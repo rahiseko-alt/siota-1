@@ -1,0 +1,28 @@
+{
+  "name": "trimmer-system",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-dist.mjs",
+    "check": "node ../../scripts/src-dist-drift-guard.mjs .",
+    "predeploy-check": "node scripts/predeploy-guard.mjs",
+    "preview": "node scripts/build-dist.mjs && npx wrangler dev --config worker/wrangler.toml",
+    "preview:supabase": "npm run build && npx wrangler dev --config worker/wrangler.supabase.toml",
+    "test": "npm run test:unit",
+    "test:unit": "node --test --test-isolation=none test/worker-unit.test.mjs",
+    "test:e2e": "npx playwright test",
+    "test:supabase:static": "node --test --test-isolation=none test/supabase-schema.test.mjs",
+    "test:supabase": "supabase test db",
+    "test:migration": "node --test --test-isolation=none test/kv-migration.test.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.110.6",
+    "qrcode": "1.5.4",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.1",
+    "supabase": "2.109.1"
+  }
+}

@@ -1,0 +1,34 @@
+# SALTY DOG Beauty Report 公開 Worker
+#
+# ██ 2026-08-21〜 デプロイ凍結中。まず worker/deploy-freeze.md を読むこと。 ██
+#
+#   本番は 2026-06 世代の v1 カルテアプリが稼働中。一方 ../dist は 2026-08-16 の
+#   commit 6505921 で静的 UI 提案モックに全置換されており、世代が2つズレている。
+#   今デプロイすると本番の稼働アプリがモックで潰れる。
+#   確認: npm run predeploy-check（凍結中なら EXIT 1）
+#
+# デプロイ: worker/ ディレクトリで `npx wrangler deploy`（このファイルが参照される）
+# 事前準備:
+#   npx wrangler kv namespace create REPORTS   # 作成済み（下記 id）
+# ※ WRITE_TOKEN は廃止（無認証化済み）
+name = "saltydog-report-worker"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+# Static Assets: ../dist 配下を Worker に同梱（ponchi-v2.html 注入配信用）
+# Worker ルート（/p/* /o/* /api/* /edit/*）が優先処理し、それ以外は Assets フォールスルーで配信。
+[assets]
+directory = "../dist"
+binding = "ASSETS"
+
+# KV namespace binding（コード内 env.REPORTS）
+[[kv_namespaces]]
+binding = "REPORTS"
+id = "50241192b25149eb8f846653ecae8f64"
+
+# ルート: 全パス（/*）を Worker が一本処理する構成。
+# 特定パス列挙（/p,/o,/api,/edit…）だと / 等が旧 Pages レイヤー（A 残骸）へフォールスルーするため、
+# /* に集約して route 漏れ構造そのものを消す。静的アセット(/js/*等)は [assets] fallthrough で配信。
+[[routes]]
+pattern = "trimmer-system.kouheikosehira.com/*"
+zone_name = "kouheikosehira.com"

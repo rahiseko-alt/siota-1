@@ -1,0 +1,7 @@
+{
+  "name": "saltydog-report-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "SALTY DOG Beauty Report 公開 Worker（KV + 顧客ページ生成）"
+}

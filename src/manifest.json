@@ -1,0 +1,13 @@
+{
+  "name": "SALTY DOG Beauty Report",
+  "short_name": "SALTY DOG",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f1ec",
+  "theme_color": "#e8923c",
+  "icons": [
+    { "src": "assets/app-icon.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/app-icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

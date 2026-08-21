@@ -1,0 +1,2782 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>SALTY DOG | ドッグトリマー・エディトリアルカルテシステム</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+JP:wght@300;400;500;700&family=Noto+Serif+JP:wght@300;400;600;700&family=Shippori+Mincho:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* ==========================================================================
+   1. DESIGN TOKENS & SYSTEM VARIABLES (ReBITA Architectural & Editorial System)
+   ========================================================================== */
+:root {
+  --bg-page: #f8f8f7;
+  --bg-surface: #ffffff;
+  --bg-subtle: #f2f2ef;
+  --bg-muted: #e9e9e5;
+  --bg-dark: #0f0f0f;
+  --bg-paper: #faf9f6;
+
+  --ink-primary: #121212;
+  --ink-body: #2c2c2c;
+  --ink-secondary: #585858;
+  --ink-muted: #8c8c88;
+  --ink-inverse: #ffffff;
+
+  --border-subtle: #e6e6e2;
+  --border-divider: #deded9;
+  --border-strong: #121212;
+
+  --accent-gold: #c59b27;
+  --accent-terracotta: #c85a32;
+  --accent-sage: #4a7c59;
+  --accent-alert: #d32f2f;
+  --accent-alert-bg: #fde8e8;
+
+  --font-sans: "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-en: "Inter", -apple-system, sans-serif;
+  --font-serif: "Noto Serif JP", "Shippori Mincho", "Times New Roman", serif;
+
+  --ease-editorial: cubic-bezier(0.16, 1, 0.3, 1);
+  --header-height: 54px;
+}
+
+/* ==========================================================================
+   2. RESET & BASE TYPOGRAPHY
+   ========================================================================== */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  font-size: 14.5px;
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  background-color: var(--bg-page);
+  color: var(--ink-body);
+  font-family: var(--font-sans);
+  line-height: 1.8;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+button, input, textarea, select {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  border: none;
+  background: transparent;
+}
+
+/* ==========================================================================
+   3. TOP NAVIGATION (Flat Clean Specular Glass)
+   ========================================================================== */
+.top-nav {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  width: 100%;
+  height: var(--header-height);
+  background: rgba(12, 12, 12, 0.76);
+  backdrop-filter: blur(28px) saturate(200%) brightness(105%);
+  -webkit-backdrop-filter: blur(28px) saturate(200%) brightness(105%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: none;
+  color: var(--ink-inverse);
+}
+
+.top-nav__container {
+  max-width: 1280px;
+  height: 100%;
+  margin: 0 auto;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.top-nav__left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.btn-home {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  color: #ffffff;
+  padding: 5px 12px;
+  font-family: var(--font-en);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-home:hover {
+  background: #ffffff;
+  color: #000000;
+  border-color: #ffffff;
+}
+
+.top-nav__divider {
+  color: rgba(255, 255, 255, 0.25);
+  font-size: 13px;
+}
+
+.top-nav__brand {
+  font-family: var(--font-serif);
+  font-size: 13.5px;
+  letter-spacing: 0.12em;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.top-nav__steps {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.top-nav__steps::-webkit-scrollbar { display: none; }
+
+.btn-step {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.72);
+  padding: 5px 12px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.btn-step:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+.btn-step.is-active {
+  background: #ffffff;
+  color: #111111;
+  border-color: #ffffff;
+  font-weight: 700;
+}
+
+@media (max-width: 600px) {
+  .top-nav__container {
+    padding: 0 8px;
+    gap: 6px;
+  }
+  .top-nav__brand, .top-nav__divider {
+    display: none;
+  }
+  .btn-home {
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+  .btn-step {
+    padding: 4px 7px;
+    font-size: 10px;
+    letter-spacing: 0;
+  }
+}
+
+/* ==========================================================================
+   4. ARCHITECTURAL BUTTONS (ReBITA Signature)
+   ========================================================================== */
+.boxbutton {
+  align-items: center;
+  background-color: #000000;
+  border: 1px solid #000000;
+  color: #ffffff;
+  display: inline-flex;
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  min-height: 50px;
+  padding: 12px 54px 12px 20px;
+  position: relative;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
+  user-select: none;
+}
+
+.boxbutton:before {
+  background-color: rgba(255, 255, 255, 0.28);
+  content: "";
+  display: block;
+  height: 100%;
+  position: absolute;
+  right: 44px;
+  top: 0;
+  width: 1px;
+}
+
+.boxbutton:after {
+  background-color: #ffffff;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+  content: "";
+  display: block;
+  height: 9px;
+  position: absolute;
+  right: 18px;
+  top: calc(50% - 4.5px);
+  width: 8px;
+  transition: transform 0.2s ease;
+}
+
+.boxbutton:hover:after { transform: translateX(4px); }
+
+.boxbutton--hero {
+  min-height: 64px;
+  max-width: 440px;
+  width: 100%;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 16px 64px 16px 28px;
+}
+.boxbutton--hero:before { right: 54px; }
+.boxbutton--hero:after { right: 22px; width: 10px; height: 11px; top: calc(50% - 5.5px); }
+
+.boxbutton--white {
+  background-color: #ffffff;
+  border: 1px solid #111111;
+  color: #111111;
+}
+.boxbutton--white:before { background-color: #deded9; }
+.boxbutton--white:after { background-color: #111111; }
+.boxbutton--white:hover {
+  background-color: #111111;
+  color: #ffffff;
+}
+.boxbutton--white:hover:before { background-color: rgba(255, 255, 255, 0.3); }
+.boxbutton--white:hover:after { background-color: #ffffff; }
+
+.boxbutton--full { width: 100%; }
+
+.boxbutton--sm {
+  min-height: 38px;
+  font-size: 12px;
+  padding: 8px 40px 8px 14px;
+}
+.boxbutton--sm:before { right: 32px; }
+.boxbutton--sm:after { right: 12px; height: 7px; width: 6px; top: calc(50% - 3.5px); }
+
+/* ==========================================================================
+   5. SCREEN PANELS & SHELL
+   ========================================================================== */
+.main-wrapper {
+  width: 100%;
+  min-height: calc(100vh - var(--header-height));
+  margin: 0 auto;
+}
+
+.screen-panel {
+  display: none;
+  animation: panelFadeIn 0.35s var(--ease-editorial);
+}
+
+.screen-panel.is-active {
+  display: block;
+}
+
+@keyframes panelFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ==========================================================================
+   6. SCREEN 1: EDITORIAL ENTRANCE & AUTH (純粋なクライアント仕様)
+   ========================================================================== */
+.auth-hero-wrapper {
+  min-height: calc(100vh - var(--header-height));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  background: radial-gradient(circle at 50% 30%, #ffffff 0%, #f4f4f0 100%);
+}
+
+.auth-hero-card {
+  max-width: 480px;
+  width: 100%;
+  text-align: center;
+}
+
+.auth-brand-badge {
+  display: inline-block;
+  font-family: var(--font-en);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.auth-brand-title {
+  font-family: var(--font-serif);
+  font-size: 34px;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  color: var(--ink-primary);
+  margin-bottom: 20px;
+}
+
+.auth-hero-copy {
+  font-family: var(--font-serif);
+  font-size: 17px;
+  line-height: 2.1;
+  letter-spacing: 0.08em;
+  color: var(--ink-primary);
+  margin-bottom: 32px;
+}
+
+.auth-hero-image-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  margin: 0 auto 36px;
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+.auth-hero-image-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.auth-hero-image-tag {
+  position: absolute;
+  bottom: 14px;
+  left: 16px;
+  font-family: var(--font-en);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  padding: 4px 10px;
+}
+
+.auth-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+  width: 100%;
+}
+
+/* ==========================================================================
+   7. SCREEN 2: KARTE DIRECTORY & SEARCH (純粋なクライアント仕様)
+   ========================================================================== */
+.directory-container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 16px 80px;
+}
+
+.search-sticky-box {
+  position: sticky;
+  top: calc(var(--header-height) + 12px);
+  z-index: 800;
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  margin-bottom: 20px;
+}
+
+.search-input-row {
+  display: flex;
+  align-items: center;
+}
+
+.search-icon-wrap {
+  padding: 0 16px;
+  color: var(--ink-muted);
+  display: flex;
+  align-items: center;
+}
+
+.search-input {
+  flex: 1;
+  min-height: 52px;
+  padding: 0 8px;
+  font-size: 15px;
+  color: var(--ink-primary);
+  outline: none;
+}
+
+.btn-search-mic {
+  min-height: 52px;
+  padding: 0 18px;
+  border-left: 1px solid var(--border-subtle);
+  background: var(--bg-subtle);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-search-mic:hover { background: var(--bg-muted); }
+.btn-search-mic.is-recording {
+  background: var(--accent-alert);
+  color: #ffffff;
+  animation: pulseRecording 1.2s infinite;
+}
+
+@keyframes pulseRecording {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.directory-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 16px 4px 12px;
+  border-bottom: 2px solid var(--ink-primary);
+  margin-bottom: 12px;
+}
+
+.directory-title {
+  font-family: var(--font-serif);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.karte-cards-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.karte-card {
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  padding: 18px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.karte-card:hover {
+  border-color: var(--ink-primary);
+  transform: translateY(-2px);
+}
+
+.karte-card__avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--bg-muted);
+  flex: 0 0 auto;
+  border: 1px solid var(--border-subtle);
+}
+.karte-card__avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+.karte-card__body { flex: 1; padding: 0 16px; }
+
+.karte-card__name-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.karte-card__dog-name { font-size: 17px; font-weight: 700; color: var(--ink-primary); }
+.karte-card__owner-name { font-size: 13.5px; font-weight: 600; color: var(--ink-secondary); }
+.karte-card__breed { font-size: 12px; color: var(--ink-muted); }
+
+.karte-card__meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--ink-secondary);
+}
+
+.karte-card__badge-alert {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--accent-alert-bg);
+  color: var(--accent-alert);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border: 1px solid rgba(211, 47, 47, 0.2);
+}
+
+.karte-card__badge-complete {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #eaf5ea;
+  color: var(--accent-sage);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+}
+
+.karte-card__actions { display: flex; align-items: center; gap: 8px; }
+
+.btn-clone-karte {
+  padding: 6px 12px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-body);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-clone-karte:hover { background: var(--ink-primary); color: #ffffff; }
+
+/* ==========================================================================
+   8. SCREEN 3: KARTE CREATION & CLINICAL EDITOR (純粋な手書き仕様)
+   ========================================================================== */
+.editor-wrapper {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding-bottom: 120px;
+}
+
+.editor-columns {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+  padding: 24px 16px;
+}
+
+@media (min-width: 900px) {
+  .editor-columns {
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    padding: 32px 32px;
+  }
+}
+
+.editor-col-card {
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  padding: 24px;
+}
+
+.editor-col-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 2px solid var(--ink-primary);
+  padding-bottom: 10px;
+  margin-bottom: 20px;
+}
+
+.editor-col-card__title {
+  font-family: var(--font-serif);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.editor-col-card__badge { font-size: 11.5px; color: var(--ink-muted); }
+
+.clinical-group {
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border-divider);
+}
+.clinical-group:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.clinical-group__label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13.5px;
+  font-weight: 700;
+  margin-bottom: 10px;
+  color: var(--ink-primary);
+}
+
+.clinical-group__hint { font-size: 11px; font-weight: 400; color: var(--ink-muted); }
+
+.segmented-stepper { display: flex; gap: 6px; width: 100%; }
+
+.stepper-btn {
+  flex: 1;
+  min-height: 52px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-paper);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.stepper-btn .val { font-size: 14px; font-weight: 700; color: var(--ink-primary); line-height: 1.2; }
+.stepper-btn .desc { font-size: 10.5px; color: var(--ink-muted); line-height: 1.2; margin-top: 2px; }
+.stepper-btn.is-active {
+  background: var(--ink-primary);
+  border-color: var(--ink-primary);
+  color: #ffffff;
+}
+.stepper-btn.is-active .val, .stepper-btn.is-active .desc { color: #ffffff; }
+.stepper-btn.is-alert.is-active { background: var(--accent-alert); border-color: var(--accent-alert); }
+
+.weight-input-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.weight-stat-box {
+  border: 1px solid var(--border-subtle);
+  padding: 12px 14px;
+  background: var(--bg-paper);
+}
+.weight-stat-box__title { font-size: 11px; font-weight: 600; color: var(--ink-muted); margin-bottom: 4px; }
+.weight-stat-box__val-wrap { display: flex; align-items: baseline; gap: 6px; }
+
+.weight-input {
+  font-family: var(--font-en);
+  font-size: 24px;
+  font-weight: 700;
+  width: 90px;
+  color: var(--ink-primary);
+  border-bottom: 1.5px solid var(--ink-primary);
+  outline: none;
+}
+
+.weight-diff-badge {
+  font-family: var(--font-en);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 2px;
+}
+.weight-diff-badge.is-up { background: #fde8e8; color: var(--accent-alert); }
+.weight-diff-badge.is-down { background: #eaf5ea; color: var(--accent-sage); }
+
+.weight-chart-box {
+  width: 100%;
+  height: 68px;
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  position: relative;
+  margin-top: 8px;
+}
+
+.guide-diagram-box {
+  border: 1px solid var(--border-subtle);
+  background: #ffffff;
+  margin-bottom: 10px;
+  overflow: hidden;
+  position: relative;
+}
+.guide-diagram-box img { width: 100%; height: auto; display: block; }
+.guide-diagram-box__caption {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0,0,0,0.65);
+  backdrop-filter: blur(4px);
+  color: #ffffff;
+  font-size: 10px;
+  padding: 2px 8px;
+}
+
+.teeth-selector-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  margin-top: 8px;
+}
+@media (min-width: 600px) {
+  .teeth-selector-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+.teeth-pill-btn {
+  min-height: 48px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-paper);
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.teeth-pill-btn .name { font-size: 12px; font-weight: 700; color: var(--ink-primary); line-height: 1.3; }
+.teeth-pill-btn .sub { font-size: 10px; color: var(--ink-muted); line-height: 1.2; }
+.teeth-pill-btn.is-active { background: var(--ink-primary); border-color: var(--ink-primary); }
+.teeth-pill-btn.is-active .name, .teeth-pill-btn.is-active .sub { color: #ffffff; }
+
+.body-marking-tool {
+  border: 1px solid var(--border-subtle);
+  background: #ffffff;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.body-marking-stamps {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.body-marking-stamps::-webkit-scrollbar { display: none; }
+
+.stamp-btn {
+  padding: 6px 10px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-paper);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.stamp-btn.is-active { background: var(--ink-primary); color: #ffffff; border-color: var(--ink-primary); }
+
+.canvas-container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 11;
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  overflow: hidden;
+  touch-action: none;
+}
+.canvas-container canvas { width: 100%; height: 100%; display: block; }
+
+.trimmer-textarea-wrap { position: relative; margin-top: 8px; }
+.trimmer-textarea {
+  width: 100%;
+  border: 1px solid var(--border-subtle);
+  padding: 14px 14px 44px 14px;
+  font-size: 14px;
+  line-height: 1.8;
+  background: var(--bg-paper);
+  outline: none;
+  resize: vertical;
+  min-height: 110px;
+}
+.trimmer-textarea:focus { border-color: var(--ink-primary); background: #ffffff; }
+
+.btn-inline-mic {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  background: var(--ink-primary);
+  color: #ffffff;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-inline-mic.is-recording { background: var(--accent-alert); animation: pulseRecording 1.2s infinite; }
+
+/* ==========================================================================
+   Editor Bottom Dock (単一層・未記入赤 / 完了黒)
+   ========================================================================== */
+.editor-bottom-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 950;
+  height: 58px;
+  background: rgba(12, 12, 12, 0.94);
+  backdrop-filter: blur(28px) saturate(200%) brightness(105%);
+  -webkit-backdrop-filter: blur(28px) saturate(200%) brightness(105%);
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: none;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  color: #ffffff;
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+
+/* 未記入あり時：フッター全体が赤 */
+.editor-bottom-dock.has-incomplete {
+  background: #d32f2f;
+  border-top: 1px solid #b71c1c;
+}
+
+.editor-bottom-dock__container {
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dock-status-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn-dock-goto {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  padding: 3px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease;
+}
+.btn-dock-goto:hover {
+  background: #ffffff;
+  color: #d32f2f;
+}
+
+.dock-action-wrap {
+  flex: 0 0 auto;
+}
+
+/* ==========================================================================
+   9. SCREEN 4: CUSTOMER MAGAZINE KARTE (純粋な手書き指示)
+   ========================================================================== */
+.magazine-container {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 24px 16px 100px;
+  background: #ffffff;
+}
+
+.timeline-accordion-box {
+  background: var(--bg-paper);
+  border: 1px solid var(--border-subtle);
+  margin-bottom: 28px;
+  transition: all 0.2s ease;
+}
+
+.timeline-accordion-head {
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--ink-primary);
+  user-select: none;
+}
+.timeline-accordion-head:hover { background: var(--bg-subtle); }
+
+.timeline-chips-tray {
+  padding: 12px 16px 16px;
+  border-top: 1px dashed var(--border-subtle);
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.timeline-chips-tray::-webkit-scrollbar { display: none; }
+
+.timeline-date-chip {
+  padding: 6px 14px;
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  font-family: var(--font-en);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-body);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.timeline-date-chip .sub { font-size: 10px; color: var(--ink-muted); font-family: var(--font-sans); }
+.timeline-date-chip.is-active, .timeline-date-chip:hover {
+  background: var(--ink-primary);
+  color: #ffffff;
+  border-color: var(--ink-primary);
+}
+.timeline-date-chip.is-active .sub { color: rgba(255,255,255,0.7); }
+
+.quick-jump-nav-sticky {
+  position: sticky;
+  top: var(--header-height);
+  z-index: 860;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: -24px -16px 28px -16px;
+}
+
+.quick-jump-buttons {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.quick-jump-buttons::-webkit-scrollbar { display: none; }
+
+.btn-jump-number {
+  min-width: 34px;
+  height: 34px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-paper);
+  color: var(--ink-primary);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+.btn-jump-number:hover {
+  background: var(--ink-primary);
+  color: #ffffff;
+  border-color: var(--ink-primary);
+}
+
+.btn-toggle-all {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ink-secondary);
+  padding: 6px 12px;
+  border: 1px solid var(--border-subtle);
+  background: #ffffff;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.magazine-hero {
+  border-bottom: 1px solid var(--border-divider);
+  padding-bottom: 36px;
+  margin-bottom: 36px;
+}
+
+.magazine-hero__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 20px;
+  border-bottom: 2px solid var(--ink-primary);
+  padding-bottom: 10px;
+}
+
+.magazine-hero__brand {
+  font-family: var(--font-serif);
+  font-size: 26px;
+  letter-spacing: 0.14em;
+  color: var(--ink-primary);
+}
+
+.magazine-hero__date {
+  font-family: var(--font-en);
+  font-size: 13px;
+  color: var(--ink-secondary);
+  font-weight: 600;
+}
+
+.magazine-hero__media-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+@media (min-width: 768px) {
+  .magazine-hero__media-grid {
+    grid-template-columns: 3fr 2fr;
+    gap: 28px;
+  }
+}
+
+.magazine-hero-photo-main {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: var(--bg-muted);
+}
+.magazine-hero-photo-main img { width: 100%; height: 100%; object-fit: cover; }
+
+.magazine-hero-side-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 24px;
+  background: var(--bg-paper);
+  border: 1px solid var(--border-subtle);
+}
+
+.magazine-dog-title {
+  font-family: var(--font-serif);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--ink-primary);
+  line-height: 1.2;
+  margin-bottom: 8px;
+}
+
+.magazine-dog-sub { font-size: 13px; color: var(--ink-secondary); margin-bottom: 16px; }
+
+.magazine-trimmer-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+}
+.magazine-trimmer-badge__avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--ink-primary);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.magazine-letter-section {
+  padding: 28px 24px;
+  background: var(--bg-paper);
+  border-left: 3px solid var(--ink-primary);
+  margin-bottom: 40px;
+}
+.magazine-letter-title {
+  font-family: var(--font-serif);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--ink-primary);
+  margin-bottom: 12px;
+}
+.magazine-letter-body {
+  font-size: 14.5px;
+  line-height: 2.1;
+  color: var(--ink-body);
+  letter-spacing: 0.03em;
+}
+
+.wave-accordion-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 48px;
+}
+
+.wave-card {
+  border: 1px solid var(--border-subtle);
+  background: #ffffff;
+  transition: all 0.3s var(--ease-editorial);
+  overflow: hidden;
+}
+.wave-card.is-open {
+  border-color: var(--ink-primary);
+}
+
+.wave-card-head {
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  background: var(--bg-paper);
+  position: relative;
+  transition: background 0.2s ease;
+}
+.wave-card-head:hover { background: var(--bg-subtle); }
+.wave-card.is-open .wave-card-head {
+  background: #ffffff;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.wave-card-head__title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.wave-card-number-badge {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--ink-primary);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-en);
+}
+
+.wave-card-title {
+  font-family: var(--font-serif);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.wave-card-status-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  background: #eaf5ea;
+  color: var(--accent-sage);
+}
+
+.wave-card-toggle-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s ease;
+  color: var(--ink-secondary);
+}
+.wave-card.is-open .wave-card-toggle-icon {
+  transform: rotate(180deg);
+}
+
+.wave-separator-svg {
+  width: 100%;
+  height: 12px;
+  display: block;
+  fill: none;
+  stroke: var(--border-subtle);
+  stroke-width: 1.5;
+}
+
+.wave-card-body {
+  display: none;
+  padding: 24px 20px;
+  animation: waveBodySlide 0.3s var(--ease-editorial);
+}
+.wave-card.is-open .wave-card-body {
+  display: block;
+}
+
+@keyframes waveBodySlide {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.wave-body-grid-2col {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+@media (min-width: 768px) {
+  .wave-body-grid-2col {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.wave-body-img-frame {
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-paper);
+  overflow: hidden;
+}
+.wave-body-img-frame img { width: 100%; height: auto; object-fit: cover; }
+
+.gallery-mosaic-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+@media (min-width: 768px) {
+  .gallery-mosaic-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+}
+
+.gallery-mosaic-item {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: var(--bg-muted);
+  cursor: pointer;
+}
+.gallery-mosaic-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.4s var(--ease-editorial);
+}
+.gallery-mosaic-item:hover img { transform: scale(1.05); }
+.gallery-mosaic-caption {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 6px 10px;
+  background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.magazine-revisit-box {
+  background: var(--ink-primary);
+  color: #ffffff;
+  padding: 36px 28px;
+  text-align: center;
+  margin-bottom: 40px;
+}
+.magazine-revisit-tag {
+  font-family: var(--font-en);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.magazine-revisit-title {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  margin-bottom: 14px;
+}
+.magazine-revisit-desc {
+  font-size: 14px;
+  line-height: 1.9;
+  color: rgba(255, 255, 255, 0.85);
+  max-width: 600px;
+  margin: 0 auto 24px;
+}
+
+.lightbox-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0,0,0,0.92);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  backdrop-filter: blur(12px);
+}
+.lightbox-modal.is-open { display: flex; }
+.lightbox-modal img {
+  max-width: 90vw;
+  max-height: 85vh;
+/* ==========================================================================
+   10. MOBILE COMPREHENSIVE RESPONSIVE DESIGN (375px+ スマートフォン完全最適化)
+   ========================================================================== */
+@media (max-width: 600px) {
+  html {
+    font-size: 13.5px;
+  }
+
+  /* 1. トップナビゲーション */
+  .top-nav__container {
+    padding: 0 8px;
+    gap: 6px;
+  }
+  .top-nav__brand, .top-nav__divider {
+    display: none;
+  }
+  .btn-home {
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+  .btn-step {
+    padding: 4px 6px;
+    font-size: 10px;
+    letter-spacing: 0;
+  }
+
+  /* 2. ReBITA ボックスボタン */
+  .boxbutton {
+    min-height: 44px;
+    font-size: 12.5px;
+    padding: 10px 42px 10px 14px;
+  }
+  .boxbutton:before { right: 36px; }
+  .boxbutton:after { right: 14px; width: 7px; height: 8px; top: calc(50% - 4px); }
+
+  .boxbutton--hero {
+    min-height: 52px;
+    font-size: 14.5px;
+    padding: 12px 48px 12px 16px;
+    max-width: 100%;
+  }
+  .boxbutton--hero:before { right: 42px; }
+  .boxbutton--hero:after { right: 16px; }
+
+  /* 3. Screen 1: ログイン */
+  .auth-hero-wrapper {
+    padding: 32px 16px;
+    min-height: calc(100vh - var(--header-height));
+  }
+  .auth-brand-title {
+    font-size: 26px;
+    letter-spacing: 0.12em;
+    margin-bottom: 14px;
+  }
+  .auth-hero-copy {
+    font-size: 14.5px;
+    line-height: 1.9;
+    margin-bottom: 24px;
+  }
+  .auth-hero-image-frame {
+    margin-bottom: 24px;
+  }
+
+  /* 4. Screen 2: カルテ検索・カード一覧 */
+  .directory-container {
+    padding: 16px 12px 80px;
+  }
+  .search-sticky-box {
+    top: calc(var(--header-height) + 6px);
+    margin-bottom: 14px;
+  }
+  .search-input {
+    font-size: 13.5px;
+    min-height: 44px;
+    padding: 0 4px;
+  }
+  .search-icon-wrap {
+    padding: 0 10px;
+  }
+  .btn-search-mic {
+    min-height: 44px;
+    padding: 0 12px;
+    font-size: 11px;
+    gap: 4px;
+  }
+
+  .karte-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 14px 12px;
+  }
+  .karte-card-top-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+  }
+  .karte-card__avatar {
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+  }
+  .karte-card__body {
+    padding: 0;
+    flex: 1;
+    min-width: 0;
+  }
+  .karte-card__dog-name {
+    font-size: 15.5px;
+  }
+  .karte-card__owner-name {
+    font-size: 12.5px;
+  }
+  .karte-card__meta-line {
+    gap: 8px;
+    font-size: 11px;
+  }
+  .karte-card__actions {
+    display: flex;
+    width: 100%;
+    gap: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--border-subtle);
+  }
+  .karte-card__actions .btn-clone-karte {
+    flex: 1;
+    text-align: center;
+    padding: 8px 4px;
+    font-size: 11px;
+  }
+  .karte-card__actions .boxbutton--sm {
+    flex: 1;
+    justify-content: center;
+    min-height: 36px;
+    padding: 8px 32px 8px 10px;
+    font-size: 11.5px;
+  }
+
+  /* 5. Screen 3: カルテ作成・エディター */
+  .editor-columns {
+    padding: 12px 8px;
+    gap: 16px;
+  }
+  .editor-col-card {
+    padding: 16px 12px;
+  }
+  .editor-col-card__title {
+    font-size: 16px;
+  }
+  .clinical-group {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+  }
+  .clinical-group__label {
+    font-size: 12.5px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  .weight-input {
+    font-size: 20px;
+    width: 75px;
+  }
+  .stepper-btn {
+    min-height: 44px;
+    padding: 4px 2px;
+  }
+  .stepper-btn .val {
+    font-size: 12px;
+  }
+  .stepper-btn .desc {
+    font-size: 9.5px;
+  }
+  .teeth-selector-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px;
+  }
+  .teeth-pill-btn {
+    min-height: 42px;
+    padding: 4px 6px;
+  }
+  .teeth-pill-btn .name {
+    font-size: 11px;
+  }
+  .teeth-pill-btn .sub {
+    font-size: 9px;
+  }
+  .stamp-btn {
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+  .trimmer-textarea {
+    font-size: 13px;
+    min-height: 90px;
+    padding: 10px 10px 40px 10px;
+  }
+
+  /* 単一層フッター（スマホ完全1行収容） */
+  .editor-bottom-dock {
+    height: 52px;
+    padding: 0 10px;
+  }
+  .editor-bottom-dock__container {
+    gap: 6px;
+  }
+  .dock-status-wrap {
+    gap: 4px;
+    font-size: 11px;
+    max-width: calc(100% - 140px);
+  }
+  .btn-dock-goto {
+    padding: 2px 6px;
+    font-size: 9.5px;
+  }
+  .dock-action-wrap .boxbutton {
+    min-height: 36px !important;
+    font-size: 11px !important;
+    padding: 8px 30px 8px 10px !important;
+    white-space: nowrap;
+  }
+  .dock-action-wrap .boxbutton:before { right: 26px !important; }
+  .dock-action-wrap .boxbutton:after { right: 9px !important; width: 6px !important; height: 7px !important; top: calc(50% - 3.5px) !important; }
+
+  /* 6. Screen 4: 顧客マガジン */
+  .magazine-container {
+    padding: 14px 10px 80px;
+  }
+  .quick-jump-nav-sticky {
+    margin: -14px -10px 18px -10px;
+    padding: 6px 8px;
+    gap: 4px;
+  }
+  .btn-jump-number {
+    min-width: 26px;
+    height: 26px;
+    font-size: 10px;
+    padding: 0 5px;
+  }
+  .btn-toggle-all {
+    padding: 4px 6px;
+    font-size: 9.5px;
+  }
+  .magazine-hero {
+    padding-bottom: 20px;
+    margin-bottom: 24px;
+  }
+  .magazine-hero__brand {
+    font-size: 20px;
+  }
+  .magazine-hero__date {
+    font-size: 11px;
+  }
+  .magazine-hero-side-card {
+    padding: 16px 12px;
+  }
+  .magazine-dog-title {
+    font-size: 22px;
+  }
+  .magazine-dog-sub {
+    font-size: 12px;
+    margin-bottom: 10px;
+  }
+  .magazine-letter-section {
+    padding: 18px 14px;
+    margin-bottom: 28px;
+  }
+  .magazine-letter-title {
+    font-size: 16px;
+  }
+  .magazine-letter-body {
+    font-size: 13px;
+    line-height: 1.9;
+  }
+  .wave-card-head {
+    padding: 12px 14px;
+  }
+  .wave-card-title {
+    font-size: 13.5px;
+  }
+  .wave-card-number-badge {
+    width: 22px;
+    height: 22px;
+    font-size: 10.5px;
+  }
+  .wave-card-status-pill {
+    font-size: 9.5px;
+    padding: 2px 6px;
+  }
+  .wave-card-body {
+    padding: 16px 12px;
+  }
+  .gallery-mosaic-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .magazine-revisit-box {
+    padding: 24px 16px;
+    margin-bottom: 28px;
+  }
+  .magazine-revisit-title {
+    font-size: 17px;
+  }
+  .magazine-revisit-desc {
+    font-size: 12.5px;
+  }
+}
+</style>
+</head>
+<body>
+
+<nav class="top-nav">
+  <div class="top-nav__container">
+    <div class="top-nav__left">
+      <button class="btn-home" onclick="App.goToStep(1)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+        HOME
+      </button>
+      <span class="top-nav__divider">/</span>
+      <span class="top-nav__brand" id="nav-brand-label">SALTY DOG カルテ</span>
+    </div>
+    
+    <div class="top-nav__steps">
+      <button class="btn-step is-active" data-step="1" onclick="App.goToStep(1)">01 ログイン</button>
+      <button class="btn-step" data-step="2" onclick="App.goToStep(2)">02 カルテ検索</button>
+      <button class="btn-step" data-step="3" onclick="App.goToStep(3)">03 カルテ作成</button>
+      <button class="btn-step" data-step="4" onclick="App.goToStep(4)">04 顧客カルテ</button>
+    </div>
+  </div>
+</nav>
+
+<main class="main-wrapper">
+
+  <!-- SCREEN 1: AUTH (独創切り替えボタン削除) -->
+  <section class="screen-panel is-active" id="screen-1">
+    <div class="auth-hero-wrapper">
+      <div class="auth-hero-card">
+        
+        <span class="auth-brand-badge">Trimmer & Owner Record</span>
+        <h1 class="auth-brand-title">SALTY DOG</h1>
+        
+        <p class="auth-hero-copy">
+          愛犬の暮らしと健康を美しく記録し、<br>
+          あなたと愛犬にとって豊かな未来をつくる
+        </p>
+
+        <div class="auth-hero-image-frame">
+          <img src="/assets/photo-trim-action.jpg" alt="トリミング風景">
+          <div class="auth-hero-image-tag">SALTY DOG ATELIER</div>
+        </div>
+
+        <div class="auth-actions">
+          <button class="boxbutton boxbutton--hero boxbutton--full" onclick="App.goToStep(2)">
+            <div style="display: flex; align-items: center; gap: 14px;">
+              <svg width="22" height="22" viewBox="0 0 18 18">
+                <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.616z"/>
+                <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/>
+                <path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.039l3.007-2.332z"/>
+                <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.961L3.964 7.293C4.672 5.166 6.656 3.58 9 3.58z"/>
+              </svg>
+              <span>Google でログイン</span>
+            </div>
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+
+  <!-- SCREEN 2: DIRECTORY & SEARCH (独創フィルターチップ削除) -->
+  <section class="screen-panel" id="screen-2">
+    <div class="directory-container">
+      
+      <div class="search-sticky-box">
+        <div class="search-input-row">
+          <div class="search-icon-wrap">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          </div>
+          <input type="text" id="dir-search-input" class="search-input" placeholder="飼い主名・犬名・犬種・担当者で検索..." oninput="App.filterKarte(this.value)">
+          <button class="btn-search-mic" id="dir-mic-btn" onclick="App.toggleDirVoiceSearch()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+            <span id="dir-mic-label">音声検索</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="directory-header-row">
+        <h2 class="directory-title">登録カルテ一覧</h2>
+        <div class="directory-actions">
+          <span style="font-size: 12.5px; color: var(--ink-muted);" id="karte-total-count">3件</span>
+        </div>
+      </div>
+
+      <div class="karte-cards-grid" id="karte-cards-container">
+        
+        <!-- Dog 1: ポンチ -->
+        <div class="karte-card" onclick="App.selectKarte('ポンチ', '塩田 様', 'トイプードル')">
+          <div class="karte-card-top-row">
+            <div class="karte-card__avatar">
+              <img src="/assets/photo-dog-paw-high.jpg" alt="ポンチ">
+            </div>
+            <div class="karte-card__body">
+              <div class="karte-card__name-line">
+                <span class="karte-card__dog-name">ポンチ</span>
+                <span class="karte-card__owner-name">塩田 様</span>
+                <span class="karte-card__breed">トイプードル</span>
+              </div>
+              <div class="karte-card__meta-line">
+                <span>最終: <strong>2026.08.15</strong></span>
+                <span>担当: <strong>塩田</strong></span>
+                <span class="karte-card__badge-alert">⚠️ 未記入: 爪</span>
+              </div>
+            </div>
+          </div>
+          <div class="karte-card__actions">
+            <button class="btn-clone-karte" onclick="event.stopPropagation(); App.cloneAndCreate('ポンチ')">前回を複製</button>
+            <button class="boxbutton boxbutton--sm">選択</button>
+          </div>
+        </div>
+
+        <!-- Dog 2: レオ -->
+        <div class="karte-card" onclick="App.selectKarte('レオ', '田中 様', 'ゴールデンドゥードル')">
+          <div class="karte-card-top-row">
+            <div class="karte-card__avatar">
+              <img src="/assets/dog-doodle.jpg" alt="レオ">
+            </div>
+            <div class="karte-card__body">
+              <div class="karte-card__name-line">
+                <span class="karte-card__dog-name">レオ</span>
+                <span class="karte-card__owner-name">田中 様</span>
+                <span class="karte-card__breed">ゴールデンドゥードル</span>
+              </div>
+              <div class="karte-card__meta-line">
+                <span>最終: <strong>2026.07.20</strong></span>
+                <span>担当: <strong>塩田</strong></span>
+                <span class="karte-card__badge-complete">✓ 完了</span>
+              </div>
+            </div>
+          </div>
+          <div class="karte-card__actions">
+            <button class="btn-clone-karte" onclick="event.stopPropagation(); App.cloneAndCreate('レオ')">前回を複製</button>
+            <button class="boxbutton boxbutton--sm">選択</button>
+          </div>
+        </div>
+
+        <!-- Dog 3: モカ -->
+        <div class="karte-card" onclick="App.selectKarte('モカ', '佐藤 様', 'ラブラドゥードル')">
+          <div class="karte-card-top-row">
+            <div class="karte-card__avatar">
+              <img src="/assets/photo-trim-action.jpg" alt="モカ">
+            </div>
+            <div class="karte-card__body">
+              <div class="karte-card__name-line">
+                <span class="karte-card__dog-name">モカ</span>
+                <span class="karte-card__owner-name">佐藤 様</span>
+                <span class="karte-card__breed">ラブラドゥードル</span>
+              </div>
+              <div class="karte-card__meta-line">
+                <span>最終: <strong>2026.06.18</strong></span>
+                <span>担当: <strong>塩田</strong></span>
+                <span class="karte-card__badge-complete">✓ 完了</span>
+              </div>
+            </div>
+          </div>
+          <div class="karte-card__actions">
+            <button class="btn-clone-karte" onclick="event.stopPropagation(); App.cloneAndCreate('モカ')">前回を複製</button>
+            <button class="boxbutton boxbutton--sm">選択</button>
+          </div>
+        </div>
+
+      </div>
+
+      <div style="margin-top: 28px;">
+        <button class="boxbutton boxbutton--white boxbutton--full" onclick="App.createNewKarte()">
+          <span>＋ 新規カルテを作成する</span>
+        </button>
+      </div>
+
+    </div>
+  </section>
+
+
+  <!-- SCREEN 3: CLINICAL KARTE EDITOR -->
+  <section class="screen-panel" id="screen-3">
+    
+    <div class="editor-wrapper">
+
+      <div class="editor-columns">
+        
+        <!-- LEFT COLUMN -->
+        <div class="editor-col-card">
+          
+          <div class="editor-col-card__header">
+            <h2 class="editor-col-card__title" id="editor-dog-header">ポンチ カルテ入力</h2>
+            <span class="editor-col-card__badge">1タップ判定</span>
+          </div>
+
+          <!-- 1. Weight & BCS -->
+          <div class="clinical-group">
+            <div class="clinical-group__label">
+              <span>① 体重・コンディション (BCS / MCS)</span>
+              <span class="clinical-group__hint">前回 2.67kg</span>
+            </div>
+            <div class="weight-input-container">
+              <div class="weight-stat-box">
+                <div class="weight-stat-box__title">本日の体重</div>
+                <div class="weight-stat-box__val-wrap">
+                  <input type="number" step="0.01" class="weight-input" id="input-weight" value="2.79" oninput="App.onWeightChange(this.value)">
+                  <span style="font-size: 13px; font-weight: 700;">kg</span>
+                </div>
+              </div>
+              <div class="weight-stat-box">
+                <div class="weight-stat-box__title">前回比</div>
+                <div class="weight-stat-box__val-wrap" style="margin-top: 4px;">
+                  <span class="weight-diff-badge is-up" id="weight-diff-badge">+120g ▲</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="weight-chart-box">
+              <svg viewBox="0 0 400 68" width="100%" height="100%" preserveAspectRatio="none">
+                <polyline fill="none" stroke="#e0e0dc" stroke-width="1.5" stroke-dasharray="3,3" points="0,50 400,50" />
+                <polyline fill="none" stroke="#121212" stroke-width="2.5" points="30,45 100,42 180,48 260,35 340,25" />
+                <circle cx="30" cy="45" r="3" fill="#121212" />
+                <circle cx="100" cy="42" r="3" fill="#121212" />
+                <circle cx="180" cy="48" r="3" fill="#121212" />
+                <circle cx="260" cy="35" r="3" fill="#121212" />
+                <circle cx="340" cy="25" r="4.5" fill="#c85a32" />
+                <text x="330" y="16" font-size="10" font-family="Inter" font-weight="700" fill="#c85a32">2.79kg</text>
+              </svg>
+            </div>
+          </div>
+
+          <!-- 2. Nail Examination -->
+          <div class="clinical-group" id="sec-nail">
+            <div class="clinical-group__label">
+              <span>② 爪のチェック (3段階判定)</span>
+              <span class="clinical-group__hint">※血管位置と接地状態</span>
+            </div>
+            
+            <div class="guide-diagram-box">
+              <img src="/assets/guide-nail-state.jpg" alt="爪の解剖図">
+              <span class="guide-diagram-box__caption">爪の基準図</span>
+            </div>
+
+            <div class="segmented-stepper" id="nail-stepper-wrap">
+              <button class="stepper-btn" onclick="App.selectStepper(this, 'nail', 1)">
+                <span class="val">1. 適切</span>
+                <span class="desc">血管前カット済</span>
+              </button>
+              <button class="stepper-btn" onclick="App.selectStepper(this, 'nail', 2)">
+                <span class="val">2. やや長め</span>
+                <span class="desc">維持レベル</span>
+              </button>
+              <button class="stepper-btn is-alert" onclick="App.selectStepper(this, 'nail', 3)">
+                <span class="val">3. 要注意</span>
+                <span class="desc">指変形の恐れ</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 3. Ear Examination -->
+          <div class="clinical-group">
+            <div class="clinical-group__label">
+              <span>③ 耳のチェック (左右判定)</span>
+              <span class="clinical-group__hint">1〜3レベル</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              <div>
+                <div style="font-size: 11px; font-weight: 700; text-align: center; margin-bottom: 4px; background: var(--bg-paper); padding: 3px;">右耳 (R)</div>
+                <div class="segmented-stepper">
+                  <button class="stepper-btn is-active" onclick="App.selectSubStepper(this)"><span class="val">1</span><span class="desc">良好</span></button>
+                  <button class="stepper-btn" onclick="App.selectSubStepper(this)"><span class="val">2</span><span class="desc">赤み</span></button>
+                  <button class="stepper-btn is-alert" onclick="App.selectSubStepper(this)"><span class="val">3</span><span class="desc">処置</span></button>
+                </div>
+              </div>
+              <div>
+                <div style="font-size: 11px; font-weight: 700; text-align: center; margin-bottom: 4px; background: var(--bg-paper); padding: 3px;">左耳 (L)</div>
+                <div class="segmented-stepper">
+                  <button class="stepper-btn is-active" onclick="App.selectSubStepper(this)"><span class="val">1</span><span class="desc">良好</span></button>
+                  <button class="stepper-btn" onclick="App.selectSubStepper(this)"><span class="val">2</span><span class="desc">赤み</span></button>
+                  <button class="stepper-btn is-alert" onclick="App.selectSubStepper(this)"><span class="val">3</span><span class="desc">処置</span></button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. Teeth & Oral Examination -->
+          <div class="clinical-group">
+            <div class="clinical-group__label">
+              <span>④ 口・歯のチェック (6段階判定)</span>
+              <span class="clinical-group__hint">頭骨歯列基準</span>
+            </div>
+
+            <div class="guide-diagram-box">
+              <img src="/assets/guide-teeth-state.jpg" alt="歯の頭骨解剖図">
+              <span class="guide-diagram-box__caption">頭骨解剖図</span>
+            </div>
+
+            <div class="teeth-selector-grid">
+              <button class="teeth-pill-btn is-active" onclick="App.selectTeeth(this, 'ピカピカ✨')">
+                <span class="name">ピカピカ✨</span>
+                <span class="sub">歯石なし良好</span>
+              </button>
+              <button class="teeth-pill-btn" onclick="App.selectTeeth(this, 'ちょっと歯石💦')">
+                <span class="name">ちょっと付着💦</span>
+                <span class="sub">初期付着あり</span>
+              </button>
+              <button class="teeth-pill-btn" onclick="App.selectTeeth(this, '歯石が厚い😥')">
+                <span class="name">歯石が厚い😥</span>
+                <span class="sub">要ケア状態</span>
+              </button>
+              <button class="teeth-pill-btn" onclick="App.selectTeeth(this, 'グラつきあり😟')">
+                <span class="name">グラつき😟</span>
+                <span class="sub">要観察・注意</span>
+              </button>
+              <button class="teeth-pill-btn" onclick="App.selectTeeth(this, '除去準備開始✋')">
+                <span class="name">除去準備✋</span>
+                <span class="sub">次回処置提案</span>
+              </button>
+              <button class="teeth-pill-btn" onclick="App.selectTeeth(this, '歯石取り推奨😷')">
+                <span class="name">歯石取り推奨😷</span>
+                <span class="sub">除去が必要</span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+
+        <!-- RIGHT COLUMN -->
+        <div class="editor-col-card">
+          
+          <div class="editor-col-card__header">
+            <h2 class="editor-col-card__title">皮膚スパ & カットスタイル</h2>
+            <span class="editor-col-card__badge">4面図マーキング</span>
+          </div>
+
+          <!-- 5. 4-Plane Body Interactive Marking (手書き原本指示) -->
+          <div class="clinical-group">
+            <div class="clinical-group__label">
+              <span>⑤ 皮膚・スパ・犬体4面図</span>
+              <span class="clinical-group__hint">タップでスタンプ配置</span>
+            </div>
+
+            <div class="body-marking-tool">
+              <div class="body-marking-stamps">
+                <button class="stamp-btn is-active" onclick="App.setStamp('赤み', this)">🔴 赤み</button>
+                <button class="stamp-btn" onclick="App.setStamp('しこり/イボ', this)">🟡 しこり/イボ</button>
+                <button class="stamp-btn" onclick="App.setStamp('毛玉', this)">🔵 毛玉</button>
+                <button class="stamp-btn" onclick="App.setStamp('フケ', this)">⚪ フケ</button>
+                <button class="stamp-btn" onclick="App.clearCanvas()">✕ クリア</button>
+              </div>
+
+              <div class="canvas-container" id="canvas-wrapper">
+                <img src="/assets/body-marking.png" id="canvas-bg-img" style="display:none;">
+                <canvas id="marking-canvas"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- 6. Cut Style -->
+          <div class="clinical-group">
+            <div class="clinical-group__label">
+              <span>⑥ カットスタイル設定</span>
+              <span class="clinical-group__hint">ミリ数・ハサミ仕上げ</span>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+              <div style="border: 1px solid var(--border-subtle); padding: 10px; background: var(--bg-paper);">
+                <div style="font-size: 11px; font-weight: 700; margin-bottom: 4px;">ボディバリカン</div>
+                <select style="width: 100%; border: 1px solid var(--border-subtle); padding: 6px; background: #ffffff; font-weight: 700;">
+                  <option>6mm (スッキリ)</option>
+                  <option>8mm (標準ふんわり)</option>
+                  <option>10mm (長め)</option>
+                  <option>ハサミオールシザー</option>
+                </select>
+              </div>
+              <div style="border: 1px solid var(--border-subtle); padding: 10px; background: var(--bg-paper);">
+                <div style="font-size: 11px; font-weight: 700; margin-bottom: 4px;">足回り・お顔</div>
+                <select style="width: 100%; border: 1px solid var(--border-subtle); padding: 6px; background: #ffffff; font-weight: 700;">
+                  <option>テディベアカット</option>
+                  <option>アフロ風マッシュ</option>
+                  <option>足先すっきりブーツ</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- 7. Trimmer Personal Letter Message -->
+          <div class="clinical-group">
+            <div class="clinical-group__label">
+              <span>⑦ 担当トリマーからのメッセージ</span>
+              <span class="clinical-group__hint">音声入力対応</span>
+            </div>
+
+            <div class="trimmer-textarea-wrap">
+              <textarea id="editor-trimmer-letter" class="trimmer-textarea" rows="4">今月もとってもお利口にトリミングさせてくれました。腰のマッサージ中はずっとウトウトして気持ちよさそうで、リラックスした様子にとても癒やされました。また来月お会いできるのを楽しみにしております。</textarea>
+              <button class="btn-inline-mic" id="editor-voice-btn" onclick="App.toggleEditorVoice()">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- Bottom Fixed Dock (単一層・未記入時は赤 / 完了時は黒) -->
+    <div class="editor-bottom-dock has-incomplete" id="editor-bottom-dock">
+      <div class="editor-bottom-dock__container">
+        <div class="dock-status-wrap" id="dock-status-wrap">
+          <span id="dock-status-icon">⚠️</span>
+          <span id="dock-status-text">未記入: 爪のチェック</span>
+          <button class="btn-dock-goto" id="btn-dock-goto" onclick="App.focusNailSection()">該当項目へ ➜</button>
+        </div>
+        <div class="dock-action-wrap">
+          <button class="boxbutton boxbutton--white" style="min-height: 44px; padding: 10px 48px 10px 18px;" onclick="App.goToStep(4)">
+            <span>確定してお客様カルテを見る</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+
+  <!-- SCREEN 4: CUSTOMER MAGAZINE KARTE -->
+  <section class="screen-panel" id="screen-4">
+    <div class="magazine-container">
+      
+      <!-- 1. Past Reports Timeline Bar (手書き原本指示) -->
+      <div class="timeline-accordion-box">
+        <div class="timeline-accordion-head" onclick="App.toggleTimeline()">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            <span>過去のレポートを見返す（来店履歴タイムライン）</span>
+          </div>
+          <span style="font-size: 11px; color: var(--ink-muted);" id="timeline-toggle-text">表示する ▼</span>
+        </div>
+        
+        <div class="timeline-chips-tray" id="timeline-tray" style="display:none;">
+          <div class="timeline-date-chip is-active" onclick="App.switchReportDate('2026.08.15', this)">
+            <span>2026.08.15</span>
+            <span class="sub">本日・フルコース</span>
+          </div>
+          <div class="timeline-date-chip" onclick="App.switchReportDate('2026.08.01', this)">
+            <span>2026.08.01</span>
+            <span class="sub">スパ＆部分ケア</span>
+          </div>
+          <div class="timeline-date-chip" onclick="App.switchReportDate('2026.07.18', this)">
+            <span>2026.07.18</span>
+            <span class="sub">フルコース</span>
+          </div>
+          <div class="timeline-date-chip" onclick="App.switchReportDate('2026.06.25', this)">
+            <span>2026.06.25</span>
+            <span class="sub">フルコース</span>
+          </div>
+          <div class="timeline-date-chip" onclick="App.switchReportDate('2026.06.05', this)">
+            <span>2026.06.05</span>
+            <span class="sub">爪・耳ケア</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Sticky Quick Jump Bar (手書き原本指示: リスト ① ② ③ ④ ⑤) -->
+      <div class="quick-jump-nav-sticky">
+        <div class="quick-jump-buttons">
+          <button class="btn-jump-number" onclick="App.jumpToWave('wave-skin')">① 皮膚</button>
+          <button class="btn-jump-number" onclick="App.jumpToWave('wave-nail')">② 爪</button>
+          <button class="btn-jump-number" onclick="App.jumpToWave('wave-ear')">③ 耳</button>
+          <button class="btn-jump-number" onclick="App.jumpToWave('wave-teeth')">④ 歯</button>
+          <button class="btn-jump-number" onclick="App.jumpToWave('wave-weight')">⑤ 体重</button>
+          <button class="btn-jump-number" onclick="App.jumpToWave('wave-cut')">⑥ カット</button>
+        </div>
+        <button class="btn-toggle-all" id="btn-toggle-all-waves" onclick="App.toggleAllWaves()">全開/全閉</button>
+      </div>
+
+      <!-- 3. Magazine Hero Section -->
+      <header class="magazine-hero">
+        <div class="magazine-hero__header">
+          <div class="magazine-hero__brand">SALTY DOG</div>
+          <div class="magazine-hero__date" id="mag-report-date-label">2026.08.15 vol.24</div>
+        </div>
+
+        <div class="magazine-hero__media-grid">
+          <div class="magazine-hero-photo-main">
+            <img src="/assets/photo-dog-paw-high.jpg" alt="ポンチ 仕上がり写真" onclick="App.openLightbox(this.src)">
+          </div>
+          <div class="magazine-hero-side-card">
+            <div>
+              <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.16em; color: var(--ink-muted); text-transform: uppercase; margin-bottom: 6px;">Trimming & Spa Report</div>
+              <h2 class="magazine-dog-title" id="mag-dog-name">ポンチ くん</h2>
+              <div class="magazine-dog-sub" id="mag-dog-sub">トイプードル / 4歳 / 2.79kg</div>
+            </div>
+
+            <div>
+              <div style="font-size: 13.5px; line-height: 1.8; color: var(--ink-body); margin-bottom: 16px;">
+                ふわふわのテディベアカットと、<br>
+                皮膚を優しくうるおす保湿スパで、<br>
+                艶やかな美しい仕上がりになりました。
+              </div>
+              <div class="magazine-trimmer-badge">
+                <div class="magazine-trimmer-badge__avatar">塩</div>
+                <div>
+                  <div style="font-size: 12px; font-weight: 700;">担当トリマー: 塩田</div>
+                  <div style="font-size: 10.5px; color: var(--ink-muted);">SALTY DOG メディカルトリマー</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- 4. Editorial Personal Letter -->
+      <section class="magazine-letter-section">
+        <h3 class="magazine-letter-title">担当トリマーからのメッセージ</h3>
+        <p class="magazine-letter-body" id="mag-letter-content">
+          今月もとってもお利口にトリミングさせてくれました。腰のマッサージ中はずっとウトウトして気持ちよさそうで、リラックスした様子にとても癒やされました。また来月お会いできるのを楽しみにしております。
+        </p>
+      </section>
+
+      <!-- 5. Hand-Drawn Style Wave Accordion Stack (手書き原本指示: 動きとして) -->
+      <section class="wave-accordion-stack">
+        
+        <div style="text-align: center; margin-bottom: 16px;">
+          <div style="font-family: var(--font-en); font-size: 11px; font-weight: 700; letter-spacing: 0.18em; color: var(--ink-muted); text-transform: uppercase;">Health & Grooming Details</div>
+          <h3 style="font-family: var(--font-serif); font-size: 22px; font-weight: 700;">各項目の健康診断・カルテ詳細</h3>
+          <p style="font-size: 12px; color: var(--ink-secondary); margin-top: 4px;">タップすると各項目の詳細・解剖図・写真が展開します</p>
+        </div>
+
+        <!-- Wave Card 1: 皮膚 -->
+        <div class="wave-card is-open" id="wave-skin">
+          <div class="wave-card-head" onclick="App.toggleWaveCard('wave-skin')">
+            <div class="wave-card-head__title-wrap">
+              <span class="wave-card-number-badge">1</span>
+              <span class="wave-card-title">皮膚・被毛・スパ状態（4面図）</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span class="wave-card-status-pill">保湿スパ済・良好</span>
+              <div class="wave-card-toggle-icon">▼</div>
+            </div>
+          </div>
+          
+          <svg class="wave-separator-svg" viewBox="0 0 1000 12" preserveAspectRatio="none"><path d="M0,6 Q250,0 500,6 T1000,6"/></svg>
+
+          <div class="wave-card-body">
+            <div class="wave-body-grid-2col">
+              <div class="wave-body-img-frame">
+                <img src="/assets/photo-dog-skin.jpg" alt="皮膚被毛" onclick="App.openLightbox(this.src)">
+              </div>
+              <div>
+                <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 6px;">皮膚・被毛のコンディション</h4>
+                <p style="font-size: 13.5px; line-height: 1.8; color: var(--ink-body); margin-bottom: 12px;">
+                  背中・お腹ともに赤みや乾燥はなく、非常に良好な状態です。セラミド保湿スパをたっぷり浸透させたため、毛艶と手触りが格段に柔らかくなっています。
+                </p>
+                <div style="font-size: 12px; background: var(--bg-paper); padding: 10px; border: 1px solid var(--border-subtle);">
+                  <strong>トリマーチェック:</strong> フケ・ニキビなし / スパ保湿完了
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Wave Card 2: 爪 -->
+        <div class="wave-card is-open" id="wave-nail">
+          <div class="wave-card-head" onclick="App.toggleWaveCard('wave-nail')">
+            <div class="wave-card-head__title-wrap">
+              <span class="wave-card-number-badge">2</span>
+              <span class="wave-card-title">爪のチェック（3段階判定・解剖図）</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span class="wave-card-status-pill">1. 適切カット済</span>
+              <div class="wave-card-toggle-icon">▼</div>
+            </div>
+          </div>
+
+          <svg class="wave-separator-svg" viewBox="0 0 1000 12" preserveAspectRatio="none"><path d="M0,6 Q250,12 500,6 T1000,6"/></svg>
+
+          <div class="wave-card-body">
+            <div class="wave-body-grid-2col">
+              <div class="wave-body-img-frame">
+                <img src="/assets/guide-nail-state.jpg" alt="爪解剖図" onclick="App.openLightbox(this.src)">
+              </div>
+              <div>
+                <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 6px;">爪の長さと接地状態の解説</h4>
+                <p style="font-size: 13.5px; line-height: 1.8; color: var(--ink-body); margin-bottom: 12px;">
+                  血管の直前で安全に丸く整えています。地面への接地がなく、歩行時に指の骨格へ負担がかからない理想的な長さを維持しています。
+                </p>
+                <div style="font-size: 12px; background: #fde8e8; color: var(--accent-alert); padding: 10px; border: 1px solid rgba(211,47,47,0.2);">
+                  ⚠️ <strong>注意点:</strong> 爪が長い状態で生活していると、歩行バランスが崩れ指が変形する恐れがあります。定期的なケアが重要です。
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Wave Card 3: 耳 -->
+        <div class="wave-card" id="wave-ear">
+          <div class="wave-card-head" onclick="App.toggleWaveCard('wave-ear')">
+            <div class="wave-card-head__title-wrap">
+              <span class="wave-card-number-badge">3</span>
+              <span class="wave-card-title">耳のチェック（左右個別スコアリング）</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span class="wave-card-status-pill">左右 Lv.1 良好</span>
+              <div class="wave-card-toggle-icon">▼</div>
+            </div>
+          </div>
+
+          <svg class="wave-separator-svg" viewBox="0 0 1000 12" preserveAspectRatio="none"><path d="M0,6 Q250,0 500,6 T1000,6"/></svg>
+
+          <div class="wave-card-body">
+            <div class="wave-body-grid-2col">
+              <div class="wave-body-img-frame">
+                <img src="/assets/photo-dog-ear.jpg" alt="耳の様子" onclick="App.openLightbox(this.src)">
+              </div>
+              <div>
+                <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 6px;">左右耳道の清潔度</h4>
+                <p style="font-size: 13.5px; line-height: 1.8; color: var(--ink-body); margin-bottom: 12px;">
+                  右耳(R)・左耳(L)ともに内部の赤みや汚れはなく、通気性も良好です。耳毛の処理と優しいローション洗浄を行いました。
+                </p>
+                <div style="font-size: 12px; background: var(--bg-paper); padding: 10px; border: 1px solid var(--border-subtle);">
+                  <strong>判定結果:</strong> 右耳: Lv.1 (良好) / 左耳: Lv.1 (良好)
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Wave Card 4: 歯 -->
+        <div class="wave-card is-open" id="wave-teeth">
+          <div class="wave-card-head" onclick="App.toggleWaveCard('wave-teeth')">
+            <div class="wave-card-head__title-wrap">
+              <span class="wave-card-number-badge">4</span>
+              <span class="wave-card-title">口・歯のチェック（頭骨解剖図・6段階）</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span class="wave-card-status-pill">ピカピカ良好</span>
+              <div class="wave-card-toggle-icon">▼</div>
+            </div>
+          </div>
+
+          <svg class="wave-separator-svg" viewBox="0 0 1000 12" preserveAspectRatio="none"><path d="M0,6 Q250,12 500,6 T1000,6"/></svg>
+
+          <div class="wave-card-body">
+            <div class="wave-body-grid-2col">
+              <div class="wave-body-img-frame">
+                <img src="/assets/guide-teeth-state.jpg" alt="頭骨歯列図" onclick="App.openLightbox(this.src)">
+              </div>
+              <div>
+                <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 6px;">口腔内・歯石の判定結果</h4>
+                <p style="font-size: 13.5px; line-height: 1.8; color: var(--ink-body); margin-bottom: 12px;">
+                  上顎・下顎ともに歯石の蓄積はなく、歯茎の引き締まりも健康です。グラつきのある歯も見られません。
+                </p>
+                <div style="font-size: 12px; background: var(--bg-paper); padding: 10px; border-left: 3px solid var(--ink-primary); line-height: 1.7;">
+                  <strong>トリマーアドバイス:</strong><br>
+                  食事内容よりも口腔環境の問題の方が寿命に大きく関わります。このピカピカな状態を保つため、毎日のガーゼ磨きを継続してください。
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Wave Card 5: 体重 -->
+        <div class="wave-card" id="wave-weight">
+          <div class="wave-card-head" onclick="App.toggleWaveCard('wave-weight')">
+            <div class="wave-card-head__title-wrap">
+              <span class="wave-card-number-badge">5</span>
+              <span class="wave-card-title">体重・体型スコア（BCS / MCS）</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span class="wave-card-status-pill">2.79 kg (適正)</span>
+              <div class="wave-card-toggle-icon">▼</div>
+            </div>
+          </div>
+
+          <svg class="wave-separator-svg" viewBox="0 0 1000 12" preserveAspectRatio="none"><path d="M0,6 Q250,0 500,6 T1000,6"/></svg>
+
+          <div class="wave-card-body">
+            <div class="wave-body-grid-2col">
+              <div style="background: var(--bg-paper); padding: 16px; border: 1px solid var(--border-subtle); display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                <div style="font-size: 11px; font-weight: 700; color: var(--ink-muted); margin-bottom: 8px;">過去の体重推移グラフ (kg)</div>
+                <svg viewBox="0 0 300 120" width="100%" height="90">
+                  <polyline fill="none" stroke="#deded9" stroke-width="1.5" stroke-dasharray="3,3" points="0,80 300,80" />
+                  <polyline fill="none" stroke="#121212" stroke-width="2.5" points="20,70 80,65 150,75 220,55 280,40" />
+                  <circle cx="280" cy="40" r="5" fill="#c85a32" />
+                  <text x="225" y="30" font-size="12" font-family="Inter" font-weight="700" fill="#c85a32">2.79 kg</text>
+                </svg>
+              </div>
+              <div>
+                <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 6px;">BCS（ボディコンディション）評価</h4>
+                <p style="font-size: 13.5px; line-height: 1.8; color: var(--ink-body); margin-bottom: 12px;">
+                  体重は単なる数値だけでなく、BCS（体型）とMCS（筋肉量）で総合評価します。肋骨に適度な脂肪の被覆があり、上から見て綺麗なウエストのくびれが確認できます（BCS 3: 理想体型）。
+                </p>
+                <div style="font-size: 12px; background: var(--bg-paper); padding: 10px; border: 1px solid var(--border-subtle);">
+                  前回（2.67kg）比: <strong>+120g</strong>（成長・筋肉量の適正増加）
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Wave Card 6: カット -->
+        <div class="wave-card is-open" id="wave-cut">
+          <div class="wave-card-head" onclick="App.toggleWaveCard('wave-cut')">
+            <div class="wave-card-head__title-wrap">
+              <span class="wave-card-number-badge">6</span>
+              <span class="wave-card-title">カットスタイル & 本日のフォトギャラリー</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span class="wave-card-status-pill">4枚撮影</span>
+              <div class="wave-card-toggle-icon">▼</div>
+            </div>
+          </div>
+
+          <svg class="wave-separator-svg" viewBox="0 0 1000 12" preserveAspectRatio="none"><path d="M0,6 Q250,12 500,6 T1000,6"/></svg>
+
+          <div class="wave-card-body">
+            <div style="margin-bottom: 16px; font-size: 13.5px; line-height: 1.8;">
+              <strong>カット設定:</strong> ボディ6mmバリカン / お顔ふんわりテディベア / 足先すっきりブーツカット
+            </div>
+            <div class="gallery-mosaic-grid">
+              <div class="gallery-mosaic-item" onclick="App.openLightbox('/assets/photo-trim-action.jpg')">
+                <img src="/assets/photo-trim-action.jpg" alt="トリミング中">
+                <div class="gallery-mosaic-caption">カット中の真剣な表情</div>
+              </div>
+              <div class="gallery-mosaic-item" onclick="App.openLightbox('/assets/photo-dog-paw-high.jpg')">
+                <img src="/assets/photo-dog-paw-high.jpg" alt="お手ポーズ">
+                <div class="gallery-mosaic-caption">上手にお手</div>
+              </div>
+              <div class="gallery-mosaic-item" onclick="App.openLightbox('/assets/photo-dog-pawpad.jpg')">
+                <img src="/assets/photo-dog-pawpad.jpg" alt="肉球ケア">
+                <div class="gallery-mosaic-caption">肉球ぷるぷる保湿</div>
+              </div>
+              <div class="gallery-mosaic-item" onclick="App.openLightbox('/assets/photo-dog-jump.jpg')">
+                <img src="/assets/photo-dog-jump.jpg" alt="仕上がり">
+                <div class="gallery-mosaic-caption">ご機嫌な仕上がり</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- 6. Next Visit (手書き原本指示: 理想の周期) -->
+      <section class="magazine-revisit-box">
+        <div class="magazine-revisit-tag">Next Schedule</div>
+        <h4 class="magazine-revisit-title">次回のおすすめご来店時期</h4>
+        <p class="magazine-revisit-desc">
+          ポンチくんの毛質と爪の伸び具合から、理想の周期は<strong>約3〜4週間後（2026年9月10日前後）</strong>です。<br>
+          被毛の毛玉防止と皮膚の健康維持のため、定期的なケアをおすすめいたします。
+        </p>
+        <button class="boxbutton boxbutton--white" style="min-height: 52px;" onclick="alert('LINE公式アカウントまたは予約システムと連携します')">
+          <span>次回のご予約・ご相談はこちら</span>
+        </button>
+      </section>
+
+      <div style="text-align: center; margin-top: 40px;">
+        <button class="boxbutton boxbutton--white" onclick="App.goToStep(2)">
+          <span>わんちゃんカルテ一覧へ戻る</span>
+        </button>
+      </div>
+
+    </div>
+  </section>
+
+</main>
+
+<!-- Lightbox Modal -->
+<div class="lightbox-modal" id="lightbox-modal" onclick="App.closeLightbox()">
+  <div class="lightbox-close-btn">&times;</div>
+  <img id="lightbox-img" src="" alt="拡大画像">
+</div>
+
+<!-- JS Logic (独創メソッド削除) -->
+<script>
+const App = {
+  currentStep: 1,
+  currentDog: {
+    name: 'ポンチ',
+    owner: '塩田 様',
+    breed: 'トイプードル',
+    weight: 2.79,
+    prevWeight: 2.67
+  },
+  currentStamp: '赤み',
+  marks: [],
+  allWavesOpen: true,
+
+  init() {
+    this.initCanvas();
+  },
+
+  goToStep(stepNum) {
+    this.currentStep = stepNum;
+
+    document.querySelectorAll('.btn-step').forEach(btn => {
+      btn.classList.toggle('is-active', parseInt(btn.dataset.step) === stepNum);
+    });
+
+    document.querySelectorAll('.screen-panel').forEach(panel => {
+      panel.classList.remove('is-active');
+    });
+    const targetPanel = document.getElementById(`screen-${stepNum}`);
+    if (targetPanel) targetPanel.classList.add('is-active');
+
+    const brandLabel = document.getElementById('nav-brand-label');
+    if (brandLabel) {
+      if (stepNum === 1) brandLabel.textContent = 'SALTY DOG';
+      else if (stepNum === 2) brandLabel.textContent = 'カルテ検索・一覧';
+      else if (stepNum === 3) brandLabel.textContent = `${this.currentDog.name} カルテ作成`;
+      else if (stepNum === 4) brandLabel.textContent = `${this.currentDog.name} 顧客カルテ`;
+    }
+
+    if (stepNum === 3) {
+      setTimeout(() => this.drawCanvas(), 50);
+    }
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  },
+
+  selectKarte(dogName, ownerName, breed) {
+    this.currentDog.name = dogName;
+    this.currentDog.owner = ownerName;
+    this.currentDog.breed = breed;
+
+    document.getElementById('editor-dog-header').textContent = `${dogName} カルテ入力`;
+    document.getElementById('mag-dog-name').textContent = `${dogName} くん`;
+    document.getElementById('mag-dog-sub').textContent = `${breed} / 4歳 / 2.79kg`;
+
+    // 爪の未選択リセット & フッターを赤（未記入あり）にセット
+    const nailWrap = document.getElementById('nail-stepper-wrap');
+    if (nailWrap) {
+      nailWrap.querySelectorAll('.stepper-btn').forEach(b => b.classList.remove('is-active'));
+    }
+    const dock = document.getElementById('editor-bottom-dock');
+    const statusIcon = document.getElementById('dock-status-icon');
+    const statusText = document.getElementById('dock-status-text');
+    const gotoBtn = document.getElementById('btn-dock-goto');
+
+    if (dock) dock.classList.add('has-incomplete');
+    if (statusIcon) statusIcon.textContent = '⚠️';
+    if (statusText) statusText.textContent = '未記入: 爪のチェック';
+    if (gotoBtn) gotoBtn.style.display = 'inline-block';
+
+    this.goToStep(3);
+  },
+
+  cloneAndCreate(dogName) {
+    alert(`【複製完了】${dogName}の過去カルテデータを読み込みました。変更箇所のみ上書きして保存できます。`);
+    this.selectKarte(dogName, '塩田 様', 'トイプードル');
+  },
+
+  createNewKarte() {
+    this.selectKarte('新規わんちゃん', '新規飼い主 様', '未設定');
+  },
+
+  filterKarte(query) {
+    const q = (query || '').trim().toLowerCase();
+    const cards = document.querySelectorAll('.karte-card');
+    let count = 0;
+
+    cards.forEach(card => {
+      const text = card.textContent.toLowerCase();
+      if (!q || text.includes(q)) {
+        card.style.display = 'flex';
+        count++;
+      } else {
+        card.style.display = 'none';
+      }
+    });
+
+    const totalEl = document.getElementById('karte-total-count');
+    if (totalEl) totalEl.textContent = `${count}件`;
+  },
+
+  toggleDirVoiceSearch() {
+    const btn = document.getElementById('dir-mic-btn');
+    const label = document.getElementById('dir-mic-label');
+    const input = document.getElementById('dir-search-input');
+
+    if (btn) btn.classList.add('is-recording');
+    if (label) label.textContent = '録音中...';
+
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const rec = new SpeechRec();
+      rec.lang = 'ja-JP';
+      rec.onresult = (e) => {
+        const text = e.results[0][0].transcript;
+        if (input) {
+          input.value = text;
+          this.filterKarte(text);
+        }
+        if (btn) btn.classList.remove('is-recording');
+        if (label) label.textContent = '音声検索';
+      };
+      rec.onerror = () => {
+        if (btn) btn.classList.remove('is-recording');
+        if (label) label.textContent = '音声検索';
+      };
+      rec.start();
+    } else {
+      setTimeout(() => {
+        if (input) {
+          input.value = 'ポンチ';
+          this.filterKarte('ポンチ');
+        }
+        if (btn) btn.classList.remove('is-recording');
+        if (label) label.textContent = '音声検索';
+      }, 1200);
+    }
+  },
+
+  toggleWaveCard(id) {
+    const card = document.getElementById(id);
+    if (card) {
+      card.classList.toggle('is-open');
+    }
+  },
+
+  toggleAllWaves() {
+    this.allWavesOpen = !this.allWavesOpen;
+    document.querySelectorAll('.wave-card').forEach(card => {
+      card.classList.toggle('is-open', this.allWavesOpen);
+    });
+    const btn = document.getElementById('btn-toggle-all-waves');
+    if (btn) btn.textContent = this.allWavesOpen ? 'すべて閉じる' : 'すべて開く';
+  },
+
+  jumpToWave(id) {
+    const card = document.getElementById(id);
+    if (card) {
+      card.classList.add('is-open');
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  },
+
+  toggleTimeline() {
+    const tray = document.getElementById('timeline-tray');
+    const label = document.getElementById('timeline-toggle-text');
+    if (tray) {
+      const isOpen = tray.style.display !== 'none';
+      tray.style.display = isOpen ? 'none' : 'flex';
+      if (label) label.textContent = isOpen ? '表示する ▼' : '閉じる ▲';
+    }
+  },
+
+  switchReportDate(dateStr, chipEl) {
+    document.querySelectorAll('.timeline-date-chip').forEach(c => c.classList.remove('is-active'));
+    chipEl.classList.add('is-active');
+
+    const dateLabel = document.getElementById('mag-report-date-label');
+    if (dateLabel) dateLabel.textContent = `${dateStr} vol.24`;
+    alert(`【過去カルテ表示】${dateStr} の施術記録に切り替えました。`);
+  },
+
+  selectStepper(btn, type, val) {
+    const parent = btn.parentElement;
+    if (parent) {
+      parent.querySelectorAll('.stepper-btn').forEach(b => b.classList.remove('is-active'));
+      btn.classList.add('is-active');
+    }
+    
+    if (type === 'nail') {
+      const dock = document.getElementById('editor-bottom-dock');
+      const statusIcon = document.getElementById('dock-status-icon');
+      const statusText = document.getElementById('dock-status-text');
+      const gotoBtn = document.getElementById('btn-dock-goto');
+
+      if (dock) dock.classList.remove('has-incomplete');
+      if (statusIcon) statusIcon.textContent = '✓';
+      if (statusText) statusText.textContent = '全項目入力完了 (6/6)';
+      if (gotoBtn) gotoBtn.style.display = 'none';
+    }
+  },
+
+  selectSubStepper(btn) {
+    const parent = btn.parentElement;
+    if (parent) {
+      parent.querySelectorAll('.stepper-btn').forEach(b => b.classList.remove('is-active'));
+      btn.classList.add('is-active');
+    }
+  },
+
+  selectTeeth(btn, label) {
+    const parent = btn.parentElement;
+    if (parent) {
+      parent.querySelectorAll('.teeth-pill-btn').forEach(b => b.classList.remove('is-active'));
+      btn.classList.add('is-active');
+    }
+  },
+
+  onWeightChange(val) {
+    const w = parseFloat(val) || 0;
+    const diff = Math.round((w - this.currentDog.prevWeight) * 1000);
+    const badge = document.getElementById('weight-diff-badge');
+    if (badge) {
+      if (diff >= 0) {
+        badge.className = 'weight-diff-badge is-up';
+        badge.textContent = `+${diff}g ▲`;
+      } else {
+        badge.className = 'weight-diff-badge is-down';
+        badge.textContent = `${diff}g ▼`;
+      }
+    }
+  },
+
+  toggleEditorVoice() {
+    const btn = document.getElementById('editor-voice-btn');
+    const ta = document.getElementById('editor-trimmer-letter');
+    if (btn) btn.classList.add('is-recording');
+
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const rec = new SpeechRec();
+      rec.lang = 'ja-JP';
+      rec.onresult = (e) => {
+        const text = e.results[0][0].transcript;
+        if (ta) {
+          ta.value += (ta.value ? ' ' : '') + text;
+          document.getElementById('mag-letter-content').textContent = ta.value;
+        }
+        if (btn) btn.classList.remove('is-recording');
+      };
+      rec.onerror = () => { if (btn) btn.classList.remove('is-recording'); };
+      rec.start();
+    } else {
+      setTimeout(() => {
+        if (ta) {
+          ta.value += (ta.value ? ' ' : '') + '耳裏のブラッシングを丁寧に行いました。';
+          document.getElementById('mag-letter-content').textContent = ta.value;
+        }
+        if (btn) btn.classList.remove('is-recording');
+      }, 1500);
+    }
+  },
+
+  focusNailSection() {
+    const sec = document.getElementById('sec-nail');
+    if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  },
+
+  initCanvas() {
+    const canvas = document.getElementById('marking-canvas');
+    if (!canvas) return;
+    const wrapper = document.getElementById('canvas-wrapper');
+
+    const resize = () => {
+      canvas.width = wrapper.clientWidth;
+      canvas.height = wrapper.clientHeight;
+      this.drawCanvas();
+    };
+
+    window.addEventListener('resize', resize);
+    setTimeout(resize, 100);
+
+    canvas.addEventListener('pointerdown', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / rect.width;
+      const y = (e.clientY - rect.top) / rect.height;
+      this.marks.push({ x, y, type: this.currentStamp });
+      this.drawCanvas();
+    });
+  },
+
+  setStamp(type, btn) {
+    this.currentStamp = type;
+    document.querySelectorAll('.stamp-btn').forEach(b => b.classList.remove('is-active'));
+    btn.classList.add('is-active');
+  },
+
+  clearCanvas() {
+    this.marks = [];
+    this.drawCanvas();
+  },
+
+  drawCanvas() {
+    const canvas = document.getElementById('marking-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const img = document.getElementById('canvas-bg-img');
+    if (img && img.complete && img.naturalWidth > 0) {
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    } else {
+      ctx.fillStyle = '#faf9f6';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#8c8c88';
+      ctx.font = '12px Noto Sans JP';
+      ctx.textAlign = 'center';
+      ctx.fillText('犬体4面図（前面・背面・左側面・右側面）', canvas.width / 2, canvas.height / 2);
+    }
+
+    this.marks.forEach(m => {
+      const px = m.x * canvas.width;
+      const py = m.y * canvas.height;
+      ctx.beginPath();
+      ctx.arc(px, py, 9, 0, Math.PI * 2);
+
+      if (m.type === '赤み') ctx.fillStyle = '#d32f2f';
+      else if (m.type === 'しこり/イボ') ctx.fillStyle = '#f57c00';
+      else if (m.type === '毛玉') ctx.fillStyle = '#1976d2';
+      else ctx.fillStyle = '#7b1fa2';
+
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 8px Inter';
+      ctx.textAlign = 'center';
+      ctx.fillText(m.type.charAt(0), px, py + 3);
+    });
+  },
+
+  openLightbox(src) {
+    const modal = document.getElementById('lightbox-modal');
+    const img = document.getElementById('lightbox-img');
+    if (modal && img) {
+      img.src = src;
+      modal.classList.add('is-open');
+    }
+  },
+
+  closeLightbox() {
+    const modal = document.getElementById('lightbox-modal');
+    if (modal) modal.classList.remove('is-open');
+  }
+};
+
+document.addEventListener('DOMContentLoaded', () => App.init());
+</script>
+
+<script type="module" src="/js/ponchi-app.js"></script>
+</body>
+</html>

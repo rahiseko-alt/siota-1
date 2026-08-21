@@ -1,0 +1,30 @@
+{
+  "format": "trimmer-kv-export-v1",
+  "pages": [
+    {
+      "keys": [
+        { "name": "index/owners.json" },
+        { "name": "owners/a.json" },
+        { "name": "owners/b.json" },
+        { "name": "index/customers.json" },
+        { "name": "customers/x.json" },
+        { "name": "customers/y.json" },
+        { "name": "customers/z.json" },
+        { "name": "customers/q.json" },
+        { "name": "reports/x/rx.json" }
+      ],
+      "list_complete": true
+    }
+  ],
+  "values": {
+    "index/owners.json": { "version": 1, "owners": [{ "ownerSlug": "a" }, { "ownerSlug": "b" }] },
+    "owners/a.json": { "version": 1, "ownerSlug": "a", "ownerName": "サンプルA", "pets": [{ "slug": "x" }, { "slug": "y" }, { "slug": "z" }] },
+    "owners/b.json": { "version": 1, "ownerSlug": "b", "ownerName": "サンプルB", "pets": [{ "slug": "q" }] },
+    "index/customers.json": { "version": 1, "customers": [{ "slug": "x" }, { "slug": "y" }, { "slug": "z" }, { "slug": "q" }] },
+    "customers/x.json": { "version": 1, "slug": "x", "petName": "X", "ownerSlug": "a", "template": "ponchi", "months": { "2026-07": [{ "reportId": "rx", "date": "2026/07/16" }] } },
+    "customers/y.json": { "version": 1, "slug": "y", "petName": "Y", "ownerSlug": "a", "template": "ponchi", "months": {} },
+    "customers/z.json": { "version": 1, "slug": "z", "petName": "Z", "ownerSlug": "a", "template": "ponchi", "months": {} },
+    "customers/q.json": { "version": 1, "slug": "q", "petName": "Q", "ownerSlug": "b", "template": "ponchi", "months": {} },
+    "reports/x/rx.json": { "reportId": "rx", "date": "2026/07/16", "report": { "pet": "X", "heroPhotos": ["data:image/png;base64,iVBORw0KGgoAAAAA"] } }
+  }
+}
