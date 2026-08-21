@@ -90,11 +90,54 @@ AI 生成が5件（C2PA 署名から OpenAI / Google と特定）、残る15件�
 
 `docs/runbook.md` は M8 で是正済み（絶対パス6箇所・個人アドレス・存在しない A版ファイルへの指示）。
 
+## 2-b. 飼い主の導線（2026-08-21 マスター決定）
+
+**飼い主はログインしてマイページへ行き、そこにある自分の飼っている犬の一覧から選んでカルテを見る。**
+
+無認証の公開URL `/p/{slug}` を廃止したあとの代替導線がこれ。plan には「`/p/` `/o/` 廃止」としか
+書かれておらず代替が空白だったので、ここで確定した。
+
+### 調べたら、この導線はほぼ実装済みだった
+
+| 段階 | 実装 | 状態 |
+|---|---|---|
+| ログイン | `bootProtectedPortal()` + Google OAuth（`supabase-auth.js`） | ✅ ある |
+| マイページ = 犬の一覧 | route `pets` = `/my` → `renderPets()` が犬カードを並べる | ✅ ある |
+| 犬を選ぶ | `/my/pets/{petId}` | ✅ ある |
+| カルテを見る | `/my/pets/{petId}/reports/{reportId}` | ✅ ある |
+| 自分の犬だけ見える | RLS `pets_customer_select` = `is_owner_user(owner_id)` | ✅ ある |
+| 確定済みだけ見える | RLS `reports_customer_select` = `status = 'final'` | ✅ ある |
+| **`my.html` の DOM フック** | `data-portal="customer"` / `data-portal-content` / `data-login-panel` / `data-google-login` | ❌ **全部 0 件** |
+
+`supabase-auth.js:280` が `document.body.dataset.portal === 'customer'` を条件にしているため、
+**ポータルは一度も起動していない**（`F-20260821` 系の既知事項・統合 plan のリスク#3）。
+やることは「作る」ではなく「フックを戻す」に近い。
+
+### ⚠️ 順序を P8 → P1 に変えた理由
+
+この導線は**全部 Supabase の Google OAuth 前提**で、Supabase はまだ有効化されていない。
+そして **KV モードには飼い主のログインが存在しない**——`/p/{slug}` が無認証なのは、
+それが飼い主向けの唯一の経路だからである。
+
+**P1 で先に `/p/` を消すと、Supabase が有効になるまで飼い主はカルテを一切見られなくなる。**
+置き換え先を動く状態にしてから古い経路を消す順序にする。
+
+もう1つ、P1 は「画面の改名」ではない。肉球画面の撤去（`grep -c "paw" src/js/ponchi-app.js` は現在 31）と
+`src/search.html` の削除を含み、**`verify:*` 4本はすべて `#screen-paw .pad` を経由している**ので
+4本とも書き直しになる。検査の作り直しを含む一塊の作業として見積もること。
+
+---
+
 ## 3. 次回やること (Next Steps)
 
-1. **素材の出所確認**（マスター作業）— `docs/ASSET-PROVENANCE.md` の `UNVERIFIED` 15件。コードでは解けない。実写に見える4件が優先。
-2. **統合フェーズ P1 以降**（`docs/ops/plans/2026-08-21-integration.md`）— P0 は完了。次の P1「画面骨格」は**肉球画面の撤去**（`grep -c "paw" src/js/ponchi-app.js` を 31 → 0）と `src/search.html` の削除を含む。
-   ⚠️ **`verify:*` 4本はすべて `#screen-paw .pad` を経由している。** 肉球を撤去すると4本とも書き直しになるので、P1 は「画面の改名」ではなく「検査の作り直しを含む一塊の作業」として見積もること。
+1. **P8 — `my.html` の再結線**（次の一手）。上表の ❌ 1行を埋める作業。
+   ただし **Supabase が無効なので実機検証ができない**。静的検証（`node --check` / フックの実在 /
+   ルート定義との対応）までしか付けられず、`verify:roundtrip` のような実証は Supabase 有効化後になる。
+   **「静的に通った」を「動く」と書かないこと**（`F-20260821-11` の再発防止）。
+2. **Supabase の有効化**（マスター作業）— プロジェクト作成と Google OAuth 設定。
+   P8 の実機確認と、飼い主導線の成立の両方がここに依存している。**最優先の外部依存**。
+3. **素材の出所確認**（マスター作業）— `docs/ASSET-PROVENANCE.md` の `UNVERIFIED` 15件。コードでは解けない。実写に見える4件が優先。
+2. **統合フェーズ — 次は P1 ではなく P8**（順序を変更した。理由は下記）
 3. **Supabase の有効化**（マスター作業）— プロジェクト作成と Google OAuth 設定。実装は済んでいる。
 
 統合に入る前に `docs/design.md` を読むこと。`finalize_report` が**4条件で黙って `null` を返す**ことなど、
