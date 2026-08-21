@@ -1251,7 +1251,19 @@ c.addEventListener('scrollend',function(){var closest=0,minDist=Infinity;cards.f
   var innerW=W-padL-padR, innerH=H-padT-padB;
   var data=[];
   var best=null;
-  function ymShort(s){var p=String(s||'').split('-');var m=(p[1]||'').replace(/^0/,'');if(p.length>=3&&p[2]){return m+'/'+(p[2]||'').replace(/^0/,'');}return m+'月';}
+  /* 表示用の月ラベル。返り値が数字と '/' と '月' だけになるようにしてある。
+     ここには保存済みカルテの weights[].ym がそのまま流れてくる。出力は
+     buildSVG() と renderList() で innerHTML に連結されるため、任意の文字を
+     通すと飼い主の公開ページで実行される（F-20260821-17 で実証済み）。
+     エスケープではなく「数字以外を落とす」ことで、構造的に markup を返せなくする。 */
+  function ymShort(s){
+    var p=String(s||'').split('-');
+    var digits=function(v){return String(v||'').replace(/\D/g,'').replace(/^0+(?=\d)/,'');};
+    var m=digits(p[1]);
+    var d=digits(p[2]);
+    if(p.length>=3&&d)return m+'/'+d;
+    return m+'月';
+  }
   function sortData(){data.sort(function(a,b){return a.ym<b.ym?-1:1;});}
   function buildSVG(){
     var kgs=data.map(function(d){return d.kg;});
@@ -1326,7 +1338,15 @@ c.addEventListener('scrollend',function(){var closest=0,minDist=Infinity;cards.f
   window.__SALTYDOG_SET_WEIGHTS = function(arr){
     if(!Array.isArray(arr))return;
     data.length=0;
-    arr.forEach(function(item){if(item&&item.ym&&isFinite(item.kg))data.push({ym:item.ym,kg:Number(item.kg)});});
+    /* ym は heroDateVal() が /^\d{4}-\d{2}-\d{2}$/ を通したものしか作らない。
+       保存済み JSON は無認証の POST /api/reports 経由でも入るので、
+       アプリが作り得ない形は読み込み時点で捨てる（多層防御）。 */
+    arr.forEach(function(item){
+      if(!item||!isFinite(item.kg))return;
+      var ym=String(item.ym||'');
+      if(!/^\d{4}-\d{2}(-\d{2})?$/.test(ym))return;
+      data.push({ym:ym,kg:Number(item.kg)});
+    });
     render();
   };
 })();

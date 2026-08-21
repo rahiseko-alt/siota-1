@@ -17,7 +17,9 @@
 - **M7**: 眠っていた Supabase 系3スイート（storage 6 / store 23 / auth 10 = 39件）を `test:supabase:static` に配線し、`npm test` が全6スイート **61 pass** を実行するようにした。`scripts/design-isolation-guard.mjs` を新規作成して `npm run check` に組み込み、`design/README.md` を追加。
 - **カルテ往復の修復（最重要）**: マスター指摘を受けて機能そのものを検査したところ、**トリマーが記入した所見の大半が飼い主に届いていなかった**。皮膚の種類・変化と歯の状態は保存されるのに復元で静かに消え（`cssAttrSafe` が日本語の値を空にしていた）、耳・爪・歯のコメントは `data-field` が無く保存対象ですらなく、担当からの一言は保存されないうえ既定文が飼い主に届いていた。犬の名前も肉球画面に一度も出ていなかった。全て修正し、`npm run verify:roundtrip` で常時検査する。詳細は `docs/failures.md` の F-20260821-11〜14。
 - **カルテ0件の犬の見え方を是正（F-15）**: 施術を一度もしていない犬の公開ページに、架空の月ラベル5つ・他所の犬の Unsplash 写真5枚・他の犬の体重と担当コメント入りのデモカルテが、その犬の名前で出ていた。飼い主には見本を一切出さず「まだカルテがありません」を表示する。トリマー側の中央パッドだけ「＋ 新規カルテ」として残す（1件目を作る唯一の導線のため）。`npm run verify:empty` で検査。
-- `docs/failures.md` に 16 件を記録（CLOSED 11 / OPEN 4、+ F-06 の Root Cause 訂正）。
+- **stored XSS を発見して修正（F-17・Critical）**: 認証不要の `POST /api/reports` に細工した `weights[].ym` を入れるだけで、飼い主の公開ページで任意の JS が実行された。実ブラウザで実証済み。`ymShort()` が数字以外を返せないようにし、`SET_WEIGHTS` でも形を検査する。`npm run verify:xss` が6経路に撃ち込んで常時検査（修正前 5/6 → 修正後 6/6）。
+- **vibe-base への依存を打ち切り（F-09 / F-10）**: どちらも「移設元を見ないと決着しない」と書いていたが、F-09 は注入シンク31箇所の棚卸しでこのリポジトリだけで解決（→ F-17）。F-10 は受け入れ基準#14 を「移設元から8件を転記」から「**このリポジトリで起きた失敗が再現手順つきで記録されていること**」に読み替えた。以後 vibe-base は参照しない。
+- `docs/failures.md` に 18 件を記録（CLOSED 16 / OPEN 2、+ F-06 の Root Cause 訂正）。
 
 ## 2. 現在の状態 (Current State)
 
@@ -31,6 +33,9 @@
 | `npm run verify:m6` | **11/11 PASS・EXIT 0** |
 | `npm run verify:roundtrip` | **15/15 PASS・EXIT 0**（記入→保存→公開ページの往復） |
 | `npm run verify:empty` | **8/8 PASS・EXIT 0**（カルテ0件の犬に架空の履歴が出ないこと） |
+| `npm run verify:xss` | **6/6 PASS・EXIT 0**（保存データが飼い主のブラウザで実行されないこと） |
+
+`npm run verify:all` で verify 系4本をまとめて回せる。
 
 `verify:m6` / `verify:roundtrip` / `verify:empty` は別端末で `npm run preview` を起動してから実行する。
 playwright 管理外の chromium を使う場合は `M6_CHROMIUM=/path/to/chrome` を渡す。
@@ -54,6 +59,9 @@ playwright 管理外の chromium を使う場合は `M6_CHROMIUM=/path/to/chrome
 **空（`verify:empty`）**: カルテ0件の犬には、架空の月ラベルも見本写真もタップ導線も出ない。
 飼い主には「まだカルテがありません」。トリマーの中央パッドからは1件目を作成できる。
 
+**安全（`verify:xss`）**: 保存されたカルテのデータ6経路（体重の年月・犬名・担当の一言・
+耳のコメント・皮膚の部位）に細工を撃ち込んでも、飼い主のブラウザで実行されない。
+
 導線が通ることと中身が届くことは別物で、**後者は一度も検査されていなかった**。
 `verify:m6` が 9/9 だった時点で、実際には所見の大半が消えていた。
 
@@ -72,8 +80,8 @@ playwright 管理外の chromium を使う場合は `M6_CHROMIUM=/path/to/chrome
 |---|---|---|
 | F-20260821-07 | 納品物が外部 CDN の画像・フォントに依存 | M8 |
 | F-20260821-08 | PWA が未結線（`<link rel="manifest">` 0件） | M8 |
-| F-20260821-09 | plan の言う XSS Critical の箇所を特定できていない | 要 vibe-base 参照 |
-| F-20260821-10 | 移設元の失敗記録8件を転記できていない | 要 vibe-base 参照 |
+
+**残り2件はどちらもこのリポジトリ内で完結する。** 外部リポジトリを要する項目はもう無い。
 
 `docs/runbook.md` は移設元の Windows 絶対パス（`C:\Users\...\vibe-base\...`）を残したままで、
 このリポジトリの手順書として読めない。M9 で直す。
@@ -83,7 +91,7 @@ playwright 管理外の chromium を使う場合は `M6_CHROMIUM=/path/to/chrome
 1. **M8** — `F-20260821-07/-08` を潰す。Unsplash 直リンク10箇所の自リポジトリ同梱と `docs/ASSET-PROVENANCE.md` の作成が本体。あわせて 4ファイルに `link rel="manifest"` を足し、`src/search.html` `src/my.html` の `塩田` を置換する。
 2. **M9** — `AGENTS.md` / `docs/design.md` を実スタック（Vanilla JS + Konva + Cloudflare Workers + `node --test`）へ書き換え、`runbook.md` の Windows 絶対パスを是正する。`F-20260821-09/-10` は vibe-base に触れる環境で行う。
 
-導線・中身・空状態の3つに機械検査が付いたので、**「クライアントが使える状態が、壊れたら機械が気づく」ところまで来ている**。
+導線・中身・空状態・安全の4つに機械検査が付いたので、**「クライアントが使える状態が、壊れたら機械が気づく」ところまで来ている**。
 
 なお F-11 と F-16 は自分の進め方の失敗として記録した。要点は2つ——受入基準を満たすことを
 成果と取り違えないこと、そして**片方がクライアントに実害を出す選択は「判断」ではなく不具合**
