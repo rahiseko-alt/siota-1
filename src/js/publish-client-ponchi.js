@@ -15,7 +15,30 @@
   const API_BASE = '/api';
 
   // ===== DOM ヘルパ =====
+  // cssAttrSafe はセレクタ組み立て時の注入防止。ASCII の「名前」（data-field 名・
+  // 写真キー・行番号）にだけ使う。**保存された「値」には使ってはいけない。**
+  // 皮膚の種類（湿疹・カサブタ・イボ・傷）、変化（成長・縮小・治療中・完治）、
+  // 歯の状態（キレイ・歯石・維持）は日本語なので、通すと空文字になり
+  // `[data-val=""]` という一致しないセレクタが出来上がる。抽出では正しく保存され、
+  // 復元だけが静かに失敗する——トリマーが記入した所見が、保存後に消える。
   function cssAttrSafe(v){return String(v).replace(/[^a-zA-Z0-9_\-]/g,'');}
+
+  /**
+   * pickByValue(groupSelector, value, attr)
+   * groupSelector に一致する要素から is-picked を外し、
+   * 値が attr（既定 'val'）と一致する1件にだけ付け直す。
+   *
+   * 値をセレクタに連結せず JS で比較するので、日本語でも絵文字でも正しく一致し、
+   * かつセレクタ注入の余地が無い。cssAttrSafe を緩めずに済ませるための入口。
+   */
+  function pickByValue(groupSelector, value, attr) {
+    var key = attr || 'val';
+    var wanted = value == null ? '' : String(value);
+    [].forEach.call(document.querySelectorAll(groupSelector), function (el) {
+      var matched = wanted !== '' && String(el.dataset[key] || '') === wanted;
+      el.classList.toggle('is-picked', matched);
+    });
+  }
   function pathSegment(value) { return encodeURIComponent(String(value || '')); }
   function txt(sel) { var el = document.querySelector(sel); return el ? el.textContent.trim() : ''; }
   function field(name) { return txt('[data-field="' + cssAttrSafe(name) + '"]'); }
@@ -119,6 +142,9 @@
       year:      field('year'),
       day:       field('day'),
       bestWeight: field('best-weight'),
+      // 「担当からの一言」。HTML には data-field="staff-note" として最初から在ったが
+      // 抽出側が読んでいなかったため、トリマーが書いても保存されず飼い主に届かなかった。
+      staffNote: field('staff-note'),
       options:   options,
       weights:   weights,
       skin:      skin,
@@ -184,6 +210,10 @@
     setField('day',         report.day);
     setField('best-weight', report.bestWeight);
     setField('bm-title',    report.bmTitle);
+    /* 本キーを持たない旧データでも必ず上書きする。触らずに残すと、HTML の既定文
+       「今月もとっても良い仕上がりでした！…」が飼い主に見えてしまう。
+       担当が書いていない文章を担当の言葉として届けるより、空で出すほうが正しい。 */
+    setField('staff-note', report.staffNote || '');
 
     /* ヒーロー日付: span 復元後に native date ピッカーの value を再構築（旧データ＝day なしも許容） */
     if (typeof window.__SALTYDOG_HERODATE_FROM_SPANS === 'function') {
@@ -239,22 +269,10 @@
         var row = idx + 1;
         setField('skin-loc-' + row,  s.loc);
         setField('skin-size-' + row, s.size);
-        // type
-        document.querySelectorAll('.sk-pick[data-skin-type="' + cssAttrSafe(row) + '"]').forEach(function (el) {
-          el.classList.remove('is-picked');
-        });
-        if (s.type) {
-          var typeEl = document.querySelector('.sk-pick[data-skin-type="' + cssAttrSafe(row) + '"][data-val="' + cssAttrSafe(s.type) + '"]');
-          if (typeEl) typeEl.classList.add('is-picked');
-        }
-        // change
-        document.querySelectorAll('.sk-pick[data-skin-change="' + cssAttrSafe(row) + '"]').forEach(function (el) {
-          el.classList.remove('is-picked');
-        });
-        if (s.change) {
-          var changeEl = document.querySelector('.sk-pick[data-skin-change="' + cssAttrSafe(row) + '"][data-val="' + cssAttrSafe(s.change) + '"]');
-          if (changeEl) changeEl.classList.add('is-picked');
-        }
+        // type / change
+        // 値（湿疹・治療中 等）は日本語なのでセレクタに埋めない。pickByValue を使う。
+        pickByValue('.sk-pick[data-skin-type="' + cssAttrSafe(row) + '"]', s.type);
+        pickByValue('.sk-pick[data-skin-change="' + cssAttrSafe(row) + '"]', s.change);
       });
     }
 
@@ -299,13 +317,8 @@
 
     // --- teeth: status / photo / diagram / comment ---
     if (report.teeth) {
-      document.querySelectorAll('.tt-pick').forEach(function (el) {
-        el.classList.remove('is-picked');
-      });
-      if (report.teeth.status) {
-        var tpick = document.querySelector('.tt-pick[data-teeth="' + cssAttrSafe(report.teeth.status) + '"]');
-        if (tpick) tpick.classList.add('is-picked');
-      }
+      // status（キレイ・歯石・維持）は日本語なのでセレクタに埋めない。
+      pickByValue('.tt-pick', report.teeth.status, 'teeth');
       if (report.teeth.photo) setPhotoSlot('teeth-real', report.teeth.photo);
       // diagram: #tt-canvas-wrap .bm-single の src
       if (report.teeth.diagram) {
@@ -329,14 +342,11 @@
     // extractReport: .ear-cell.is-picked[data-ear="right/left"][data-val]
     if (report.ear) {
       ['right', 'left'].forEach(function (side) {
-        document.querySelectorAll('.ear-cell[data-ear="' + cssAttrSafe(side) + '"]').forEach(function (el) {
-          el.classList.remove('is-picked');
-        });
         var val = report.ear[side];
-        if (val != null && val !== 0) {
-          var epick = document.querySelector('.ear-cell[data-ear="' + cssAttrSafe(side) + '"][data-val="' + cssAttrSafe(val) + '"]');
-          if (epick) epick.classList.add('is-picked');
-        }
+        pickByValue(
+          '.ear-cell[data-ear="' + cssAttrSafe(side) + '"]',
+          val != null && val !== 0 ? val : '',
+        );
       });
       setField('ear-comment', report.ear.comment);
       if (report.ear.photo) setPhotoSlot('ear', report.ear.photo);
@@ -344,13 +354,11 @@
 
     // --- nail: level / comment ---
     if (report.nail) {
-      document.querySelectorAll('.nail-lv').forEach(function (el) {
-        el.classList.remove('is-picked');
-      });
-      if (report.nail.level != null && report.nail.level !== 0) {
-        var npick = document.querySelector('.nail-lv[data-nail="' + cssAttrSafe(report.nail.level) + '"]');
-        if (npick) npick.classList.add('is-picked');
-      }
+      pickByValue(
+        '.nail-lv',
+        report.nail.level != null && report.nail.level !== 0 ? report.nail.level : '',
+        'nail',
+      );
       setField('nail-comment', report.nail.comment);
     }
   }

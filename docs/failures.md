@@ -87,7 +87,8 @@
 - **Failure**: 登録した犬の名前（例「チョコ」）が反映されない。納品先の飼い主に別の犬の名前が見える。
 - **Root Cause**: `data-field="pet"` は文書内に1箇所（`ponchi-v2.html:909`、肉球画面）しか無く、`ponchi-app.js:971` の代入は **Supabase モード かつ reportId === 'new'** のときにしか走らない。KV モードには経路が無い。
 - **Guardrail / Prevention**: 未着手。M8（demo顧客名の置換）で扱う。`data-field="pet"` に KV モードの代入経路を足すのが筋で、既定値そのものを消すだけでは足りない。
-- **Status**: OPEN
+- **Status**: CLOSED
+- **Update (2026-08-21)**: **上記 Root Cause は誤りだったので訂正する。** 真因は `renderPawScreen`（`ponchi-app.js:537`）が `sec.querySelector('.paw-pet-name')` を見ていたこと。この class を持つ要素は `#screen-archive` 側にしかなく、`sec`（= `#screen-paw`）配下には存在しないため **常に null** で、犬名の代入が一度も実行されていなかった。モードとも `reportId` とも無関係で、KV / Supabase の両方で壊れていた。`#screen-paw` の実際の見出しである `[data-field="pet"]` へ入れるよう修正。この要素は保存契約でもあるため、保存されるカルテの犬名も同時に正しくなる。`npm run verify:roundtrip` の第1項目で常時検査する。
 
 ### [F-20260821-07] 納品物が外部 CDN の画像とフォントに依存している
 
@@ -128,3 +129,45 @@
 - **Root Cause**: 移設の受け入れ基準が、移設元へのアクセスを前提にしている。
 - **Guardrail / Prevention**: 未着手。M9 を vibe-base に触れる環境で実施する。件数だけ合わせて中身の違うものを置かない。
 - **Status**: OPEN
+
+---
+
+### [F-20260821-11] 受入基準を通すことを目的にして、機能そのものを確かめていなかった
+
+- **Date**: 2026-08-21
+- **Category**: test
+- **Trigger/Context**: M6。マスター指摘「もともとのAPPの機能を再現しろ。Goal はクライアントが問題なく使えることだ」。
+- **Failure**: M6 の受入基準9項目を「全項目 PASS」と報告した。しかし実際には、トリマーが記入する所見のうち**皮膚の種類・変化、歯の状態、耳・爪・歯のコメント、担当からの一言が、いずれも飼い主に届いていなかった**（F-12〜F-15）。検査したのは「写真が1枚戻るか」「ペンで線が引けるか」——たまたま壊れていなかった2つだけ。そのうえ、受入基準9「コンソールエラー0件」を緑にするために favicon の 404 と `/api/config` の 404 を先に直し、**現に見えている犬名の誤表示（F-06）を「M8 担当」と書いて先送りした**。
+- **Root Cause**: 検査項目の充足を成果と取り違えた。基準は「動くことの十分条件」ではなく、書いた人が思いついた確認点の一覧でしかない。画面が出てボタンが押せることは、**書いたものが相手に届くこと**を全く保証しない。加えて、直す順序を「チェックリストが緑になるか」で決めた。クライアントが実際に困る度合いで決めるべきだった。
+- **Guardrail / Prevention**: 機械検証は「操作できたか」ではなく**「入力したものが受け手に同じ値で届いたか」**で書く。`npm run verify:roundtrip` がその形（記入 → 保存 → 公開ページで全項目を突き合わせ、1項目でも欠ければ EXIT 1）。新しい入力欄を足したら、必ずこの検査にも足す。着手順序は、クライアントに見える壊れ方の大きさで決める。コンソールの汚れは最後でよい。
+- **Status**: CLOSED
+
+### [F-20260821-12] 皮膚の所見と歯の状態が、保存はされるのに復元で静かに消える
+
+- **Date**: 2026-08-21
+- **Category**: logic
+- **Trigger/Context**: `extractReport → applyReport → extractReport` の不動点を実ブラウザで確認したところ、`湿疹` `治療中` `歯石` がいずれも空文字になった。
+- **Failure**: トリマーが記録した皮膚の種類（湿疹・カサブタ・イボ・傷）、変化（成長・縮小・治療中・完治）、歯の状態（キレイ・歯石・維持）が、保存後に**一つも読み戻せない**。飼い主のカルテからは所見が丸ごと欠ける。エラーも警告も出ない。
+- **Root Cause**: `cssAttrSafe`（`publish-client-ponchi.js:18`）は `[^a-zA-Z0-9_-]` を全除去する。セレクタ注入を防ぐための関数で、それ自体は正しい。しかし `applyReport` が**保存された「値」**にもこれを通し、`[data-val="' + cssAttrSafe('湿疹') + '"]` = `[data-val=""]` という一致し得ないセレクタを組み立てていた。抽出（保存）は素の値を読むので成功し、復元だけが失敗する。**片道だけ壊れているので、保存直後の画面を見ても気づけない。**
+- **Guardrail / Prevention**: 値をセレクタ文字列に連結しない。`pickByValue()` を追加し、候補要素を列挙して `dataset` を JS で厳密比較する。日本語でも絵文字でも一致し、注入の余地も無いので `cssAttrSafe` を緩めずに済む。`cssAttrSafe` は ASCII の「名前」（`data-field` 名・写真キー・行番号）専用だと関数の直上に明記した。
+- **Status**: CLOSED
+
+### [F-20260821-13] 耳・爪・歯のコメントが、そもそも保存対象になっていなかった
+
+- **Date**: 2026-08-21
+- **Category**: logic
+- **Trigger/Context**: `extractReport` が読む `data-field` 名と、HTML に実在する `data-field` を突き合わせた。
+- **Failure**: `extractReport` は `[data-field="ear-comment"]` `[data-field="nail-comment"]` `[data-field="teeth-comment"]` を探すが、HTML の該当要素は `class="ear-comment"` `class="nail-comment hand"` `class="tt-comment hand"` で、`data-field` を**一つも持っていなかった**。トリマーは contenteditable で書けるし音声入力ボタンまで付いているのに、保存の対象外。飼い主には一言も届かない。
+- **Root Cause**: 抽出側は属性で、UI 側は class で書かれていて、両者が一度も突き合わされていなかった。歯は名前まで食い違っていた（`teeth-comment` を探すのに実体は `tt-comment`）。
+- **Guardrail / Prevention**: 3要素に `data-field` を付与して契約に載せた。`verify:roundtrip` は記入先の要素が見つからない時点で「UI と保存契約が食い違っている」として EXIT 1 で止まる。書ける欄を足すときは `data-field` を必ず同時に付ける。
+- **Status**: CLOSED
+
+### [F-20260821-14] 「担当からの一言」が保存されず、飼い主には誰も書いていない定型文が届く
+
+- **Date**: 2026-08-21
+- **Category**: logic
+- **Trigger/Context**: 同上。HTML には `data-field="staff-note"` があるのに、`extractReport` の返り値に対応するキーが無い。
+- **Failure**: トリマーが書いた一言は保存されない。そのうえ公開ページには HTML の既定文「今月もとっても良い仕上がりでした！次回もよろしくお願いします。」が残るため、**飼い主は担当が書いていない文章を担当の言葉として受け取る**。欠落より悪い。
+- **Root Cause**: UI が先に用意され、保存契約に載せる作業が漏れた。既定文がプレースホルダではなく実文だったため、抜けが空欄として現れず気づけなかった。
+- **Guardrail / Prevention**: `staffNote` を `extractReport` / `applyReport` の両方に追加。`applyReport` は本キーを持たない古いデータでも必ず上書きする（`report.staffNote || ''`）——書かれていない文章を届けるくらいなら空で出す。`verify:roundtrip` で常時検査する。
+- **Status**: CLOSED

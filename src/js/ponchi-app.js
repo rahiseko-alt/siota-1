@@ -533,9 +533,16 @@
     var petName  = (params && params.petName) || pet.petName || '';
     var months   = pet.months || [];
 
-    /* 犬名を上部見出しに反映 */
-    var titleEl = sec.querySelector('.paw-pet-name');
-    if (titleEl) titleEl.textContent = petName;
+    /* 犬名を見出しに反映。
+       以前は sec.querySelector('.paw-pet-name') を見ていたが、その class を持つ要素は
+       #screen-archive 側にしか無く（#screen-paw には存在しない）、常に null だった。
+       結果、肉球画面の見出しは静的な既定値「まるちゃん」のまま——登録した犬の名前が
+       一度も表示されず、飼い主には別の犬の名前が見えていた。
+       #screen-paw の実際の見出しは h1.top-h[data-field="pet"] なのでそちらへ入れる。
+       この要素は保存契約（extractReport の pet）でもあるため、正しい名前が入ることで
+       保存されるカルテの犬名も正しくなる。 */
+    var titleEl = sec.querySelector('[data-field="pet"]');
+    if (titleEl && petName) titleEl.textContent = petName;
 
     /* 肉球ラベル更新（契約#6 マップ適用）*/
     applyPawMap(months, slug, params);
