@@ -54,20 +54,31 @@ LEVEL D: REPOSITORY-SPECIFIC RULES (プロジェクト固有ルール)
 10. 最後は実際に動いた事実で証明する (Runtime Evidence)
 ```
 
-### デフォルト鉄板構成 (Default Golden Stack)
-新規構築や技術選定に特段の指定がない場合は、以下の**鉄板構成**をデフォルトとする。
+### 本リポジトリの確定スタック (Confirmed Stack)
 
-| レイヤー | デフォルト技術スタック (Golden Stack) |
+これは「推奨」ではなく**確定事項**である。本リポジトリは既に本番稼働しているアプリの
+納品用リポジトリであり、選定はやり直さない。テンプレートの鉄板構成を持ち込まないこと。
+
+| レイヤー | 本リポジトリの実体 |
 |---|---|
-| **言語・ランタイム** | TypeScript (Strict Mode) / Node.js LTS (v20+) |
-| **フレームワーク** | Next.js (App Router) / React |
-| **スタイリング・UI** | Tailwind CSS + shadcn/ui + Lucide Icons |
-| **API / バックエンド** | Next.js Route Handlers / Fastify (Python時は FastAPI) |
-| **DB & ORM** | PostgreSQL (本番) / SQLite (PoC/ローカル), Drizzle ORM / Prisma |
-| **バリデーション** | Zod (Schema-First Type Inference) |
-| **テスト & 検証** | Vitest (Unit/Integration) + Playwright (E2E / Runtime Evidence) |
-| **Linter / Formatter**| Biome (または ESLint + Prettier) |
-| **CI / CD** | GitHub Actions |
+| **言語・ランタイム** | **素の JavaScript**（ES2015 相当）/ Node.js 22。**TypeScript は導入しない** |
+| **フレームワーク** | **無し。** React も Next.js も使わない。DOM を直接触る |
+| **スタイリング・UI** | HTML 内の `<style>` と CSS 変数。**Tailwind / shadcn / UI ライブラリは使わない** |
+| **描画** | Konva v10.3.0 を `src/assets/konva.min.js` に**同梱**。CDN 参照禁止 |
+| **フォント・画像** | `src/assets/` に**同梱**。外部 CDN 参照禁止（`F-20260821-07`） |
+| **配信・API** | Cloudflare Workers（`worker/src/index.js`）。ビルドは自作の `scripts/build-dist.mjs` |
+| **データストア** | **二系統**。Cloudflare Workers KV（本番）と Supabase/PostgreSQL（移行先・未有効化） |
+| **バリデーション** | Zod（唯一テンプレートから引き継いだもの） |
+| **テスト** | **`node --test`**（Vitest ではない）+ Playwright（E2E・`verify:*`） |
+| **Linter / Formatter** | **無し。** 導入されていない。整形は既存コードの書き方に合わせる |
+| **CI / CD** | **無し。** GitHub Actions は置かれていない。検査はローカルで走らせる |
+
+**この表から外れる変更（TypeScript 化・フレームワーク導入・Linter 追加・CDN 参照）は、
+マスターの承認なしに行わない。** 「今どきの標準はこうだから」は理由にならない。
+
+> 上表に `Next.js` `Tailwind` `Vitest` の語が残っているのは、**使わないと明示するため**。
+> 移設 plan の受入基準#15 はこれらの語が 0 件になることを求めていたが、
+> 目的は「旧スタックを指示していないこと」であって語の消去ではない。詳細は `F-20260821-20`。
 
 ### 標準開発Harness (Default Harness)
 
@@ -127,8 +138,16 @@ EXPLORE  -->  BUILD  -->  VERIFY
   - Reuse first / Minimum change / Existing pattern first
   - 禁止: 不要なFramework/wrapper、既存helperの再発明、将来用機能、不要な依存追加、全面rewrite、無関係なrefactor
   - 目標: 「最も美しい設計」ではなく「現在のGoalを満たす最小の整合した変更」
-- **MECHANICAL CHECK**:
-  - Lint, Typecheck, Unit Test, Integration Test, Build, Static Analysis, Smoke, E2E
+- **MECHANICAL CHECK**（本リポジトリでの実体）:
+  - Lint と Typecheck は**存在しない**（Linter 未導入・TypeScript 不使用）。代わりに以下3本。
+
+    | コマンド | 見るもの |
+    |---|---|
+    | `npm run build` | dist が生成でき、相対パスが残っていないこと |
+    | `npm run check` | src↔dist の対応と、`design/` が `src/` に流れ込んでいないこと |
+    | `npm test` | 全6スイート 61 件 |
+
+  - **3本とも EXIT 0 になるまで VERIFY へ進まない。**
   - 機械判定できるものは先にすべて自動実行する。LLM Reviewerに機械判定を任せない。
 
 ---
@@ -150,6 +169,20 @@ EXPLORE  -->  BUILD  -->  VERIFY
 - **原則**: 自己申告の推論ではなく、外部事実 (Runtime Evidence) で完了を証明する。
 - **証拠の強さ**:
   `AI Reasoning < Code Review < Automated Test < Runtime Evidence`
+- **本リポジトリの Runtime Evidence**（`npm run preview` を別端末で起動してから実行）:
+
+  | コマンド | 証明するもの |
+  |---|---|
+  | `npm run verify:m6` | 導線が通ること（ログイン→検索→肉球→カルテ→保存→公開） |
+  | `npm run verify:roundtrip` | **トリマーが書いた所見が、同じ値で飼い主に届くこと**（13項目） |
+  | `npm run verify:empty` | カルテ0件の犬に、存在しない履歴を見せていないこと |
+  | `npm run verify:xss` | 保存されたデータが飼い主のブラウザで実行されないこと |
+  | `npm run verify:all` | 上記4本 |
+
+  **`verify:roundtrip` が本リポジトリで最も重要な検査。** 画面が出るか・押せるかではなく、
+  書いたものが相手に届くかを見る。この2つは別物で、前者だけを見て「動く」と報告した失敗が
+  `F-20260821-11` に記録してある。**入力欄を足したら、必ずこの検査にも足すこと。**
+
 - **対象別検証方法**:
   - **UI / Web**: 実ブラウザ / Playwright等での実操作と表示結果
   - **API**: 実際のHTTPリクエスト/レスポンスとDB状態
@@ -196,7 +229,26 @@ EXPLORE  -->  BUILD  -->  VERIFY
 - **「複数回発生した」「重大事故に直結する」「機械判定可能」「汎用性が高い」** 条件を満たすもののみ、このセクションまたは上位レベルへ昇格する。
 
 ### [プロジェクト固有ルール一覧]
-*(プロジェクトの要件に応じてここに必要なルールを最小限追記する)*
-- 例: owner_idのないクエリの禁止
-- 例: マイグレーションでの既存カラムの不可逆削除禁止
-- 例: 外部LLM APIへの生顧客データの直接送信禁止
+
+いずれも**実際に起きた事故から昇格したもの**で、括弧内が出典。
+機械強制のあるものは、規則を覚えていなくてもコマンドが止める。
+
+| # | ルール | 機械強制 |
+|---|---|---|
+| **D-1** | `src/` が本番の実体。`design/` は意匠見本であり `src/` `worker/` `scripts/` から参照しない | `npm run check` |
+| **D-2** | データストアは KV / Supabase の二系統。`finalize_report` の `null` 返却は**必ず失敗として扱う**（例外を投げないため、握ると「保存したのに draft のまま」になる） | — |
+| **D-3** | `/api/*` に認証が無いのは**意図された前提**。勝手に発見して騒がない・勝手に塞がない | — |
+| **D-4** | 出所未確認の素材を外部公開物へ転載しない。外部 CDN も参照しない（`F-07`） | `docs/ASSET-PROVENANCE.md` |
+| **D-5** | 生成物は `npm run build` 経由でのみ作る。dist への手コピー禁止 | `npm run check` |
+| **D-6** | 既存ファイルを上書きする前に「今も生きているか」を確認する | 消える識別子の `grep -c` |
+| **D-7** | 自分で書いたルールを自分で守れると仮定しない。`.gitignore` / npm の EXIT 1 / test に落とす | — |
+| **D-8** | 失敗と未完了は `docs/failures.md` にしか書かない。commit hash だけで参照しない | `Status: OPEN` 行 |
+| **D-9** | `data-*` の**値**に非 ASCII を使わない。使うなら**セレクタに連結しない**（`pickByValue()` を使う）（`F-12`・`F-17`） | `npm run verify:xss` |
+| **D-10** | 飼い主に見せる画面（`window.__VIEW__`）に、見本・デモ・既定文を出さない。**書かれていないものは空で出す**（`F-14`・`F-15`） | `npm run verify:empty` |
+| **D-11** | 「アプリがこの形しか作らない」を「この形しか来ない」と読み替えない。保存済み JSON は無認証の API からも入る（`F-17`） | `npm run verify:xss` |
+| **D-12** | 受入基準の充足を成果と取り違えない。検査は「操作できたか」ではなく**「入力したものが受け手に同じ値で届いたか」**で書く（`F-11`） | `npm run verify:roundtrip` |
+| **D-13** | 移設・複製で持ってきた**文書**は、コードと同じ回数だけ読み直す。特に「削除禁止」「必ず通せ」は対象の実在を確かめる（`F-03`・`F-19`） | — |
+
+**外部リポジトリ（vibe-base 等）を参照しない。** 移設は完了しており、このリポジトリ単独で
+ビルド・検査・実行・失敗照合のすべてが完結する。行番号や commit hash で他リポジトリを
+指す記述は失効しているものとして扱う（`F-09`）。
