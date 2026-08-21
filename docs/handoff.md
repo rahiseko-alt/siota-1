@@ -9,7 +9,7 @@
 
 ## 1. 今回やったこと (Completed in this session)
 
-**M5〜M9 を完了。移設 plan の工程はすべて終わり、`docs/failures.md` の OPEN は 0 件。**
+**移設 plan（M0〜M9）完了。統合フェーズの P0（エンジン抽出）まで進んだ。`docs/failures.md` の OPEN は 0 件。**
 
 - **M5**: `npm run check` の親モノレポ参照を自リポジトリへ。`--test-isolation=none`（node 22 で `bad option`）を除去。実体を移設していない `predeploy-check` と、それを指す `wrangler.toml` / `runbook.md` の記述を是正。`playwright@1.59.1` / `wrangler@4.92.0` を devDependencies に宣言。lockfile を追加。
 - **M6**: `npm run preview`（KV local）で実際にアプリを動かし、plan の受入基準9項目を全て通した。検証は `scripts/verify-m6.mjs`（`npm run verify:m6`）として残してあるので、次回以降は手作業でなく再実行できる。
@@ -21,6 +21,7 @@
 - **vibe-base への依存を打ち切り（F-09 / F-10）**: どちらも「移設元を見ないと決着しない」と書いていたが、F-09 は注入シンク31箇所の棚卸しでこのリポジトリだけで解決（→ F-17）。F-10 は受け入れ基準#14 を「移設元から8件を転記」から「**このリポジトリで起きた失敗が再現手順つきで記録されていること**」に読み替えた。以後 vibe-base は参照しない。
 - **M8（F-07 / F-08 / PII）**: 外部 CDN 参照を全廃した。Unsplash 10件は**同梱ではなく撤去**（全て写真アップロードまでの仮置きで、他人の犬を顧客の犬として見せるのは F-15 と同じ問題になる）。フォントは Latin 3ファミリを同梱し、日本語4ファミリは容量（Noto 2種で 70MB）を理由にシステムフォントへ寄せた。PWA manifest を4ファイルに結線し、dist でのパス変化も build に置換を足して塞いだ。`docs/ASSET-PROVENANCE.md` を新設。実在顧客名と個人アドレスを除去し、`docs/runbook.md` の移設元パス6箇所も是正。
 - **M9（ルール改訂）**: `AGENTS.md` の Golden Stack をテンプレートの鉄板構成（Next.js / Tailwind / Prisma / Vitest）から**本リポジトリの確定スタック**へ差し替え。MECHANICAL CHECK と REAL VERIFICATION に実際のコマンドを明記し、LEVEL D に事故から昇格した13条を記載。`docs/design.md` は空テンプレートだったので実態で埋めた。**移設元の凍結は行わない**（vibe-base への依存を打ち切ったため）。
+- **P0（統合フェーズ・エンジン抽出）**: `ponchi-v2.html` のインライン `<script>` 985行を `src/js/ponchi-engine.js` へ**逐語**で切り出した。切り出し前後を突き合わせて**完全一致**を確認済み（位置だけが変わった）。HTML は 2154行 → 1168行。これで HTML を差し替えてもエンジンが消えなくなった——P1 以降の貼り替えの前提。
 - `docs/failures.md` に **20 件**を記録（**CLOSED 20 / OPEN 0**、+ F-06 の Root Cause 訂正）。
 
 ## 2. 現在の状態 (Current State)
@@ -92,7 +93,8 @@ AI 生成が5件（C2PA 署名から OpenAI / Google と特定）、残る15件�
 ## 3. 次回やること (Next Steps)
 
 1. **素材の出所確認**（マスター作業）— `docs/ASSET-PROVENANCE.md` の `UNVERIFIED` 15件。コードでは解けない。実写に見える4件が優先。
-2. **統合フェーズ**（`docs/ops/plans/2026-08-21-integration.md` の P0〜P9）— `design/mock-4step.html` の意匠へ貼り替える。**P0「エンジン抽出」が全ての前提**（Konva エンジン約966行が `ponchi-v2.html` のインラインに埋まっていて、`src/js/*.js` だけでは動かない）。
+2. **統合フェーズ P1 以降**（`docs/ops/plans/2026-08-21-integration.md`）— P0 は完了。次の P1「画面骨格」は**肉球画面の撤去**（`grep -c "paw" src/js/ponchi-app.js` を 31 → 0）と `src/search.html` の削除を含む。
+   ⚠️ **`verify:*` 4本はすべて `#screen-paw .pad` を経由している。** 肉球を撤去すると4本とも書き直しになるので、P1 は「画面の改名」ではなく「検査の作り直しを含む一塊の作業」として見積もること。
 3. **Supabase の有効化**（マスター作業）— プロジェクト作成と Google OAuth 設定。実装は済んでいる。
 
 統合に入る前に `docs/design.md` を読むこと。`finalize_report` が**4条件で黙って `null` を返す**ことなど、
