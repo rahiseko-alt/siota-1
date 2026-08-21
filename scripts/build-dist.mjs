@@ -35,6 +35,9 @@ if (!fs.existsSync(htmlSrc)) {
 
 const htmlContent = fs.readFileSync(htmlSrc, 'utf8')
   .replaceAll('../assets/', '/assets/')
+  /* dist では design-samples/*.html がルート直下に置かれるので、../manifest.json は
+     ルートの外を指してしまう。PWA が結線されていなかった原因のひとつ（F-08）。 */
+  .replaceAll('../manifest.json', '/manifest.json')
   .replaceAll('../js/',      '/js/');
 
 fs.writeFileSync(htmlDest, htmlContent, 'utf8');
@@ -118,16 +121,35 @@ console.log('[build] JS bundle: js/supabase-vendor.js');
 // 3. assets: src/assets/ を自動列挙して無変換コピー
 // ──────────────────────────────────────────────
 const srcAssetsDir = path.join(SRC, 'assets');
-const assetFiles = fs.readdirSync(srcAssetsDir).filter(f => fs.statSync(path.join(srcAssetsDir, f)).isFile());
 
+/* 再帰で拾う。同梱フォントが assets/fonts/ 配下にあり、直下だけを列挙していた頃の
+   実装では dist に入らなかった。1件でも落ちると本番で読めないので、
+   ディレクトリを掘って全部コピーする。 */
+function listAssets(dir, prefix = '') {
+  const out = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) out.push(...listAssets(path.join(dir, entry.name), rel));
+    else if (entry.isFile()) out.push(rel);
+  }
+  return out;
+}
+
+const assetFiles = listAssets(srcAssetsDir);
+
+/* 同梱フォントは 18 件ある。1件ずつ出すとログが埋まるので、まとめて1行にする。 */
 let assetCount = 0;
+let fontCount = 0;
 for (const assetFile of assetFiles) {
   const assetSrc  = path.join(SRC, 'assets', assetFile);
   const assetDest = path.join(DIST, 'assets', assetFile);
+  fs.mkdirSync(path.dirname(assetDest), { recursive: true });
   fs.copyFileSync(assetSrc, assetDest);
   assetCount++;
+  if (assetFile.startsWith('fonts/')) { fontCount++; continue; }
   console.log(`[build] asset コピー: assets/${assetFile}`);
 }
+if (fontCount) console.log(`[build] asset コピー: assets/fonts/ (${fontCount} 件)`);
 
 // ──────────────────────────────────────────────
 // 4. manifest: 無変換コピー

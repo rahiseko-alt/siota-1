@@ -5,9 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=2.0">
 <title>ポチページ デザイン v2.1</title>
 <link rel="icon" href="../assets/app-icon.png" type="image/png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Yusei+Magic&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <link rel="manifest" href="../manifest.json">
+  <link rel="stylesheet" href="../assets/fonts/fonts.css">
 <style>
 :root{
   --white:#ffffff; --ink:#33384a; --ink-soft:#9aa0b0; --navy:#28304d;
@@ -15,7 +14,7 @@
   --blob-orange:#ffc08a; --blob-yellow:#ffe08a; --blob-rose:#ffb3cf; --blob-green:#a8e6c4; --blob-grape:#cdb4f6;
   --tile-pink:#fde4ee; --tile-lav:#ece3fb; --tile-yellow:#fdf0cf; --tile-green:#d8f3e3; --tile-peach:#ffe6d3;
   --serif:'Fraunces','Hiragino Mincho ProN',serif;
-  --sans:'Plus Jakarta Sans','Zen Kaku Gothic New',sans-serif;
+  --sans:'Plus Jakarta Sans',"Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic Medium", "Yu Gothic", Meiryo, sans-serif;
   --r-lg:28px; --r-md:20px;
   --sh-soft:0 18px 40px -16px rgba(80,60,110,0.28);
   --sh-card:0 14px 34px -18px rgba(70,50,100,0.30);
@@ -45,6 +44,8 @@ body{font-family:var(--sans);color:var(--ink);background:#f3f1f7}
 .toe-img{display:block;width:100%;height:100%;border-radius:50% 50% 46% 46% / 55% 55% 45% 45%;overflow:hidden;position:relative;
   box-shadow:inset 0 -10px 18px -6px rgba(30,16,8,0.5), inset 0 5px 12px -4px rgba(255,240,230,0.6)}
 .toe-img img{width:100%;height:100%;object-fit:cover;display:block}
+/* 見本写真を外したので、src が入るまで画像枠を出さない（applyPawMap が月ごとに src を入れる） */
+.toe-img img:not([src]),.pad img:not([src]){display:none}
 /* .toe-label: 旧直線ラベル — SVG textPath 移行後は非表示 */
 .toe-label{display:none}
 /* 指の円弧ラベル SVG */
@@ -53,7 +54,7 @@ body{font-family:var(--sans);color:var(--ink);background:#f3f1f7}
   overflow:visible;pointer-events:none;z-index:4;
 }
 .toe-arc-text{
-  font-family:'Yusei Magic','Klee One',var(--sans);
+  font-family:var(--sans);
   font-size:9.5px;font-weight:700;
   fill:var(--grape);
   paint-order:stroke fill;
@@ -883,31 +884,31 @@ body.is-drawing-active .hc:hover,body.is-drawing-active .owner-pet-item:hover,bo
     <div class="top-brand">SALTY <b>DOG</b></div>
     <div class="paw">
       <!-- 契約#6: pad=最新月 / toe-1=左端=最新-1 / toe-2=最新-2 / toe-3=最新-3 / toe-4=右端=全履歴 -->
-      <div class="toe toe-1" role="button" style="cursor:pointer" aria-label="11月 のカルテへ（デモ）"><div class="toe-img"><img src="https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=200&q=70" alt=""></div><span class="toe-label">11月</span>
+      <div class="toe toe-1" role="button" style="cursor:pointer" aria-label="11月 のカルテへ（デモ）"><div class="toe-img"><img alt=""></div><span class="toe-label">11月</span>
         <svg class="toe-arc-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
           <defs><path id="arc-toe-1" d="M 2,50 A 48,48 0 0,1 98,50" fill="none"/></defs>
           <text class="toe-arc-text"><textPath href="#arc-toe-1" startOffset="50%" text-anchor="middle" class="toe-arc-label">11月</textPath></text>
         </svg>
       </div>
-      <div class="toe toe-2" role="button" style="cursor:pointer" aria-label="10月 のカルテへ（デモ）"><div class="toe-img"><img src="https://images.unsplash.com/photo-1561037404-61cd46aa615b?w=200&q=70" alt=""></div><span class="toe-label">10月</span>
+      <div class="toe toe-2" role="button" style="cursor:pointer" aria-label="10月 のカルテへ（デモ）"><div class="toe-img"><img alt=""></div><span class="toe-label">10月</span>
         <svg class="toe-arc-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
           <defs><path id="arc-toe-2" d="M 2,50 A 48,48 0 0,1 98,50" fill="none"/></defs>
           <text class="toe-arc-text"><textPath href="#arc-toe-2" startOffset="50%" text-anchor="middle" class="toe-arc-label">10月</textPath></text>
         </svg>
       </div>
-      <div class="toe toe-3" role="button" style="cursor:pointer" aria-label="9月 のカルテへ（デモ）"><div class="toe-img"><img src="https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=200&q=70" alt=""></div><span class="toe-label">9月</span>
+      <div class="toe toe-3" role="button" style="cursor:pointer" aria-label="9月 のカルテへ（デモ）"><div class="toe-img"><img alt=""></div><span class="toe-label">9月</span>
         <svg class="toe-arc-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
           <defs><path id="arc-toe-3" d="M 2,50 A 48,48 0 0,1 98,50" fill="none"/></defs>
           <text class="toe-arc-text"><textPath href="#arc-toe-3" startOffset="50%" text-anchor="middle" class="toe-arc-label">9月</textPath></text>
         </svg>
       </div>
-      <div class="toe toe-4" role="button" style="cursor:pointer" aria-label="全履歴を見る"><div class="toe-img"><img src="https://images.unsplash.com/photo-1518717758536-85ae29035b6d?w=200&q=70" alt=""></div><span class="toe-label">全履歴</span>
+      <div class="toe toe-4" role="button" style="cursor:pointer" aria-label="全履歴を見る"><div class="toe-img"><img alt=""></div><span class="toe-label">全履歴</span>
         <svg class="toe-arc-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
           <defs><path id="arc-toe-4" d="M 2,50 A 48,48 0 0,1 98,50" fill="none"/></defs>
           <text class="toe-arc-text"><textPath href="#arc-toe-4" startOffset="50%" text-anchor="middle" class="toe-arc-label">全履歴</textPath></text>
         </svg>
       </div>
-      <div class="pad" role="button" style="cursor:pointer" aria-label="12月 のカルテへ（デモ）"><span class="pad-badge">最新 ・ 12月</span><img src="https://images.unsplash.com/photo-1601758228041-f3b2795255f1?w=320&q=75" alt=""></div>
+      <div class="pad" role="button" style="cursor:pointer" aria-label="12月 のカルテへ（デモ）"><span class="pad-badge">最新 ・ 12月</span><img alt=""></div>
     </div>
     <h1 class="top-h" contenteditable="true" data-field="pet">まるちゃん</h1>
     <p class="top-p">毎月のトリミングと健康記録を<br>大切なアルバムとしてお届けします。</p>
@@ -943,8 +944,8 @@ body.is-drawing-active .hc:hover,body.is-drawing-active .owner-pet-item:hover,bo
     <button type="button" class="report-back-btn" id="reportBackBtn" aria-label="戻る先を選ぶ">‹ 戻る</button>
     <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div><div class="blob b4"></div>
     <div class="hero-track" id="heroTrack">
-      <div class="hero-slide"><div class="oval"><div class="hero-soft-tab hero-date-pick"><span class="dot"></span><span class="hero-date-text"><span data-field="year">2026</span><span class="hdsep">/</span><span data-field="date">12</span><span class="hd-day"><span class="hdsep">/</span><span data-field="day">5</span></span></span><input type="date" id="heroDateInput" class="hero-date-native" value="2026-12-05" aria-label="カルテの日付を選ぶ"></div><img data-photo="hero-1" src="https://images.unsplash.com/photo-1601758228041-f3b2795255f1?w=420&q=78" alt="" style="cursor:pointer"><button class="photo-draw-btn" data-draw-for="hero-1" type="button">✏️ 描く</button></div></div>
-      <div class="hero-slide"><div class="oval"><img data-photo="hero-2" src="https://images.unsplash.com/photo-1605568427561-40dd23c2acea?w=420&q=78" alt="" style="cursor:pointer"><button class="photo-draw-btn" data-draw-for="hero-2" type="button">✏️ 描く</button></div></div>
+      <div class="hero-slide"><div class="oval"><div class="hero-soft-tab hero-date-pick"><span class="dot"></span><span class="hero-date-text"><span data-field="year">2026</span><span class="hdsep">/</span><span data-field="date">12</span><span class="hd-day"><span class="hdsep">/</span><span data-field="day">5</span></span></span><input type="date" id="heroDateInput" class="hero-date-native" value="2026-12-05" aria-label="カルテの日付を選ぶ"></div><img data-photo="hero-1" data-empty="1" alt="" style="cursor:pointer"><button class="photo-draw-btn" data-draw-for="hero-1" type="button">✏️ 描く</button></div></div>
+      <div class="hero-slide"><div class="oval"><img data-photo="hero-2" data-empty="1" alt="" style="cursor:pointer"><button class="photo-draw-btn" data-draw-for="hero-2" type="button">✏️ 描く</button></div></div>
     </div>
     <div class="hero-dots"><span class="hd on"></span><span class="hd"></span></div>
     <h2 class="hero-h">今月も <em>うっとり</em><br>かわいく仕上がりました</h2>
@@ -958,9 +959,9 @@ body.is-drawing-active .hc:hover,body.is-drawing-active .owner-pet-item:hover,bo
       <button class="car-nav car-prev" aria-label="前へ">‹</button>
       <button class="car-nav car-next" aria-label="次へ">›</button>
       <div class="car" id="bodyCar">
-        <div class="card"><div class="card-ph"><img data-photo="bl-1" src="https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=480&q=74" alt="" style="cursor:pointer"><button class="photo-draw-btn" data-draw-for="bl-1" type="button">✏️ 描く</button></div></div>
-        <div class="card"><div class="card-ph"><img data-photo="bl-2" src="https://images.unsplash.com/photo-1576201836106-db1758fd1c97?w=480&q=74" alt="" style="cursor:pointer"><button class="photo-draw-btn" data-draw-for="bl-2" type="button">✏️ 描く</button></div></div>
-        <div class="card"><div class="card-ph"><img data-photo="bl-3" src="https://images.unsplash.com/photo-1591768575198-88dac53fbd0a?w=480&q=74" alt="" style="cursor:pointer"><button class="photo-draw-btn" data-draw-for="bl-3" type="button">✏️ 描く</button></div></div>
+        <div class="card"><div class="card-ph"><img data-photo="bl-1" data-empty="1" alt="" style="cursor:pointer"><button class="photo-draw-btn" data-draw-for="bl-1" type="button">✏️ 描く</button></div></div>
+        <div class="card"><div class="card-ph"><img data-photo="bl-2" data-empty="1" alt="" style="cursor:pointer"><button class="photo-draw-btn" data-draw-for="bl-2" type="button">✏️ 描く</button></div></div>
+        <div class="card"><div class="card-ph"><img data-photo="bl-3" data-empty="1" alt="" style="cursor:pointer"><button class="photo-draw-btn" data-draw-for="bl-3" type="button">✏️ 描く</button></div></div>
       </div>
     </div>
   </section>

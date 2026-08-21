@@ -97,8 +97,9 @@
 - **Trigger/Context**: M6。egress 制限のある環境で実行したところ、外部ホストへの失敗が 24 件出た。
 - **Failure**: `src/` に `images.unsplash.com` への直リンクが 10 箇所（肉球画面5・ヒーロー2・カード3）、Google Fonts が 2 箇所。ネットワークが無い／CDN が落ちる／Unsplash が URL を変えると、画像が全部消える。
 - **Root Cause**: 意匠見本の段階で置いたプレースホルダ画像が、そのまま納品対象の `src/` に残っている。LEVEL D-4「出所未確認の素材を外部公開物へ転載禁止」に正面から抵触する。
-- **Guardrail / Prevention**: 未着手。M8 で `docs/ASSET-PROVENANCE.md` を作り、出所を台帳化したうえで自リポジトリ同梱に切り替える。Konva を同梱している（CDN 禁止）のと同じ理由が画像にも当てはまる。
-- **Status**: OPEN
+- **Guardrail / Prevention**: M8 で対処。Unsplash 10件は**同梱ではなく撤去**した——全て「トリマーが写真をアップロードするまでの仮置き」で、他人の犬の写真を納品物に取り込んで顧客の犬として見せるのは F-15 と同じ問題になる。写真スロット5件は既存の空表現（`data-empty="1"` →「＋ 写真を追加」）に寄せ、肉球5件は `src` を落として `applyPawMap` の管理下に置いた。フォントは Latin 3ファミリ（Fraunces / Plus Jakarta Sans / Inter・SIL OFL 1.1・568KB）を同梱し、日本語4ファミリは容量（Noto Sans JP 30MB + Noto Serif JP 40MB）を理由に同梱せずシステムフォントへ寄せた。判断と代償は `docs/ASSET-PROVENANCE.md` に記載。`scripts/vendor-fonts.mjs` で再取得でき、CSS が参照する全ファイルの実在を自己検査する。
+- **Status**: CLOSED
+- **実測**: `npm run verify:m6` の項目9 が `external(egress-blocked)=24` → **0**。アプリが外部へ一切通信しなくなった。台帳の作成で AI 生成物5件（C2PA 署名から OpenAI / Google と特定）が判明。残る15件は `UNVERIFIED` として台帳に常駐——出所が不明だからと消すと状態ガイドが空欄になりトリマーが判断に使えなくなるため、差し替えるまで残す。
 
 ### [F-20260821-08] PWA が機能していない（`<link rel="manifest">` が 0 件）
 
@@ -107,8 +108,9 @@
 - **Trigger/Context**: M6。`grep -rc 'rel="manifest"' src/*.html src/design-samples/*.html` が全て 0。
 - **Failure**: `src/manifest.json` は存在し `npm run build` で dist にも入るが、どの HTML からも参照されていないためホーム画面追加が働かない。
 - **Root Cause**: 移設前から結線が切れていた（plan のリスク#5 に既出）。M6 でアイコン（`<link rel="icon">`）だけは 4ファイルに入れたが、manifest は入れていない。
-- **Guardrail / Prevention**: 未着手。M8 で 4ファイルに `<link rel="manifest">` を足す。`build-dist.mjs` のパス置換（`../assets/` → `/assets/`）が manifest の相対パスにも効くかを同時に確認すること。
-- **Status**: OPEN
+- **Guardrail / Prevention**: M8 で 4ファイルに `<link rel="manifest">` を追加。**同時に確認せよと書いた懸念が当たっていた**——`ponchi-v2.html` だけは `../manifest.json` になるが、dist ではこのファイルがルート直下へ移るので、置換が無いとルートの外を指す。`build-dist.mjs` に `../manifest.json` → `/manifest.json` を追加した。`src/assets/` の列挙も直下のみだったので再帰に直した（同梱フォントが `assets/fonts/` 配下にあり、そのままでは dist に入らなかった）。
+- **Status**: CLOSED
+- **実測**: 4ファイルすべてで `rel="manifest"` = 1。`curl http://localhost:8787/manifest.json` → 200、`/assets/fonts/fonts.css` → 200、woff2 → 200。
 
 ### [F-20260821-09] plan が指す XSS Critical の箇所が、移設後のファイルで特定できていない
 
@@ -212,4 +214,24 @@
 - **Failure**: 2箇所。(1) `<img src="${d.avatar || '…'}">` だけ `escHtml` を通しておらず、他の全項目は通っていた——**1つだけ抜けていた**。(2) `onclick="selectDog('${escHtml(d.pet)}')"` は escHtml を通しているのに危険で、HTML 属性値は実体参照が復号されてから JS として解釈されるため、`&#39;` が `'` に戻って文字列を抜けられる。現在は `DOGS` が静的配列なので成立しないが、統合フェーズ P1 でここを実データに繋いだ瞬間に成立する。
 - **Root Cause**: (1) は単純な列挙漏れ。(2) は**エスケープの文脈取り違え**で、HTML 用のエスケープを「HTML 属性の中の JS 文字列」に使っていた。この入れ子では HTML→JS の二段で復号されるので、HTML 用の1段では足りない。
 - **Guardrail / Prevention**: (1) は `escHtml` を通した。(2) は `selectDog` が引数を使っていなかったので落とした（値を渡さなければ文脈の入れ子自体が消える）。**インライン `onclick` の中に値を埋めない**——統合 plan の P2 が `onclick="App.` の撤去を掲げているのと同じ理由。
+- **Status**: CLOSED
+
+### [F-20260821-19] 納品リポジトリの手順書が、移設元の PC のパスと個人アドレスのままだった
+
+- **Date**: 2026-08-21
+- **Category**: setup
+- **Trigger/Context**: M8 の PII 除去。マスター指示「vibe-base を完全無関係にしろ」。
+- **Failure**: `docs/runbook.md` が `cd "C:\Users\user\Desktop\ClaudeCode\vibe-base\products\trimmer-system"` を6箇所に持ち、Cloudflare 認証欄に個人の Gmail アドレスが書かれていた。加えて `beauty-report-mobile.html`（A版）を「維持・削除禁止」と3箇所で指示していたが、**そのファイルは移設していないので存在しない**。クライアントに渡すリポジトリの手順書として、そのままでは1行も実行できない。
+- **Root Cause**: 移設でコードとテストは動くようにしたが、**手順書は「持ってきた」だけで読み直していなかった**。動くかどうかを機械検証できるのはコードだけで、文書は読まないと分からない。
+- **Guardrail / Prevention**: 絶対パスをリポジトリ基準の相対パスへ、個人アドレスを `npx wrangler whoami` での確認手順へ、A版の記述を「このリポジトリには無い」へ書き換えた。**移設で持ってきた文書は、コードと同じ回数だけ読み直す。** 特に「削除禁止」「必ず通せ」の類は、対象が実在するかを確かめる（同じ型の誤りが `F-20260821-03` の `predeploy-check` でも起きている）。
+- **Status**: CLOSED
+
+### [F-20260821-20] 受入基準#15 を、語を消すことではなく「旧スタックを指示していないこと」と読み替えた
+
+- **Date**: 2026-08-21
+- **Category**: setup
+- **Trigger/Context**: M9。移設 plan の受け入れ基準#15「`grep -c 'Next.js\|Prisma\|Tailwind\|Vitest' AGENTS.md docs/design.md` = 0」。
+- **Failure**: 書き換え後も3件残る。ただし残っているのは全て**否定文**——「React も Next.js も使わない」「Tailwind / shadcn / UI ライブラリは使わない」「`node --test`（Vitest ではない）」。
+- **Root Cause**: 基準が**語の不在**で書かれているが、目的は**旧スタックを指示していないこと**。テンプレート（`template-0811 v3`）から来た読み手には、何を使わないかを名指しで書くほうが伝わる。語を消すと「Next.js を使わない」という情報まで消え、**基準を満たしたぶんドキュメントが悪くなる**。
+- **Guardrail / Prevention**: 語は残し、基準を「旧スタックを**指示**する記述が無いこと」と読み替えた。読み替えた事実を `AGENTS.md` の該当表の直下にも書いたので、将来 `grep` して3件出た人が回帰かどうかを判断できる。**同種の読み替えは `F-20260821-10`（移設元8件の転記）でも行っている。基準は目的の代理でしかなく、代理を満たすために目的を損なわない。**
 - **Status**: CLOSED

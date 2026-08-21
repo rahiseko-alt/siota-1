@@ -5,9 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>カルテ検索・一覧 | SALTY DOG</title>
   <link rel="icon" href="/assets/app-icon.png" type="image/png">
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+JP:wght@300;400;500;700&family=Noto+Serif+JP:wght@300;400;600;700&display=swap" rel="stylesheet" />
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/assets/fonts/fonts.css">
   <style>
     :root {
       --bg-page: #f8f8f7;
@@ -30,9 +29,9 @@
       --accent-alert-bg: #fde8e8;
       --accent-sage: #4a7c59;
 
-      --font-sans: "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic Medium", "Yu Gothic", Meiryo, sans-serif;
       --font-en: "Inter", -apple-system, sans-serif;
-      --font-serif: "Noto Serif JP", "Times New Roman", serif;
+      --font-serif: "Hiragino Mincho ProN", "Yu Mincho", YuMincho, "Times New Roman", serif;
 
       --ease-editorial: cubic-bezier(0.16, 1, 0.3, 1);
       --header-height: 54px;
@@ -361,7 +360,7 @@
 
       <div class="filter-chips-row">
         <span class="filter-chip is-active" onclick="quickFilter('all', this)">すべて</span>
-        <span class="filter-chip" onclick="quickFilter('ポンチ', this)">ポンチ（塩田様）</span>
+        <span class="filter-chip" onclick="quickFilter('要ケア', this)">要ケア</span>
         <span class="filter-chip" onclick="quickFilter('モモ', this)">モモ</span>
         <span class="filter-chip" onclick="quickFilter('レオ', this)">レオ</span>
         <span class="filter-chip" onclick="quickFilter('要ケア', this)">⚠️ 要注意</span>
@@ -391,7 +390,7 @@
     function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 
     const DOGS = [
-      { owner: '塩田 様', pet: 'ポンチ', reading: 'ぽんち', breed: 'トイプードル', sub: '2026/08/15', avatar: '/assets/photo-dog-paw-high.jpg', alert: '⚠️ 前回未記入: 爪状態' },
+      { owner: '山田 太郎', pet: 'ポチ', reading: 'ぽち', breed: 'トイプードル', sub: '2026/08/15', avatar: '/assets/photo-dog-paw-high.jpg', alert: '⚠️ 前回未記入: 爪状態' },
       { owner: '佐藤 花子', pet: 'モモ', reading: 'もも', breed: '柴犬', sub: '2026/05/30', avatar: '/assets/dog-poodle.jpg' },
       { owner: '田中 一郎', pet: '桃',   reading: 'もも', breed: 'ポメラニアン', sub: '2026/05/28', avatar: '/assets/photo-trim-action.jpg' },
       { owner: '鈴木 美咲', pet: 'もも', reading: 'もも', breed: 'ミニチュアダックス', sub: '2026/05/25', avatar: '/assets/dog-doodle.jpg' },
