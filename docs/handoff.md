@@ -9,11 +9,12 @@
 
 ## 1. 今回やったこと (Completed in this session)
 
-**M5（依存固定・自立化）と M6（動作証明）を完了。**
+**M5（依存固定・自立化）／ M6（動作証明）／ M7（モック隔離とテスト配線）を完了。**
 
 - **M5**: `npm run check` の親モノレポ参照を自リポジトリへ。`--test-isolation=none`（node 22 で `bad option`）を除去。実体を移設していない `predeploy-check` と、それを指す `wrangler.toml` / `runbook.md` の記述を是正。`playwright@1.59.1` / `wrangler@4.92.0` を devDependencies に宣言。lockfile を追加。
 - **M6**: `npm run preview`（KV local）で実際にアプリを動かし、plan の受入基準9項目を全て通した。検証は `scripts/verify-m6.mjs`（`npm run verify:m6`）として残してあるので、次回以降は手作業でなく再実行できる。
 - M6 の過程で見つけた不具合3件を修正（`/api/config` の KV モード欠落 / デモ月の無効 fetch / favicon 404）。
+- **M7**: 眠っていた Supabase 系3スイート（storage 6 / store 23 / auth 10 = 39件）を `test:supabase:static` に配線し、`npm test` が全6スイート **61 pass** を実行するようにした。`scripts/design-isolation-guard.mjs` を新規作成して `npm run check` に組み込み、`design/README.md` を追加。
 - `docs/failures.md` に 10 件を記録（CLOSED 5 / OPEN 5）。
 
 ## 2. 現在の状態 (Current State)
@@ -23,8 +24,8 @@
 | コマンド | 結果 |
 |---|---|
 | `npm run build` | EXIT 0 |
-| `npm run check` | EXIT 0（移設後はじめて通った） |
-| `npm test` | EXIT 0（worker-unit 5 pass） |
+| `npm run check` | EXIT 0（src↔dist parity + design/ isolation の2本） |
+| `npm test` | EXIT 0・**61 pass / 0 fail**（全6スイート = plan の目標値） |
 | `npm run verify:m6` | **11/11 PASS・EXIT 0** |
 
 `verify:m6` は別端末で `npm run preview` を起動してから実行する。
@@ -43,7 +44,6 @@ playwright 管理外の chromium を使う場合は `M6_CHROMIUM=/path/to/chrome
 
 ### 未着手
 
-- **M7** モック配置とテスト配線 — `design/README.md` と `scripts/design-isolation-guard.mjs` が未作成。眠っている Supabase 系3スイート（storage 6 / store 23 / auth 10 = 39件）がどの npm script からも走っていない。**個別に実行すると全て pass することは確認済み**（全6スイート合計 61 tests = plan の目標値）。配線するだけでよい。
 - **M8** PII / 権利 / PWA 是正 — `F-20260821-06` `-07` `-08` がここに対応。`塩田` は `src/search.html` `src/my.html` に残存、`@gmail.com` は `docs/runbook.md` に残存。
 - **M9** ルール改訂と移設元の凍結 — `docs/design.md` の Golden Stack がテンプレのまま（Next.js / Prisma / Tailwind / Vitest。実際は Vanilla JS + Konva + Cloudflare Workers + `node --test`）。`AGENTS.md` も同様。
 
@@ -62,9 +62,8 @@ playwright 管理外の chromium を使う場合は `M6_CHROMIUM=/path/to/chrome
 
 ## 3. 次回やること (Next Steps)
 
-1. **M7** — 眠っている39テストを npm script に配線し、`design/README.md` と `design-isolation-guard.mjs` を追加する。`npm test` の pass 合計が 61 になれば合格。
-2. **M8** — `F-20260821-06/-07/-08` を潰す。Unsplash 直リンク10箇所の自リポジトリ同梱と `docs/ASSET-PROVENANCE.md` の作成が本体。
-3. **M9** — `AGENTS.md` / `docs/design.md` を実スタックへ書き換え、`runbook.md` のパスを是正する。`F-20260821-09/-10` は vibe-base に触れる環境で行う。
+1. **M8** — `F-20260821-06/-07/-08` を潰す。Unsplash 直リンク10箇所の自リポジトリ同梱と `docs/ASSET-PROVENANCE.md` の作成が本体。あわせて 4ファイルに `link rel="manifest"` を足し、`src/search.html` `src/my.html` の `塩田` と肉球画面のデモ名「まるちゃん」を置換する。
+2. **M9** — `AGENTS.md` / `docs/design.md` を実スタック（Vanilla JS + Konva + Cloudflare Workers + `node --test`）へ書き換え、`runbook.md` の Windows 絶対パスを是正する。`F-20260821-09/-10` は vibe-base に触れる環境で行う。
 
-M6 は通ったので、**「動くものが揃っている」状態には到達している**。M7 以降は納品品質を上げる工程で、
-アプリが動くかどうかの前提はもう崩れない。
+M6 が通り M7 の検査も揃ったので、**「動くものが揃っていて、壊れたら機械が気づく」状態に到達している**。
+M8 以降は納品品質を上げる工程で、アプリが動くかどうかの前提はもう崩れない。
