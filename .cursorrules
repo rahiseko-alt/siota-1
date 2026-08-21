@@ -1,0 +1,8 @@
+# .cursorrules
+# This repository follows template-0811 v3 rules defined in AGENTS.md
+
+Always adhere to the 4-level hierarchy and development principles in AGENTS.md:
+1. NON-NEGOTIABLE RULES: Never leak/generate secrets, never use real personal data in samples, never weaken tests to pass CI.
+2. DEVELOPMENT PRINCIPLES: Search first, Reuse first, Define the Gap, Build only the Gap, No unnecessary abstractions.
+3. RISK-BASED WORKFLOW: Dynamically apply Failure Matcher, Independent Critic, and Independent Verifier based on Risk Level (0-3).
+4. REPOSITORY-SPECIFIC RULES: Check Level D in AGENTS.md before making modifications.
