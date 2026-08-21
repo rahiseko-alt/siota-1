@@ -28,11 +28,13 @@
  */
 
 import { spawn } from 'node:child_process';
+import net from 'node:net';
 import { chromium } from 'playwright';
 
 const PORT = Number(process.env.PORTAL_PORT || 8788);
 const BASE = `http://localhost:${PORT}`;
 const READY_TIMEOUT_MS = 90_000;
+const STOP_TIMEOUT_MS = 5_000;
 
 const results = [];
 function check(name, pass, detail) {
@@ -40,14 +42,56 @@ function check(name, pass, detail) {
   process.stdout.write(`${pass ? 'PASS' : 'FAIL'}  ${name}${detail ? `  ${detail}` : ''}\n`);
 }
 
-/* ダミーであることが読んで分かる値にする。実在の値をここへ書かない。 */
+/** ポートが空いているか。塞がっていると wrangler は kj::Exception を吐いて読み解きにくい。 */
+function portIsFree(port) {
+  return new Promise((resolve) => {
+    const probe = net.createServer();
+    probe.once('error', () => resolve(false));
+    probe.once('listening', () => probe.close(() => resolve(true)));
+    probe.listen(port, '127.0.0.1');
+  });
+}
+
+if (!await portIsFree(PORT)) {
+  process.stderr.write(
+    `ポート ${PORT} が塞がっている。前回の wrangler が残っているか、他のサーバが使っている。\n`
+    + `PORTAL_PORT=<別のポート> で逃がすこともできる。\n`,
+  );
+  process.exit(1);
+}
+
+/* ダミーであることが読んで分かる値にする。実在の値をここへ書かない。
+   detached: true はプロセスグループを作るため。`npx` を kill しても、その下の
+   wrangler(node) と workerd は生き残ってポートを掴んだままになり、次の実行が
+   「Address already in use」で落ちる。グループごと止める。 */
 const worker = spawn('npx', [
   'wrangler', 'dev',
   '--config', 'worker/wrangler.supabase.toml',
   '--port', String(PORT),
   '--var', 'SUPABASE_URL:https://portal-verify.supabase.co',
   '--var', 'SUPABASE_PUBLISHABLE_KEY:sb_publishable_verifyonly',
-], { stdio: ['ignore', 'pipe', 'pipe'] });
+], { stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+
+/** プロセスグループごと止めて、実際に終わるまで待つ（待たないとポートが解放されない）。 */
+async function stopWorker() {
+  if (worker.exitCode !== null || worker.signalCode !== null) return;
+  const exited = new Promise((resolve) => worker.once('exit', resolve));
+  try {
+    process.kill(-worker.pid, 'SIGTERM');
+  } catch {
+    return; // もう居ない
+  }
+  const hammer = setTimeout(() => {
+    try { process.kill(-worker.pid, 'SIGKILL'); } catch { /* もう居ない */ }
+  }, STOP_TIMEOUT_MS);
+  await exited;
+  clearTimeout(hammer);
+}
+
+/* 途中で Ctrl-C されても居残らせない。 */
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.on(signal, () => { stopWorker().finally(() => process.exit(130)); });
+}
 
 let workerLog = '';
 const ready = new Promise((resolve, reject) => {
@@ -126,7 +170,7 @@ try {
   check('検査を最後まで実行できた', false, error.message);
 } finally {
   if (browser) await browser.close();
-  worker.kill('SIGTERM');
+  await stopWorker();
 }
 
 const passed = results.filter((r) => r.pass).length;

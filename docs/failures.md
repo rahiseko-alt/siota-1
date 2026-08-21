@@ -255,3 +255,13 @@
 - **Root Cause**: 意匠モックを `src/my.html` という**本番の実体の場所**にそのまま置いたこと。`design/mock-4step.html` の `#screen-4` と同じ意匠であり、置き場所さえ間違えなければ D-1 が隔離してくれた。`F-20260821-15`（カルテ0件の犬に見本を出していた）と同型で、あちらが公開ページ、こちらがマイページというだけの違い。**「まだ繋いでいない画面」を、繋いだ後の見た目で埋めておくと、繋がっていないこと自体が見えなくなる。**
 - **Guardrail / Prevention**: `src/my.html` をポータルの器だけに置き換えた（意匠は `design/mock-4step.html` に既にある。P6 の `renderMagazine` で実データから作る）。機械強制を2本入れた。(1) `test/supabase-auth.test.mjs` が `bootProtectedPortal()` の**ソースから** `querySelector` の引数を抜き出し、その全部が `src/my.html` に在ることを要求する（フックを足したら HTML 側も要求される）。あわせて `<img>` と `/assets/photo-*` と日付・体重らしき文字列が my.html に無いことを検査する。(2) `npm run verify:portal` が実ブラウザで `/my` を開き、ポータルが起動してログイン導線が出るところまで 10 項目見る。**ただしこの検査はログイン前までしか見ていない**——ログイン後の犬一覧・カルテ表示・RLS は Supabase 有効化後に別途要る（`F-20260821-11` の「静的に通ったを動くと書かない」の適用）。
 - **Status**: CLOSED (P8-a)
+
+### [F-20260821-23] 新設した検査が、2回目の実行で必ず落ちた（自前で立てた Worker を止め切れていない）
+
+- **Date**: 2026-08-21
+- **Category**: test
+- **Trigger/Context**: `F-20260821-22` の再発防止に足した `npm run verify:portal`。1回目 10/10 PASS を確認して commit・push した後、**同じコマンドを続けて2回流したら 2回目が落ちた**。
+- **Failure**: `Address already in use (127.0.0.1:8788)`。`spawn('npx', ['wrangler','dev',…])` の戻り値に `kill('SIGTERM')` を送っていたが、死ぬのは `npx` だけで、その下の wrangler(node) と workerd は生き残りポートを掴んだままだった（`ps` で親 node が生存、workerd 2件が Z のまま残留）。**検査そのものは正しく通っていたので、1回しか回さなければ気づけない。**
+- **Root Cause**: 子プロセスを1個だと思って kill したが、実体は `npx → wrangler(node) → workerd` の3段。加えて kill の**完了を待たずに** exit していたため、待てばポートが解放される場合でも間に合わなかった。「起動する検査」を書いたのに「止まる」ことを検査していなかった。
+- **Guardrail / Prevention**: `detached: true` でプロセスグループを作り、`process.kill(-pid, 'SIGTERM')` でグループごと止め、`exit` を await してから戻る（5秒で SIGKILL へ落とす）。`SIGINT`/`SIGTERM` でも同じ後始末をする。起動前に `net.createServer().listen()` でポートの空きを確かめ、塞がっていれば wrangler の `kj::Exception` ではなく読める文で落とす。**サーバを立てる検査を書いたら、続けて3回流して全部 EXIT 0 になることを確認してから commit する**（今回そうしていれば push 前に見つかっていた）。
+- **Status**: CLOSED

@@ -16,6 +16,7 @@
 - **`/my` が一度も起動していなかったのを直した（F-22）**。`src/my.html` には `bootProtectedPortal()` が探すフック5種も起動条件 `data-portal="customer"` も無く、`supabase-auth.js` を読み込んでさえいなかった。器として作り直し、`supabase-vendor.js` →`supabase-auth.js` の順で結線した。
 - **同じページに出ていた架空のカルテを撤去した（D-10）**。犬名「ポンチ くん」・体重 2.79kg・来店日 2026.08.15・他所の犬の写真7枚・担当トリマーの文面が入った静的モックで、Supabase 有効化と同時に、ログインしていない誰にでもそう見える状態だった。意匠は `design/mock-4step.html` の `#screen-4` に同じものがあるので失っていない（実データからの描画は P6 の `renderMagazine`）。
 - **機械強制を2本足した**。`test/supabase-auth.test.mjs` が `bootProtectedPortal()` のソースから `querySelector` の引数を抜き出し、その全部が `my.html` に在ることを要求する（フックを足せば HTML も要求される）。`npm run verify:portal` は実ブラウザで `/my` を開き、10項目を見る。どちらも、外したら落ちることを実際に確認した。
+- **その `verify:portal` が2回目の実行で落ちるのを直した（F-23）**。自分で立てた Worker を `npx` にだけ SIGTERM していて、下の wrangler と workerd がポートを掴んだまま残っていた。プロセスグループごと止めて exit を待つようにし、**連続3回とも 10/10・EXIT 0** になることを確認した。1回しか回さなければ気づけない類で、push 後に見つけた。
 - **`/my` の見た目は P6 まで素っ気ない。** 犬の一覧・カルテは `supabase-auth.js` の既存レンダラが素の DOM で出す。架空の中身を見せないこととの交換で、意匠は P6 で実データに乗せる。
 
 ### 以前のセッション（M0〜M9 / P0）
