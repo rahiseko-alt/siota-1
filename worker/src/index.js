@@ -900,6 +900,14 @@ export default {
       return handleSupabaseMode(request, env, url, cors);
     }
 
+    // KV モードのバックエンド告知。supabase-auth.js の bootLoginPage() が
+    // ログインページで必ず叩く。Supabase モードにしか実装が無いと 404 が返り、
+    // クライアントは正しく諦めるがコンソールにはエラーが残る（受入基準9が落ちる）。
+    // 「supabase ではない」と答えるのが実態であり、黙って 404 を返すより正しい。
+    if (path === '/api/config' && request.method === 'GET') {
+      return json({ backend: 'kv' }, 200, cors);
+    }
+
     // 編集モード: /edit、/edit/o/{ownerSlug}、/edit/p/{slug}、/edit/p/{slug}/{reportId}
     // GET のみ（POST/PUT は /api/* 経由）
     if (path === '/edit' || path === '/edit/') {

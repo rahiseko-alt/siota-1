@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>カルテ検索・一覧 | SALTY DOG</title>
+  <link rel="icon" href="/assets/app-icon.png" type="image/png">
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+JP:wght@300;400;500;700&family=Noto+Serif+JP:wght@300;400;600;700&display=swap" rel="stylesheet" />
@@ -436,9 +437,9 @@
         countEl.textContent = list.length + ' 件';
         listEl.innerHTML = list.map(d => `
           <li>
-            <div class="result-row" onclick="selectDog('${escHtml(d.pet)}')">
+            <div class="result-row" onclick="selectDog()">
               <div class="row-avatar">
-                <img src="${d.avatar || '/assets/photo-dog-paw-high.jpg'}" alt="${escHtml(d.pet)}">
+                <img src="${escHtml(d.avatar || '/assets/photo-dog-paw-high.jpg')}" alt="${escHtml(d.pet)}">
               </div>
               <div class="row-main">
                 <div class="pet-name-line">
@@ -458,7 +459,11 @@
       }
     }
 
-    function selectDog(name) {
+    /* 引数は取らない。以前は onclick="selectDog('${escHtml(d.pet)}')" と
+       インライン属性の中の JS 文字列へ犬名を埋めていたが、HTML 属性値は実体参照が
+       復号されてから JS として解釈されるため、escHtml が付けた &#39; が ' に戻り
+       文字列を抜けられる（エスケープが文脈に合っていない）。値は元々使っていない。 */
+    function selectDog() {
       window.location.href = 'design-samples/ponchi-v2.html';
     }
 
