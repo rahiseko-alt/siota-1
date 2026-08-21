@@ -578,14 +578,50 @@
     if (badgeEl) badgeEl.textContent = text;
   }
 
+  /**
+   * markPawEmpty(el)
+   * カルテが無い肉球を「無い」姿にする。ラベルを消し、静的 HTML に埋まっている
+   * 見本写真（他所の犬）を外し、タップを殺す。
+   *
+   * 既定の HTML には見本用の月ラベルと Unsplash の犬写真が入っている。放っておくと
+   * カルテ0件の犬でもそれが残り、飼い主には「施術履歴がある」ように見える。
+   */
+  function markPawEmpty(el) {
+    el.classList.add('is-empty');
+    setToeLabel(el, '');
+    var img = el.querySelector('img');
+    if (img) { img.removeAttribute('src'); img.alt = ''; }
+    el.style.cursor = '';
+    el.removeAttribute('role');
+    el.removeAttribute('aria-label');
+    el.onclick = null;
+  }
+
   function applyPawMap(months, slug, params) {
+    /* 飼い主が見ている公開ページか（プレビューはトリマー文脈なので __VIEW__ で判定。
+       line 908 と同じ規約）。飼い主にはデモを一切見せない。 */
+    var ownerView = !!window.__VIEW__;
+    var hasAny    = months.length > 0;
+
+    /* カルテ0件の告知。飼い主には「まだありません」、トリマーには作り方を出す。 */
+    var emptyEl = document.querySelector('#screen-paw .paw-empty');
+    if (emptyEl) {
+      emptyEl.hidden = hasAny;
+      emptyEl.textContent = ownerView
+        ? 'まだカルテがありません。'
+        : 'まだカルテがありません。中央の肉球から1件目を作成できます。';
+    }
+    var hintEl = document.querySelector('#screen-paw .top-hint');
+    if (hintEl) hintEl.hidden = !hasAny;
+
     /* PAW_MAP を元に、既存 .paw 内の要素にラベル＋タップハンドラを設定 */
     PAW_MAP.forEach(function (entry) {
       var el = document.querySelector('#screen-paw ' + entry.selector);
       if (!el) return;
 
       if (entry.role === 'archive') {
-        /* 右端指 → 全履歴 */
+        /* 右端指 → 全履歴。1件も無いなら開く先が無いので出さない。 */
+        if (!hasAny) { markPawEmpty(el); return; }
         setToeLabel(el, '全履歴');
         el.style.cursor = 'pointer';
         el.setAttribute('role', 'button');
@@ -604,6 +640,7 @@
       } else {
         var month = months[entry.monthOffset] || null;
         if (month) {
+          el.classList.remove('is-empty');
           /* サムネ設定 */
           var img = el.querySelector('img');
           if (img && month.heroThumb) img.src = month.heroThumb;
@@ -622,19 +659,27 @@
               PonchiApp.show('report', { slug: slug, reportId: m.reportId, params: params });
             };
           })(month);
+        } else if (ownerView || entry.role !== 'pad') {
+          /* カルテが無い枠。
+             以前はここで makeDemoLabel() が現在月から遡った架空の月ラベルを作り、
+             静的 HTML の見本写真（他所の犬）とデモ内容のカルテをタップで開いていた。
+             飼い主から見ると、施術を一度もしていない犬に5ヶ月分の履歴があり、
+             他の犬の体重と担当コメントが自分の犬の名前で表示される。
+             見本は納品物に出すものではないので、空は空として出す。 */
+          markPawEmpty(el);
         } else {
-          /* データなし(デモ): 契約#6 に沿ったデモ月ラベルを表示しタップも有効にする */
-          var demoLabel = makeDemoLabel(entry.monthOffset);
-          setToeLabel(el, demoLabel);
+          /* トリマー文脈の中央パッドだけは、1件目を作る入口として残す。
+             ここが KV モードで新規カルテを作る唯一の導線。過去月を騙らせない。 */
+          el.classList.remove('is-empty');
+          setToeLabel(el, '＋ 新規カルテ');
+          var padImg = el.querySelector('img');
+          if (padImg) { padImg.removeAttribute('src'); padImg.alt = ''; }
           el.style.cursor = 'pointer';
           el.setAttribute('role', 'button');
-          el.setAttribute('aria-label', demoLabel + ' のカルテへ（デモ）');
-          el.onclick = (function (offset) {
-            return function () {
-              /* デモ遷移: report 画面を表示（slug/reportId はダミー） */
-              PonchiApp.show('report', { slug: slug || 'demo', reportId: 'demo-' + offset, params: params });
-            };
-          })(entry.monthOffset);
+          el.setAttribute('aria-label', '新規カルテを作成する');
+          el.onclick = function () {
+            PonchiApp.show('report', { slug: slug || 'demo', reportId: 'demo-0', params: params });
+          };
         }
       }
     });

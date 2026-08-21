@@ -84,6 +84,9 @@ body{font-family:var(--sans);color:var(--ink);background:#f3f1f7}
 .top-h em{font-style:italic;color:var(--orange)}
 .top-p{font-size:0.82rem;color:var(--ink-soft);text-align:center;margin-top:14px;line-height:1.8}
 .top-hint{margin:22px auto 0;display:block;width:fit-content;font-size:0.74rem;font-weight:700;color:var(--grape);background:#f3edff;padding:8px 18px;border-radius:30px}
+.paw-empty{margin-top:10px;font-size:0.82rem;color:#9a93a6;line-height:1.7}
+.paw .is-empty{opacity:.34;pointer-events:none}
+.paw .is-empty .toe-img,.paw .is-empty img{visibility:hidden}
 
 /* ② ヒーロー（ブランド行・CTAボタン削除後 短縮版） */
 .hero{position:relative;overflow:hidden;padding:14px 22px 20px;background:linear-gradient(168deg,#fff7ec 0%,#ffeede 42%,#ffe7ef 78%,#f7ecff 100%)}
@@ -909,6 +912,7 @@ body.is-drawing-active .hc:hover,body.is-drawing-active .owner-pet-item:hover,bo
     <h1 class="top-h" contenteditable="true" data-field="pet">まるちゃん</h1>
     <p class="top-p">毎月のトリミングと健康記録を<br>大切なアルバムとしてお届けします。</p>
     <span class="top-hint">肉球をタップして月を選ぶ →</span>
+    <p class="paw-empty" hidden>まだカルテがありません。</p>
   </section>
 
 </div><!-- /.frame (#screen-paw) -->

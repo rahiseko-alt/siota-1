@@ -16,7 +16,8 @@
 - M6 の過程で見つけた不具合3件を修正（`/api/config` の KV モード欠落 / デモ月の無効 fetch / favicon 404）。
 - **M7**: 眠っていた Supabase 系3スイート（storage 6 / store 23 / auth 10 = 39件）を `test:supabase:static` に配線し、`npm test` が全6スイート **61 pass** を実行するようにした。`scripts/design-isolation-guard.mjs` を新規作成して `npm run check` に組み込み、`design/README.md` を追加。
 - **カルテ往復の修復（最重要）**: マスター指摘を受けて機能そのものを検査したところ、**トリマーが記入した所見の大半が飼い主に届いていなかった**。皮膚の種類・変化と歯の状態は保存されるのに復元で静かに消え（`cssAttrSafe` が日本語の値を空にしていた）、耳・爪・歯のコメントは `data-field` が無く保存対象ですらなく、担当からの一言は保存されないうえ既定文が飼い主に届いていた。犬の名前も肉球画面に一度も出ていなかった。全て修正し、`npm run verify:roundtrip` で常時検査する。詳細は `docs/failures.md` の F-20260821-11〜14。
-- `docs/failures.md` に 14 件を記録（CLOSED 9 / OPEN 4）。
+- **カルテ0件の犬の見え方を是正（F-15）**: 施術を一度もしていない犬の公開ページに、架空の月ラベル5つ・他所の犬の Unsplash 写真5枚・他の犬の体重と担当コメント入りのデモカルテが、その犬の名前で出ていた。飼い主には見本を一切出さず「まだカルテがありません」を表示する。トリマー側の中央パッドだけ「＋ 新規カルテ」として残す（1件目を作る唯一の導線のため）。`npm run verify:empty` で検査。
+- `docs/failures.md` に 16 件を記録（CLOSED 11 / OPEN 4、+ F-06 の Root Cause 訂正）。
 
 ## 2. 現在の状態 (Current State)
 
@@ -29,8 +30,9 @@
 | `npm test` | EXIT 0・**61 pass / 0 fail**（全6スイート = plan の目標値） |
 | `npm run verify:m6` | **11/11 PASS・EXIT 0** |
 | `npm run verify:roundtrip` | **15/15 PASS・EXIT 0**（記入→保存→公開ページの往復） |
+| `npm run verify:empty` | **8/8 PASS・EXIT 0**（カルテ0件の犬に架空の履歴が出ないこと） |
 
-`verify:m6` と `verify:roundtrip` は別端末で `npm run preview` を起動してから実行する。
+`verify:m6` / `verify:roundtrip` / `verify:empty` は別端末で `npm run preview` を起動してから実行する。
 playwright 管理外の chromium を使う場合は `M6_CHROMIUM=/path/to/chrome` を渡す。
 
 **`verify:roundtrip` がこのリポジトリで一番重要な検査。** 画面が出るか・押せるかではなく、
@@ -49,16 +51,19 @@ playwright 管理外の chromium を使う場合は `M6_CHROMIUM=/path/to/chrome
 耳（右・左）/ 爪のレベル / 耳・爪・歯のコメント / 担当からの一言 —— 13項目すべてが、
 トリマーの記入どおりの値で飼い主の公開ページに現れる。
 
+**空（`verify:empty`）**: カルテ0件の犬には、架空の月ラベルも見本写真もタップ導線も出ない。
+飼い主には「まだカルテがありません」。トリマーの中央パッドからは1件目を作成できる。
+
 導線が通ることと中身が届くことは別物で、**後者は一度も検査されていなかった**。
 `verify:m6` が 9/9 だった時点で、実際には所見の大半が消えていた。
 
-外部ホスト（`images.unsplash.com` / `fonts.googleapis.com`）への接続失敗 24 件は
+外部ホスト（`images.unsplash.com` / `fonts.googleapis.com`）への接続失敗 22 件は
 実行環境の egress 制限によるもので、アプリの不具合ではない。ただし**外部 CDN に
 依存していること自体**は D-4 違反として `F-20260821-07` に OPEN で記録した。
 
 ### 未着手
 
-- **M8** PII / 権利 / PWA 是正 — `F-20260821-06` `-07` `-08` がここに対応。`塩田` は `src/search.html` `src/my.html` に残存、`@gmail.com` は `docs/runbook.md` に残存。
+- **M8** PII / 権利 / PWA 是正 — `F-20260821-07` `-08` がここに対応。`塩田` は `src/search.html` `src/my.html` に残存、`@gmail.com` は `docs/runbook.md` に残存。
 - **M9** ルール改訂と移設元の凍結 — `docs/design.md` の Golden Stack がテンプレのまま（Next.js / Prisma / Tailwind / Vitest。実際は Vanilla JS + Konva + Cloudflare Workers + `node --test`）。`AGENTS.md` も同様。
 
 ### 未解決（`docs/failures.md` の OPEN）
@@ -75,9 +80,11 @@ playwright 管理外の chromium を使う場合は `M6_CHROMIUM=/path/to/chrome
 
 ## 3. 次回やること (Next Steps)
 
-1. **カルテ未登録の犬の見え方をマスターに確認する（M8 より先）** — カルテが1件も無い犬の肉球画面には、`makeDemoLabel()` が生成した架空の月ラベル（今月・1ヶ月前…）と、他所の犬の Unsplash 写真が並ぶ。タップすると他の犬のデータで埋まったデモカルテが開く。**本番 V1 と同じ挙動**なので「もともとの機能」ではあるが、飼い主に見せるものとしては誤解を招く。仕様として残すか、空状態を出すかは判断が要る。
-2. **M8** — `F-20260821-07/-08` を潰す。Unsplash 直リンク10箇所の自リポジトリ同梱と `docs/ASSET-PROVENANCE.md` の作成が本体。あわせて 4ファイルに `link rel="manifest"` を足し、`src/search.html` `src/my.html` の `塩田` を置換する。
-3. **M9** — `AGENTS.md` / `docs/design.md` を実スタック（Vanilla JS + Konva + Cloudflare Workers + `node --test`）へ書き換え、`runbook.md` の Windows 絶対パスを是正する。`F-20260821-09/-10` は vibe-base に触れる環境で行う。
+1. **M8** — `F-20260821-07/-08` を潰す。Unsplash 直リンク10箇所の自リポジトリ同梱と `docs/ASSET-PROVENANCE.md` の作成が本体。あわせて 4ファイルに `link rel="manifest"` を足し、`src/search.html` `src/my.html` の `塩田` を置換する。
+2. **M9** — `AGENTS.md` / `docs/design.md` を実スタック（Vanilla JS + Konva + Cloudflare Workers + `node --test`）へ書き換え、`runbook.md` の Windows 絶対パスを是正する。`F-20260821-09/-10` は vibe-base に触れる環境で行う。
 
-導線と中身の両方に機械検査が付いたので、**「クライアントが使える状態が、壊れたら機械が気づく」ところまで来ている**。
-ただし上の1は未判断で、飼い主の目に触れる部分なので M8 より先に決めたい。
+導線・中身・空状態の3つに機械検査が付いたので、**「クライアントが使える状態が、壊れたら機械が気づく」ところまで来ている**。
+
+なお F-11 と F-16 は自分の進め方の失敗として記録した。要点は2つ——受入基準を満たすことを
+成果と取り違えないこと、そして**片方がクライアントに実害を出す選択は「判断」ではなく不具合**
+なので、聞かずに直してから報告すること。

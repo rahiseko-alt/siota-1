@@ -13,6 +13,7 @@
     "test:e2e": "npx playwright test",
     "verify:m6": "node scripts/verify-m6.mjs",
     "verify:roundtrip": "node scripts/verify-report-roundtrip.mjs",
+    "verify:empty": "node scripts/verify-empty-pet.mjs",
     "test:supabase:static": "node --test test/supabase-schema.test.mjs test/supabase-storage.test.mjs test/supabase-store.test.mjs test/supabase-auth.test.mjs",
     "test:supabase": "supabase test db",
     "test:migration": "node --test test/kv-migration.test.mjs"
