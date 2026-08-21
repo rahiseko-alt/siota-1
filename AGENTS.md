@@ -145,7 +145,7 @@ EXPLORE  -->  BUILD  -->  VERIFY
     |---|---|
     | `npm run build` | dist が生成でき、相対パスが残っていないこと |
     | `npm run check` | src↔dist の対応と、`design/` が `src/` に流れ込んでいないこと |
-    | `npm test` | 全6スイート 61 件 |
+    | `npm test` | 全6スイート 66 件 |
 
   - **3本とも EXIT 0 になるまで VERIFY へ進まない。**
   - 機械判定できるものは先にすべて自動実行する。LLM Reviewerに機械判定を任せない。
@@ -177,7 +177,8 @@ EXPLORE  -->  BUILD  -->  VERIFY
   | `npm run verify:roundtrip` | **トリマーが書いた所見が、同じ値で飼い主に届くこと**（13項目） |
   | `npm run verify:empty` | カルテ0件の犬に、存在しない履歴を見せていないこと |
   | `npm run verify:xss` | 保存されたデータが飼い主のブラウザで実行されないこと |
-  | `npm run verify:all` | 上記4本 |
+  | `npm run verify:portal` | `/my` が起動し、未ログインの飼い主にログイン導線が出ること（自分で Worker を立てるので `preview` 不要） |
+  | `npm run verify:all` | 上記5本 |
 
   **`verify:roundtrip` が本リポジトリで最も重要な検査。** 画面が出るか・押せるかではなく、
   書いたものが相手に届くかを見る。この2つは別物で、前者だけを見て「動く」と報告した失敗が

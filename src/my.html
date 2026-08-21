@@ -77,6 +77,7 @@
       letter-spacing: 0.12em;
       color: #ffffff;
     }
+    .top-nav__actions { display: flex; align-items: center; gap: 8px; }
     .top-nav-btn {
       background: rgba(255, 255, 255, 0.12);
       border: 1px solid rgba(255, 255, 255, 0.24);
@@ -88,306 +89,127 @@
       text-decoration: none;
       cursor: pointer;
     }
+    .top-nav-btn[hidden] { display: none; }
 
-    .magazine-container {
+    .portal-container {
       max-width: 1040px;
       margin: 0 auto;
-      padding: 24px 16px 100px;
+      padding: 32px 16px 100px;
       background: #ffffff;
       box-shadow: 0 4px 32px rgba(0,0,0,0.04);
+      min-height: calc(100vh - var(--header-height));
     }
 
-    /* Past Reports Timeline Bar */
-    .timeline-accordion-box {
-      background: var(--bg-paper);
-      border: 1px solid var(--border-subtle);
-      margin-bottom: 28px;
-    }
-    .timeline-accordion-head {
-      padding: 12px 16px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      cursor: pointer;
-      font-weight: 700;
-      font-size: 13px;
-      color: var(--ink-primary);
-      user-select: none;
-    }
-    .timeline-chips-tray {
-      padding: 12px 16px 16px;
-      border-top: 1px dashed var(--border-subtle);
-      display: flex;
-      gap: 8px;
-      overflow-x: auto;
-      scrollbar-width: none;
-    }
-    .timeline-chips-tray::-webkit-scrollbar { display: none; }
-    .timeline-date-chip {
-      padding: 6px 14px;
-      background: #ffffff;
-      border: 1px solid var(--border-subtle);
-      font-family: var(--font-en);
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--ink-body);
-      white-space: nowrap;
-      cursor: pointer;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-    .timeline-date-chip .sub { font-size: 10px; color: var(--ink-muted); font-family: var(--font-sans); }
-    .timeline-date-chip.is-active {
-      background: var(--ink-primary);
-      color: #ffffff;
-      border-color: var(--ink-primary);
-    }
-    .timeline-date-chip.is-active .sub { color: rgba(255,255,255,0.7); }
-
-    /* Quick Jump Numbers Bar */
-    .quick-jump-nav-sticky {
-      position: sticky;
-      top: var(--header-height);
-      z-index: 860;
-      background: rgba(255, 255, 255, 0.94);
-      backdrop-filter: blur(20px);
-      border-bottom: 1px solid var(--border-subtle);
-      padding: 8px 12px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      margin: -24px -16px 28px -16px;
-    }
-    .quick-jump-buttons { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
-    .quick-jump-buttons::-webkit-scrollbar { display: none; }
-    .btn-jump-number {
-      min-width: 34px;
-      height: 34px;
-      border: 1px solid var(--border-subtle);
-      background: var(--bg-paper);
-      color: var(--ink-primary);
-      font-size: 12px;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0 10px;
-      cursor: pointer;
-      white-space: nowrap;
-    }
-    .btn-jump-number:hover { background: var(--ink-primary); color: #ffffff; }
-
-    /* Magazine Hero */
-    .magazine-hero {
-      border-bottom: 1px solid var(--border-divider);
-      padding-bottom: 36px;
-      margin-bottom: 36px;
-    }
-    .magazine-hero__header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-      margin-bottom: 20px;
+    .portal-head {
       border-bottom: 2px solid var(--ink-primary);
-      padding-bottom: 10px;
+      padding-bottom: 12px;
+      margin-bottom: 20px;
     }
-    .magazine-hero__brand {
+    .portal-head__brand {
+      font-family: var(--font-en);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      color: var(--ink-muted);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .portal-head__title {
       font-family: var(--font-serif);
       font-size: 26px;
-      letter-spacing: 0.14em;
+      font-weight: 700;
+      letter-spacing: 0.12em;
       color: var(--ink-primary);
     }
-    .magazine-hero__date {
-      font-family: var(--font-en);
-      font-size: 13px;
+
+    /* ログイン状態・エラー・招待結果の通知欄。文面は supabase-auth.js が入れる。 */
+    .portal-status {
+      font-size: 13.5px;
       color: var(--ink-secondary);
-      font-weight: 600;
+      margin-bottom: 24px;
+      min-height: 1.8em;
     }
-    .magazine-hero__media-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 20px;
-      margin-bottom: 28px;
-    }
-    @media (min-width: 768px) {
-      .magazine-hero__media-grid { grid-template-columns: 3fr 2fr; gap: 28px; }
-    }
-    .magazine-hero-photo-main {
-      position: relative;
-      aspect-ratio: 4 / 3;
-      overflow: hidden;
-      background: var(--bg-muted);
-    }
-    .magazine-hero-photo-main img { width: 100%; height: 100%; object-fit: cover; }
-    .magazine-hero-side-card {
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      padding: 24px;
+    .portal-status:empty { margin-bottom: 0; }
+
+    .login-panel {
       background: var(--bg-paper);
       border: 1px solid var(--border-subtle);
-    }
-    .magazine-dog-title {
-      font-family: var(--font-serif);
-      font-size: 30px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      color: var(--ink-primary);
-      margin-bottom: 8px;
-    }
-    .magazine-dog-sub { font-size: 13px; color: var(--ink-secondary); margin-bottom: 16px; }
-
-    /* Personal Letter */
-    .magazine-letter-section {
-      padding: 28px 24px;
-      background: var(--bg-paper);
       border-left: 3px solid var(--ink-primary);
-      margin-bottom: 40px;
+      padding: 28px 24px;
+      margin-bottom: 32px;
     }
-    .magazine-letter-title {
+    .login-panel[hidden] { display: none; }
+    .login-panel__title {
       font-family: var(--font-serif);
       font-size: 18px;
       font-weight: 600;
       letter-spacing: 0.08em;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
-    .magazine-letter-body {
-      font-size: 14.5px;
-      line-height: 2.1;
+    .login-panel__lead {
+      font-size: 13.5px;
+      line-height: 2;
       color: var(--ink-body);
+      margin-bottom: 20px;
     }
 
-    /* Wave Accordion Stack */
-    .wave-accordion-stack {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      margin-bottom: 48px;
-    }
-    .wave-card {
+    .portal-content[hidden] { display: none; }
+
+    /* 以下は supabase-auth.js の renderPets / renderPet / renderReport が生成する DOM に当たる。
+       クラス名を変えるときは向こうも一緒に変えること。 */
+    .pet-card {
+      display: block;
+      padding: 18px 20px;
+      margin-bottom: 12px;
+      background: var(--bg-paper);
       border: 1px solid var(--border-subtle);
-      background: #ffffff;
-      overflow: hidden;
+      font-family: var(--font-serif);
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: var(--ink-primary);
+      text-decoration: none;
     }
-    .wave-card.is-open {
+    .pet-card:hover {
       border-color: var(--ink-primary);
       box-shadow: 0 12px 36px rgba(0,0,0,0.06);
     }
-    .wave-card-head {
-      padding: 16px 20px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      cursor: pointer;
-      user-select: none;
-      background: var(--bg-paper);
-    }
-    .wave-card-head:hover { background: var(--bg-subtle); }
-    .wave-card.is-open .wave-card-head {
-      background: #ffffff;
-      border-bottom: 1px solid var(--border-subtle);
-    }
-    .wave-card-head__title-wrap {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .wave-card-number-badge {
-      width: 26px;
-      height: 26px;
-      border-radius: 50%;
-      background: var(--ink-primary);
-      color: #ffffff;
-      font-size: 12px;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: var(--font-en);
-    }
-    .wave-card-title {
-      font-family: var(--font-serif);
-      font-size: 16px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-    }
-    .wave-card-status-pill {
-      font-size: 11px;
-      font-weight: 700;
-      padding: 3px 10px;
-      background: #eaf5ea;
-      color: var(--accent-sage);
-    }
-    .wave-separator-svg {
-      width: 100%;
-      height: 12px;
-      display: block;
-      fill: none;
-      stroke: var(--border-subtle);
-      stroke-width: 1.5;
-    }
-    .wave-card-body {
-      display: none;
-      padding: 24px 20px;
-    }
-    .wave-card.is-open .wave-card-body {
-      display: block;
-    }
-    .wave-body-grid-2col {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 20px;
-    }
-    @media (min-width: 768px) {
-      .wave-body-grid-2col { grid-template-columns: 1fr 1fr; }
-    }
-    .wave-body-img-frame {
-      border: 1px solid var(--border-subtle);
-      background: var(--bg-paper);
-      overflow: hidden;
-    }
-    .wave-body-img-frame img { width: 100%; height: auto; object-fit: cover; }
 
-    /* Photo Mosaic */
-    .gallery-mosaic-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
-    }
-    @media (min-width: 768px) {
-      .gallery-mosaic-grid { grid-template-columns: repeat(4, 1fr); gap: 16px; }
-    }
-    .gallery-mosaic-item {
-      position: relative;
-      aspect-ratio: 1;
-      overflow: hidden;
-      background: var(--bg-muted);
-      cursor: pointer;
-    }
-    .gallery-mosaic-item img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      transition: transform 0.4s ease;
-    }
-    .gallery-mosaic-item:hover img { transform: scale(1.05); }
-
-    /* Revisit Box */
-    .magazine-revisit-box {
-      background: var(--ink-primary);
-      color: #ffffff;
-      padding: 36px 28px;
-      text-align: center;
-      margin-bottom: 40px;
-    }
-    .magazine-revisit-title {
+    .portal-content h2 {
       font-family: var(--font-serif);
-      font-size: 22px;
-      font-weight: 600;
+      font-size: 24px;
+      font-weight: 700;
       letter-spacing: 0.08em;
-      margin-bottom: 14px;
+      color: var(--ink-primary);
+      margin-bottom: 16px;
+    }
+    .portal-content p {
+      font-size: 14px;
+      line-height: 2;
+      color: var(--ink-body);
+      margin-bottom: 16px;
+    }
+
+    .report-list { display: flex; flex-direction: column; gap: 10px; }
+    .report-list a {
+      padding: 12px 16px;
+      background: #ffffff;
+      border: 1px solid var(--border-subtle);
+      font-family: var(--font-en);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink-body);
+      text-decoration: none;
+    }
+    .report-list a:hover { background: var(--bg-subtle); }
+
+    .portal-content img {
+      display: block;
+      width: 100%;
+      height: auto;
+      margin-bottom: 12px;
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-muted);
     }
 
     /* ReBITA Boxbutton */
@@ -407,6 +229,7 @@
       text-decoration: none;
       cursor: pointer;
     }
+    .boxbutton:disabled { opacity: 0.5; cursor: default; }
     .boxbutton:before {
       background-color: rgba(255, 255, 255, 0.28);
       content: "";
@@ -428,300 +251,52 @@
       top: calc(50% - 4.5px);
       width: 8px;
     }
-    .boxbutton--white {
-      background-color: #ffffff;
-      border: 1px solid #111111;
-      color: #111111;
-    }
-    .boxbutton--white:before { background-color: #deded9; }
-    .boxbutton--white:after { background-color: #111111; }
   </style>
+  <script src="/js/supabase-vendor.js"></script>
+  <script type="module" src="/js/supabase-auth.js"></script>
 </head>
-<body>
+<body data-portal="customer">
 
   <!-- Top Glass Nav -->
   <nav class="top-nav">
     <div class="top-nav__container">
       <div class="top-brand">SALTY DOG カルテ</div>
-      <a href="/" class="top-nav-btn">TOPへ戻る</a>
+      <div class="top-nav__actions">
+        <button type="button" class="top-nav-btn" data-sign-out hidden>ログアウト</button>
+        <a href="/" class="top-nav-btn">TOPへ戻る</a>
+      </div>
     </div>
   </nav>
 
-  <main class="magazine-container">
-    
-    <!-- 1. Past Reports Timeline Bar -->
-    <div class="timeline-accordion-box">
-      <div class="timeline-accordion-head" onclick="toggleTimeline()">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-          <span>過去のレポートを見返す（来店履歴タイムライン）</span>
-        </div>
-        <span style="font-size: 11px; color: var(--ink-muted);" id="timeline-toggle-text">表示する ▼</span>
-      </div>
-      <div class="timeline-chips-tray" id="timeline-tray" style="display:none;">
-        <div class="timeline-date-chip is-active" onclick="switchDate('2026.08.15', this)">
-          <span>2026.08.15</span>
-          <span class="sub">本日・フルコース</span>
-        </div>
-        <div class="timeline-date-chip" onclick="switchDate('2026.08.01', this)">
-          <span>2026.08.01</span>
-          <span class="sub">スパ＆部分ケア</span>
-        </div>
-        <div class="timeline-date-chip" onclick="switchDate('2026.07.18', this)">
-          <span>2026.07.18</span>
-          <span class="sub">フルコース</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- 2. Sticky Quick Jump Bar -->
-    <div class="quick-jump-nav-sticky">
-      <div class="quick-jump-buttons">
-        <button class="btn-jump-number" onclick="jumpTo('wave-skin')">① 皮膚</button>
-        <button class="btn-jump-number" onclick="jumpTo('wave-nail')">② 爪</button>
-        <button class="btn-jump-number" onclick="jumpTo('wave-ear')">③ 耳</button>
-        <button class="btn-jump-number" onclick="jumpTo('wave-teeth')">④ 歯</button>
-        <button class="btn-jump-number" onclick="jumpTo('wave-weight')">⑤ 体重</button>
-        <button class="btn-jump-number" onclick="jumpTo('wave-cut')">⑥ カット</button>
-      </div>
-      <button class="btn-jump-number" onclick="toggleAll()">全開/全閉</button>
-    </div>
-
-    <!-- 3. Magazine Hero -->
-    <header class="magazine-hero">
-      <div class="magazine-hero__header">
-        <div class="magazine-hero__brand">SALTY DOG</div>
-        <div class="magazine-hero__date" id="report-date-label">2026.08.15 vol.24</div>
-      </div>
-      <div class="magazine-hero__media-grid">
-        <div class="magazine-hero-photo-main">
-          <img src="/assets/photo-dog-paw-high.jpg" alt="ポンチ 仕上がり写真">
-        </div>
-        <div class="magazine-hero-side-card">
-          <div>
-            <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.16em; color: var(--ink-muted); text-transform: uppercase; margin-bottom: 6px;">Trimming & Spa Report</div>
-            <h2 class="magazine-dog-title">ポンチ くん</h2>
-            <div class="magazine-dog-sub">トイプードル / 4歳 / 2.79kg</div>
-          </div>
-          <div>
-            <div style="font-size: 13.5px; line-height: 1.8; color: var(--ink-body); margin-bottom: 16px;">
-              ふわふわのテディベアカットと、<br>
-              皮膚を優しくうるおす保湿スパで、<br>
-              艶やかな美しい仕上がりになりました。
-            </div>
-            <div style="font-size: 12px; font-weight: 700; border-top: 1px solid var(--border-subtle); padding-top: 12px;">
-              担当トリマー: —
-            </div>
-          </div>
-        </div>
-      </div>
+  <main class="portal-container">
+    <header class="portal-head">
+      <div class="portal-head__brand">Trimming &amp; Spa Report</div>
+      <h1 class="portal-head__title">マイカルテ</h1>
     </header>
 
-    <!-- 4. Personal Letter -->
-    <section class="magazine-letter-section">
-      <h3 class="magazine-letter-title">担当トリマーからのメッセージ</h3>
-      <p class="magazine-letter-body">
-        今月もとってもお利口にトリミングさせてくれました。腰のマッサージ中はずっとウトウトして気持ちよさそうで、リラックスした様子にとても癒やされました。また来月お会いできるのを楽しみにしております。
+    <!-- 状態表示。初期値は「まだ何も確かめていない」ことだけを言う。
+         D-10: 飼い主に見せる画面に見本・デモ・既定文を出さない。 -->
+    <p class="portal-status" data-portal-status>読み込んでいます…</p>
+
+    <noscript>
+      <p class="portal-status">このページの表示にはJavaScriptが必要です。</p>
+    </noscript>
+
+    <section class="login-panel" data-login-panel hidden>
+      <h2 class="login-panel__title">飼い主さまログイン</h2>
+      <p class="login-panel__lead">
+        ご登録いただいたGoogleアカウントでログインすると、
+        お預かりした子のカルテをご覧いただけます。
       </p>
-    </section>
-
-    <!-- 5. Wave Accordions -->
-    <section class="wave-accordion-stack">
-      
-      <!-- Wave 1: Skin -->
-      <div class="wave-card is-open" id="wave-skin">
-        <div class="wave-card-head" onclick="toggleWave('wave-skin')">
-          <div class="wave-card-head__title-wrap">
-            <span class="wave-card-number-badge">1</span>
-            <span class="wave-card-title">皮膚・被毛・スパ状態（4面図）</span>
-          </div>
-          <span class="wave-card-status-pill">保湿スパ済・良好</span>
-        </div>
-        <svg class="wave-separator-svg" viewBox="0 0 1000 12" preserveAspectRatio="none"><path d="M0,6 Q250,0 500,6 T1000,6"/></svg>
-        <div class="wave-card-body">
-          <div class="wave-body-grid-2col">
-            <div class="wave-body-img-frame">
-              <img src="/assets/photo-dog-skin.jpg" alt="皮膚被毛">
-            </div>
-            <div>
-              <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 6px;">皮膚・被毛のコンディション</h4>
-              <p style="font-size: 13.5px; line-height: 1.8; color: var(--ink-body); margin-bottom: 12px;">
-                背中・お腹ともに赤みや乾燥はなく、非常に良好な状態です。セラミド保湿スパをたっぷり浸透させたため、毛艶と手触りが格段に柔らかくなっています。
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Wave 2: Nail -->
-      <div class="wave-card is-open" id="wave-nail">
-        <div class="wave-card-head" onclick="toggleWave('wave-nail')">
-          <div class="wave-card-head__title-wrap">
-            <span class="wave-card-number-badge">2</span>
-            <span class="wave-card-title">爪のチェック（3段階判定・解剖図）</span>
-          </div>
-          <span class="wave-card-status-pill">1. 適切カット済</span>
-        </div>
-        <svg class="wave-separator-svg" viewBox="0 0 1000 12" preserveAspectRatio="none"><path d="M0,6 Q250,12 500,6 T1000,6"/></svg>
-        <div class="wave-card-body">
-          <div class="wave-body-grid-2col">
-            <div class="wave-body-img-frame">
-              <img src="/assets/guide-nail-state.jpg" alt="爪解剖図">
-            </div>
-            <div>
-              <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 6px;">爪の長さと接地状態の解説</h4>
-              <p style="font-size: 13.5px; line-height: 1.8; color: var(--ink-body); margin-bottom: 12px;">
-                血管の直前で安全に丸く整えています。地面への接地がなく、歩行時に指の骨格へ負担がかからない理想的な長さを維持しています。
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Wave 3: Ear -->
-      <div class="wave-card" id="wave-ear">
-        <div class="wave-card-head" onclick="toggleWave('wave-ear')">
-          <div class="wave-card-head__title-wrap">
-            <span class="wave-card-number-badge">3</span>
-            <span class="wave-card-title">耳のチェック（左右個別スコアリング）</span>
-          </div>
-          <span class="wave-card-status-pill">左右 Lv.1 良好</span>
-        </div>
-        <svg class="wave-separator-svg" viewBox="0 0 1000 12" preserveAspectRatio="none"><path d="M0,6 Q250,0 500,6 T1000,6"/></svg>
-        <div class="wave-card-body">
-          <div class="wave-body-grid-2col">
-            <div class="wave-body-img-frame">
-              <img src="/assets/photo-dog-ear.jpg" alt="耳の様子">
-            </div>
-            <div>
-              <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 6px;">左右耳道の清潔度</h4>
-              <p style="font-size: 13.5px; line-height: 1.8; color: var(--ink-body); margin-bottom: 12px;">
-                右耳(R)・左耳(L)ともに内部の赤みや汚れはなく、通気性も良好です。
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Wave 4: Teeth -->
-      <div class="wave-card is-open" id="wave-teeth">
-        <div class="wave-card-head" onclick="toggleWave('wave-teeth')">
-          <div class="wave-card-head__title-wrap">
-            <span class="wave-card-number-badge">4</span>
-            <span class="wave-card-title">口・歯のチェック（頭骨解剖図・6段階）</span>
-          </div>
-          <span class="wave-card-status-pill">ピカピカ良好</span>
-        </div>
-        <svg class="wave-separator-svg" viewBox="0 0 1000 12" preserveAspectRatio="none"><path d="M0,6 Q250,12 500,6 T1000,6"/></svg>
-        <div class="wave-card-body">
-          <div class="wave-body-grid-2col">
-            <div class="wave-body-img-frame">
-              <img src="/assets/guide-teeth-state.jpg" alt="頭骨歯列図">
-            </div>
-            <div>
-              <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 6px;">口腔内・歯石の判定結果</h4>
-              <p style="font-size: 13.5px; line-height: 1.8; color: var(--ink-body); margin-bottom: 12px;">
-                上顎・下顎ともに歯石の蓄積はなく、歯茎の引き締まりも健康です。
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Wave 5: Weight -->
-      <div class="wave-card" id="wave-weight">
-        <div class="wave-card-head" onclick="toggleWave('wave-weight')">
-          <div class="wave-card-head__title-wrap">
-            <span class="wave-card-number-badge">5</span>
-            <span class="wave-card-title">体重・体型スコア（BCS / MCS）</span>
-          </div>
-          <span class="wave-card-status-pill">2.79 kg (適正)</span>
-        </div>
-        <svg class="wave-separator-svg" viewBox="0 0 1000 12" preserveAspectRatio="none"><path d="M0,6 Q250,0 500,6 T1000,6"/></svg>
-        <div class="wave-card-body">
-          <div class="wave-body-grid-2col">
-            <div style="background: var(--bg-paper); padding: 16px; border: 1px solid var(--border-subtle); display: flex; justify-content: center; align-items: center;">
-              <svg viewBox="0 0 300 100" width="100%" height="80">
-                <polyline fill="none" stroke="#121212" stroke-width="2.5" points="20,60 80,55 150,65 220,45 280,30" />
-                <circle cx="280" cy="30" r="5" fill="#c85a32" />
-                <text x="225" y="22" font-size="12" font-family="Inter" font-weight="700" fill="#c85a32">2.79 kg</text>
-              </svg>
-            </div>
-            <div>
-              <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 6px;">BCS（ボディコンディション）評価</h4>
-              <p style="font-size: 13.5px; line-height: 1.8; color: var(--ink-body); margin-bottom: 12px;">
-                適度なくびれが維持されており、BCS 3（理想体型）です。前回比 +120g です。
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Wave 6: Cut -->
-      <div class="wave-card is-open" id="wave-cut">
-        <div class="wave-card-head" onclick="toggleWave('wave-cut')">
-          <div class="wave-card-head__title-wrap">
-            <span class="wave-card-number-badge">6</span>
-            <span class="wave-card-title">カットスタイル & 本日のフォト</span>
-          </div>
-          <span class="wave-card-status-pill">4枚撮影</span>
-        </div>
-        <svg class="wave-separator-svg" viewBox="0 0 1000 12" preserveAspectRatio="none"><path d="M0,6 Q250,12 500,6 T1000,6"/></svg>
-        <div class="wave-card-body">
-          <div class="gallery-mosaic-grid">
-            <div class="gallery-mosaic-item"><img src="/assets/photo-trim-action.jpg" alt="カット中"></div>
-            <div class="gallery-mosaic-item"><img src="/assets/photo-dog-paw-high.jpg" alt="お手"></div>
-            <div class="gallery-mosaic-item"><img src="/assets/photo-dog-pawpad.jpg" alt="肉球"></div>
-            <div class="gallery-mosaic-item"><img src="/assets/photo-dog-jump.jpg" alt="仕上がり"></div>
-          </div>
-        </div>
-      </div>
-
-    </section>
-
-    <!-- 6. Revisit Banner -->
-    <section class="magazine-revisit-box">
-      <h4 class="magazine-revisit-title">次回のおすすめご来店時期</h4>
-      <p style="font-size: 14px; margin-bottom: 20px; color: rgba(255,255,255,0.85);">
-        理想の周期は<strong>約3〜4週間後（2026年9月10日前後）</strong>です。
-      </p>
-      <button class="boxbutton boxbutton--white" onclick="alert('LINE公式アカウントまたは予約システムと連携します')">
-        <span>次回のご予約・ご相談はこちら</span>
+      <button type="button" class="boxbutton" data-google-login>
+        <span>Googleでログイン</span>
       </button>
     </section>
 
+    <!-- 中身は supabase-auth.js の renderPets / renderPet / renderReport が入れる。
+         犬の一覧 → 犬 → カルテ の3段（/my → /my/pets/{id} → /my/pets/{id}/reports/{id}）。 -->
+    <section class="portal-content" data-portal-content hidden></section>
   </main>
 
-  <script>
-    function toggleWave(id) {
-      const card = document.getElementById(id);
-      if (card) card.classList.toggle('is-open');
-    }
-    let allOpen = true;
-    function toggleAll() {
-      allOpen = !allOpen;
-      document.querySelectorAll('.wave-card').forEach(c => c.classList.toggle('is-open', allOpen));
-    }
-    function jumpTo(id) {
-      const card = document.getElementById(id);
-      if (card) {
-        card.classList.add('is-open');
-        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }
-    function toggleTimeline() {
-      const tray = document.getElementById('timeline-tray');
-      const text = document.getElementById('timeline-toggle-text');
-      const isOpen = tray.style.display !== 'none';
-      tray.style.display = isOpen ? 'none' : 'flex';
-      text.textContent = isOpen ? '表示する ▼' : '閉じる ▲';
-    }
-    function switchDate(dateStr, el) {
-      document.querySelectorAll('.timeline-date-chip').forEach(c => c.classList.remove('is-active'));
-      el.classList.add('is-active');
-      document.getElementById('report-date-label').textContent = `${dateStr} vol.24`;
-      alert(`【過去カルテ表示】${dateStr} の記録に切り替えました。`);
-    }
-  </script>
 </body>
 </html>

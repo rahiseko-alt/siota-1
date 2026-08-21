@@ -9,7 +9,16 @@
 
 ## 1. 今回やったこと (Completed in this session)
 
-**移設 plan（M0〜M9）完了。統合フェーズの P0（エンジン抽出）まで進んだ。`docs/failures.md` の OPEN は 0 件。**
+**移設 plan（M0〜M9）完了。統合フェーズは P0（エンジン抽出）と P8-a（飼い主のマイページ再結線）まで。`docs/failures.md` の OPEN は 0 件。**
+
+### 最新セッション（P8-a）
+
+- **`/my` が一度も起動していなかったのを直した（F-22）**。`src/my.html` には `bootProtectedPortal()` が探すフック5種も起動条件 `data-portal="customer"` も無く、`supabase-auth.js` を読み込んでさえいなかった。器として作り直し、`supabase-vendor.js` →`supabase-auth.js` の順で結線した。
+- **同じページに出ていた架空のカルテを撤去した（D-10）**。犬名「ポンチ くん」・体重 2.79kg・来店日 2026.08.15・他所の犬の写真7枚・担当トリマーの文面が入った静的モックで、Supabase 有効化と同時に、ログインしていない誰にでもそう見える状態だった。意匠は `design/mock-4step.html` の `#screen-4` に同じものがあるので失っていない（実データからの描画は P6 の `renderMagazine`）。
+- **機械強制を2本足した**。`test/supabase-auth.test.mjs` が `bootProtectedPortal()` のソースから `querySelector` の引数を抜き出し、その全部が `my.html` に在ることを要求する（フックを足せば HTML も要求される）。`npm run verify:portal` は実ブラウザで `/my` を開き、10項目を見る。どちらも、外したら落ちることを実際に確認した。
+- **`/my` の見た目は P6 まで素っ気ない。** 犬の一覧・カルテは `supabase-auth.js` の既存レンダラが素の DOM で出す。架空の中身を見せないこととの交換で、意匠は P6 で実データに乗せる。
+
+### 以前のセッション（M0〜M9 / P0）
 
 - **M5**: `npm run check` の親モノレポ参照を自リポジトリへ。`--test-isolation=none`（node 22 で `bad option`）を除去。実体を移設していない `predeploy-check` と、それを指す `wrangler.toml` / `runbook.md` の記述を是正。`playwright@1.59.1` / `wrangler@4.92.0` を devDependencies に宣言。lockfile を追加。
 - **M6**: `npm run preview`（KV local）で実際にアプリを動かし、plan の受入基準9項目を全て通した。検証は `scripts/verify-m6.mjs`（`npm run verify:m6`）として残してあるので、次回以降は手作業でなく再実行できる。
@@ -32,17 +41,19 @@
 |---|---|
 | `npm run build` | EXIT 0 |
 | `npm run check` | EXIT 0（src↔dist parity + design/ isolation の2本） |
-| `npm test` | EXIT 0・**61 pass / 0 fail**（全6スイート = plan の目標値） |
+| `npm test` | EXIT 0・**66 pass / 0 fail**（全6スイート。P8-a で +5） |
 | `npm run verify:m6` | **11/11 PASS・EXIT 0** |
 | `npm run verify:roundtrip` | **15/15 PASS・EXIT 0**（記入→保存→公開ページの往復） |
 | `npm run verify:empty` | **8/8 PASS・EXIT 0**（カルテ0件の犬に架空の履歴が出ないこと） |
 | `npm run verify:xss` | **6/6 PASS・EXIT 0**（保存データが飼い主のブラウザで実行されないこと） |
+| `npm run verify:portal` | **10/10 PASS・EXIT 0**（`/my` が起動し、未ログインでログイン導線が出ること） |
 
 **アプリは外部へ一切通信しない。** `verify:m6` 項目9 の外部リクエスト失敗が 24件 → **0件**。
 
-`npm run verify:all` で verify 系4本をまとめて回せる。
+`npm run verify:all` で verify 系5本をまとめて回せる。
 
-`verify:m6` / `verify:roundtrip` / `verify:empty` は別端末で `npm run preview` を起動してから実行する。
+`verify:m6` / `verify:roundtrip` / `verify:empty` / `verify:xss` は別端末で `npm run preview` を起動してから実行する。
+`verify:portal` だけは自分で Worker を立てる（`/my` は Supabase モードでしか配信されず、`preview` は KV モードのため）。
 playwright 管理外の chromium を使う場合は `M6_CHROMIUM=/path/to/chrome` を渡す。
 
 **`verify:roundtrip` がこのリポジトリで一番重要な検査。** 画面が出るか・押せるかではなく、
@@ -107,11 +118,13 @@ AI 生成が5件（C2PA 署名から OpenAI / Google と特定）、残る15件�
 | カルテを見る | `/my/pets/{petId}/reports/{reportId}` | ✅ ある |
 | 自分の犬だけ見える | RLS `pets_customer_select` = `is_owner_user(owner_id)` | ✅ ある |
 | 確定済みだけ見える | RLS `reports_customer_select` = `status = 'final'` | ✅ ある |
-| **`my.html` の DOM フック** | `data-portal="customer"` / `data-portal-content` / `data-login-panel` / `data-google-login` | ❌ **全部 0 件** |
+| **`my.html` の DOM フック** | `data-portal="customer"` / `data-portal-content` / `data-login-panel` / `data-google-login` / `data-sign-out` / `data-portal-status` | ✅ **P8-a で結線**（`npm run verify:portal`） |
+| カルテの意匠 | `renderMagazine`（`src/js/magazine-view.js`） | ❌ **P6 で作る**。今は素の DOM |
 
 `supabase-auth.js:280` が `document.body.dataset.portal === 'customer'` を条件にしているため、
-**ポータルは一度も起動していない**（`F-20260821` 系の既知事項・統合 plan のリスク#3）。
-やることは「作る」ではなく「フックを戻す」に近い。
+**ポータルは一度も起動していなかった**（統合 plan のリスク#3）。P8-a で結線し、実ブラウザで
+未ログイン状態の起動を確認した（`verify:portal` 10/10）。**ログイン後の表示は未確認**——
+Google OAuth も犬一覧も RLS も Supabase 有効化後でないと動かせない。
 
 ### ⚠️ 順序を P8 → P1 に変えた理由
 
@@ -130,20 +143,21 @@ AI 生成が5件（C2PA 署名から OpenAI / Google と特定）、残る15件�
 
 ## 3. 次回やること (Next Steps)
 
-1. **P8 — `my.html` の再結線**（次の一手）。上表の ❌ 1行を埋める作業。
-   ただし **Supabase が無効なので実機検証ができない**。静的検証（`node --check` / フックの実在 /
-   ルート定義との対応）までしか付けられず、`verify:roundtrip` のような実証は Supabase 有効化後になる。
-   **「静的に通った」を「動く」と書かないこと**（`F-20260821-11` の再発防止）。
-2. **Supabase の有効化**（マスター作業）— プロジェクト作成と Google OAuth 設定。
-   P8 の実機確認と、飼い主導線の成立の両方がここに依存している。**最優先の外部依存**。
-3. **素材の出所確認**（マスター作業）— `docs/ASSET-PROVENANCE.md` の `UNVERIFIED` 15件。コードでは解けない。実写に見える4件が優先。
-2. **統合フェーズ — 次は P1 ではなく P8**（順序を変更した。理由は下記）
-3. **Supabase の有効化**（マスター作業）— プロジェクト作成と Google OAuth 設定。実装は済んでいる。
+1. **Supabase の有効化**（マスター作業）— プロジェクト作成と Google OAuth 設定。
+   **最優先の外部依存**。P8 の残り（ログイン1往復・犬一覧・カルテ表示・RLS の効き方）は
+   全部ここ待ちで、コード側からは詰められない。`verify:portal` はログイン前までしか見ていない。
+2. **P8-b — ログイン後の実機確認**。1 が済んだら、`verify:portal` に
+   「ログインした飼い主が自分の犬だけ見える」「他人の犬は見えない」を足す。
+   **「静的に通った」を「動く」と書かないこと**（`F-20260821-11` / `F-20260821-22`）。
+3. **素材の出所確認**（マスター作業）— `docs/ASSET-PROVENANCE.md` の `UNVERIFIED` 15件。
+   コードでは解けない。実写に見える4件が優先。
+4. **統合フェーズの続き** — P1（画面骨格）と P6（`magazine-view.js`）。
+   `/my` の見た目が素っ気ないのは P6 待ちで、意匠は `design/mock-4step.html` の `#screen-4` にある。
 
 統合に入る前に `docs/design.md` を読むこと。`finalize_report` が**4条件で黙って `null` を返す**ことなど、
 書き直しを選ばない理由が実物の確認つきで書いてある。
 
-導線・中身・空状態・安全の4つに機械検査が付いたので、**「クライアントが使える状態が、壊れたら機械が気づく」ところまで来ている**。
+導線・中身・空状態・安全・マイページ起動の5つに機械検査が付いたので、**「クライアントが使える状態が、壊れたら機械が気づく」ところまで来ている**。
 
 なお F-11 と F-16 は自分の進め方の失敗として記録した。要点は2つ——受入基準を満たすことを
 成果と取り違えないこと、そして**片方がクライアントに実害を出す選択は「判断」ではなく不具合**

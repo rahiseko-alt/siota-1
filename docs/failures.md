@@ -245,3 +245,13 @@
 - **Root Cause**: bot からの通知を**結果**として読み、**状態**として読まなかった。`Review skipped` と `Review limit reached` は「レビューが無かった」であって「問題が無かった」ではない。さらに Free プランは概要と walkthrough のみで**行単位の指摘を出さない**ことも、通知本文に書いてあったのに報告に反映していなかった。
 - **Guardrail / Prevention**: 自動レビューの結果を報告するときは、**レビューが走ったこと自体を先に確認する**。`Review skipped` / `Review limit reached` / `rate limited` を含む通知は「未実施」と報告し、「指摘なし」とは書かない。あわせて、外部 bot に独立レビューを依存しない——`AGENTS.md` LEVEL C の INDEPENDENT CRITIC は Level 2 以上で自前で回す工程であって、bot はその代替ではない。
 - **Status**: CLOSED
+
+### [F-20260821-22] 飼い主のマイページが、架空の犬のカルテを見せる静的モックのままだった
+
+- **Date**: 2026-08-21
+- **Category**: logic
+- **Trigger/Context**: P8（顧客ポータルの再結線）。`src/my.html` を開いた。
+- **Failure**: 2つが同時にあった。(1) `supabase-auth.js` の `bootProtectedPortal()` が探す DOM フック5種（`data-portal-status` / `data-login-panel` / `data-portal-content` / `data-google-login` / `data-sign-out`）と、起動条件の `data-portal="customer"` が**1つも無く**、さらに `supabase-auth.js` 自体が読み込まれてすらいなかった。`/my` は開いてもポータルが起動しない。(2) 代わりに出ていたのは、犬名「ポンチ くん」・体重 2.79kg・来店日 2026.08.15・他所の犬の写真7枚・担当トリマーの文面まで書かれた**静的モック**。Supabase を有効化した瞬間、ログインしていない誰にでも、実在しないカルテがそう見える形で出る状態だった。
+- **Root Cause**: 意匠モックを `src/my.html` という**本番の実体の場所**にそのまま置いたこと。`design/mock-4step.html` の `#screen-4` と同じ意匠であり、置き場所さえ間違えなければ D-1 が隔離してくれた。`F-20260821-15`（カルテ0件の犬に見本を出していた）と同型で、あちらが公開ページ、こちらがマイページというだけの違い。**「まだ繋いでいない画面」を、繋いだ後の見た目で埋めておくと、繋がっていないこと自体が見えなくなる。**
+- **Guardrail / Prevention**: `src/my.html` をポータルの器だけに置き換えた（意匠は `design/mock-4step.html` に既にある。P6 の `renderMagazine` で実データから作る）。機械強制を2本入れた。(1) `test/supabase-auth.test.mjs` が `bootProtectedPortal()` の**ソースから** `querySelector` の引数を抜き出し、その全部が `src/my.html` に在ることを要求する（フックを足したら HTML 側も要求される）。あわせて `<img>` と `/assets/photo-*` と日付・体重らしき文字列が my.html に無いことを検査する。(2) `npm run verify:portal` が実ブラウザで `/my` を開き、ポータルが起動してログイン導線が出るところまで 10 項目見る。**ただしこの検査はログイン前までしか見ていない**——ログイン後の犬一覧・カルテ表示・RLS は Supabase 有効化後に別途要る（`F-20260821-11` の「静的に通ったを動くと書かない」の適用）。
+- **Status**: CLOSED (P8-a)

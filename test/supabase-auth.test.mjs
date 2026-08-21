@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -152,4 +153,69 @@ test('invitation URL is first-registration-only and contains only the raw token'
     `https://dev.example.test/my?invite=${token}`,
   );
   assert.throws(() => buildInvitationUrl('https://dev.example.test', 'short'));
+});
+
+/* ここから下は src/my.html（飼い主のマイページ）の結線検査。
+   フックが1つでも欠けると bootProtectedPortal() は無反応になるか、
+   loginButton.onclick で落ちる。実際に data-portal="customer" が消えていて
+   ポータルが一度も起動していなかった期間がある（統合 plan のリスク#3）。
+   Supabase 未有効化のため実機では確かめられないので、静的に押さえる。 */
+
+const portalHtml = fs.readFileSync(new URL('../src/my.html', import.meta.url), 'utf8');
+const authSource = fs.readFileSync(new URL('../src/js/supabase-auth.js', import.meta.url), 'utf8');
+const bootSource = authSource.slice(
+  authSource.indexOf('export async function bootProtectedPortal'),
+  authSource.indexOf('async function bootLoginPage'),
+);
+
+/** 属性名がそのまま出現しているか。`data-portal` が `data-portal-status` に当たらないようにする。 */
+function hasAttribute(html, name) {
+  return new RegExp(`(?<![\\w-])${name}(?![\\w-])`).test(html);
+}
+
+test('my.html carries every DOM hook bootProtectedPortal looks up', () => {
+  assert.ok(bootSource.length > 0, 'bootProtectedPortal の本文を切り出せていない');
+  const hooks = [...bootSource.matchAll(/document\.querySelector\('\[([\w-]+)\]'\)/g)].map((m) => m[1]);
+  assert.deepEqual(
+    hooks,
+    ['data-portal-status', 'data-login-panel', 'data-portal-content', 'data-google-login', 'data-sign-out'],
+  );
+  for (const hook of hooks) {
+    assert.ok(hasAttribute(portalHtml, hook), `src/my.html に ${hook} が無い`);
+  }
+});
+
+test('my.html declares the portal flavor bootProtectedPortal branches on', () => {
+  const [, flavor] = authSource.match(/document\.body\?\.dataset\.portal === '([\w-]+)'/);
+  assert.equal(flavor, 'customer');
+  assert.match(portalHtml, new RegExp(`<body[^>]*\\sdata-portal="${flavor}"`));
+});
+
+test('my.html loads the Supabase vendor before the portal module', () => {
+  const vendorAt = portalHtml.indexOf('src="/js/supabase-vendor.js"');
+  const moduleAt = portalHtml.indexOf('src="/js/supabase-auth.js"');
+  assert.ok(vendorAt >= 0, 'vendor を読んでいない。createAuthClient が vendor?.createClient で必ず落ちる');
+  assert.ok(moduleAt >= 0, 'supabase-auth.js を読んでいない。ポータルが起動しない');
+  assert.ok(vendorAt < moduleAt, 'vendor は supabase-auth.js より前に置くこと');
+  assert.match(portalHtml, /<script type="module" src="\/js\/supabase-auth\.js"><\/script>/);
+});
+
+test('my.html hides the login panel, the content and the sign-out until boot decides', () => {
+  for (const hook of ['data-login-panel', 'data-portal-content', 'data-sign-out']) {
+    assert.match(
+      portalHtml,
+      new RegExp(`${hook}[^>]*\\shidden`),
+      `${hook} が初期表示で出ている。ログイン前の飼い主に中身の枠が見えてしまう`,
+    );
+  }
+});
+
+/* D-10: 飼い主に見せる画面に見本・デモ・既定文を出さない（F-14 / F-15）。
+   my.html は 2026-08-21 まで、架空の犬・架空の日付・他所の犬の写真が入った
+   静的モックだった。カルテの中身は renderReport() が実データから作る。 */
+test('my.html ships no sample report content of its own', () => {
+  assert.doesNotMatch(portalHtml, /<img\b/, 'カルテ画像を静的に埋めている');
+  assert.doesNotMatch(portalHtml, /\/assets\/(photo|guide)-/, '見本写真を参照している');
+  assert.doesNotMatch(portalHtml, /20\d\d[.\-/]\d\d[.\-/]\d\d/, '架空の来店日が埋まっている');
+  assert.doesNotMatch(portalHtml, /\d+(\.\d+)?\s*kg/i, '架空の体重が埋まっている');
 });
