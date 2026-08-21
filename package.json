@@ -11,6 +11,7 @@
     "test": "npm run test:unit",
     "test:unit": "node --test test/worker-unit.test.mjs",
     "test:e2e": "npx playwright test",
+    "verify:m6": "node scripts/verify-m6.mjs",
     "test:supabase:static": "node --test test/supabase-schema.test.mjs",
     "test:supabase": "supabase test db",
     "test:migration": "node --test test/kv-migration.test.mjs"

@@ -9,6 +9,15 @@ build/
 .npm
 .yarn/
 
+# Cloudflare Wrangler のローカル状態（local KV の中身・dev のビルドキャッシュ）
+.wrangler/
+worker/.wrangler/
+
+# Playwright
+test/e2e-results.json
+playwright-report/
+test-results/
+
 # Python
 __pycache__/
 *.py[cod]

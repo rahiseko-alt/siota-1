@@ -989,6 +989,17 @@
       return;
     }
 
+    /* デモ月（カルテ未登録の指・肉球）は実体を持たない。'demo-N' は publishReport 側でも
+       「既存カルテではない」と扱われる（isExistingEdit の判定）。ここで fetch すると Worker の
+       reportId 検証に弾かれて 400 が返り、静的なデモ内容が出たままコンソールにだけエラーが
+       残る。投げずに、そのままデモ内容を見せて編集バーだけ出す。 */
+    if (reportId && reportId.indexOf('demo-') === 0) {
+      if (isEditMode() && !isSupabaseMode()) {
+        showCommitBar(params);
+      }
+      return;
+    }
+
     /* fetch して applyReport（犬別データ読み出し: /api/reports/{slug}/{reportId}）*/
     if (slug && reportId) {
       var reportPath = isSupabaseMode()
