@@ -9,7 +9,7 @@
 
 ## 1. 今回やったこと (Completed in this session)
 
-**M5（依存固定・自立化）／ M6（動作証明）／ M7（モック隔離とテスト配線）を完了。**
+**M5〜M8 を完了。`docs/failures.md` の OPEN は 0 件。**
 
 - **M5**: `npm run check` の親モノレポ参照を自リポジトリへ。`--test-isolation=none`（node 22 で `bad option`）を除去。実体を移設していない `predeploy-check` と、それを指す `wrangler.toml` / `runbook.md` の記述を是正。`playwright@1.59.1` / `wrangler@4.92.0` を devDependencies に宣言。lockfile を追加。
 - **M6**: `npm run preview`（KV local）で実際にアプリを動かし、plan の受入基準9項目を全て通した。検証は `scripts/verify-m6.mjs`（`npm run verify:m6`）として残してあるので、次回以降は手作業でなく再実行できる。
@@ -19,7 +19,8 @@
 - **カルテ0件の犬の見え方を是正（F-15）**: 施術を一度もしていない犬の公開ページに、架空の月ラベル5つ・他所の犬の Unsplash 写真5枚・他の犬の体重と担当コメント入りのデモカルテが、その犬の名前で出ていた。飼い主には見本を一切出さず「まだカルテがありません」を表示する。トリマー側の中央パッドだけ「＋ 新規カルテ」として残す（1件目を作る唯一の導線のため）。`npm run verify:empty` で検査。
 - **stored XSS を発見して修正（F-17・Critical）**: 認証不要の `POST /api/reports` に細工した `weights[].ym` を入れるだけで、飼い主の公開ページで任意の JS が実行された。実ブラウザで実証済み。`ymShort()` が数字以外を返せないようにし、`SET_WEIGHTS` でも形を検査する。`npm run verify:xss` が6経路に撃ち込んで常時検査（修正前 5/6 → 修正後 6/6）。
 - **vibe-base への依存を打ち切り（F-09 / F-10）**: どちらも「移設元を見ないと決着しない」と書いていたが、F-09 は注入シンク31箇所の棚卸しでこのリポジトリだけで解決（→ F-17）。F-10 は受け入れ基準#14 を「移設元から8件を転記」から「**このリポジトリで起きた失敗が再現手順つきで記録されていること**」に読み替えた。以後 vibe-base は参照しない。
-- `docs/failures.md` に 18 件を記録（CLOSED 16 / OPEN 2、+ F-06 の Root Cause 訂正）。
+- **M8（F-07 / F-08 / PII）**: 外部 CDN 参照を全廃した。Unsplash 10件は**同梱ではなく撤去**（全て写真アップロードまでの仮置きで、他人の犬を顧客の犬として見せるのは F-15 と同じ問題になる）。フォントは Latin 3ファミリを同梱し、日本語4ファミリは容量（Noto 2種で 70MB）を理由にシステムフォントへ寄せた。PWA manifest を4ファイルに結線し、dist でのパス変化も build に置換を足して塞いだ。`docs/ASSET-PROVENANCE.md` を新設。実在顧客名と個人アドレスを除去し、`docs/runbook.md` の移設元パス6箇所も是正。
+- `docs/failures.md` に **19 件**を記録（**CLOSED 19 / OPEN 0**、+ F-06 の Root Cause 訂正）。
 
 ## 2. 現在の状態 (Current State)
 
@@ -34,6 +35,8 @@
 | `npm run verify:roundtrip` | **15/15 PASS・EXIT 0**（記入→保存→公開ページの往復） |
 | `npm run verify:empty` | **8/8 PASS・EXIT 0**（カルテ0件の犬に架空の履歴が出ないこと） |
 | `npm run verify:xss` | **6/6 PASS・EXIT 0**（保存データが飼い主のブラウザで実行されないこと） |
+
+**アプリは外部へ一切通信しない。** `verify:m6` 項目9 の外部リクエスト失敗が 24件 → **0件**。
 
 `npm run verify:all` で verify 系4本をまとめて回せる。
 
@@ -71,25 +74,25 @@ playwright 管理外の chromium を使う場合は `M6_CHROMIUM=/path/to/chrome
 
 ### 未着手
 
-- **M8** PII / 権利 / PWA 是正 — `F-20260821-07` `-08` がここに対応。`塩田` は `src/search.html` `src/my.html` に残存、`@gmail.com` は `docs/runbook.md` に残存。
-- **M9** ルール改訂と移設元の凍結 — `docs/design.md` の Golden Stack がテンプレのまま（Next.js / Prisma / Tailwind / Vitest。実際は Vanilla JS + Konva + Cloudflare Workers + `node --test`）。`AGENTS.md` も同様。
+- **M9** ルール改訂 — `docs/design.md` の Golden Stack がテンプレのまま（Next.js / Prisma / Tailwind / Vitest。実際は Vanilla JS + Konva + Cloudflare Workers + `node --test`）。`AGENTS.md` も同様。**移設元の凍結は行わない**（vibe-base への依存を打ち切ったため）。
 
 ### 未解決（`docs/failures.md` の OPEN）
 
-| ID | 内容 | 担当フェーズ |
-|---|---|---|
-| F-20260821-07 | 納品物が外部 CDN の画像・フォントに依存 | M8 |
-| F-20260821-08 | PWA が未結線（`<link rel="manifest">` 0件） | M8 |
+**0 件。**
 
-**残り2件はどちらもこのリポジトリ内で完結する。** 外部リポジトリを要する項目はもう無い。
+ただし `docs/ASSET-PROVENANCE.md` に**マスター確認待ちが残っている**。素材20件のうち
+AI 生成が5件（C2PA 署名から OpenAI / Google と特定）、残る15件は出所不明で `UNVERIFIED`。
+実写に見える4件（`photo-dog-ear` / `photo-dog-skin` / `guide-nail-state` / `guide-teeth-state`）が優先。
+飼い主に配るページに載るため、第三者の犬が写っている場合はその飼い主の同意も要る。
+消すと状態ガイドが空欄になるので、差し替えるまで残してある。
 
-`docs/runbook.md` は移設元の Windows 絶対パス（`C:\Users\...\vibe-base\...`）を残したままで、
-このリポジトリの手順書として読めない。M9 で直す。
+`docs/runbook.md` は M8 で是正済み（絶対パス6箇所・個人アドレス・存在しない A版ファイルへの指示）。
 
 ## 3. 次回やること (Next Steps)
 
-1. **M8** — `F-20260821-07/-08` を潰す。Unsplash 直リンク10箇所の自リポジトリ同梱と `docs/ASSET-PROVENANCE.md` の作成が本体。あわせて 4ファイルに `link rel="manifest"` を足し、`src/search.html` `src/my.html` の `塩田` を置換する。
-2. **M9** — `AGENTS.md` / `docs/design.md` を実スタック（Vanilla JS + Konva + Cloudflare Workers + `node --test`）へ書き換え、`runbook.md` の Windows 絶対パスを是正する。`F-20260821-09/-10` は vibe-base に触れる環境で行う。
+1. **M9** — `AGENTS.md` / `docs/design.md` を実スタック（Vanilla JS + Konva + Cloudflare Workers + `node --test` / Linter なし / TypeScript 不使用）へ書き換える。plan が挙げていた「移設元の凍結」は、vibe-base への依存を打ち切ったので**行わない**。
+2. **素材の出所確認**（マスター作業）— `docs/ASSET-PROVENANCE.md` の `UNVERIFIED` 15件。コードでは解けない。
+3. その後は統合フェーズ（`docs/ops/plans/2026-08-21-integration.md` の P0〜P9）。モック意匠への貼り替え。
 
 導線・中身・空状態・安全の4つに機械検査が付いたので、**「クライアントが使える状態が、壊れたら機械が気づく」ところまで来ている**。
 

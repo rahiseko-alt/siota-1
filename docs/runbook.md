@@ -15,8 +15,8 @@
 | Worker（/p/* /o/* /edit/* /api/*） | `worker/src/index.js`（KV binding `REPORTS`） |
 | データストア | Cloudflare Workers KV（id `50241192b25149eb8f846653ecae8f64`） |
 | 本番ドメイン | `trimmer-system.kouheikosehira.com`（Cloudflare 管理） |
-| Cloudflare 認証 | `rahiseko@gmail.com` で OAuth 済 |
-| A版後方互換 | `dist/beauty-report-mobile.html` は **維持**。削除禁止 |
+| Cloudflare 認証 | 運用担当者のアカウントで OAuth 済（`npx wrangler whoami` で確認） |
+| A版後方互換 | **このリポジトリには無い**。`beauty-report-mobile.html` は移設対象外（本番 KV に残る A版 slug は本リポジトリからは配信できない） |
 
 **パス方針（重要）**:
 `src/design-samples/ponchi-v2.html` は `../assets/` `../js/` の相対パスのまま維持し `file://` で開ける状態を保つ。
@@ -35,7 +35,7 @@ route 優先順位: **Worker route（/p/* /o/* /edit/* /api/*）> Pages フォ�
 ### 1-A. ビルド実行
 
 ```powershell
-cd "C:\Users\user\Desktop\ClaudeCode\vibe-base\products\trimmer-system"
+cd <リポジトリのルート>
 npm run build
 ```
 
@@ -58,7 +58,7 @@ npm run build
 デプロイ前に必ずローカルで動作を確認する。
 
 ```powershell
-cd "C:\Users\user\Desktop\ClaudeCode\vibe-base\products\trimmer-system\worker"
+cd worker
 npx wrangler dev --local
 ```
 
@@ -68,7 +68,7 @@ npx wrangler dev --local
 |-----|---------|
 | `http://localhost:8787/api/ping` | `{"ok":true}` |
 | `http://localhost:8787/edit` | ponchi-v2.html（__OWNER_LIST__ 注入・__VIEW__ なし） |
-| `http://localhost:8787/p/{slug}` | ponchi-v2.html（__VIEW__=true・__SCREEN__='paw'）または beauty-report-mobile.html（A版） |
+| `http://localhost:8787/p/{slug}` | ponchi-v2.html（__VIEW__=true・__SCREEN__='paw'） |
 
 ---
 
@@ -84,7 +84,7 @@ npx wrangler dev --local
 ### A. Worker をデプロイ
 
 ```powershell
-cd "C:\Users\user\Desktop\ClaudeCode\vibe-base\products\trimmer-system\worker"
+cd worker
 npx wrangler deploy
 ```
 
@@ -94,7 +94,7 @@ npx wrangler deploy
 ### B. Pages をデプロイ（dist の絶対パス指定）
 
 ```powershell
-npx wrangler pages deploy "C:\Users\user\Desktop\ClaudeCode\vibe-base\products\trimmer-system\dist" `
+npx wrangler pages deploy dist `
   --project-name=trimmer-system `
   --branch=main `
   --commit-dirty=true `
@@ -109,7 +109,7 @@ npx wrangler pages deploy "C:\Users\user\Desktop\ClaudeCode\vibe-base\products\t
 
 ### 閲覧 E2E（A版後方互換 — 回帰確認）
 
-- [ ] `https://trimmer-system.kouheikosehira.com/p/{A版slug}` → `beauty-report-mobile.html` が表示される
+- [ ] A版 slug の確認は本リポジトリでは行えない（`beauty-report-mobile.html` を移設していないため）
 - [ ] `https://trimmer-system.kouheikosehira.com/p/{A版slug}/{reportId}` → カルテ内容が正常表示
 - [ ] 上記で `window.__VIEW__=true` が注入されていること（DevTools > Console: `__VIEW__`）
 
@@ -142,7 +142,7 @@ npx wrangler pages deploy "C:\Users\user\Desktop\ClaudeCode\vibe-base\products\t
 ### Worker のロールバック
 
 ```powershell
-cd "C:\Users\user\Desktop\ClaudeCode\vibe-base\products\trimmer-system\worker"
+cd worker
 # Cloudflare ダッシュボードで前バージョンの deployment ID を確認してから:
 npx wrangler rollback <deployment-id>
 ```
@@ -157,7 +157,7 @@ Cloudflare ダッシュボード（Workers & Pages > trimmer-system > Deployment
 
 ```powershell
 # worker/src/index.js を特定コミットに戻す場合:
-git checkout <commit-hash> -- "C:\Users\user\Desktop\ClaudeCode\vibe-base\products\trimmer-system\worker\src\index.js"
+git checkout <commit-hash> -- worker/src/index.js
 # その後 wrangler deploy で再デプロイ
 ```
 
