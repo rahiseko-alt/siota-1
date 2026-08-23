@@ -135,12 +135,20 @@
     // --- 歯: .tt-pick.is-picked[data-teeth] ---
     var teethPick = document.querySelector('.tt-pick.is-picked');
 
+    // #heroDateInput は HTML5 の <input type="date"> なので、値が入っていれば
+    // 必ず YYYY-MM-DD 形式になる（date/year/day の3分割表示と違って結合が要らない）。
+    // Supabase モードの公開検証（ponchi-app.js）はこちらを見る。
+    // date/year/day の3キーは KV モード（A版14キー契約）が使い続けるので残す。
+    var heroDateInputEl = document.getElementById('heroDateInput');
+    var isoDate = heroDateInputEl ? String(heroDateInputEl.value || '').trim() : '';
+
     return {
       // A版 14 キー（契約#4 共通部）
       pet:       field('pet'),
       date:      field('date'),
       year:      field('year'),
       day:       field('day'),
+      isoDate:   isoDate,
       bestWeight: field('best-weight'),
       // 「担当からの一言」。HTML には data-field="staff-note" として最初から在ったが
       // 抽出側が読んでいなかったため、トリマーが書いても保存されず飼い主に届かなかった。

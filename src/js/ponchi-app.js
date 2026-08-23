@@ -761,6 +761,24 @@
       if (el) el.textContent = '';
     });
 
+    /* 日付: #heroDateInput（native date input）を今日の日付にリセットする。
+       これをしないと HTML に書かれた静的な既定値（例: 2026-12-05）が残ったまま
+       になり、トリマーが日付ピッカーに一度も触れなくても、その架空の日付で
+       カルテが保存されてしまう（F-20260823-26）。change を発火させて
+       ponchi-engine.js の同期処理（#heroDateInput ⇄ 年/月/日 表示スパン）に
+       表示側も揃えさせる。 */
+    var heroDateInputEl = document.getElementById('heroDateInput');
+    if (heroDateInputEl) {
+      var today = new Date();
+      var yyyy = today.getFullYear();
+      var mm = String(today.getMonth() + 1).padStart(2, '0');
+      var dd = String(today.getDate()).padStart(2, '0');
+      heroDateInputEl.value = yyyy + '-' + mm + '-' + dd;
+      heroDateInputEl.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    var dayEl = document.querySelector('[data-field="day"]');
+    if (dayEl && !heroDateInputEl) dayEl.textContent = '';
+
     /* 皮膚チェック 1-10 */
     for (var i = 1; i <= 10; i++) {
       var locEl = document.querySelector('[data-field="skin-loc-' + i + '"]');
@@ -1182,10 +1200,13 @@
       report = Object.assign({}, report, { pet: _reportContext.petName });
     }
 
-    var rawDate = isSupabaseMode() ? String(report.date || '').trim() : '';
-    var dateMatch = isSupabaseMode() ? rawDate.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})$/) : null;
+    /* isoDate は #heroDateInput（<input type="date">）の値。年/月/日の3分割表示
+       （report.date/year/day、KV モード契約）は月だけしか持たないため、日付として
+       使えるのは isoDate だけ（F-20260823-26）。 */
+    var isoDate = isSupabaseMode() ? String(report.isoDate || '').trim() : '';
+    var dateMatch = isSupabaseMode() ? isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/) : null;
     if (isSupabaseMode() && !dateMatch) {
-      alert('日付を YYYY/MM/DD の形式で入力してください。');
+      alert('日付を選択してください。');
       return;
     }
 
@@ -1200,7 +1221,8 @@
 
     var publishRequest;
     if (isSupabaseMode()) {
-      var reportDate = dateMatch[1] + '-' + String(dateMatch[2]).padStart(2, '0') + '-' + String(dateMatch[3]).padStart(2, '0');
+      /* isoDate は <input type="date"> の値なので、既に YYYY-MM-DD で確定している。 */
+      var reportDate = isoDate;
       publishRequest = (async function () {
         var retry = _supabaseDraftRetry;
         if (!retry || retry.petId !== slug || retry.reportDate !== reportDate) {

@@ -156,21 +156,41 @@ KV モードの `/o/{ownerSlug}`（公開飼い主ページ）は `renderOwnerIn
 古い経路のままで、paw 撤去の影響で「犬選択→肉球」ではなく「犬選択→即 archive」に変わった
 （本番未デプロイのため実害なし。D-20260823-08 のとおり `workers.dev` のみ触れている）。
 
-### F3 — ④カルテ作成（Supabase 経路の結線）
+### F3 — ④カルテ作成（Supabase 経路の結線）【完了・2026-08-23】
 
 カルテの新規作成・保存が Supabase 側の API で通るようにする。
 
-- `supabase-staff.js` に `/edit/p/{petId}/new` を追加、`worker/src/index.js:40` の
-  `SUPABASE_EDIT_PATH_PATTERN` を1箇所拡張
-- `publish-client-ponchi.js` の `extractReport` / `applyReport` を Supabase 経路から呼ぶ
-- 写真アップロードを `supabase-storage.js` 経由に結線
+**scope 変更（実施時の判明事項）**: 計画時点では「経路そのものを結線する」作業だと想定していたが、
+実際には**経路は既に結線済みだった**。`showCreateFlow(4, {reportId:'new', ...})` が
+`/edit/p/{petId}` のアーカイブ画面から URL を変えずに `screen-report` を開く既存の仕組みで
+動いており、`/edit/p/{petId}/new` という新規ルートも `SUPABASE_EDIT_PATH_PATTERN` の拡張も
+不要だった。`extractReport`/`applyReport` の Supabase 分岐、写真アップロード
+（`TrimmerSupabaseStorage.uploadReportAssets`）も実装済みで、そのまま動いた。
+**実際に必要だった修正は、F1 で見つけた `F-20260823-26`（日付結合の欠落）ただ1件**。
 
-**受け入れ条件**
-| 検証 | 合格値 |
+- `publish-client-ponchi.js` の `extractReport()` に `isoDate` キーを新設。
+  `#heroDateInput`（`<input type="date">`、常に `YYYY-MM-DD`）の値をそのまま返す
+- `ponchi-app.js` の公開検証を `report.date`（月だけ）ではなく `report.isoDate` を見るように修正
+- 修正の過程でもう1件見つけて直した（`F-20260823-27`）: `clearReport()` が
+  `#heroDateInput` 自体をリセットしておらず、新規カルテは日付ピッカーに触れない限り
+  常に HTML の静的な既定値（2026年12月5日）で保存されるところだった。
+  今日の日付で初期化するよう修正
+
+**受け入れ条件（実機確認済み）**
+| 検証 | 結果 |
 |---|---|
-| 実ブラウザ: 犬を選ぶ→記入→保存 | `reports` に1行増える |
-| 保存した値を DB から読み出す | 記入した値と一致 |
-| 写真1枚アップロード | `report-assets` にオブジェクトが増える |
+| 実ブラウザ: 犬を選ぶ→記入（日付ピッカーに触れず）→確定→プレビュー→公開 | ✅ 「公開しました！」まで到達 |
+| 保存された `reports.status` | ✅ `final` |
+| 保存された `reports.report_date` | ✅ 実行日（今日の日付）と一致 |
+| 保存された `staff_note` | ✅ 記入した値と一致 |
+| 写真アップロード | ✅ `report_assets` に4件（Canvas 描画画像を含む） |
+| `npm run build` / `check` / `test` | EXIT 0・67 pass（変わらず） |
+
+**確認していないこと**: ⑥（顧客ページ）でこの内容が正しく見えるかは未確認（F4 の対象）。
+公開処理は写真アセットの数だけ直列にアップロードするため、**体感で15〜20秒かかる**。
+遅くはあるが今回のスコープの不具合ではないため、そのままにしてある。
+`verify:*` の作り直し（F5）で、この経路の自動検査（新規カルテを1件、日付ピッカーに触れずに
+公開できること）を追加すること。
 
 ### F4 — ⑤⑥確認ページ＝顧客ページ（同一レンダラ）
 

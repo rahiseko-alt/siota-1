@@ -303,5 +303,15 @@
 - **Trigger/Context**: F1（完成までの計画）。ダミーデータで①〜⑥の動線を実ブラウザで辿り、④カルテ作成→公開を実際にクリックして確認した。
 - **Failure**: 「新規カルテ作成」→記入→「確定」→「プレビューを確認」→「確定（公開）」まで正しく進むが、**最後の公開が必ず失敗する**。`alert('日付を YYYY/MM/DD の形式で入力してください。')` が出て止まる。日付ピッカーに触っても触らなくても同じ結果になる——**構造的に直りようがない**バグだった。
 - **Root Cause**: `extractReport()`（`src/js/publish-client-ponchi.js:141`）は `date: field('date')` として日付を取り出すが、`[data-field="date"]`（`src/design-samples/ponchi-v2.html:947`）は「年/月/日」3分割表示のうち**月だけ**を保持する要素で、年は別要素 `[data-field="year"]`、日は `[data-field="day"]`。一方 Supabase モードの公開検証（`src/js/ponchi-app.js:1316-1319`）は `report.date` 単体が `YYYY/MM/DD` 形式であることを要求する。`field('date')` は `"12"` のような1〜2桁にしかならず、この検証を絶対に満たせない。KV モードには同じ検証が無く（`report.date` を月ラベルとしてそのまま使う設計）、Supabase モードを追加した際に**検証だけを足して、日付を結合する処理を足し忘れた**と推測される。
-- **Guardrail / Prevention**: F3（Supabase 経路の結線）で修正する。`extractReport()` で `year`/`date`/`day` を結合するか、`ponchi-engine.js:79` が既に管理している `heroDateInput.value`（ISO形式で最初から存在する）をそのまま使う。修正後、この経路を通す自動検査を追加すること（実ブラウザで新規カルテを1件公開できることを検査に含める）。
-- **Status**: OPEN（F3 で修正予定）
+- **Guardrail / Prevention**: `extractReport()`（`publish-client-ponchi.js`）に `isoDate` キーを新設し、`#heroDateInput`（`<input type="date">`、常に `YYYY-MM-DD`）の値をそのまま返すようにした。`date`/`year`/`day` の3キーは KV モード（A版14キー契約）が使い続けるので変更していない。`ponchi-app.js` の公開検証は `report.date` ではなく `report.isoDate` を見るように差し替えた。実ブラウザで、日付ピッカーに一切触れずに新規カルテを作成→確定→プレビュー→公開まで通し、Supabase 側の `reports.status` が `final` になり、写真4枚を含めて保存されることを確認した（F3）。
+- **Status**: CLOSED（F3）
+
+### [F-20260823-27] 新規カルテの日付ピッカーが、静的HTMLの既定値のまま残っていた
+
+- **Date**: 2026-08-23
+- **Category**: logic
+- **Trigger/Context**: `F-20260823-26` を `isoDate` で修正した直後、実ブラウザで「新規カルテ作成」ボタンを押し、日付ピッカーに一切触れずに検証したところ、`#heroDateInput.value` が `"2026-12-05"`（`src/design-samples/ponchi-v2.html` に書かれた静的な既定値）のままだった。
+- **Failure**: `F-20260823-26` の修正だけでは、公開自体は成功するようになるが、**トリマーが日付ピッカーに触れない限り、常に架空の日付（2026年12月5日）でカルテが保存される**。実際の来店日と異なる日付が記録され続ける状態で、修正前より発見しにくい不具合になるところだった。
+- **Root Cause**: 新規カルテ作成時に呼ばれる `clearReport()`（`ponchi-app.js:754`）は `date`/`year` の表示スパンをテキストクリアするだけで、**`#heroDateInput` 自体には触れていなかった**。`ponchi-engine.js` の日付同期処理は起動時に一度 `fromSpans()`（表示スパン→input）を呼ぶだけで、`clearReport()` 後に再同期する仕組みが無い。
+- **Guardrail / Prevention**: `clearReport()` に、`#heroDateInput.value` を**今日の日付**へ設定し `change` イベントを発火する処理を追加した（`ponchi-engine.js` の既存リスナーが表示スパンへ同期する）。実ブラウザで、新規カルテ作成直後に `#heroDateInput.value` が実行日の日付になっていることを確認した。**この経路の自動検査は未整備**——`verify:*` 4本は F2 で KV モード前提のまま壊れており、F5 で Supabase 版へ作り直す際に「新規カルテを1件、日付ピッカーに触れずに公開できる」ことを検査項目へ追加すること。
+- **Status**: CLOSED（F3）
