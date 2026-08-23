@@ -275,3 +275,13 @@
 - **Root Cause**: 検査が `node --test` の静的検査（`test:supabase:static` 39件）だけで、**SQL を PostgreSQL に食わせる工程が無かった**。`npm run test:supabase`（`supabase test db`）は Docker 前提で、`docs/handoff.md` に「Docker/Postgres 停止で検証不能」と書かれたまま放置されていた。**動かせない検査は、無い検査と同じ**。加えて統合 plan の各 Phase 合格条件から実 DB 項目を意図的に外していたため（リスク#4）、誰も気づく機会が無かった。
 - **Guardrail / Prevention**: 別名を `limit_window`（非予約語）に変更。あわせて**この環境に PostgreSQL 16 を入れて5本を実際に流し、全て EXIT 0 を確認した**。Supabase が先に用意している土台（`auth.uid()` / `auth.users` / `storage.buckets` / `storage.objects` / `extensions.digest` / ロール3種）は最小のスタブで再現している。**修正前の状態に戻すと同じ行で EXIT 3 になることも確認済み**（検査が本当に落とせるかの確認。`F-20260821-23` と同じ手順）。**SQL を書いたら、実際の PostgreSQL に流すまで「書けた」と言わない。**
 - **Status**: CLOSED
+
+### [F-20260821-24] マイグレーションが一度も実行されておらず、予約語で構文エラーのまま置かれていた
+
+- **Date**: 2026-08-23
+- **Category**: db
+- **Trigger/Context**: Supabase 有効化。マスターが `202607160001_supabase_base.sql` を本番の SQL Editor に貼って実行した。
+- **Failure**: `ERROR: 42601: syntax error at or near "window"`（565行目）。`insert into private.rate_limit_windows as window (…)` の別名が PostgreSQL の予約語（WINDOW 句）と衝突し、**パースすら通らない**。この文は `enforce_rate_limit()` の本体にあり、2箇所ある。つまり**このマイグレーションはどの PostgreSQL でも一度も走ったことがなかった**。テーブルもポリシーも Storage バケットも、1つも作られたことがない状態で「実装済み」として扱われていた。
+- **Root Cause**: SQL に対して**実行を伴う検査が1つも無かった**。`npm test` の 66件は JS だけを見ており、`supabase/migrations/` は誰も読まない текст ファイルと同じ扱いだった。`npm run test:supabase`（pgTAP）は Docker 前提で、`docs/handoff.md` に「Docker/Postgres 停止で検証不能」と書かれたまま放置されていた。**検証できない状態を「未検証」と記録するに留め、検証できる形へ作り替えなかった**のが本体。予約語の知識の問題ではない——実行していれば1秒で分かる。
+- **Guardrail / Prevention**: 別名を `limit_window` に変更（2箇所）。`npm run verify:migrations` を新設し、素の PostgreSQL を1つ立てて `scripts/lib/supabase-stub.sql`（Supabase が先に用意している auth / storage の最小再現）+ 5本を順に流し、1本でも落ちれば EXIT 1 にする。**Docker は要らない**（`apt-get install postgresql` か `MIGRATION_PG_URL` で足りる）。バグを戻すと 0/5・EXIT 1、直すと 5/5・EXIT 0 になることを実際に確認した。**`supabase/migrations/` に手を入れたら、必ずこれを回してから渡すこと。** なお本検査は構文とスキーマ内の参照までで、RLS が実際に誰に何を見せるかは pgTAP の領分（未着手）。
+- **Status**: CLOSED

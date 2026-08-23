@@ -16,6 +16,7 @@
     "verify:empty": "node scripts/verify-empty-pet.mjs",
     "verify:xss": "node scripts/verify-xss.mjs",
     "verify:portal": "node scripts/build-dist.mjs && node scripts/verify-portal.mjs",
+    "verify:migrations": "node scripts/verify-migrations.mjs",
     "verify:all": "npm run verify:m6 && npm run verify:roundtrip && npm run verify:empty && npm run verify:xss && npm run verify:portal",
     "test:supabase:static": "node --test test/supabase-schema.test.mjs test/supabase-storage.test.mjs test/supabase-store.test.mjs test/supabase-auth.test.mjs",
     "test:supabase": "supabase test db",
