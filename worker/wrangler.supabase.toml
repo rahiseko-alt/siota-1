@@ -1,6 +1,6 @@
 # Supabase 先行版のローカル／開発専用 Worker。
 # production route、KV namespace、service role key をこのファイルへ追加しない。
-name = "shiota"
+name = "shiota0823"
 main = "src/index.js"
 compatibility_date = "2025-01-01"
 
