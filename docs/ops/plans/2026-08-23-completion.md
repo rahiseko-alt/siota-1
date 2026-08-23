@@ -114,20 +114,47 @@ Worker の配置は完了し、`https://shiota0823.rahiseko.workers.dev` でト�
 **受け入れ条件**: `docs/ops/plans/2026-08-23-completion.md` に、
 ①〜⑥それぞれの「通る/落ちる」と、落ちた場合の原因（ファイル名と行番号つき）が書かれている。
 
-### F2 — ③犬を選ぶ（画面骨格）
+### F2 — ③犬を選ぶ（画面骨格）【完了・2026-08-23】
 
 `飼い主ページ → ワンちゃんページ` の2層を、**犬の一覧1枚**にする。肉球画面を撤去する。
 
-- `src/design-samples/ponchi-v2.html` の section id を `list / edit / view` へ改名
-- `src/js/ponchi-app.js` から肉球画面（paw）を撤去
-- `src/search.html` を削除し、`scripts/build-dist.mjs` を追随させる
+**scope 変更（実施時の判断）**: 当初 section id を `list/edit/view` へ全面改名する案を書いていたが、
+実施しなかった。`screen-owner`/`screen-archive`/`screen-report` の3画面は KV モードと Supabase
+モードで共有されており、id 改名は両モードの全参照箇所（表示分岐・CSS・E2E テスト）を巻き込む
+大きな作業になる。今回の実害（動線に無い層・肉球画面）を消すのに id 改名は必須ではないため、
+既存 id は維持し、`screen-owner` の**中身の出し分け**だけを変えた（下記）。
 
-**受け入れ条件**
-| 検証 | 合格値 |
+- **`worker/src/data-stores/supabase-data-store.js`**: `listPetsWithOwner()` を新設。
+  `owners(name)` の PostgREST embed で、店舗の犬を飼い主名つき1回の問い合わせで取得
+- **`worker/src/index.js`**: `GET /api/pets`（店舗の犬を直接一覧、スタッフのみ RLS で許可）を追加
+- **`src/js/supabase-staff.js`**: `/edit` の処理を `GET /api/owners`（飼い主一覧）から
+  `GET /api/pets`（犬の直接一覧）に差し替え
+- **`src/js/ponchi-app.js`**: `renderFlatPetList()` を新設（`design/mock-4step.html` の
+  「登録カルテ一覧」相当）。犬をクリックすると `/edit/p/{petId}` へ直接遷移し、肉球を経由せず
+  archive（全月一覧）へ進む。「＋ 新規カルテを作成する」で犬名・飼い主名を1画面で受け取り、
+  飼い主→犬の順に作成して編集画面へ進む導線も追加（1人目の飼い主が居ない状態からでも動く）
+- **肉球画面（paw）を全面撤去**: `renderPawScreen`/`applyPawMap`/`PAW_MAP` ほか関数を削除、
+  `#screen-paw` の HTML・CSS（`.paw`/`.toe-*`/`.pad*`）を削除。「戻るドロワー」（3択のガラスパネル、
+  行き先の1つが paw だった）も、行き先が1つしかなくなったため撤去し直接遷移に簡略化
+- `src/search.html` を削除し、`scripts/build-dist.mjs`（HTML コピー・完全性ガード）を追随
+
+**受け入れ条件（実機確認済み）**
+| 検証 | 結果 |
 |---|---|
-| `grep -c "paw" src/js/ponchi-app.js` | 0（現状31） |
+| `grep -c "paw" src/js/ponchi-app.js` | **0**（実施前31） |
+| `grep -c "paw" src/design-samples/ponchi-v2.html` | **0** |
 | `ls src/search.html` | 無い |
-| 実ブラウザ: ログイン直後に犬の一覧が出る | 飼い主を選ぶ操作を挟まない |
+| 実ブラウザ: ログイン直後に犬の一覧が出る | ✅ 飼い主を選ぶ操作を挟まない（`/edit` で3頭が直接並ぶ） |
+| 実ブラウザ: 犬をクリック | ✅ `/edit/p/{petId}` へ直接遷移、肉球を経由せず全カルテ一覧が出る |
+| 実ブラウザ: 「戻る」 | ✅ `/edit`（犬の一覧）へ戻る |
+| 実ブラウザ: 新規カルテ作成（犬名+飼い主名） | ✅ 飼い主・犬を作成し、その犬の編集画面へ進む。DB で確認済み |
+| `npm run build` / `check` / `test` | EXIT 0・**67 pass**（変わらず） |
+
+**確認していないこと**: 意匠（`design/mock-4step.html` の見た目）はまだ適用していない。
+今の犬の一覧は「田舎レンダラ」（`createListItem` の素の DOM）で、意匠は P6/F4 相当の作業で乗せる。
+KV モードの `/o/{ownerSlug}`（公開飼い主ページ）は `renderOwnerIndexList`/`renderPetList` の
+古い経路のままで、paw 撤去の影響で「犬選択→肉球」ではなく「犬選択→即 archive」に変わった
+（本番未デプロイのため実害なし。D-20260823-08 のとおり `workers.dev` のみ触れている）。
 
 ### F3 — ④カルテ作成（Supabase 経路の結線）
 

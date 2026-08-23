@@ -41,6 +41,9 @@ export function mapPet(pet) {
     petName: pet.name,
     ownerId: pet.owner_id,
     ownerSlug: pet.owner_id,
+    /* /api/pets（listPetsWithOwner）が owners(name) を embed しているときだけ入る。
+       PostgREST は多対一の embed をオブジェクトで返す（配列ではない）。 */
+    ownerName: (pet.owners && pet.owners.name) || undefined,
     template: pet.template,
     months: (pet.reports || []).map(reportMonth),
   };
@@ -268,8 +271,9 @@ async function bootStaffPortal(PonchiApp) {
     return;
   }
   if (route.name === 'owners') {
-    const body = await readJson(client, '/api/owners');
-    PonchiApp.show('owner', { ownerList: (body.owners || []).map(mapOwner) });
+    /* /edit — 犬を直接一覧する（F2）。「飼い主を選ぶ」層を挟まない。 */
+    const body = await readJson(client, '/api/pets');
+    PonchiApp.show('owner', { petListFlat: (body.pets || []).map(mapPet) });
     return;
   }
   if (route.name === 'owner') {

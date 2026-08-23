@@ -71,6 +71,15 @@ export class SupabaseDataStore {
     return this.request('/rest/v1/pets?select=id,shop_id,owner_id,name,template,active,created_at,updated_at&active=eq.true&order=created_at.desc');
   }
 
+  /* スタッフ側の「犬を選ぶ」画面（/edit）用。飼い主を経由せず店舗の犬を直接一覧する（F2）。
+     RLS（pets_staff_all）が店舗のスタッフにだけ全件を返す。owners(name) は PostgREST の
+     embed 構文で、pets_owner_shop_fkey を辿って飼い主名を1回の問い合わせで取得する。 */
+  async listPetsWithOwner() {
+    return this.request(
+      '/rest/v1/pets?select=id,shop_id,owner_id,name,template,active,created_at,owners(name)&active=eq.true&order=created_at.desc',
+    );
+  }
+
   one(rows) {
     if (!Array.isArray(rows) || rows.length === 0) throw new StoreError(404, 'not_found');
     return rows[0];

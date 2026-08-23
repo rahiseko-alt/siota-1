@@ -233,6 +233,11 @@ async function handleSupabaseApi(request, store, path, cors, env) {
     }
   }
 
+  // スタッフの「犬を選ぶ」画面（/edit）が使う、店舗の犬を飼い主名つきで直接一覧する口（F2）。
+  if (path === '/api/pets' && request.method === 'GET') {
+    return json({ pets: await store.listPetsWithOwner() }, 200, cors);
+  }
+
   if (path === '/api/owners') {
     if (request.method === 'GET') return json({ owners: await store.listOwners() }, 200, cors);
     if (request.method === 'POST') {
@@ -809,10 +814,10 @@ async function handlePublicPage(_request, env, slug, subPath) {
     return renderAppPage(env, { screen: 'report', view: true, pet: petData, report: reportData });
   }
 
-  // /p/{slug} — H2 肉球画面（月別メタ注入）
+  // /p/{slug} — 全月一覧（月別メタ注入）。肉球画面は撤去済みなので archive を直接使う。
   const months = buildMonthsMeta(doc);
   const petData = buildPetData(doc, months);
-  return renderAppPage(env, { screen: 'paw', view: true, pet: petData });
+  return renderAppPage(env, { screen: 'archive', view: true, pet: petData });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -884,7 +889,7 @@ export default {
     }
 
     // ルート / は login（index.html）を配信する。
-    // 4ページ動線の入口: login(index.html) → search.html → カルテ。
+    // 動線の入口: login(index.html) → ログイン → 犬の一覧（/edit）。search.html は F2 で撤去した。
     // 旧実装は /edit へ 302（index.html 不在時の暫定・A 残骸対策）。login ページ追加に伴い廃止。
     // dummy origin "http://assets" で Worker ルーティングへの再帰を避ける（fetchAssetHtml と同方針）。
     if (path === '/' || path === '') {

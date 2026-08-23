@@ -44,7 +44,8 @@ fs.writeFileSync(htmlDest, htmlContent, 'utf8');
 console.log(`[build] HTML 置換完了: ponchi-v2.html`);
 
 // ──────────────────────────────────────────────
-// 1b. ログイン(index.html) / 検索(search.html) / 顧客(my.html) を dist 直下へ配置
+// 1b. ログイン(index.html) / 顧客(my.html) を dist 直下へ配置
+// search.html は F2 で撤去した（動線に無い層だったため）。
 // ──────────────────────────────────────────────
 const indexSrc  = path.join(SRC, 'index.html');
 const indexDest = path.join(DIST, 'index.html');
@@ -54,17 +55,6 @@ if (!fs.existsSync(indexSrc)) {
 }
 fs.copyFileSync(indexSrc, indexDest);
 console.log(`[build] HTML コピー: index.html`);
-
-const searchSrc  = path.join(SRC, 'search.html');
-const searchDest = path.join(DIST, 'search.html');
-if (!fs.existsSync(searchSrc)) {
-  console.error(`[build] search.html が見つかりません: ${searchSrc}`);
-  process.exit(1);
-}
-const searchContent = fs.readFileSync(searchSrc, 'utf8')
-  .replaceAll('design-samples/ponchi-v2.html', 'ponchi-v2.html');
-fs.writeFileSync(searchDest, searchContent, 'utf8');
-console.log(`[build] HTML 置換完了: search.html (design-samples/ → root)`);
 
 const mySrc = path.join(SRC, 'my.html');
 const myDest = path.join(DIST, 'my.html');
@@ -196,7 +186,7 @@ if (absJsCount < 1) {
 // ──────────────────────────────────────────────
 {
   const rootHtmlFiles = fs.readdirSync(SRC).filter(f => f.endsWith('.html'));
-  const handledRootHtml = new Set(['index.html', 'search.html', 'my.html']);
+  const handledRootHtml = new Set(['index.html', 'my.html']);
   const unhandledRoot = rootHtmlFiles.filter(f => !handledRootHtml.has(f));
   if (unhandledRoot.length > 0) {
     console.error(`[build] ⚠ 未処理 src/*.html: ${unhandledRoot.join(', ')}`);

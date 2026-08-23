@@ -6,29 +6,16 @@
  *   window.PonchiApp.boot()
  *
  * 画面スタック:
- *   'owner'   — H1 飼い主→犬名リスト  (#screen-owner)
- *   'paw'     — H2 肉球 月選択         (#screen-paw)
+ *   'owner'   — 犬の一覧（登録カルテ一覧） (#screen-owner)
  *   'archive' — 全月一覧               (#screen-archive)
  *   'report'  — H3 月別カルテ          (#screen-report)
  *
- * 契約 #6 — 肉球↔月マップ（単一の真実源）
- *   中央 .pad          = months[0]（最新月）
- *   toe-1（左端指）    = months[1]（最新-1）
- *   toe-2（左中指）    = months[2]（最新-2）
- *   toe-3（右中指）    = months[3]（最新-3）
- *   toe-4（右端指）    = 【全履歴】→ archive
+ * 2026-08-23: 肉球（月選択）画面を撤去した。マスター指定の動線
+ * （ログイン→犬を選ぶ→カルテ作成→確認→顧客ページ）に無い層だったため。
+ * 犬を選ぶと直接 archive（全月一覧）へ進む。
  */
 (function () {
   'use strict';
-
-  /* ── 定数: 肉球↔月マップ（契約#6）────────────────────────── */
-  var PAW_MAP = [
-    { selector: '.pad',    role: 'pad',     monthOffset: 0  },   // 中央=最新月
-    { selector: '.toe-1',  role: 'toe',     monthOffset: 1  },   // 左端指=最新-1
-    { selector: '.toe-2',  role: 'toe',     monthOffset: 2  },   // 左中指=最新-2
-    { selector: '.toe-3',  role: 'toe',     monthOffset: 3  },   // 右中指=最新-3
-    { selector: '.toe-4',  role: 'archive', monthOffset: null }, // 右端指=【全履歴】
-  ];
 
   /* ── 内部状態 ─────────────────────────────────────────────── */
   var _current = null;
@@ -95,7 +82,7 @@
     result.slug     = p.slug     || inner.slug     || '';
     result.reportId = p.reportId || inner.reportId || '';
 
-    /* petName: 外側優先（paw→archive 遷移で外側に正しい値がある場合のため） */
+    /* petName: 外側優先 */
     result.petName  = p.petName  || inner.petName  || '';
 
     /* ownerSlug / ownerData: 外側→内側で最初に見つかった値 */
@@ -118,7 +105,7 @@
 
   /* ── 全画面を隠す ────────────────────────────────────────── */
   function hideAll() {
-    ['owner', 'paw', 'archive', 'report'].forEach(function (s) {
+    ['owner', 'archive', 'report'].forEach(function (s) {
       var el = document.getElementById('screen-' + s);
       if (el) el.style.display = 'none';
     });
@@ -243,7 +230,7 @@
     return del;
   }
 
-  /* owner-pet-row + owner-pet-item + paw/name/arrow の共通DOM生成
+  /* owner-pet-row + owner-pet-item + icon/name/arrow の共通DOM生成
    * onDelete が関数で渡された場合のみ owner-pet-row ラッパを生成し
    * 編集モードで makeDeleteBtn 呼び出し結果を row に追加する。
    * onDelete なし（archive等）は item ボタンをそのまま返す。 */
@@ -253,7 +240,7 @@
     item.setAttribute('type', 'button');
     item.setAttribute('aria-label', opts.ariaLabel);
     item.innerHTML =
-      '<span class="owner-pet-paw" aria-hidden="true">' + opts.icon + '</span>' +
+      '<span class="owner-pet-icon" aria-hidden="true">' + opts.icon + '</span>' +
       '<span class="owner-pet-name">' + escHtml(opts.label) + '</span>' +
       '<span class="owner-pet-arrow" aria-hidden="true">›</span>';
     item.addEventListener('click', opts.onSelect);
@@ -274,6 +261,14 @@
 
     var listEl = sec.querySelector('.owner-list');
     if (!listEl) return;
+
+    /* 優先0: 犬の一覧をフラットに直接渡された場合（F2・Supabase の /edit）。
+       「飼い主を選ぶ」層を挟まず、店舗の犬をそのまま並べる。空配列でも確実にこちらを通す。 */
+    var petListFlat = (params && params.petListFlat);
+    if (Array.isArray(petListFlat)) {
+      renderFlatPetList(listEl, petListFlat);
+      return;
+    }
 
     var owner = (params && params.owner) || window.__OWNER__ || null;
 
@@ -311,6 +306,100 @@
       .catch(function () {
         listEl.innerHTML = '<p class="owner-error">データを取得できませんでした。</p>';
       });
+  }
+
+  /* 犬の一覧を直接表示する（F2）。飼い主を選ぶ層を挟まない、/edit の唯一の入口。
+     マスター指定の意匠見本（4ステップモックの「登録カルテ一覧」画面）に対応。 */
+  function renderFlatPetList(listEl, pets) {
+    listEl.innerHTML = '';
+
+    var titleEl = document.getElementById('ownerTitle');
+    if (titleEl) titleEl.innerHTML = '登録カルテ <em>一覧</em>';
+    var subtitleEl = document.getElementById('ownerSubtitle');
+    if (subtitleEl) subtitleEl.textContent = pets.length + '件';
+    var backWrap = document.getElementById('ownerBackWrap');
+    if (backWrap) backWrap.hidden = true;
+
+    if (!pets.length) {
+      var emptyEl = document.createElement('p');
+      emptyEl.className = 'owner-empty';
+      emptyEl.textContent = 'まだ犬が登録されていません。下のボタンから追加してください。';
+      listEl.appendChild(emptyEl);
+    }
+
+    pets.forEach(function (pet) {
+      var row = createListItem({
+        icon:      '🐾',
+        label:     pet.petName + (pet.ownerName ? '（' + pet.ownerName + ' 様）' : ''),
+        ariaLabel: pet.petName + ' のカルテへ',
+        onSelect:  function () {
+          lockReportContext({ petId: pet.id, ownerId: pet.ownerId, petName: pet.petName });
+          window.location.href = '/edit/p/' + pathSegment(pet.id);
+        },
+        onDelete:  function () {
+          return makeDeleteBtn(
+            pet.petName + ' のカルテをすべて削除します。よろしいですか？',
+            '/api/pets/' + pathSegment(pet.id), pet.petName + ' を削除');
+        },
+      });
+      listEl.appendChild(row);
+    });
+
+    /* ＋ 新規カルテを作成する: 犬の名前と飼い主名を1画面で受け取り、
+       飼い主→犬の順に作成して編集画面へ進む。飼い主が1人もいない状態からでも
+       ここだけで最初の1件を作れる。 */
+    var addWrap = document.createElement('div');
+    addWrap.className = 'ponchi-inline-form ponchi-new-karte-form';
+    var petInput = document.createElement('input');
+    petInput.type = 'text';
+    petInput.placeholder = '犬のお名前';
+    petInput.className = 'ponchi-inline-input';
+    var ownerInput = document.createElement('input');
+    ownerInput.type = 'text';
+    ownerInput.placeholder = '飼い主のお名前';
+    ownerInput.className = 'ponchi-inline-input';
+    var errEl = document.createElement('p');
+    errEl.className = 'ponchi-inline-error';
+    errEl.style.display = 'none';
+    var submitBtn = createAddButton('新規カルテを作成する', 'ponchi-add-btn cta');
+    addWrap.appendChild(petInput);
+    addWrap.appendChild(ownerInput);
+    addWrap.appendChild(errEl);
+    addWrap.appendChild(submitBtn);
+    listEl.appendChild(addWrap);
+
+    function fail(msg) {
+      errEl.textContent = msg;
+      errEl.style.display = 'block';
+      submitBtn.disabled = false;
+    }
+
+    submitBtn.addEventListener('click', function () {
+      var petName = petInput.value.trim();
+      var ownerName = ownerInput.value.trim();
+      if (!petName)   return fail('犬のお名前を入力してください。');
+      if (!ownerName) return fail('飼い主のお名前を入力してください。');
+      errEl.style.display = 'none';
+      submitBtn.disabled = true;
+      apiPost('/api/owners', { name: ownerName })
+        .then(function (ownerBody) {
+          var newOwner = ownerBody && ownerBody.owner;
+          if (!newOwner || !newOwner.id) throw new Error('owner creation failed');
+          return apiPost('/api/owners/' + pathSegment(newOwner.id) + '/pets', {
+            ownerId: newOwner.id,
+            name: petName,
+            template: 'ponchi',
+          });
+        })
+        .then(function (petBody) {
+          var newPet = petBody && petBody.pet;
+          if (!newPet || !newPet.id) throw new Error('pet creation failed');
+          window.location.href = '/edit/p/' + pathSegment(newPet.id);
+        })
+        .catch(function () {
+          fail('作成に失敗しました。もう一度お試しください。');
+        });
+    });
   }
 
   function renderPetList(listEl, pets, ownerData) {
@@ -412,8 +501,12 @@
               ownerId: pet.ownerId || (ownerData && ownerData.ownerSlug),
               petName: pet.petName,
             });
+            /* /edit/p/{petId} へ遷移すると supabase-staff.js の route.name==='pet' が
+               直接 archive を表示する。肉球（月選択）を経由しない。 */
+            window.location.href = '/edit/p/' + pathSegment(pet.id || pet.slug);
+            return;
           }
-          PonchiApp.show('paw', { pet: pet, slug: pet.slug, petName: pet.petName, ownerData: ownerData });
+          PonchiApp.show('archive', { pet: pet, slug: pet.slug, petName: pet.petName, ownerData: ownerData });
         },
         onDelete:  function () {
           return makeDeleteBtn(
@@ -520,171 +613,6 @@
       }));
     });
   }
-
-  /* ════════════════════════════════════════════════════════════
-   * H2 肉球 月選択
-   * ════════════════════════════════════════════════════════════ */
-  function renderPawScreen(params) {
-    var sec  = document.getElementById('screen-paw');
-    if (!sec) return;
-
-    var pet      = (params && params.pet) || window.__PET__ || {};
-    var slug     = (params && params.slug) || pet.slug || '';
-    var petName  = (params && params.petName) || pet.petName || '';
-    var months   = pet.months || [];
-
-    /* 犬名を見出しに反映。
-       以前は sec.querySelector('.paw-pet-name') を見ていたが、その class を持つ要素は
-       #screen-archive 側にしか無く（#screen-paw には存在しない）、常に null だった。
-       結果、肉球画面の見出しは静的な既定値「まるちゃん」のまま——登録した犬の名前が
-       一度も表示されず、飼い主には別の犬の名前が見えていた。
-       #screen-paw の実際の見出しは h1.top-h[data-field="pet"] なのでそちらへ入れる。
-       この要素は保存契約（extractReport の pet）でもあるため、正しい名前が入ることで
-       保存されるカルテの犬名も正しくなる。 */
-    var titleEl = sec.querySelector('[data-field="pet"]');
-    if (titleEl && petName) titleEl.textContent = petName;
-
-    /* 肉球ラベル更新（契約#6 マップ適用）*/
-    applyPawMap(months, slug, params);
-  }
-
-  /**
-   * makeDemoLabel(monthOffset)
-   * データなし(デモ)時に契約#6 配置に沿ったデモ月ラベルを返す。
-   * pad(offset=0)=現在月、toe-1(offset=1)=1ヶ月前、…
-   */
-  function makeDemoLabel(monthOffset) {
-    var now = new Date();
-    var d   = new Date(now.getFullYear(), now.getMonth() - monthOffset, 1);
-    return (d.getMonth() + 1) + '月';
-  }
-
-  /**
-   * setToeLabel(el, text)
-   * .toe 要素のラベルを更新する。
-   * SVG textPath（.toe-arc-label）が存在する場合はその text を更新。
-   * フォールバックとして .toe-label（旧直線 span）も更新。
-   * .pad-badge は textContent を直接更新（変更なし）。
-   */
-  function setToeLabel(el, text) {
-    /* SVG textPath ラベル */
-    var arcLabel = el.querySelector('.toe-arc-label');
-    if (arcLabel) arcLabel.textContent = text;
-    /* フォールバック: 旧直線ラベル */
-    var spanLabel = el.querySelector('.toe-label');
-    if (spanLabel) spanLabel.textContent = text;
-    /* pad-badge */
-    var badgeEl = el.querySelector('.pad-badge');
-    if (badgeEl) badgeEl.textContent = text;
-  }
-
-  /**
-   * markPawEmpty(el)
-   * カルテが無い肉球を「無い」姿にする。ラベルを消し、静的 HTML に埋まっている
-   * 見本写真（他所の犬）を外し、タップを殺す。
-   *
-   * 既定の HTML には見本用の月ラベルと Unsplash の犬写真が入っている。放っておくと
-   * カルテ0件の犬でもそれが残り、飼い主には「施術履歴がある」ように見える。
-   */
-  function markPawEmpty(el) {
-    el.classList.add('is-empty');
-    setToeLabel(el, '');
-    var img = el.querySelector('img');
-    if (img) { img.removeAttribute('src'); img.alt = ''; }
-    el.style.cursor = '';
-    el.removeAttribute('role');
-    el.removeAttribute('aria-label');
-    el.onclick = null;
-  }
-
-  function applyPawMap(months, slug, params) {
-    /* 飼い主が見ている公開ページか（プレビューはトリマー文脈なので __VIEW__ で判定。
-       line 908 と同じ規約）。飼い主にはデモを一切見せない。 */
-    var ownerView = !!window.__VIEW__;
-    var hasAny    = months.length > 0;
-
-    /* カルテ0件の告知。飼い主には「まだありません」、トリマーには作り方を出す。 */
-    var emptyEl = document.querySelector('#screen-paw .paw-empty');
-    if (emptyEl) {
-      emptyEl.hidden = hasAny;
-      emptyEl.textContent = ownerView
-        ? 'まだカルテがありません。'
-        : 'まだカルテがありません。中央の肉球から1件目を作成できます。';
-    }
-    var hintEl = document.querySelector('#screen-paw .top-hint');
-    if (hintEl) hintEl.hidden = !hasAny;
-
-    /* PAW_MAP を元に、既存 .paw 内の要素にラベル＋タップハンドラを設定 */
-    PAW_MAP.forEach(function (entry) {
-      var el = document.querySelector('#screen-paw ' + entry.selector);
-      if (!el) return;
-
-      if (entry.role === 'archive') {
-        /* 右端指 → 全履歴。1件も無いなら開く先が無いので出さない。 */
-        if (!hasAny) { markPawEmpty(el); return; }
-        setToeLabel(el, '全履歴');
-        el.style.cursor = 'pointer';
-        el.setAttribute('role', 'button');
-        el.setAttribute('aria-label', '全履歴を見る');
-        el.onclick = function () {
-          /* normalizeParams で paw の params を平坦化し、months を表層に引き上げて渡す */
-          var pawBase = normalizeParams(params);
-          PonchiApp.show('archive', {
-            slug:      slug      || pawBase.slug,
-            months:    months.length ? months : pawBase.months,
-            petName:   pawBase.petName,
-            ownerSlug: pawBase.ownerSlug,
-            ownerData: pawBase.ownerData,
-          });
-        };
-      } else {
-        var month = months[entry.monthOffset] || null;
-        if (month) {
-          el.classList.remove('is-empty');
-          /* サムネ設定 */
-          var img = el.querySelector('img');
-          if (img && month.heroThumb) img.src = month.heroThumb;
-          /* ラベル（SVG textPath 対応） */
-          setToeLabel(el, month.dateLabel || month.date || '');
-          /* タップ → H3 */
-          el.style.cursor = 'pointer';
-          el.setAttribute('role', 'button');
-          el.setAttribute('aria-label', (month.dateLabel || month.date || '') + ' のカルテへ');
-          el.onclick = (function (m) {
-            return function () {
-              if (isSupabaseMode()) {
-                window.location.href = '/edit/p/' + pathSegment(slug) + '/' + pathSegment(m.reportId);
-                return;
-              }
-              PonchiApp.show('report', { slug: slug, reportId: m.reportId, params: params });
-            };
-          })(month);
-        } else if (ownerView || entry.role !== 'pad') {
-          /* カルテが無い枠。
-             以前はここで makeDemoLabel() が現在月から遡った架空の月ラベルを作り、
-             静的 HTML の見本写真（他所の犬）とデモ内容のカルテをタップで開いていた。
-             飼い主から見ると、施術を一度もしていない犬に5ヶ月分の履歴があり、
-             他の犬の体重と担当コメントが自分の犬の名前で表示される。
-             見本は納品物に出すものではないので、空は空として出す。 */
-          markPawEmpty(el);
-        } else {
-          /* トリマー文脈の中央パッドだけは、1件目を作る入口として残す。
-             ここが KV モードで新規カルテを作る唯一の導線。過去月を騙らせない。 */
-          el.classList.remove('is-empty');
-          setToeLabel(el, '＋ 新規カルテ');
-          var padImg = el.querySelector('img');
-          if (padImg) { padImg.removeAttribute('src'); padImg.alt = ''; }
-          el.style.cursor = 'pointer';
-          el.setAttribute('role', 'button');
-          el.setAttribute('aria-label', '新規カルテを作成する');
-          el.onclick = function () {
-            PonchiApp.show('report', { slug: slug || 'demo', reportId: 'demo-0', params: params });
-          };
-        }
-      }
-    });
-  }
-
   /* ════════════════════════════════════════════════════════════
    * アーカイブ（全月一覧）
    * ════════════════════════════════════════════════════════════ */
@@ -698,25 +626,17 @@
     var slug   = (params && params.slug) || '';
     var months = (params && params.months) || [];
 
-    /* 「戻る」ボタン: 犬一覧（owner）へ戻る */
+    /* 「戻る」ボタン: 編集モードは犬の一覧（/edit）へ。閲覧モードは飼い主ページへ。 */
     var backBtn = document.getElementById('archiveBackBtn');
     if (backBtn) {
-      /* ownerSlug または ownerData から owner 画面のコンテキストを復元 */
       backBtn.onclick = function () {
-        /* normalizeParams で多重ネストを一括解消。前任の手動フォールバックを置換 */
-        var np = normalizeParams(params);
-        var ownerData = np.ownerData;
-        var ownerSlug = np.ownerSlug;
-        if (ownerData) {
-          /* ownerData がある → owner 画面（犬一覧）を直接表示 */
-          PonchiApp.show('owner', { owner: ownerData });
-        } else if (ownerSlug) {
-          /* ownerSlug のみ → ページ遷移で Worker に __OWNER__ を注入させる */
-          window.location.href = (isEditMode() ? '/edit/o/' : '/o/') + pathSegment(ownerSlug);
-        } else {
-          /* フォールバック: 肉球画面 */
-          PonchiApp.show('paw', params || {});
+        if (isEditMode()) {
+          window.location.href = '/edit';
+          return;
         }
+        var np = normalizeParams(params);
+        var ownerSlug = np.ownerSlug;
+        if (ownerSlug) window.location.href = '/o/' + pathSegment(ownerSlug);
       };
     }
 
@@ -943,72 +863,21 @@
     if (sec) sec.appendChild(bar);
   }
 
-  /* 戻るドロワーの 3 経路遷移（正しい階層: 飼い主ページ→飼い犬ページ→月選択ページ→編集）
-     target = 'owners'(飼い主ページ=飼い主一覧) | 'owner'(その飼い主の飼い犬ページ) | 'paw'(月選択) */
-  function navBackTo(target, params, slug) {
-    var np = normalizeParams(params);
-    /* 公開閲覧(__VIEW__)以外 = トリマーの編集文脈。プレビュー(is-readonly)もトリマー文脈なので
-       isEditMode() ではなく !__VIEW__ で判定する（プレビューで飼い主ページが飼い犬ページに流れるのを防ぐ）。
-       戻る時はプレビューの is-readonly を解除し編集可能状態に戻す。 */
-    var trimmer = !window.__VIEW__;
-    if (trimmer) document.body.classList.remove('is-readonly');
-    if (target === 'owners') {
-      /* 飼い主ページ（飼い主一覧）。トリマーは常に /edit へ */
-      if (trimmer) {
-        window.location.href = '/edit';
-      } else if (np.ownerSlug) {
-        window.location.href = '/o/' + pathSegment(np.ownerSlug);
-      } else if (np.ownerData) {
-        PonchiApp.show('owner', { owner: np.ownerData });
-      } else {
-        PonchiApp.show('paw', params || {});
-      }
-    } else if (target === 'owner') {
-      /* その飼い主の飼い犬ページ（犬を選ぶ画面） */
-      if (np.ownerData) {
-        PonchiApp.show('owner', { owner: np.ownerData });
-      } else if (np.ownerSlug) {
-        window.location.href = (trimmer ? '/edit/o/' : '/o/') + pathSegment(np.ownerSlug);
-      } else {
-        PonchiApp.show('paw', params || {});
-      }
-    } else { /* paw = 月選択ページ */
-      PonchiApp.show('paw', {
-        slug:      np.slug || slug,
-        petName:   np.petName,
-        ownerSlug: np.ownerSlug,
-        ownerData: np.ownerData,
-      });
-    }
-  }
-
-  /* 戻るドロワーを開き、各経路ボタンを結線する（onclick 再代入で二重結線回避） */
-  function openBackDrawer(params, slug) {
-    var dr = document.getElementById('backDrawer');
-    if (!dr) { navBackTo('paw', params, slug); return; }
-    dr.classList.add('is-open');
-    dr.setAttribute('aria-hidden', 'false');
-    function close() {
-      dr.classList.remove('is-open');
-      dr.setAttribute('aria-hidden', 'true');
-    }
-    [].forEach.call(dr.querySelectorAll('[data-bd-close]'), function (b) { b.onclick = close; });
-    [].forEach.call(dr.querySelectorAll('[data-bd]'), function (b) {
-      b.onclick = function () { close(); navBackTo(b.dataset.bd, params, slug); };
-    });
-  }
-
   function renderReportScreen(params) {
     var slug     = (params && params.slug) || '';
     var reportId = (params && params.reportId) || '';
 
-    /* 「戻る」ボタン: 全月一覧（archive）へ戻る。archive コンテキストが params にあれば使用し、
-       なければ肉球（paw）へフォールバック（閲覧モードでも有効） */
+    /* 「戻る」ボタン: 全月一覧（archive）へ直接戻る。
+       以前は「飼い主ページ/犬ページ/月選択」を選ばせるドロワーだったが、
+       階層をフラット化した（F2）のでその3択自体が意味を持たなくなった。 */
     var backBtn = document.getElementById('reportBackBtn');
     if (backBtn) {
-      /* 戻るボタン → 左からスライドするガラスドロワーで 3 経路を選ばせる
-         （犬一覧 owner / 月選択 paw / カルテ一覧 archive）。ドロワー不在時は archive へ直行 */
-      backBtn.onclick = function () { openBackDrawer(params, slug); };
+      backBtn.onclick = function () {
+        document.body.classList.remove('is-readonly');
+        window.location.href = isEditMode()
+          ? '/edit/p/' + pathSegment(slug)
+          : '/p/' + pathSegment(slug) + '/all';
+      };
     }
 
     /* 新規作成モード: reportId が 'new' の場合は空ひな形にリセットして編集開始 */
@@ -1419,7 +1288,7 @@
 
     /**
      * show(screen, params)
-     * screen: 'owner' | 'paw' | 'archive' | 'report'
+     * screen: 'owner' | 'archive' | 'report'
      */
     show: function (screen, params) {
       _current = screen;
@@ -1436,9 +1305,6 @@
       switch (screen) {
         case 'owner':
           renderOwnerScreen(_params);
-          break;
-        case 'paw':
-          renderPawScreen(_params);
           break;
         case 'archive':
           renderArchiveScreen(_params);
@@ -1472,7 +1338,7 @@
         }
         return;
       }
-      var screen = window.__SCREEN__ || 'paw';
+      var screen = window.__SCREEN__ || 'archive';
       var params = {};
 
       switch (screen) {
@@ -1491,13 +1357,6 @@
             };
           }
           break;
-        case 'paw':
-          params = {
-            pet:     window.__PET__    || {},
-            slug:    (window.__PET__ && window.__PET__.slug) || '',
-            petName: (window.__PET__ && window.__PET__.petName) || '',
-          };
-          break;
         case 'archive':
           params = {
             slug:      (window.__PET__ && window.__PET__.slug) || '',
@@ -1514,7 +1373,7 @@
           };
           break;
         default:
-          screen = 'paw';
+          screen = 'archive';
           params = { pet: window.__PET__ || {} };
       }
 
