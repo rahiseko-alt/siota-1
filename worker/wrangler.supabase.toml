@@ -1,6 +1,6 @@
 # Supabase 先行版のローカル／開発専用 Worker。
 # production route、KV namespace、service role key をこのファイルへ追加しない。
-name = "saltydog-report-worker-supabase-dev"
+name = "shiota"
 main = "src/index.js"
 compatibility_date = "2025-01-01"
 
@@ -11,3 +11,4 @@ binding = "ASSETS"
 [vars]
 DATA_BACKEND = "supabase"
 SUPABASE_REPORT_ASSETS_BUCKET = "report-assets"
+SUPABASE_URL = "https://bcodloqwnrhcuvevfguy.supabase.co"
