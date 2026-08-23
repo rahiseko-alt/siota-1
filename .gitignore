@@ -13,6 +13,10 @@ build/
 .wrangler/
 worker/.wrangler/
 
+# Supabase CLI のローカル実行状態（`supabase start`）
+supabase/.branches/
+supabase/.temp/
+
 # Playwright
 test/e2e-results.json
 playwright-report/

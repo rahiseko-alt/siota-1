@@ -160,6 +160,14 @@
 - **Answer**: `wrangler dev`（ローカル実行・Cloudflareアカウント不要）が使えることは確認した。ただし認証済みセッションを自動化で作る手段（F1〜F3で使った admin `generate_link`）が service role key 無しには使えないため、実ログイン→実カルテ作成→公開→飼い主画面という一気通貫の検証はこのセッションでは実施できなかった。代わりに、`renderMagazine()` を対象にした実ブラウザ（Playwright/chromium）でのDOM単体検証を作り、27項目全て確認した：13項目相当の実データ描画、記入なし項目の非表示（架空データを出さない）、`data-view`35件/`data-field`0件、アコーディオン開閉・クイックジャンプ・ライトボックス・タイムラインリンク・戻るボタンの実動作、`<script>`注入が実行されないこと（XSS安全性）、コンソールエラー0件。`npm run build`/`check`/`test` は全て EXIT 0（67件、既存分に regression なし）
 - **Impact**: 「動く」と断定できるのは `renderMagazine()` 単体のみ。`ponchi-v2.html`（トリマー確認）・`my.html`（飼い主閲覧）への実際の組み込み、実 Supabase 往復、署名付きURLでの写真表示は**未確認**のまま。マスターが `CLOUDFLARE_API_TOKEN` と Supabase service role key（またはテスト用の実ログイン手段）を渡せば、次のセッションで F1〜F3 と同じ実機検証を仕上げる
 
+### [D-20260823-18] F4 の実機検証は「ローカル Supabase」で完了した（私の判断）
+
+- **Date**: 2026-08-23
+- **Kind**: claude-judgment
+- **Question**: D-20260823-17 で「実ログイン手段（service role key）が無く実機検証できない」と記録したが、他に手段はないか
+- **Answer**: あった。`supabase/seed.sql` に、まさにこの用途のために先行実装済みのローカル専用テストアカウント（`staff@local.test` / `owner-a@local.test` / `owner-b@local.test` など、password login）が既にあった。`docker` と `supabase` CLI がこの環境で使えたので `supabase start` でローカルに実 Postgres・実 Auth（GoTrue）・実 PostgREST・実 Storage を一式起動し（`supabase/config.toml` に `[edge_runtime] enabled=false` を追加——使わない上にこのサンドボックスでは rlimit 権限エラーで起動できなかったため）、`worker/wrangler.local.toml`（新規・ローカル専用・秘密情報なし）でそのローカル Supabase を指す `wrangler dev` を立てて検証した。password grant でアクセストークンを取得し、`window.TrimmerAuth.setSession()`（`supabase-auth.js`/`supabase-staff.js` が既に公開している口）へ注入する形でログインを自動化した。ホスト済み Supabase プロジェクトの service role key も、Cloudflare へのデプロイも一切使っていない
+- **Impact**: F4 の受け入れ条件（記入→確定→飼い主画面の値の一致・写真の署名付きURL経由表示・他人の犬が見えないこと）を、Playwright（chromium）で実際に **19/19 PASS** で確認した。詳細は本文および `docs/ops/plans/2026-08-23-completion.md` の F4 セクション参照。D-20260823-17 の「未確認」は解消。D-20260823-U2 は「ローカル検証は解決・ホスト済みプロジェクトへの実デプロイ確認だけがまだ」に格下げする（下記 D-20260823-U2 更新参照）。この手段は F5（`verify:*` の作り直し）でも同じ土台を使い回せる
+
 ---
 
 ## 未決事項（マスター判断待ち）
@@ -171,9 +179,9 @@
 - **Question**: `docs/ASSET-PROVENANCE.md` の `UNVERIFIED` 15件（うち実写に見える4件が優先）の出所は何か。第三者の犬の写真であれば、その飼い主の同意が要る
 - **Impact**: コードでは解けない。放置すると、飼い主に配るページに出所不明の写真を配り続けることになる
 
-### [D-20260823-U2] F4 の実機検証に必要な認証情報が今のコンテナに無い
+### [D-20260823-U2]（解決・格下げ）ホスト済み Supabase プロジェクトへの実デプロイ確認だけが残っている
 
-- **Date**: 2026-08-23
+- **Date**: 2026-08-23（起票）/ 2026-08-23（ローカル検証で大部分解決・D-20260823-18）
 - **Kind**: open
-- **Question**: F1〜F3 で使っていた `CLOUDFLARE_API_TOKEN`（Worker デプロイ用）と Supabase の service role key（テストログイン用の magiclink 発行に使用）は、セッション跨ぎ（新しいコンテナ）でどちらも引き継がれていなかった。次のセッションで F4 の実機検証（実ログイン→カルテ作成→公開→飼い主画面、13項目往復、署名付きURL写真）を仕上げるには、どちらかを渡す必要がある
-- **Impact**: D-20260823-17 参照。渡されるまで、F4 は `renderMagazine()` 単体の実ブラウザ検証（27/27 PASS）に留まる。`wrangler dev` はローカル実行できることを確認済みなので、Cloudflare トークンが無くてもテスト用 Worker は動かせる。ボトルネックは Supabase 側の自動ログイン手段の方
+- **Question**: F1〜F3 で使っていた `CLOUDFLARE_API_TOKEN` と、ホスト済み Supabase プロジェクトの service role key は、このコンテナに引き継がれていなかった。ローカル Supabase（D-20260823-18）で機能面の実機検証は完了したが、`shiota0823.rahiseko.workers.dev`（ホスト済みプロジェクト・実際の master 確認用URL）へ F4 のコードがデプロイされ、同様に動くことはまだ確認していない
+- **Impact**: 機能そのものが動くことはローカルで実証済み（19/19 PASS）なので、リスクは低いと判断している。ただし `shiota0823.rahiseko.workers.dev` は F1〜F3 の時点のコードのままで、F4 は未反映。マスターが `CLOUDFLARE_API_TOKEN` を渡せば次のセッションでデプロイし、ホスト済みプロジェクトでも同じ検証を通す

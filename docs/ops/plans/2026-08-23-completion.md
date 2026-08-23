@@ -242,8 +242,14 @@ KV モードの `/o/{ownerSlug}`（公開飼い主ページ）は `renderOwnerIn
 |---|---|
 | `renderMagazine()` の実ブラウザ単体検証（Playwright/chromium・合成データ） | ✅ 27/27 PASS。`data-view` 35件・`data-field` 0件、13項目相当の実データ描画、記入なし項目の非表示、XSS注入不実行、アコーディオン/クイックジャンプ/ライトボックス/タイムラインリンク/戻るボタンの実動作、コンソールエラー0件 |
 | `npm run build` / `check` / `test` | ✅ 全て EXIT 0（67件、regressionなし） |
-| **記入→確定→飼い主画面** の実 Supabase 往復（実ログイン・実カルテ作成・実公開） | ⏳ **未確認**（D-20260823-17）。このセッションのコンテナには `CLOUDFLARE_API_TOKEN` も Supabase service role key（テストログイン用）も無く、F1〜F3 と同じ実機検証ができなかった。`wrangler dev` はローカルでCloudflareアカウント無しに動くことは確認済み。ボトルネックは自動ログイン手段（service role key）の方 |
-| 飼い主に見える写真が署名付きURL経由 | ⏳ 未確認（同上。コード上は `hydrateAssetReferences()` を経由する実装になっている） |
+| **記入→確定→飼い主画面** の実 Supabase 往復（実ログイン・実カルテ作成・実公開） | ✅ **確認済み（ローカル Supabase・D-20260823-18）**。19/19 PASS。実ログイン（password grant）→犬「X」選択→新規カルテに皮膚・爪・耳・歯・担当からの一言を実際にクリック/入力→確定→確認画面（`#screen-magazine`）に記入どおりの値が出ることを確認→公開→別ブラウザコンテキストで飼い主(owner-a)としてログインし直し、`/my/pets/{id}/reports/{id}` に**同じ値が同じレンダラで**届くことを確認 |
+| 飼い主に見える写真が署名付きURL経由 | ✅ コード上 `hydrateAssetReferences()` 経由（実装確認済み）。今回のE2Eではテキスト項目のみ記入して確認したため、写真アップロード込みの往復は未実施（下記「確認していないこと」参照） |
+| RLS実証（他人の犬が見えない・全体受け入れ条件3の前倒し確認） | ✅ owner-b@local.test で同じURLへアクセスし、`reports_customer_select` ポリシー（`status='final' and can_read_pet`）により中身が表示されない（「表示できません」）ことを確認 |
+
+**確認していないこと**:
+- 写真アップロードを含む往復（今回はテキスト項目のみ記入。ロジックは実装済みだが未実写確認）
+- ホスト済み Supabase プロジェクト（`shiota0823.rahiseko.workers.dev`）への実デプロイ後の動作（D-20260823-U2・`CLOUDFLARE_API_TOKEN` が要る）
+- ローカル検証の手段: `supabase start` でローカルに実Postgres・実Auth・実PostgREST・実Storageを起動し、`worker/wrangler.local.toml`（新規・秘密情報なし）でそれを指す `wrangler dev` を実行。`supabase/seed.sql` の password login 専用テストアカウントで実ログインを自動化した。この土台は F5 でも再利用する
 
 ### F5 — 検査を Supabase 版へ作り直す
 

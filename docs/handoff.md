@@ -162,13 +162,19 @@ Google OAuth も犬一覧も RLS も Supabase 有効化後でないと動かせ�
 2. **`docs/ops/plans/2026-08-23-completion.md`** — 完成までのフェーズ F0〜F6・受け入れ条件・動線図
 3. **`docs/decisions.md`** — マスター決定・私の判断・未決事項の台帳（口頭で流さず必ずここに記録する運用に変更した）
 
-**現在地: F0・F1・F2・F3・F4（実装完了・実機一部未確認）。次は資格情報が揃い次第、F4の実機検証仕上げ→F5。**
+**現在地: F0・F1・F2・F3・F4 完了（ローカルSupabaseで実機確認済み）。次は F5（検査の作り直し）。**
 
-**F4 を再開する前に読むこと（重要）**: このセッションのコンテナには `CLOUDFLARE_API_TOKEN` も
-Supabase の service role key（テストログイン用）も残っていない。F4 の実装（`renderMagazine()`
-とその組み込み）自体は完了し、`renderMagazine()` 単体は実ブラウザで 27/27 PASS しているが、
-**実ログイン→実カルテ作成→実公開→飼い主画面という一気通貫の実機検証はできていない**。
-どちらかの資格情報が要る。`docs/decisions.md` の D-20260823-17 / D-20260823-U2 を見ること。
+**ローカルでの実機検証手段（重要・F5でも使う）**: `CLOUDFLARE_API_TOKEN` もホスト済み
+Supabase プロジェクトの service role key も無いコンテナでも、実ログイン・実DB・実RLSの検証が
+できる。`supabase start`（Docker）でローカルに実 Postgres・実 Auth・実 PostgREST・実 Storage を
+起動し（`supabase/config.toml` の `[edge_runtime] enabled=false` はこのサンドボックスでの
+rlimit エラー回避のため追加済み）、`worker/wrangler.local.toml`（新規・秘密情報なし）でそれを
+指す `wrangler dev --config worker/wrangler.local.toml --port 8787` を立てる。ログインは
+`supabase/seed.sql` のテスト専用アカウント（`staff@local.test` 等・password login）で
+password grant のアクセストークンを取得し、`window.TrimmerAuth.setSession()` に注入する
+（本番UIはGoogle認証のみを表示するので、この注入はテスト専用の裏口）。詳細は
+`docs/decisions.md` D-20260823-18。ホスト済みプロジェクトへの実デプロイ確認だけは
+`CLOUDFLARE_API_TOKEN` が無いとできない（D-20260823-U2、格下げ済み・低リスク）。
 
 要点だけ書く（詳細は上記2ファイル）:
 
@@ -257,15 +263,21 @@ Supabase の service role key（テストログイン用）も残っていない
   ローカル同梱フォントのトークンをそのまま使い、「アプリは外部へ一切通信しない」を維持した
 - KV モード（現行本番）の確認画面（`showLegacyPreview`）は一字一句変更していない
   （D-20260823-15）。マガジン化は Supabase モードだけの分岐
-- **実機で確認したこと**: `renderMagazine()` を Playwright（chromium）で合成データを使って
-  単体検証し、27/27 PASS。`data-view` 35件・`data-field` 0件、13項目相当の実データ描画、
-  記入なし項目は非表示（架空データを出さない）、`<script>` 注入が実行されない（XSS安全性）、
-  アコーディオン開閉・クイックジャンプ・ライトボックス・タイムラインリンク・戻るボタンの
-  実動作、コンソールエラー0件
-- **未確認**: 実ログイン・実カルテ作成・実公開・飼い主画面という一気通貫の実機検証。
-  `wrangler dev` はローカルでCloudflareアカウント無しに動くことは確認したが、F1〜F3で
-  使っていた自動ログイン手段（Supabase service role key での magiclink 発行）がこの
-  コンテナに無く、認証済みセッションを作れなかった。D-20260823-17 / D-20260823-U2 参照
+- **実機で確認したこと（2段階）**:
+  1. `renderMagazine()` を Playwright（chromium）で合成データを使って単体検証し、27/27 PASS。
+     `data-view` 35件・`data-field` 0件、記入なし項目は非表示（架空データを出さない）、
+     `<script>` 注入が実行されない（XSS安全性）、アコーディオン/クイックジャンプ/ライトボックス/
+     タイムラインリンク/戻るボタンの実動作、コンソールエラー0件
+  2. **ローカル Supabase（`supabase start`）+ ローカル `wrangler dev` で一気通貫の実機検証**
+     （D-20260823-18）。19/19 PASS。実ログイン（`staff@local.test`）→犬「X」選択→新規カルテに
+     皮膚・爪・耳・歯・担当からの一言を実際にクリック/入力→確定→**確認画面
+     （`#screen-magazine`）に記入どおりの値が出る**ことを確認→公開→別ブラウザコンテキストで
+     飼い主(`owner-a@local.test`)としてログインし直し、**`/my/pets/{id}/reports/{id}` に
+     同じ値が同じレンダラで届く**ことを確認。さらに `owner-b@local.test`（他人）は同じURLへ
+     アクセスしても中身が出ない（RLS実証・全体受け入れ条件3の前倒し確認）ことも確認
+- **未確認のまま残っていること**: 写真アップロードを含む往復（今回はテキスト項目のみ）、
+  ホスト済み Supabase プロジェクト（`shiota0823.rahiseko.workers.dev`）への実デプロイ後の
+  動作（`CLOUDFLARE_API_TOKEN` が要る・D-20260823-U2・低リスクと判断）
 - `npm run build` / `check` / `test` は EXIT 0・67 pass のまま変化なし
 
 統合に入る前に `docs/design.md` を読むこと。`finalize_report` が**4条件で黙って `null` を返す**ことなど、
