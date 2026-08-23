@@ -21,7 +21,12 @@ export class SupabaseDataStore {
     this.publishableKey = publishableKey;
     this.accessToken = accessToken;
     this.userId = userId;
-    this.fetchImpl = fetchImpl;
+    /* Workers の fetch は、レシーバ付きで呼ぶと `TypeError: Illegal invocation` で落ちる。
+       `this.fetchImpl(...)` はレシーバが SupabaseDataStore になるため、そのまま持つと
+       本番の全 REST 呼び出しが失敗する（auth-context.js が無事なのは、あちらが
+       `fetchImpl(...)` と裸で呼んでいるから）。ここで束ねてしまい、呼び出し側の
+       書き方に依存させない。テストが差し込む偽の fetch は `this` を使わないので影響しない。 */
+    this.fetchImpl = fetchImpl.bind(globalThis);
     this.staffShopId = null;
   }
 

@@ -505,3 +505,29 @@ test('finalize keeps a report draft when storage metadata or objects are incompl
   assert.equal(response.status, 409);
   assert.deepEqual(await response.json(), { error: 'report assets are incomplete' });
 });
+
+/* 本番の Cloudflare Workers では、fetch をレシーバ付きで呼ぶと
+   `TypeError: Illegal invocation` で落ちる。`this.fetchImpl(...)` と書いていたため
+   Supabase への REST 呼び出しが本番で全滅していた（`F-20260821-25`）。
+   テストが差し込む偽の fetch は `this` を見ないので、この不具合は
+   「テストは通るのに本番だけ落ちる」形になる。レシーバを直接検査する。 */
+test('the Supabase store never calls fetch with itself as the receiver', async () => {
+  const receivers = [];
+  const store = new SupabaseDataStore({
+    supabaseUrl: 'https://project.supabase.co',
+    publishableKey: 'publishable-key',
+    accessToken: 'user-jwt',
+    // アロー関数だと `this` が束縛済みで検査にならないので、通常の関数で受ける。
+    fetchImpl: function fake() {
+      receivers.push(this);
+      return Response.json([]);
+    },
+  });
+
+  await store.getSessionContext('20000000-0000-0000-0000-0000000000a1');
+
+  assert.ok(receivers.length >= 2, 'fetch が呼ばれていない');
+  for (const receiver of receivers) {
+    assert.notEqual(receiver, store, 'fetch のレシーバが store になっている（本番で Illegal invocation）');
+  }
+});

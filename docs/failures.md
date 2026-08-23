@@ -285,3 +285,13 @@
 - **Root Cause**: SQL に対して**実行を伴う検査が1つも無かった**。`npm test` の 66件は JS だけを見ており、`supabase/migrations/` は誰も読まない текст ファイルと同じ扱いだった。`npm run test:supabase`（pgTAP）は Docker 前提で、`docs/handoff.md` に「Docker/Postgres 停止で検証不能」と書かれたまま放置されていた。**検証できない状態を「未検証」と記録するに留め、検証できる形へ作り替えなかった**のが本体。予約語の知識の問題ではない——実行していれば1秒で分かる。
 - **Guardrail / Prevention**: 別名を `limit_window` に変更（2箇所）。`npm run verify:migrations` を新設し、素の PostgreSQL を1つ立てて `scripts/lib/supabase-stub.sql`（Supabase が先に用意している auth / storage の最小再現）+ 5本を順に流し、1本でも落ちれば EXIT 1 にする。**Docker は要らない**（`apt-get install postgresql` か `MIGRATION_PG_URL` で足りる）。バグを戻すと 0/5・EXIT 1、直すと 5/5・EXIT 0 になることを実際に確認した。**`supabase/migrations/` に手を入れたら、必ずこれを回してから渡すこと。** なお本検査は構文とスキーマ内の参照までで、RLS が実際に誰に何を見せるかは pgTAP の領分（未着手）。
 - **Status**: CLOSED
+
+### [F-20260821-25] Workers の fetch をレシーバ付きで呼んでいて、本番の Supabase 通信が全滅した
+
+- **Date**: 2026-08-23
+- **Category**: api
+- **Trigger/Context**: Supabase 有効化後、初回ログイン。Google 認証は成功し `auth.users` に行も出来たのに、`/my` が「Googleでログインしてください」に戻る（＝ログインパネルも消えた catch 分岐）。
+- **Failure**: `GET /api/session` が **502**。Supabase 側は完全に正常で、同じトークン・同じ publishable key で `/auth/v1/user` も `/rest/v1/shop_memberships` も `/rest/v1/owner_users` も 200 を返す。Worker のログを取って初めて原因が出た——`TypeError: Illegal invocation: function called with incorrect 'this' reference`。**Supabase への REST 呼び出しが1本残らず失敗していた。**
+- **Root Cause**: `SupabaseDataStore` が `fetch` をプロパティに持ち `this.fetchImpl(...)` と呼んでいた（`supabase-data-store.js:39`）。Workers の `fetch` はレシーバが globalThis 以外だと実行を拒否する。`worker/src/auth-context.js` が無事だったのは、あちらが引数を `fetchImpl(...)` と**裸で**呼んでいるから。認証だけ通ってデータだけ落ちるという、切り分けにくい症状になった。
+- **Guardrail / Prevention**: コンストラクタで `fetchImpl.bind(globalThis)` して、呼び出し側の書き方に依存させない。**`test/supabase-store.test.mjs` に、fetch のレシーバが store 自身でないことを直接検査するテストを追加**（偽 fetch を通常の関数で受け、`this` を記録して照合する）。`bind` を外すと実際に落ちることを確認済み。**この不具合は既存テストでは原理的に見つからない**——テストが差し込む偽 fetch は `this` を使わないため、本番の制約に触れない。**外部 SDK/ランタイムの API を自前のオブジェクトに持たせるときは、呼び出し規約（レシーバ要求）を確かめること。**
+- **Status**: CLOSED

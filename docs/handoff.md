@@ -19,6 +19,18 @@
 - **その `verify:portal` が2回目の実行で落ちるのを直した（F-23）**。自分で立てた Worker を `npx` にだけ SIGTERM していて、下の wrangler と workerd がポートを掴んだまま残っていた。プロセスグループごと止めて exit を待つようにし、**連続3回とも 10/10・EXIT 0** になることを確認した。1回しか回さなければ気づけない類で、push 後に見つけた。
 - **`/my` の見た目は P6 まで素っ気ない。** 犬の一覧・カルテは `supabase-auth.js` の既存レンダラが素の DOM で出す。架空の中身を見せないこととの交換で、意匠は P6 で実データに乗せる。
 
+### Supabase 有効化（2026-08-23・マスター立ち会いで実施）
+
+**動いている**: https://shiota0823.rahiseko.workers.dev
+
+- **Supabase プロジェクト `shiota1`（`bcodloqwnrhcuvevfguy`）を有効化した。** マイグレーション5本を適用し、テーブル12個・RLS 全11テーブル有効・`report-assets` バケット（非公開/10MB/jpeg,png,webp）を確認。Google OAuth を有効化（Client ID/Secret はマスターが直接 Supabase へ入力。私は経由していない）。
+- **Worker `shiota0823` を `workers.dev` へデプロイした。** 独自ドメインには紐付けていない。**現行本番（`wrangler.toml` / `trimmer-system.kouheikosehira.com` / KV モード）には一切触れていない**——別物として並走している。`RATE_LIMIT_IP_PEPPER` は 48文字を生成して `wrangler secret` へ投入。
+- **マスターの Google ログインが通ることを実機で確認した**（`auth.users` に行が出来ている）。`/api/session` も 200 を返す。
+- 途中で**実物のバグを2件見つけて直した**。どちらも「机上では見えない」型で、`docs/failures.md` の `F-20260821-24`・`F-20260821-25` に記録した。
+  - **F-24**: マイグレーションが予約語 `window` を別名に使っていて、実際の PostgreSQL では一度も通らなかった。→ この環境に PostgreSQL 16 を入れ、Supabase の土台のスタブを書いて5本を実流しして確認。
+  - **F-25**: `SupabaseDataStore` が Workers の `fetch` をレシーバ付きで呼んでいて、**本番の Supabase 通信が全滅**していた（`Illegal invocation`）。認証だけ別経路で無事だったため切り分けにくかった。→ `bind` して、レシーバを直接検査するテストを追加。
+- **残り**: 最初のトリマー（管理者）の登録。招待制の設計上1人目だけ手で入れる必要があり、**マスターがどの Google アカウントを管理者にするかの決定待ち**。
+
 ### 以前のセッション（M0〜M9 / P0）
 
 - **M5**: `npm run check` の親モノレポ参照を自リポジトリへ。`--test-isolation=none`（node 22 で `bad option`）を除去。実体を移設していない `predeploy-check` と、それを指す `wrangler.toml` / `runbook.md` の記述を是正。`playwright@1.59.1` / `wrangler@4.92.0` を devDependencies に宣言。lockfile を追加。
