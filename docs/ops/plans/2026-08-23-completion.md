@@ -299,14 +299,16 @@ worker/wrangler.local.toml` の起動/停止と、`supabase/seed.sql` のテス�
 - `worker/wrangler.local.toml` / `supabase/config.toml` は既にF4で追加済みのものを
   そのまま再利用
 
-**scope 変更（実施時の判明事項）**: `test/e2e/*.cjs`（`archive-back.spec.cjs` /
-`e2e-ponchi.spec.cjs`、`npx playwright test` 経由・`npm test` には含まれない）は
-KV モード（`#screen-paw` 前提）のままで、Supabase版への書き直しはしなかった。
-理由: これらは KV モードの動作として今も正しく（KV Worker 自体は無変更）、
-`npm test`/`npm run verify:all` のどちらのゲートにも入っていない。計画本文が
-名指ししていたのは `verify:m6`/`verify:roundtrip`/`verify:empty`/`verify:xss` の
-4本と `verify:portal` の拡張のみで、それは全て完了した。`test/e2e/*.cjs` の
-Supabase版書き直しは、要ればF5後の別作業として切り出す（未決事項に追記）。
+**scope 変更（実施時の判明事項・のちに訂正）**: 当初「`test/e2e/*.cjs` は KV モードの
+動作として今も正しいので対象外」と記録したが、これは誤りだった。F2 で
+`#backDrawer`/`openBackDrawer`/`#screen-paw` は KV/Supabase 共有のソースから
+**完全に削除済み**（`grep` で0件）で、この2ファイルはどちらのモードにも存在しない
+ものを検査していた。中身を精査した結果、個別ケースはKVモード専用API（`/api/customers`・
+`/api/reports`・`/o/{slug}`・`/p/{slug}/{reportId}` 等）に依存しており、対応する
+Supabase版の経路は上記5本が実DB・実RLS込みで既にカバーしていた。書き直しは重複作業に
+なるため、この2ファイルと`playwright.config.cjs`・`package.json`の`test:e2e`を削除し、
+唯一そこにしか無かった検査（体重の新規登録・使用オプションのオン/オフ）だけを
+`verify-m6.mjs`（6b・6c）へ移植した（`docs/decisions.md` D-20260823-20）。
 
 **受け入れ条件の確認状況**（クリーンな状態から検証・2026-08-23）:
 | 検証 | 結果 |

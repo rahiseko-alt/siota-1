@@ -311,11 +311,28 @@ F4のローカルSupabase実機検証（D-20260823-18）を `scripts/lib/local-s
 - **`verify:portal`（14/14）**: ログイン前10項目は無変更のまま維持し、ログイン後4項目
   （自分の犬だけ見える／ログアウトボタン表示／他人の犬は見えないRLS／サインアウトで
   ログイン画面に戻る）を追加
-- **scope変更（D-20260823-U3）**: `test/e2e/*.cjs`（`npx playwright test` 経由、`npm test`
-  には含まれない）はKVモードのままで書き直していない。計画がF5で名指ししていたのは
-  上記5本のみで、それは完了した
 - **クリーンな状態から確認**: `npx supabase db reset` → `npm run verify:all` で
   **59/59 PASS**（12+19+7+7+14）。`npm run build`/`check`/`test` も EXIT 0・67件のまま
+
+### F6待ちの間に実施したこと（2026-08-23）
+
+F6は `CLOUDFLARE_API_TOKEN`（＋Supabase側のSite URL変更・Google OAuth本番公開という
+人手作業）待ちで止まっている。その間に2つ追加作業をした。
+
+- **`test/e2e/*.cjs` を削除した（訂正）**: F5直後、「これらはKVモードの検査として今も
+  正しいので対象外」と記録したが誤りだった。`#backDrawer`/`openBackDrawer`/`#screen-paw`
+  はF2でKV/Supabase共有のソースから完全に削除済みで、この2ファイルはどちらのモードにも
+  存在しないものを検査していた。書き直すと`verify:*`5本と重複するだけなので、削除し、
+  唯一そこにしか無かった検査（体重の新規登録・使用オプションのオン/オフ）だけを
+  `verify-m6.mjs`（6b・6c、12→14項目）へ移植した。`playwright.config.cjs`と
+  `package.json`の`test:e2e`も削除。詳細は`docs/decisions.md` D-20260823-20
+- **`code-review`スキルでF0〜F5の差分（PR #4）全体を見直し、実バグ1件を発見・修正した**:
+  `supabase-auth.js`の`bootProtectedPortal()`で、セッション確認後にトークンが失効/破損
+  すると「Googleでログインしてください」と出るのにログインボタンが押せない詰み状態に
+  なっていた（signed-out分岐でしかボタンを結線していなかったため）。壊れたトークンを
+  実際に注入して再現し、`signOut()`してから1回だけ`reload()`する形に直して、
+  実機で解消を確認した。他に確認画面のfetch並行化・未使用コードの整理も実施。
+  詳細は`docs/decisions.md` D-20260823-21
 
 統合に入る前に `docs/design.md` を読むこと。`finalize_report` が**4条件で黙って `null` を返す**ことなど、
 書き直しを選ばない理由が実物の確認つきで書いてある。

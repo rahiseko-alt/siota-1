@@ -10,7 +10,6 @@
     "preview:supabase": "npm run build && npx wrangler dev --config worker/wrangler.supabase.toml",
     "test": "npm run test:unit && npm run test:supabase:static && npm run test:migration",
     "test:unit": "node --test test/worker-unit.test.mjs",
-    "test:e2e": "npx playwright test",
     "verify:m6": "node scripts/build-dist.mjs && node scripts/verify-m6.mjs",
     "verify:roundtrip": "node scripts/build-dist.mjs && node scripts/verify-report-roundtrip.mjs",
     "verify:empty": "node scripts/build-dist.mjs && node scripts/verify-empty-pet.mjs",

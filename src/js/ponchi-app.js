@@ -1271,8 +1271,8 @@
        （report.date/year/day、KV モード契約）は月だけしか持たないため、日付として
        使えるのは isoDate だけ（F-20260823-26）。 */
     var isoDate = isSupabaseMode() ? String(report.isoDate || '').trim() : '';
-    var dateMatch = isSupabaseMode() ? isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/) : null;
-    if (isSupabaseMode() && !dateMatch) {
+    var isValidIsoDate = isSupabaseMode() ? /^\d{4}-\d{2}-\d{2}$/.test(isoDate) : false;
+    if (isSupabaseMode() && !isValidIsoDate) {
       alert('日付を選択してください。');
       return;
     }

@@ -159,17 +159,23 @@ async function loadProtectedResource(supabase, route, content) {
   let apiPath = '/api/my/pets';
   if (route.name === 'pet') apiPath = `/api/my/pets/${encodeURIComponent(route.petId)}`;
   if (route.name === 'report') apiPath = `/api/my/pets/${encodeURIComponent(route.petId)}/reports/${encodeURIComponent(route.reportId)}`;
+
+  /* report ルートはタイムライン用に犬本体（兄弟レポート一覧）も要るが、補助情報でしか
+     ないので、本体取得と並行に投げる（直列にすると往復が倍かかる）。 */
+  const siblingsPromise = route.name === 'report'
+    ? authorizedFetch(supabase, `/api/my/pets/${encodeURIComponent(route.petId)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => data?.pet?.reports || [])
+      .catch(() => [] /* タイムライン表示は補助情報。取得に失敗してもカルテ本体は表示する */)
+    : null;
+
   const response = await authorizedFetch(supabase, apiPath);
   if (!response.ok) throw new Error(response.status === 401 ? 'authentication required' : 'not available');
   const body = await response.json();
   if (route.name === 'pets') renderPets(content, body.pets || []);
   if (route.name === 'pet') renderPet(content, body.pet);
   if (route.name === 'report') {
-    let siblings = [];
-    try {
-      const petResponse = await authorizedFetch(supabase, `/api/my/pets/${encodeURIComponent(route.petId)}`);
-      if (petResponse.ok) siblings = ((await petResponse.json()).pet?.reports || []);
-    } catch { /* タイムライン表示は補助情報。取得に失敗してもカルテ本体は表示する */ }
+    const siblings = await siblingsPromise;
     await renderReport(content, body.report, supabase, siblings);
   }
 }
@@ -181,14 +187,16 @@ export async function bootProtectedPortal() {
   const loginButton = document.querySelector('[data-google-login]');
   const signOutButton = document.querySelector('[data-sign-out]');
   captureInvitationToken(location.search);
+  let supabase;
   try {
-    const supabase = await createAuthClient();
+    supabase = await createAuthClient();
     globalThis.TrimmerAuth = {
       client: supabase,
       setSession: (session) => supabase.auth.setSession(session),
     };
     const restored = await restoreProtectedRoute(supabase);
     if (restored.state === 'signed-out') {
+      sessionStorage.removeItem('auth_reload_once');
       show(loginPanel, true);
       show(content, false);
       setMessage(status, 'Googleでログインしてください');
@@ -238,6 +246,7 @@ export async function bootProtectedPortal() {
       return;
     }
     await loadProtectedResource(supabase, route, content);
+    sessionStorage.removeItem('auth_reload_once');
     show(loginPanel, false);
     show(content, true);
     show(signOutButton, true);
@@ -247,6 +256,19 @@ export async function bootProtectedPortal() {
       location.replace('/my');
     };
   } catch (error) {
+    /* セッション確認後（restored.state === 'signed-in'）にトークンが失効するなどして
+       ここへ来た場合、ログインボタンはまだ結線されていない（それは signed-out 分岐でしか
+       行わない）。ただの reload では、壊れた/失効したセッションが localStorage に
+       残ったままだと restoreProtectedRoute() が再び signed-in と判定して同じ場所に
+       戻ってしまう（詰み）。signOut() でセッションを消してから 1回だけ再読み込みし、
+       signed-out 判定からやり直す。 */
+    if (error.message === 'authentication required' && !sessionStorage.getItem('auth_reload_once')) {
+      sessionStorage.setItem('auth_reload_once', '1');
+      try { await supabase?.auth.signOut(); } catch { /* セッションが既に壊れていても reload は続ける */ }
+      location.reload();
+      return;
+    }
+    sessionStorage.removeItem('auth_reload_once');
     show(loginPanel, false);
     show(content, false);
     setMessage(status, error.message === 'authentication required' ? 'Googleでログインしてください' : '表示できません');

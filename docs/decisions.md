@@ -176,17 +176,25 @@
 - **Answer**: `scripts/lib/local-stack.mjs` として共通化し、`verify:m6`/`verify:roundtrip`/`verify:empty`/`verify:xss`/`verify:portal` の5本全てがこれを使う形に書き直した。`verify:xss` だけは他と脅威モデルが異なる（DOM/extractReportのサニタイズを迂回し、スタッフAPI経由でDBへ直接細工データを書き込んでから飼い主画面での描画を見る）ことをそのまま維持し、より厳しい「出口が安全か」の検査にした。`verify:portal` は既存のログイン前10項目を変えずログイン後4項目を追加した
 - **Impact**: `npx supabase db reset` で空にした状態から `npm run verify:all` を実行し、5本合計 **59/59 PASS** を確認した（内訳: m6=12/12, roundtrip=19/19, empty=7/7, xss=7/7, portal=14/14）。`npm run build`/`check`/`test` も EXIT 0・67件のまま。副産物として `src/js/supabase-auth.js` の `renderPet()` に「まだカルテがありません」の空状態文言を追加した（元々無かった。D-10の精神に沿う軽微な追加）。`package.json` の `verify:*` は全て自己完結（`npm run preview` を別端末で立てる前提を廃止）にし、代わりに `npx supabase start` が前提になった
 
+### [D-20260823-20] `test/e2e/*.cjs` を削除した（先の判断の訂正）
+
+- **Date**: 2026-08-23
+- **Kind**: claude-judgment
+- **Question**: F5の直後、一度「`archive-back.spec.cjs`/`e2e-ponchi.spec.cjs` はKVモードの検査として今も正しいので対象外」と記録した（旧 D-20260823-U3）。実際に中身を読み直したところ、この理由は誤りだった。書き直すか、削除するか
+- **Answer**: 訂正して削除した。旧D-20260823-U3の「KV Worker は無変更だから今も正しい」は誤り——`ponchi-app.js`/`ponchi-v2.html` は KV/Supabase 両モード共有の1つのソースで、F2で `#backDrawer`（ガラスドロワー3択）・`openBackDrawer`・`#screen-paw` を**コードから完全に削除済み**（`grep` で0件）。つまりこの2ファイルは「Supabase版に無い」のではなく「今のソースのどちらのモードにも存在しないもの」を検査していた。実際に中身を読むと、テストされていた個別ケース（新規登録・カルテ作成・確定→公開・戻る導線・既存カルテ再表示・公開ページ閲覧・飼い主索引ページ）は、KVモード専用のAPI（`/api/owners`・`/api/customers`・`/api/reports`・`/o/{slug}`・`/p/{slug}/{reportId}`）に依存しており、Supabase版の対応する経路はF5で書いた `verify:m6`/`verify:roundtrip`/`verify:empty`/`verify:xss`/`verify:portal` が既に、より厳密に（実DB・実RLS込みで）カバーしている。書き直すことは実質的にF5の重複作業になり、価値を生まない。唯一この2ファイルにしか無かった検査（体重の新規登録・使用オプションのオン/オフ）だけは `verify-m6.mjs` に「6b」「6c」として移植した（12→14項目）。`playwright.config.cjs`（この2ファイルしか指していなかった）と `package.json` の `test:e2e` も併せて削除した
+- **Impact**: `test/e2e/` ディレクトリが無くなった。`npm test`/`npm run verify:all` はどちらも元々これらに依存していなかったので挙動に変化なし。`playwright` パッケージ自体（`chromium` ランチャー）は `verify:*` が使うので devDependencies に残す
+
+### [D-20260823-21] F0〜F5の差分をレビューし、実バグ1件を修正した
+
+- **Date**: 2026-08-23
+- **Kind**: claude-judgment
+- **Question**: F6が資格情報待ちで止まっている間に、`code-review` スキルでF0〜F5の差分全体（PR #4）を見直した。指摘4件のうちどれを直すか
+- **Answer**: `src/js/supabase-auth.js` の `bootProtectedPortal()` に実バグを1件発見・修正した。セッション確認後（`restoreProtectedRoute()` が signed-in と判定した後）に `/api/session` が非200を返す場合——トークンの失効・破損など——catch節が「Googleでログインしてください」と表示しつつ、ログインボタンは signed-out 分岐でしか結線されないため押せず、詰み状態になっていた。実際に壊れたトークンを注入して実機で再現し（初回の修正では直らないことを実機で確認してから）、`signOut()` してから1回だけ `reload()` する形に直し、再現していた詰みが解消することを確認した。他の3件（体重・確認画面の並行fetch化、`dateMatch`の未使用キャプチャ整理）も併せて直した。`e2e-ponchi.spec.cjs`（削除対象と判明済み）を指す4件目の指摘は、D-20260823-20の削除で解消
+- **Impact**: `src/js/supabase-auth.js`・`src/js/ponchi-app.js` を修正。`verify:roundtrip`（19/19）・`verify:portal`（14/14）で regression が無いことを再確認済み。壊れたセッションからの復帰は、実際に壊れたトークンを注入する専用の確認で再現・修正確認済み（スクリプトは使い捨てで削除済み）
+
 ---
 
 ## 未決事項（マスター判断待ち）
-
-### [D-20260823-U3] `test/e2e/*.cjs`（KVモード前提）はSupabase版へ書き直していない（私の判断）
-
-- **Date**: 2026-08-23
-- **Kind**: open（次に触るなら判断が要る）
-- **Question**: `archive-back.spec.cjs` / `e2e-ponchi.spec.cjs`（`npx playwright test` 経由、`#screen-paw` 前提）は F2 の画面骨格変更後も KV モードのままで、Supabase版への書き直しをF5の対象に含めるか
-- **Answer**: 含めなかった。`npm test`（`test:unit`/`test:supabase:static`/`test:migration`）にも `npm run verify:all` にも入っておらず、KV Worker 自体は無変更のためKVモードの検査としては今も正しい。計画本文がF5で名指ししていたのは `verify:m6`/`verify:roundtrip`/`verify:empty`/`verify:xss` の4本と `verify:portal` の拡張のみで、それは全て完了・確認済み（59/59 PASS）
-- **Impact**: `npm test`/`npm run verify:all` は両方ともこれらのファイルの存在に影響されない。次にKVモードのコードへ手を入れる、またはこの2ファイルをCIに組み込む話が出た時点で、書き直すか削除するかを判断すること
 
 ### [D-20260823-U1] 素材20件のうち出所不明15件
 

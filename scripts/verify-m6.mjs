@@ -38,7 +38,12 @@ try {
   const posts = [];
   page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push({ text: m.text(), url: m.location()?.url || '' }); });
   page.on('pageerror', (e) => consoleErrors.push({ text: 'pageerror: ' + e.message, url: '' }));
-  page.on('requestfailed', (r) => consoleErrors.push({ text: `requestfailed ${r.failure()?.errorText}`, url: r.url() }));
+  page.on('requestfailed', (r) => {
+    // ERR_ABORTED は「ページ遷移でブラウザが読み込み中のリソースを打ち切った」だけの
+    // 正常系で、アプリの不具合ではない（フォント/画像の先読みがページ遷移と競合する等）。
+    if (r.failure()?.errorText === 'net::ERR_ABORTED') return;
+    consoleErrors.push({ text: `requestfailed ${r.failure()?.errorText}`, url: r.url() });
+  });
   page.on('response', (r) => {
     if (r.status() >= 400) consoleErrors.push({ text: `HTTP ${r.status()}`, url: r.url() });
     if (r.request().method() === 'POST' && r.url().includes('/api/')) posts.push({ status: r.status(), url: r.url() });
@@ -141,6 +146,27 @@ try {
     return { isData: (img?.src || '').startsWith('data:image'), empty: img?.getAttribute('data-empty') };
   });
   record('6 写真アップロードが反映される', photo.isData && photo.empty === null, `data-empty=${photo.empty}`);
+
+  // ── 6b. 体重の新規登録（旧 test/e2e/e2e-ponchi.spec.cjs E2E-4 の引き継ぎ）──
+  await page.evaluate(() => document.getElementById('weightCard')?.scrollIntoView());
+  const wcOpen = await page.evaluate(() => document.getElementById('weightCard')?.open);
+  if (!wcOpen) await page.locator('#weightCard summary').click();
+  await page.click('#wcNew');
+  await page.waitForSelector('#wcInputRow', { timeout: 5000 });
+  await page.fill('#wcKg', '3.5');
+  const wcCountBefore = await page.locator('#wcList').evaluate((el) => el.children.length);
+  await page.click('#wcAdd');
+  await page.waitForTimeout(500);
+  const wcCountAfter = await page.locator('#wcList').evaluate((el) => el.children.length);
+  record('6b 体重を新規登録できる', wcCountAfter > wcCountBefore, `wcList件数 ${wcCountBefore}->${wcCountAfter}`);
+
+  // ── 6c. 使用オプションのトグル（旧 test/e2e/e2e-ponchi.spec.cjs E2E-4 の引き継ぎ）──
+  const firstOpt = page.locator('.opt').first();
+  await firstOpt.scrollIntoViewIfNeeded();
+  const optOnBefore = await firstOpt.evaluate((el) => el.classList.contains('on'));
+  await firstOpt.click();
+  const optOnAfter = await firstOpt.evaluate((el) => el.classList.contains('on'));
+  record('6c 使用オプションのオン/オフが切り替わる', optOnAfter === !optOnBefore, `on: ${optOnBefore}->${optOnAfter}`);
 
   // ── 7. 保存（確定 → プレビューを確認 → 確定（公開））──
   await page.evaluate(() => document.getElementById('ponchi-commit-ok')?.scrollIntoView());
