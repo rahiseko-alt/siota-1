@@ -16,7 +16,7 @@
  */
 
 import { chromium } from 'playwright';
-import { startLocalWorker, injectSession, passwordLogin, FIXTURE, LOCAL_PASSWORD } from './lib/local-stack.mjs';
+import { startLocalWorker, injectSession, passwordLogin, openStaffPage, FIXTURE, LOCAL_PASSWORD } from './lib/local-stack.mjs';
 
 const CHROME = process.env.M6_CHROMIUM;
 
@@ -69,9 +69,7 @@ try {
   page.on('pageerror', (e) => process.stdout.write(`  [pageerror] ${e.message}\n`));
 
   // ── トリマー側: ブラウザで実ログインし、カルテを1件書いて保存する ──
-  await page.goto(`${BASE}/edit`);
-  await injectSession(page, FIXTURE.staffEmail);
-  await page.reload();
+  await openStaffPage(page, BASE, '/edit', FIXTURE.staffEmail);
   await page.waitForSelector('.owner-pet-item', { timeout: 15000 });
 
   await Promise.all([

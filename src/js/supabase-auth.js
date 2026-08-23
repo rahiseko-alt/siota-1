@@ -9,10 +9,16 @@ const ROUTES = [
 ];
 const INVITATION_TOKEN_PATTERN = /^[0-9a-f]{64}$/i;
 
+/* ログイン後に戻す先。オープンリダイレクト防止のため、同一オリジンの保護された
+   内部ルート（飼い主の /my とトリマーの /edit）だけを通し、それ以外は /my に潰す。
+   /edit を通すのは、スタッフが未ログインで /edit を開いた場合にログイン後そこへ
+   戻すため。ここを /my だけにしていると、スタッフかつ飼い主のアカウント
+   （D-20260823-06 で管理者を飼い主にも紐付けた＝マスター自身）が、ログイン後に
+   飼い主画面へ着いてトリマー画面に戻れなくなる。 */
 export function safeReturnPath(value) {
   if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//')) return '/my';
   const url = new URL(value, 'https://local.invalid');
-  return /^\/my(?:\/|$)/.test(url.pathname) ? `${url.pathname}${url.search}` : '/my';
+  return /^\/(?:my|edit)(?:\/|$)/.test(url.pathname) ? `${url.pathname}${url.search}` : '/my';
 }
 
 export function parseProtectedRoute(pathname) {

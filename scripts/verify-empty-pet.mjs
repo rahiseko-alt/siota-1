@@ -13,7 +13,7 @@
  */
 
 import { chromium } from 'playwright';
-import { startLocalWorker, passwordLogin, injectSession, FIXTURE, LOCAL_PASSWORD } from './lib/local-stack.mjs';
+import { startLocalWorker, passwordLogin, injectSession, openStaffPage, FIXTURE, LOCAL_PASSWORD } from './lib/local-stack.mjs';
 
 const CHROME = process.env.M6_CHROMIUM;
 
@@ -59,9 +59,7 @@ try {
 
   // ── トリマー側: 1件目を作る導線が残っていること ──
   const staffPage = await browser.newPage({ viewport: { width: 390, height: 844 } });
-  await staffPage.goto(`${BASE}/edit`);
-  await injectSession(staffPage, FIXTURE.staffEmail);
-  await staffPage.reload();
+  await openStaffPage(staffPage, BASE, '/edit', FIXTURE.staffEmail);
   await staffPage.waitForSelector('.owner-pet-item', { timeout: 15000 });
   await Promise.all([
     staffPage.waitForURL(/\/edit\/p\//, { timeout: 10000 }),

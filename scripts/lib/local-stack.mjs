@@ -85,6 +85,20 @@ export async function injectSession(page, email, password = LOCAL_PASSWORD) {
   }), session);
 }
 
+/**
+ * スタッフとしてログインし、トリマー画面（/edit 配下）を開く。
+ *
+ * 未ログインのまま /edit を開いてからセッションを注入すると、`bootStaffPortal()` が
+ * 「セッションが無い」と判断して /my へ飛ばす処理と、こちらの注入がレースする。
+ * どちらが先に走るかで結果が変わる不安定な検査になるため、先に /my でセッションを
+ * 作ってから目的の画面へ入る（ログインを省いているわけではない。順序を決めているだけ）。
+ */
+export async function openStaffPage(page, base, path = '/edit', email = 'staff@local.test') {
+  await page.goto(`${base}/my`);
+  await injectSession(page, email);
+  await page.goto(`${base}${path}`);
+}
+
 function portIsFree(port) {
   return new Promise((resolve) => {
     const probe = net.createServer();

@@ -18,7 +18,7 @@ import { chromium } from 'playwright';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { startLocalWorker, passwordLogin, injectSession, FIXTURE, LOCAL_PASSWORD } from './lib/local-stack.mjs';
+import { startLocalWorker, passwordLogin, injectSession, openStaffPage, FIXTURE, LOCAL_PASSWORD } from './lib/local-stack.mjs';
 
 const CHROME = process.env.M6_CHROMIUM;
 
@@ -56,9 +56,7 @@ try {
   record('1 ログイン導線が出る（①②）', (await page.locator('[data-entry-login]').count()) === 1, await page.title());
 
   // ── ② ログイン（テスト専用の password grant で自動化）── ③ 犬を選ぶ画面 ──
-  await page.goto(`${BASE}/edit`);
-  await injectSession(page, FIXTURE.staffEmail);
-  await page.reload();
+  await openStaffPage(page, BASE, '/edit', FIXTURE.staffEmail);
   await page.waitForSelector('.owner-pet-item, .owner-error', { timeout: 15000 });
   const petRows = await page.locator('.owner-pet-item').count();
   record('2 ログイン後に犬の一覧が直接出る（③・飼い主選択層が無い）', petRows > 0, `${petRows} rows`);

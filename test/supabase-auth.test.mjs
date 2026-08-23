@@ -31,6 +31,19 @@ test('safeReturnPath permits only protected internal routes', () => {
   assert.equal(safeReturnPath('https://evil.example/my'), '/my');
 });
 
+/* スタッフの画面（/edit）も戻り先として保持する。ここを /my だけに戻すと、
+   スタッフかつ飼い主のアカウント（D-20260823-06 = マスター自身）が未ログインで
+   /edit を開いたとき、ログイン後に飼い主画面へ着いてトリマー画面に戻れなくなる。
+   ブラウザ側（supabase-auth.js）と Worker 側（auth-context.js）は同じ契約。 */
+test('safeReturnPath keeps the staff route so trimmers land back on /edit', () => {
+  for (const fn of [safeReturnPath, safeBrowserReturnPath]) {
+    assert.equal(fn('/edit'), '/edit');
+    assert.equal(fn('/edit/p/40000000-0000-0000-0000-0000000000a1'), '/edit/p/40000000-0000-0000-0000-0000000000a1');
+    assert.equal(fn('/editorial'), '/my', '前方一致で通してはいけない');
+    assert.equal(fn('//evil.example/edit'), '/my');
+  }
+});
+
 test('resolveAuthContext validates the bearer with Supabase Auth', async () => {
   const calls = [];
   const context = await resolveAuthContext(

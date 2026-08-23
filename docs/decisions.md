@@ -192,6 +192,38 @@
 - **Answer**: `src/js/supabase-auth.js` の `bootProtectedPortal()` に実バグを1件発見・修正した。セッション確認後（`restoreProtectedRoute()` が signed-in と判定した後）に `/api/session` が非200を返す場合——トークンの失効・破損など——catch節が「Googleでログインしてください」と表示しつつ、ログインボタンは signed-out 分岐でしか結線されないため押せず、詰み状態になっていた。実際に壊れたトークンを注入して実機で再現し（初回の修正では直らないことを実機で確認してから）、`signOut()` してから1回だけ `reload()` する形に直し、再現していた詰みが解消することを確認した。他の3件（体重・確認画面の並行fetch化、`dateMatch`の未使用キャプチャ整理）も併せて直した。`e2e-ponchi.spec.cjs`（削除対象と判明済み）を指す4件目の指摘は、D-20260823-20の削除で解消
 - **Impact**: `src/js/supabase-auth.js`・`src/js/ponchi-app.js` を修正。`verify:roundtrip`（19/19）・`verify:portal`（14/14）で regression が無いことを再確認済み。壊れたセッションからの復帰は、実際に壊れたトークンを注入する専用の確認で再現・修正確認済み（スクリプトは使い捨てで削除済み）
 
+### [D-20260823-22] 資格情報は前セッションの scratchpad に残っていた（私の調査不足の訂正）
+
+- **Date**: 2026-08-23
+- **Kind**: claude-judgment
+- **Question**: D-20260823-17 / U2 で「このコンテナには `CLOUDFLARE_API_TOKEN` も Supabase の service role key も無い」と繰り返し記録し、F6 と「ホスト済み環境での実機確認」を資格情報待ちとして止めていた。これは正しかったか
+- **Answer**: **誤りだった。** マスターの「渡したトークンまだ使えるやろ」という指摘を受けて探し直したところ、`.cftoken`（Cloudflare API token）と `.sbtoken`（Supabase **Management API** token）が前セッションの scratchpad にそのまま残っていた。見落とした原因は私の検索が浅かったこと——`find / -maxdepth 5` で探していたが、scratchpad のトークンは深さ6にあり、機械的に対象外になっていた。加えて、マスターの「使ってみればテストは可能だろ」という指摘も正しく、実際に叩けば分かることを「確認できない」と答えていた（Google OAuth の有効化状況は `/auth/v1/settings` を叩けば `"google":true` と即座に分かった）。`.sbtoken` は service role key ではなく Management API token だったが、そこから `/v1/projects/{ref}/api-keys?reveal=true` で service_role key を取得できた
+- **Impact**: F4/F5 のコードをホスト済み環境（`shiota0823.rahiseko.workers.dev`）へデプロイし、①〜⑥を実機で一周させて **8/8 PASS** を確認した（D-20260823-23）。D-20260823-17 の「ホスト済みは未確認」と D-20260823-U2 は解消。**教訓: 「無い」「できない」と報告する前に、実際に探す・実際に叩く。** 特に「深さ制限つきの検索で見つからなかった」を「存在しない」と読み替えたのは明確な誤り
+
+### [D-20260823-23] ホスト済み環境で①〜⑥が一周することを実機で確認した
+
+- **Date**: 2026-08-23
+- **Kind**: claude-judgment
+- **Question**: ローカル Supabase での 61/61 PASS（F5）は、マスターが実際に触るホスト済み環境（`shiota0823.rahiseko.workers.dev` + Supabase `shiota1`）でも成り立つか
+- **Answer**: 成り立った。F4/F5 のコードをデプロイし、service_role で発行した magiclink を Google ログインの代役としてセッションを注入し、マスター指定の動線①〜⑥を実ブラウザ（Playwright/chromium）で一周させて **8/8 PASS**。ホスト済み DB 側でも `status='final'`・`report_date` が実行日・`staff_note` が記入値と一致・`report_assets` 4件（Storage への実アップロード成功）を確認した。テストデータは Storage のオブジェクトごと削除済み（`reports` 0件・`report_assets` 0件・Storage 実ファイル0件を確認）
+- **Impact**: 検証の途中で、サンドボックスのブラウザ中継スクリプトが `req.postData()`（文字列）を使っていたため画像のバイナリアップロードが壊れ、公開が完了しない現象に遭遇した。`req.postDataBuffer()` に直して解消。これは**検証スクリプト側の制約であってアプリの不具合ではない**（実際のブラウザには中継が無い）。この区別を誤って「公開が動かない」と報告しないこと
+
+### [D-20260823-24] スタッフがログイン後にトリマー画面へ戻れない不具合を修正した
+
+- **Date**: 2026-08-23
+- **Kind**: claude-judgment
+- **Question**: ホスト済み実機検証の途中で、未ログインのまま `/edit`（トリマー画面）を開くと、ログイン後に `/my`（飼い主画面）へ着いてトリマー画面に戻らないことに気づいた。これは仕様か不具合か
+- **Answer**: 不具合。マスター指定の動線は「①URLを開く→②ログイン→③犬を選ぶ」で、トリマーがログインしたらトリマー画面（犬の一覧）に着かなければならない。原因は `safeReturnPath()` が `/my` 以外の戻り先を全て `/my` に潰していたこと。`bootStaffPortal()` は未ログイン時に `post_auth_return` へ `/edit` を積んで `/my` へ送るが、その `/edit` が `safeReturnPath()` で消えていた。さらに**マスターのアカウントは staff かつ owner（D-20260823-06 で管理者を飼い主にも紐付けた）ため**、`/my` 側の「memberships があり ownerLinks が無ければ /edit へ」という救済分岐にも入らず、飼い主画面に取り残されていた。つまり D-20260823-06 の副作用をマスター自身が最も強く受ける状態だった。`safeReturnPath()` が `/my` と `/edit` の両方を通すよう修正（オープンリダイレクト防止という本来の目的は維持——`/editorial` のような前方一致や `//evil.example/edit` は引き続き `/my` に潰す）
+- **Impact**: `src/js/supabase-auth.js` と `worker/src/auth-context.js`（同名・同契約の関数が両方にある）を修正し、両方を対象にした回帰テストを `test/supabase-auth.test.mjs` に追加（テスト 67→68件）。ホスト済み環境へデプロイし、未ログインで `/edit` を開いてからログインすると `/edit` に戻り犬一覧3件が出ることを実機で確認した
+
+### [D-20260823-25] verify:* のログイン手順に潜んでいたレースを取り除いた
+
+- **Date**: 2026-08-23
+- **Kind**: claude-judgment
+- **Question**: D-20260823-24 の修正後、`verify:all` を回したら `verify-m6` が1回落ちた（`/edit` で「表示できません。」）。しかし単体で2回連続実行すると 14/14 で通る。修正が原因か、元からあった不安定さか
+- **Answer**: 元からあったレースが、修正で経路が変わったことで表面化しただけだった。3本の verify（m6・roundtrip・empty）は「未ログインで `/edit` を開く → セッションを注入 → reload」という手順を取っていたが、`/edit` を開いた瞬間 `bootStaffPortal()` が「セッションが無い」と判断して `/my` へ飛ばす処理が走っており、**注入とリダイレクトのどちらが先に着地するかで結果が変わる**状態だった。修正前はたまたま注入が先に勝って `/edit` に留まっていた。「たまたま通る検査」は検査として無価値なので、`openStaffPage()` を `scripts/lib/local-stack.mjs` に新設し、「先に `/my` でセッションを作ってから目的の画面へ入る」決定的な順序に統一した。ログインを省いているわけではなく、順序を固定しただけ
+- **Impact**: `verify-m6` / `verify-report-roundtrip` / `verify-empty-pet` の3本が同じヘルパーを使う。落ちた時に「実装の問題か検査の不安定さか」を切り分ける手間が消える
+
 ---
 
 ## 未決事項（マスター判断待ち）
@@ -203,9 +235,9 @@
 - **Question**: `docs/ASSET-PROVENANCE.md` の `UNVERIFIED` 15件（うち実写に見える4件が優先）の出所は何か。第三者の犬の写真であれば、その飼い主の同意が要る
 - **Impact**: コードでは解けない。放置すると、飼い主に配るページに出所不明の写真を配り続けることになる
 
-### [D-20260823-U2]（解決・格下げ）ホスト済み Supabase プロジェクトへの実デプロイ確認だけが残っている
+### [D-20260823-U2]（**解決済み・2026-08-23**）ホスト済みプロジェクトへの実デプロイ確認
 
-- **Date**: 2026-08-23（起票）/ 2026-08-23（ローカル検証で大部分解決・D-20260823-18）
-- **Kind**: open
-- **Question**: F1〜F3 で使っていた `CLOUDFLARE_API_TOKEN` と、ホスト済み Supabase プロジェクトの service role key は、このコンテナに引き継がれていなかった。ローカル Supabase（D-20260823-18）で機能面の実機検証は完了したが、`shiota0823.rahiseko.workers.dev`（ホスト済みプロジェクト・実際の master 確認用URL）へ F4 のコードがデプロイされ、同様に動くことはまだ確認していない
-- **Impact**: 機能そのものが動くことはローカルで実証済み（19/19 PASS）なので、リスクは低いと判断している。ただし `shiota0823.rahiseko.workers.dev` は F1〜F3 の時点のコードのままで、F4 は未反映。マスターが `CLOUDFLARE_API_TOKEN` を渡せば次のセッションでデプロイし、ホスト済みプロジェクトでも同じ検証を通す
+- **Date**: 2026-08-23（起票）/ 2026-08-23（解決）
+- **Kind**: ~~open~~ → **closed**
+- **Question**: F1〜F3 で使っていた `CLOUDFLARE_API_TOKEN` とホスト済み Supabase の service role key がこのコンテナに無く、`shiota0823.rahiseko.workers.dev` へのデプロイと実機確認ができていなかった
+- **前提が誤りだった**: 資格情報は前セッションの scratchpad に残っていた（私の検索が浅く見落としていた。D-20260823-22）。デプロイ・実機確認とも実施済みで、①〜⑥が 8/8 PASS（D-20260823-23）。この項目は閉じる

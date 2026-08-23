@@ -166,7 +166,16 @@ Google OAuth も犬一覧も RLS も Supabase 有効化後でないと動かせ�
 2. **`docs/ops/plans/2026-08-23-completion.md`** — 完成までのフェーズ F0〜F6・受け入れ条件・動線図
 3. **`docs/decisions.md`** — マスター決定・私の判断・未決事項の台帳（口頭で流さず必ずここに記録する運用に変更した）
 
-**現在地: F0・F1・F2・F3・F4・F5 完了。次は F6（独自ドメイン切替、資格情報待ち）。**
+**現在地: F0〜F5 完了。ホスト済み環境でも①〜⑥が一周（8/8 PASS）。残るは F6（独自ドメイン切替）のみ。**
+
+**資格情報の在り処（重要・次セッションで探し回らないこと）**: `CLOUDFLARE_API_TOKEN` と
+Supabase の Management API token は、セッションの scratchpad
+（`/tmp/claude-0/-home-user-siota-1/<session-id>/scratchpad/` の `.cftoken` / `.sbtoken`、
+どちらも `chmod 600`）に置いてある。Management API token からは
+`GET https://api.supabase.com/v1/projects/bcodloqwnrhcuvevfguy/api-keys?reveal=true` で
+service_role key を取得できる（`.srkey` に保存済み）。SQL は同ディレクトリの
+`sbq.py` で流せる。**「無い」と判断する前に深さ制限なしで探すこと**——一度
+`find -maxdepth 5` で見落として、あるものを「無い」と報告した（D-20260823-22）。
 
 **ローカルでの実機検証手段（重要・F5でも使う）**: `CLOUDFLARE_API_TOKEN` もホスト済み
 Supabase プロジェクトの service role key も無いコンテナでも、実ログイン・実DB・実RLSの検証が
@@ -314,10 +323,10 @@ F4のローカルSupabase実機検証（D-20260823-18）を `scripts/lib/local-s
 - **クリーンな状態から確認**: `npx supabase db reset` → `npm run verify:all` で
   **59/59 PASS**（12+19+7+7+14）。`npm run build`/`check`/`test` も EXIT 0・67件のまま
 
-### F6待ちの間に実施したこと（2026-08-23）
+### F5後の追加作業（2026-08-23）
 
-F6は `CLOUDFLARE_API_TOKEN`（＋Supabase側のSite URL変更・Google OAuth本番公開という
-人手作業）待ちで止まっている。その間に2つ追加作業をした。
+一時「F6は資格情報待ち」として止めていたが、**その前提が誤りだった**（後述）。
+止まっていた間、および資格情報が見つかったあとに実施したこと。
 
 - **`test/e2e/*.cjs` を削除した（訂正）**: F5直後、「これらはKVモードの検査として今も
   正しいので対象外」と記録したが誤りだった。`#backDrawer`/`openBackDrawer`/`#screen-paw`
@@ -333,6 +342,41 @@ F6は `CLOUDFLARE_API_TOKEN`（＋Supabase側のSite URL変更・Google OAuth本
   実際に注入して再現し、`signOut()`してから1回だけ`reload()`する形に直して、
   実機で解消を確認した。他に確認画面のfetch並行化・未使用コードの整理も実施。
   詳細は`docs/decisions.md` D-20260823-21
+
+### ホスト済み環境での実機確認（2026-08-23・①〜⑥ 8/8 PASS）
+
+**「資格情報が無い」は私の誤りだった**（D-20260823-22）。`.cftoken`/`.sbtoken` は
+前セッションの scratchpad に残っていたのに、`find -maxdepth 5` で探して見落とし、
+「無い」と報告していた。また「Google OAuth が本番公開済みか確認できない」も誤りで、
+`/auth/v1/settings` を叩けば `"google":true` と即座に分かった。**「無い」「できない」と
+言う前に、実際に探す・実際に叩くこと。**
+
+資格情報が見つかったので、F4/F5 のコードを `shiota0823.rahiseko.workers.dev` へ
+デプロイし、ホスト済み環境（実 Supabase `shiota1`）で①〜⑥を実機で一周させた:
+
+- ①URLを開く → ②ログイン → ③犬の一覧（ポンチ/ムギ/レオが直接出る・飼い主選択層なし）
+  → ④カルテ作成 → ⑤確認ページ（F4のマガジン意匠） → 公開 → ⑥顧客ページに同じ値が
+  同じレンダラで出る、まで **8/8 PASS**
+- ホスト済み DB 側でも `status='final'`・`report_date` が実行日・`staff_note` が記入値と
+  一致・`report_assets` 4件（Storage への実アップロード成功）を確認
+- テストデータは Storage のオブジェクトごと削除済み（reports 0件・assets 0件・
+  Storage 実ファイル0件を確認）
+- 詳細は `docs/decisions.md` D-20260823-23
+
+### その検証中に見つけた不具合を修正（D-20260823-24）
+
+**スタッフが未ログインで `/edit` を開くと、ログイン後に飼い主画面へ着いてトリマー画面に
+戻れなかった。** `safeReturnPath()` が `/my` 以外の戻り先を全て `/my` に潰しており、
+`bootStaffPortal()` が積んだ `post_auth_return='/edit'` が消えていた。さらに
+**マスターのアカウントは staff かつ owner（D-20260823-06）** なので、`/my` 側の
+「memberships があり ownerLinks が無ければ /edit へ」という救済分岐にも入らず、
+飼い主画面に取り残されていた。つまり D-06 の副作用をマスター自身が最も受ける状態。
+
+`safeReturnPath()` が `/my` と `/edit` の両方を通すよう修正（`/editorial` のような
+前方一致や `//evil.example/edit` は引き続き `/my` に潰す）。ブラウザ側
+（`supabase-auth.js`）と Worker 側（`auth-context.js`）の同名・同契約の関数を
+両方直し、両方を対象にした回帰テストを追加（テスト 67→68件）。ホスト済み環境で
+「未ログインで `/edit` → ログイン → `/edit` に戻り犬一覧3件」を実機確認済み。
 
 統合に入る前に `docs/design.md` を読むこと。`finalize_report` が**4条件で黙って `null` を返す**ことなど、
 書き直しを選ばない理由が実物の確認つきで書いてある。

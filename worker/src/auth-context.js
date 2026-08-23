@@ -15,10 +15,11 @@ export function readBearer(request) {
   return token || null;
 }
 
+/* src/js/supabase-auth.js の同名関数と同じ契約。片方だけ変えないこと。 */
 export function safeReturnPath(value) {
   if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//')) return '/my';
   const url = new URL(value, 'https://local.invalid');
-  return /^\/my(?:\/|$)/.test(url.pathname) ? `${url.pathname}${url.search}` : '/my';
+  return /^\/(?:my|edit)(?:\/|$)/.test(url.pathname) ? `${url.pathname}${url.search}` : '/my';
 }
 
 function authConfig(env) {
