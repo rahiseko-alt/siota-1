@@ -268,6 +268,53 @@ KV モードの `/o/{ownerSlug}`（公開飼い主ページ）は `renderOwnerIn
 | `npm test` | EXIT 0・件数が現状（67）以上 |
 | 他人の犬が見えないこと | 別アカウントで 404 / 空 |
 
+**【完了・2026-08-23】**
+
+F4で確立したローカルSupabase実機検証（D-20260823-18）の土台を検査本体に格上げした。
+`scripts/lib/local-stack.mjs`（新設）が `supabase start` + `wrangler dev --config
+worker/wrangler.local.toml` の起動/停止と、`supabase/seed.sql` のテストアカウントでの
+実ログイン注入を共通化する。5本すべてが実Postgres・実Auth・実PostgREST・実RLSに対して
+実行される（KV版のようなモックや直接POSTの迂回は最小限）。
+
+実装内容:
+- `scripts/verify-m6.mjs`（書き直し）: ①ログイン導線→③犬の一覧（飼い主選択層なし）→
+  画面からの新規飼い主・犬登録→④カルテ作成→Konva描画（ペン/色変更/undo）→写真
+  アップロード→保存POST→⑤確認画面（マガジン意匠・F4）→⑥公開URL到達→コンソール
+  エラー0件、の一気通貫。12/12 PASS
+- `scripts/verify-report-roundtrip.mjs`（書き直し）: 実UI操作（クリック・
+  contenteditable編集）でカルテを記入→保存→別ブラウザコンテキストで飼い主として
+  ログインし直し、13項目すべてが同じ値で届くことを確認。他人（owner-b）には
+  見えないこと（RLS）も同じ実行の中で確認。19/19 PASS
+- `scripts/verify-empty-pet.mjs`（書き直し）: カルテ0件の犬に見本画像・タップ可能な
+  リンクが出ないこと、「まだカルテがありません」が出ること（`src/js/supabase-auth.js`
+  の `renderPet()` に追加。今回のUI変更点はこれのみ）、トリマー側は1件目を作る導線が
+  生きていることを確認。7/7 PASS
+- `scripts/verify-xss.mjs`（書き直し）: DOM/extractReportのサニタイズを迂回し、
+  スタッフAPI経由でDBへ直接細工データを書き込んでから飼い主画面で描画させる
+  （出口側の安全性を検証する、より厳しい脅威モデル）。pet/staffNote/skin.loc/
+  ear.comment/nail.comment/teeth.status・comment/weights[].ym の7経路。7/7 PASS
+- `scripts/verify-portal.mjs`（拡張）: 既存のログイン前10項目はそのまま維持し、
+  ログイン後4項目（自分の犬だけが見える／ログアウトボタン表示／他人の犬は見えない
+  RLS／サインアウトでログイン画面に戻る）を追加。14/14 PASS
+- `worker/wrangler.local.toml` / `supabase/config.toml` は既にF4で追加済みのものを
+  そのまま再利用
+
+**scope 変更（実施時の判明事項）**: `test/e2e/*.cjs`（`archive-back.spec.cjs` /
+`e2e-ponchi.spec.cjs`、`npx playwright test` 経由・`npm test` には含まれない）は
+KV モード（`#screen-paw` 前提）のままで、Supabase版への書き直しはしなかった。
+理由: これらは KV モードの動作として今も正しく（KV Worker 自体は無変更）、
+`npm test`/`npm run verify:all` のどちらのゲートにも入っていない。計画本文が
+名指ししていたのは `verify:m6`/`verify:roundtrip`/`verify:empty`/`verify:xss` の
+4本と `verify:portal` の拡張のみで、それは全て完了した。`test/e2e/*.cjs` の
+Supabase版書き直しは、要ればF5後の別作業として切り出す（未決事項に追記）。
+
+**受け入れ条件の確認状況**（クリーンな状態から検証・2026-08-23）:
+| 検証 | 結果 |
+|---|---|
+| `npx supabase db reset` → `npm run verify:all` | ✅ 全5本 EXIT 0（12+19+7+7+14 = 59/59 PASS） |
+| `npm run build` / `check` / `test` | ✅ 全て EXIT 0（67件、regressionなし） |
+| 他人の犬が見えないこと | ✅ `verify:roundtrip`・`verify:portal` の両方で別アカウントから確認（RLSが実際に効く） |
+
 ### F6 — 独自ドメインへ切り替え
 
 - `worker/wrangler.toml` の `routes` を Supabase 版へ移し、旧 Worker はルートのみ外す

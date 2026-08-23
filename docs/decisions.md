@@ -168,9 +168,25 @@
 - **Answer**: あった。`supabase/seed.sql` に、まさにこの用途のために先行実装済みのローカル専用テストアカウント（`staff@local.test` / `owner-a@local.test` / `owner-b@local.test` など、password login）が既にあった。`docker` と `supabase` CLI がこの環境で使えたので `supabase start` でローカルに実 Postgres・実 Auth（GoTrue）・実 PostgREST・実 Storage を一式起動し（`supabase/config.toml` に `[edge_runtime] enabled=false` を追加——使わない上にこのサンドボックスでは rlimit 権限エラーで起動できなかったため）、`worker/wrangler.local.toml`（新規・ローカル専用・秘密情報なし）でそのローカル Supabase を指す `wrangler dev` を立てて検証した。password grant でアクセストークンを取得し、`window.TrimmerAuth.setSession()`（`supabase-auth.js`/`supabase-staff.js` が既に公開している口）へ注入する形でログインを自動化した。ホスト済み Supabase プロジェクトの service role key も、Cloudflare へのデプロイも一切使っていない
 - **Impact**: F4 の受け入れ条件（記入→確定→飼い主画面の値の一致・写真の署名付きURL経由表示・他人の犬が見えないこと）を、Playwright（chromium）で実際に **19/19 PASS** で確認した。詳細は本文および `docs/ops/plans/2026-08-23-completion.md` の F4 セクション参照。D-20260823-17 の「未確認」は解消。D-20260823-U2 は「ローカル検証は解決・ホスト済みプロジェクトへの実デプロイ確認だけがまだ」に格下げする（下記 D-20260823-U2 更新参照）。この手段は F5（`verify:*` の作り直し）でも同じ土台を使い回せる
 
+### [D-20260823-19] F5: verify:* 5本をSupabase版へ書き直し、共通の土台に格上げした（私の判断）
+
+- **Date**: 2026-08-23
+- **Kind**: claude-judgment
+- **Question**: F4で作った「ローカルSupabase + ローカルwrangler dev + password loginでのセッション注入」は、F4限りの検証手段だったが、これをF5の`verify:*`本体にどう組み込むか
+- **Answer**: `scripts/lib/local-stack.mjs` として共通化し、`verify:m6`/`verify:roundtrip`/`verify:empty`/`verify:xss`/`verify:portal` の5本全てがこれを使う形に書き直した。`verify:xss` だけは他と脅威モデルが異なる（DOM/extractReportのサニタイズを迂回し、スタッフAPI経由でDBへ直接細工データを書き込んでから飼い主画面での描画を見る）ことをそのまま維持し、より厳しい「出口が安全か」の検査にした。`verify:portal` は既存のログイン前10項目を変えずログイン後4項目を追加した
+- **Impact**: `npx supabase db reset` で空にした状態から `npm run verify:all` を実行し、5本合計 **59/59 PASS** を確認した（内訳: m6=12/12, roundtrip=19/19, empty=7/7, xss=7/7, portal=14/14）。`npm run build`/`check`/`test` も EXIT 0・67件のまま。副産物として `src/js/supabase-auth.js` の `renderPet()` に「まだカルテがありません」の空状態文言を追加した（元々無かった。D-10の精神に沿う軽微な追加）。`package.json` の `verify:*` は全て自己完結（`npm run preview` を別端末で立てる前提を廃止）にし、代わりに `npx supabase start` が前提になった
+
 ---
 
 ## 未決事項（マスター判断待ち）
+
+### [D-20260823-U3] `test/e2e/*.cjs`（KVモード前提）はSupabase版へ書き直していない（私の判断）
+
+- **Date**: 2026-08-23
+- **Kind**: open（次に触るなら判断が要る）
+- **Question**: `archive-back.spec.cjs` / `e2e-ponchi.spec.cjs`（`npx playwright test` 経由、`#screen-paw` 前提）は F2 の画面骨格変更後も KV モードのままで、Supabase版への書き直しをF5の対象に含めるか
+- **Answer**: 含めなかった。`npm test`（`test:unit`/`test:supabase:static`/`test:migration`）にも `npm run verify:all` にも入っておらず、KV Worker 自体は無変更のためKVモードの検査としては今も正しい。計画本文がF5で名指ししていたのは `verify:m6`/`verify:roundtrip`/`verify:empty`/`verify:xss` の4本と `verify:portal` の拡張のみで、それは全て完了・確認済み（59/59 PASS）
+- **Impact**: `npm test`/`npm run verify:all` は両方ともこれらのファイルの存在に影響されない。次にKVモードのコードへ手を入れる、またはこの2ファイルをCIに組み込む話が出た時点で、書き直すか削除するかを判断すること
 
 ### [D-20260823-U1] 素材20件のうち出所不明15件
 

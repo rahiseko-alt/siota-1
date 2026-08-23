@@ -119,9 +119,16 @@ function renderPet(container, pet) {
   heading.dataset.testid = 'pet-name';
   heading.textContent = pet.name;
   container.append(heading);
+  const reports = pet.reports || [];
+  if (reports.length === 0) {
+    const empty = document.createElement('p');
+    empty.textContent = 'まだカルテがありません。';
+    container.append(empty);
+    return;
+  }
   const list = document.createElement('div');
   list.className = 'report-list';
-  for (const report of pet.reports || []) {
+  for (const report of reports) {
     const link = document.createElement('a');
     link.href = `/my/pets/${encodeURIComponent(pet.id)}/reports/${encodeURIComponent(report.id)}`;
     link.textContent = report.report_date;

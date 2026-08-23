@@ -1,30 +1,26 @@
 /**
- * verify-report-roundtrip.mjs — 「トリマーが書いたものが、飼い主にそのまま届くか」
+ * verify-report-roundtrip.mjs — 「トリマーが書いたものが、飼い主にそのまま届くか」（Supabaseモード）
  *
  * このアプリの存在理由そのものを検査する。画面が出る・ボタンが押せるではなく、
- * 記入 → 保存 → 飼い主が開く公開ページ、の往復で1項目でも欠けたら失格とする。
+ * 記入 → 確定 → 公開 → 飼い主が /my で開く、の往復で1項目でも欠けたら失格とする。
  *
  * 使い方:
- *   端末1: npm run preview
+ *   端末1: npx supabase start   （ローカル実 Postgres/Auth/PostgREST/Storage）
  *   端末2: npm run verify:roundtrip
- *   ブラウザを指定する場合は M6_CHROMIUM=/path/to/chrome
  *
  * EXIT 0 = 全項目が往復した / EXIT 1 = 1項目でも消えた
  *
- * なぜこの検査が要るか:
- *   画面の見た目とコンソールだけを見ていると、この種の欠落は完全に無症状になる。
- *   実際、皮膚の種類・変化と歯の状態は「保存はされるが復元で静かに落ちる」状態で
- *   移設されてきた（cssAttrSafe が日本語の値を空文字にしていた）。耳・爪・歯の
- *   コメントは data-field が振られておらず抽出対象ですらなく、「担当からの一言」は
- *   HTML にあるのに抽出側が読んでいなかった。どれもエラーを出さない。
- *   出ないからこそ、機械で往復を確かめるしかない。
+ * KV版（廃止）からの引き継ぎ: この検査はこのリポジトリで一番重要な検査という位置づけを
+ * そのまま引き継ぐ。画面の見た目とコンソールだけを見ていると、この種の欠落は
+ * 完全に無症状になる（F-20260823-26/27等）。入力欄を足したら必ずここにも足すこと。
  */
 
 import { chromium } from 'playwright';
+import { startLocalWorker, injectSession, passwordLogin, FIXTURE, LOCAL_PASSWORD } from './lib/local-stack.mjs';
 
-const BASE = process.env.M6_BASE || 'http://localhost:8787';
+const CHROME = process.env.M6_CHROMIUM;
 
-/** トリマーが1回の施術で書き込む内容。すべて飼い主に届かなければならない。 */
+/** トリマーが1回の施術で書き込む内容。すべて飼い主に届かなければならない（13項目）。 */
 const INPUT = {
   skinLoc: '右前肢の内側',
   skinSize: '5mm',
@@ -51,140 +47,140 @@ function check(name, actual, expected) {
   );
 }
 
-async function post(pathname, body) {
-  const res = await fetch(BASE + pathname, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
+const { base: BASE, stop } = await startLocalWorker({ port: Number(process.env.PORTAL_PORT || 8787) });
+let browser;
+try {
+  const stamp = Date.now().toString(36).slice(-5);
+  const PET_NAME = `往復${stamp}`;
+
+  // ── スタッフとして、既存の飼い主(owner-a)の下に新しい犬を作る（API直接）。
+  //    新規の飼い主を作ると auth ユーザーに紐付いていない孤児owner になり、
+  //    誰も飼い主として閲覧できなくなる（RLS: owner_users 経由でしか通らない）ため、
+  //    fixture の owner-a（owner_users 済み）を使う ──
+  const staffSession = await passwordLogin(FIXTURE.staffEmail, LOCAL_PASSWORD);
+  const authHeaders = { Authorization: `Bearer ${staffSession.access_token}`, 'Content-Type': 'application/json' };
+  const petRes = await fetch(`${BASE}/api/owners/${FIXTURE.ownerAOwnerId}/pets`, {
+    method: 'POST', headers: authHeaders, body: JSON.stringify({ ownerId: FIXTURE.ownerAOwnerId, name: PET_NAME, template: 'ponchi' }),
   });
-  if (!res.ok) throw new Error(`POST ${pathname} → ${res.status}`);
-  return res.json();
+  check('スタッフAPIで犬を新規登録できる', petRes.status, 201);
+
+  browser = await chromium.launch(CHROME ? { executablePath: CHROME } : {});
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  page.on('pageerror', (e) => process.stdout.write(`  [pageerror] ${e.message}\n`));
+
+  // ── トリマー側: ブラウザで実ログインし、カルテを1件書いて保存する ──
+  await page.goto(`${BASE}/edit`);
+  await injectSession(page, FIXTURE.staffEmail);
+  await page.reload();
+  await page.waitForSelector('.owner-pet-item', { timeout: 15000 });
+
+  await Promise.all([
+    page.waitForURL(/\/edit\/p\//, { timeout: 10000 }),
+    page.locator('.owner-pet-item', { hasText: `${PET_NAME}（` }).first().click(),
+  ]);
+  await page.waitForSelector('.archive-new-btn', { timeout: 15000 });
+  await page.click('.archive-new-btn');
+  await page.waitForSelector('#heroDateInput', { timeout: 15000 });
+  await page.waitForSelector('#skin-body .sk-card', { state: 'attached', timeout: 15000 });
+  await page.evaluate(() => { document.querySelectorAll('#screen-report details').forEach((d) => { d.open = true; }); });
+
+  const filled = await page.evaluate((input) => {
+    const missing = [];
+    const setText = (sel, val) => {
+      const el = document.querySelector(sel);
+      if (!el) { missing.push(sel); return; }
+      el.textContent = val;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    setText('[data-field="skin-loc-1"]', input.skinLoc);
+    setText('[data-field="skin-size-1"]', input.skinSize);
+    setText('[data-field="ear-comment"]', input.earComment);
+    setText('[data-field="nail-comment"]', input.nailComment);
+    setText('[data-field="teeth-comment"]', input.teethComment);
+    setText('[data-field="staff-note"]', input.staffNote);
+    return missing;
+  }, INPUT);
+  if (filled.length) {
+    process.stdout.write('\n❌ 記入先の要素が見つからない（UI と保存契約が食い違っている）:\n');
+    filled.forEach((m) => process.stdout.write(`  - ${m}\n`));
+    throw new Error('missing DOM targets');
+  }
+
+  async function pick(selector) {
+    await page.click(selector);
+  }
+  await pick(`.sk-pick[data-skin-type="1"][data-val="${INPUT.skinType}"]`);
+  await pick(`.sk-pick[data-skin-change="1"][data-val="${INPUT.skinChange}"]`);
+  await pick(`.tt-pick[data-teeth="${INPUT.teeth}"]`);
+  await pick(`.ear-cell[data-ear="right"][data-val="${INPUT.earRight}"]`);
+  await pick(`.ear-cell[data-ear="left"][data-val="${INPUT.earLeft}"]`);
+  await pick(`.nail-lv[data-nail="${INPUT.nail}"]`);
+
+  // 確定 → プレビューを確認(showMagazinePreview) → 確定（公開）
+  await page.click('#ponchi-commit-ok');
+  await page.waitForSelector('.ponchi-btn-pub', { timeout: 10000 });
+  await page.click('.ponchi-btn-pub');
+  await page.waitForSelector('#screen-magazine .magazine-container', { timeout: 15000 });
+
+  process.stdout.write('\n── トリマーの確認画面（#screen-magazine）に出ている値 ──\n');
+  const previewText = await page.evaluate(() => document.querySelector('#screen-magazine').textContent);
+  check('確認画面: 皮膚1 部位', previewText.includes(INPUT.skinLoc) ? INPUT.skinLoc : '(欠落)', INPUT.skinLoc);
+  check('確認画面: 担当からの一言', previewText.includes(INPUT.staffNote) ? INPUT.staffNote : '(欠落)', INPUT.staffNote);
+
+  await page.click('#screen-magazine .ponchi-btn-pub');
+  await page.waitForSelector('.ponchi-publish-notice', { timeout: 30000 });
+  const pubHref = await page.evaluate(() => document.querySelector('.ponchi-pub-link')?.getAttribute('href') || '');
+  check('保存・公開のURL通知が出る', /\/my\/pets\/.+\/reports\/.+/.test(pubHref) ? 'ok' : pubHref, 'ok');
+
+  // ── 飼い主側: 別ブラウザコンテキストでログインし直し、公開ページを開いて全項目を確認 ──
+  const ownerContext = await browser.newContext();
+  const ownerPage = await ownerContext.newPage();
+  await ownerPage.goto(`${BASE}${pubHref}`);
+  await injectSession(ownerPage, FIXTURE.ownerAEmail);
+  await ownerPage.reload();
+  await ownerPage.waitForSelector('.magazine-container', { timeout: 20000 });
+
+  const seenText = await ownerPage.evaluate(() => document.body.textContent);
+  process.stdout.write('\n── 飼い主が /my で見るもの ──\n');
+  check('犬の名前', seenText.includes(PET_NAME) ? PET_NAME : '(欠落)', PET_NAME);
+  check('皮膚1 部位', seenText.includes(INPUT.skinLoc) ? INPUT.skinLoc : '(欠落)', INPUT.skinLoc);
+  check('皮膚1 大きさ', seenText.includes(INPUT.skinSize) ? INPUT.skinSize : '(欠落)', INPUT.skinSize);
+  check('皮膚1 種類', seenText.includes(INPUT.skinType) ? INPUT.skinType : '(欠落)', INPUT.skinType);
+  check('皮膚1 変化', seenText.includes(INPUT.skinChange) ? INPUT.skinChange : '(欠落)', INPUT.skinChange);
+  check('歯の状態', seenText.includes(INPUT.teeth) ? INPUT.teeth : '(欠落)', INPUT.teeth);
+  check('耳（右）', seenText.includes(`右 Lv.${INPUT.earRight}`) ? `右 Lv.${INPUT.earRight}` : '(欠落)', `右 Lv.${INPUT.earRight}`);
+  check('耳（左）', seenText.includes(`左 Lv.${INPUT.earLeft}`) ? `左 Lv.${INPUT.earLeft}` : '(欠落)', `左 Lv.${INPUT.earLeft}`);
+  check('爪のレベル', seenText.includes(`Lv.${INPUT.nail}`) ? `Lv.${INPUT.nail}` : '(欠落)', `Lv.${INPUT.nail}`);
+  check('耳のコメント', seenText.includes(INPUT.earComment) ? INPUT.earComment : '(欠落)', INPUT.earComment);
+  check('爪のコメント', seenText.includes(INPUT.nailComment) ? INPUT.nailComment : '(欠落)', INPUT.nailComment);
+  check('歯のコメント', seenText.includes(INPUT.teethComment) ? INPUT.teethComment : '(欠落)', INPUT.teethComment);
+  check('担当からの一言', seenText.includes(INPUT.staffNote) ? INPUT.staffNote : '(欠落)', INPUT.staffNote);
+
+  const noEditHooks = await ownerPage.evaluate(() => document.querySelectorAll('[data-field]').length === 0);
+  check('飼い主画面に編集用フック(data-field)が無い', noEditHooks ? 'ok' : 'あり', 'ok');
+
+  // ── RLS実証: 他人（owner-b）はこのカルテを見られない（全体受け入れ条件3）──
+  const strangerContext = await browser.newContext();
+  const strangerPage = await strangerContext.newPage();
+  await strangerPage.goto(`${BASE}${pubHref}`);
+  await injectSession(strangerPage, FIXTURE.ownerBEmail);
+  await strangerPage.reload();
+  await strangerPage.waitForTimeout(2000);
+  const strangerSeesIt = await strangerPage.evaluate(
+    (note) => document.body.textContent.includes(note),
+    INPUT.staffNote,
+  );
+  check('他人には見えない（RLS）', strangerSeesIt ? '見えた(NG)' : 'ok', 'ok');
+  await ownerContext.close();
+  await strangerContext.close();
+} finally {
+  if (browser) await browser.close();
+  await stop();
 }
-
-const stamp = Date.now().toString(36).slice(-5);
-const PET_NAME = `往復${stamp}`;
-const owner = await post('/api/owners', { ownerName: `往復検証 ${stamp}` });
-const pet = await post('/api/customers', { petName: PET_NAME, ownerSlug: owner.ownerSlug });
-
-const launchOpts = process.env.M6_CHROMIUM ? { executablePath: process.env.M6_CHROMIUM } : {};
-const browser = await chromium.launch(launchOpts);
-const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
-page.on('pageerror', (e) => process.stdout.write(`  [pageerror] ${e.message}\n`));
-
-// ── トリマー側: カルテを1件書いて保存する ──
-await page.goto(`${BASE}/edit/o/${owner.ownerSlug}`, { waitUntil: 'domcontentloaded' });
-await page.waitForTimeout(2500);
-await page.locator('button.owner-pet-item').first().click();
-await page.waitForTimeout(2500);
-
-// 肉球画面に登録した犬の名前が出ているか（既定値「まるちゃん」のままでないか）
-const pawName = await page.evaluate(() =>
-  document.querySelector('#screen-paw [data-field="pet"]')?.textContent?.trim());
-check('肉球画面に犬の名前が出る', pawName, PET_NAME);
-
-await page.locator('#screen-paw .pad').first().click();
-await page.waitForTimeout(3000);
-await page.evaluate(() => document.querySelectorAll('details').forEach((d) => { d.open = true; }));
-await page.waitForTimeout(800);
-
-const filled = await page.evaluate((input) => {
-  const missing = [];
-  const setText = (sel, val) => {
-    const el = document.querySelector(sel);
-    if (!el) { missing.push(sel); return; }
-    el.textContent = val;
-  };
-  const pick = (sel) => {
-    const el = document.querySelector(sel);
-    if (!el) { missing.push(sel); return; }
-    el.click();
-  };
-  setText('[data-field="skin-loc-1"]', input.skinLoc);
-  setText('[data-field="skin-size-1"]', input.skinSize);
-  pick(`.sk-pick[data-skin-type="1"][data-val="${input.skinType}"]`);
-  pick(`.sk-pick[data-skin-change="1"][data-val="${input.skinChange}"]`);
-  pick(`.tt-pick[data-teeth="${input.teeth}"]`);
-  pick(`.ear-cell[data-ear="right"][data-val="${input.earRight}"]`);
-  pick(`.ear-cell[data-ear="left"][data-val="${input.earLeft}"]`);
-  pick(`.nail-lv[data-nail="${input.nail}"]`);
-  setText('[data-field="ear-comment"]', input.earComment);
-  setText('[data-field="nail-comment"]', input.nailComment);
-  setText('[data-field="teeth-comment"]', input.teethComment);
-  setText('[data-field="staff-note"]', input.staffNote);
-  return missing;
-}, INPUT);
-
-if (filled.length) {
-  process.stdout.write('\n❌ 記入先の要素が見つからない（UI と保存契約が食い違っている）:\n');
-  filled.forEach((m) => process.stdout.write(`  - ${m}\n`));
-  await browser.close();
-  process.exit(1);
-}
-
-// 確定 → プレビューを確認 → 確定（公開）
-let saveStatus = 0;
-page.on('response', (r) => {
-  if (r.request().method() === 'POST' && r.url().endsWith('/api/reports')) saveStatus = r.status();
-});
-await page.evaluate(() => document.getElementById('ponchi-commit-ok')?.scrollIntoView());
-await page.locator('#ponchi-commit-ok').click();
-await page.waitForTimeout(2000);
-await page.locator('.ponchi-btn-pub').first().click();
-await page.waitForTimeout(3000);
-await page.locator('.ponchi-btn-pub').first().click();
-await page.waitForTimeout(9000);
-check('保存が 200 で返る', saveStatus, 200);
-
-// ── 飼い主側: 公開ページを開いて、書いたものが全部あるか ──
-await page.goto(`${BASE}/p/${pet.slug}`, { waitUntil: 'domcontentloaded' });
-await page.waitForTimeout(3000);
-await page.locator('#screen-paw .pad').first().click();
-await page.waitForTimeout(4000);
-await page.evaluate(() => document.querySelectorAll('details').forEach((d) => { d.open = true; }));
-await page.waitForTimeout(800);
-
-const seen = await page.evaluate(() => {
-  const text = (sel) => document.querySelector(sel)?.textContent?.trim() ?? null;
-  const picked = (sel, attr) => {
-    const el = document.querySelector(sel);
-    return el ? (el.dataset[attr] ?? null) : null;
-  };
-  return {
-    pet: text('[data-field="pet"]'),
-    skinLoc: text('[data-field="skin-loc-1"]'),
-    skinSize: text('[data-field="skin-size-1"]'),
-    skinType: picked('.sk-pick.is-picked[data-skin-type="1"]', 'val'),
-    skinChange: picked('.sk-pick.is-picked[data-skin-change="1"]', 'val'),
-    teeth: picked('.tt-pick.is-picked', 'teeth'),
-    earRight: picked('.ear-cell.is-picked[data-ear="right"]', 'val'),
-    earLeft: picked('.ear-cell.is-picked[data-ear="left"]', 'val'),
-    nail: picked('.nail-lv.is-picked', 'nail'),
-    earComment: text('[data-field="ear-comment"]'),
-    nailComment: text('[data-field="nail-comment"]'),
-    teethComment: text('[data-field="teeth-comment"]'),
-    staffNote: text('[data-field="staff-note"]'),
-  };
-});
-
-process.stdout.write('\n── 飼い主が公開ページで見るもの ──\n');
-check('犬の名前', seen.pet, PET_NAME);
-check('皮膚1 部位', seen.skinLoc, INPUT.skinLoc);
-check('皮膚1 大きさ', seen.skinSize, INPUT.skinSize);
-check('皮膚1 種類', seen.skinType, INPUT.skinType);
-check('皮膚1 変化', seen.skinChange, INPUT.skinChange);
-check('歯の状態', seen.teeth, INPUT.teeth);
-check('耳（右）', seen.earRight, INPUT.earRight);
-check('耳（左）', seen.earLeft, INPUT.earLeft);
-check('爪のレベル', seen.nail, INPUT.nail);
-check('耳のコメント', seen.earComment, INPUT.earComment);
-check('爪のコメント', seen.nailComment, INPUT.nailComment);
-check('歯のコメント', seen.teethComment, INPUT.teethComment);
-check('担当からの一言', seen.staffNote, INPUT.staffNote);
 
 const failed = results.filter((r) => !r.pass);
 process.stdout.write(`\n===== 往復: ${results.length - failed.length}/${results.length} =====\n`);
 if (failed.length) {
   process.stdout.write('\nトリマーが書いたのに飼い主に届いていない項目がある。\n');
 }
-await browser.close();
 process.exit(failed.length ? 1 : 0);

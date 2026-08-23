@@ -1,63 +1,31 @@
 /**
- * verify-xss.mjs — 保存されたカルテのデータが、飼い主のブラウザで実行されないこと
+ * verify-xss.mjs — 保存されたカルテのデータが、飼い主のブラウザで実行されないこと（Supabaseモード）
  *
  * 使い方:
- *   端末1: npm run preview
+ *   端末1: npx supabase start
  *   端末2: npm run verify:xss
- *   ブラウザを指定する場合は M6_CHROMIUM=/path/to/chrome
  *
  * EXIT 0 = 実行されない / EXIT 1 = 実行された（Critical）
  *
- * 背景:
- *   `/api/*` に認証が無いのは既知かつ意図された前提（LEVEL D-3）。ここで塞ぐのは
- *   認証ではなく、**保存済みデータが飼い主の画面でコードとして走ってしまうこと**。
- *   前者は「誰でも書ける」、後者は「書かれたものが実行される」で、別の問題。
- *
- *   実際に F-20260821-17 として成立していた。weights[].ym は heroDateVal() が
- *   YYYY-MM-DD しか作らないので安全だと見なされ、ymShort() の戻り値が buildSVG() と
- *   renderList() の innerHTML へ素通しで連結されていた。POST /api/reports に
- *   細工した ym を入れるだけで、公開ページ /p/{slug} で任意の JS が動いた。
- *
- *   移設 plan はこの種の欠陥を「ponchi-v2.html:1590 の innerHTML 連結」として
- *   risk#1 に挙げていたが、行番号は現在のファイルに対応しない。行を追うのをやめて
- *   注入口を全部洗い、実際に撃ち込んで確かめた結果がこの検査になっている。
+ * KV版と同じ脅威モデルを引き継ぐ: 「誰でも書ける」（LEVEL D-3・意図された前提）ではなく、
+ * 「書かれたものが飼い主のブラウザでコードとして実行される」ことだけを塞ぐ。
+ * ここでは data カラムへ直接（スタッフAPI経由・DOM/extractReportの無害化を迂回して）
+ * 細工した値を書き込み、renderMagazine() の描画結果が実行されないことを確かめる。
+ * これは「入り口を塞ぐ」検査ではなく「出口（描画）が安全か」の検査で、DOM経由の
+ * サニタイズに問題があっても最後の砦として効く必要がある。
  */
 
 import { chromium } from 'playwright';
+import { startLocalWorker, passwordLogin, injectSession, FIXTURE, LOCAL_PASSWORD } from './lib/local-stack.mjs';
 
-const BASE = process.env.M6_BASE || 'http://localhost:8787';
-
-const results = [];
-function check(name, pass, detail) {
-  results.push({ name, pass });
-  process.stdout.write(`${pass ? 'PASS' : 'FAIL'}  ${name}${detail ? `  ${detail}` : ''}\n`);
-}
-
-async function post(pathname, body) {
-  const res = await fetch(BASE + pathname, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`POST ${pathname} → ${res.status}`);
-  return res.json();
-}
-
+const CHROME = process.env.M6_CHROMIUM;
 const FIRE = 'window.__XSS_FIRED=1';
 
-/* 仕掛ける場所と、そこに入れる細工。いずれも「保存されたカルテ」を経由して
-   飼い主の公開ページに届く値。増やすときはここに1行足す。 */
+/* 仕掛ける場所と、そこに入れる細工。renderMagazine() が描画する箇所を一通り洗う。
+   増やすときはここに1行足す。 */
 const PAYLOADS = [
   {
-    name: 'weights[].ym（グラフと一覧の両方へ流れる）',
-    build: (p) => ({ ...p, weights: [{ ym: `2026-<img src=x onerror="${FIRE}">`, kg: 3.2 }] }),
-  },
-  {
-    name: 'weights[].ym の閉じタグ挿入',
-    build: (p) => ({ ...p, weights: [{ ym: `2026-</text><script>${FIRE}<\/script>`, kg: 3.2 }] }),
-  },
-  {
-    name: 'pet（見出しへ入る）',
+    name: 'pet（犬名見出しへ入る）',
     build: (p) => ({ ...p, pet: `<img src=x onerror="${FIRE}">` }),
   },
   {
@@ -65,43 +33,77 @@ const PAYLOADS = [
     build: (p) => ({ ...p, staffNote: `<img src=x onerror="${FIRE}">` }),
   },
   {
+    name: 'skin[].loc（皮膚の部位）',
+    build: (p) => ({ ...p, skin: [{ loc: `<img src=x onerror="${FIRE}">`, size: '5mm', type: '', change: '' }] }),
+  },
+  {
     name: 'ear.comment（耳のコメント）',
     build: (p) => ({ ...p, ear: { right: 1, left: 1, comment: `<img src=x onerror="${FIRE}">` } }),
   },
   {
-    name: 'skin[].loc（皮膚の部位）',
-    build: (p) => ({
-      ...p,
-      skin: [{ loc: `<img src=x onerror="${FIRE}">`, size: '5mm', type: '', change: '' }],
-    }),
+    name: 'nail.comment（爪のコメント）',
+    build: (p) => ({ ...p, nail: { level: 1, comment: `<img src=x onerror="${FIRE}">` } }),
+  },
+  {
+    name: 'teeth.comment / teeth.status（歯のコメント・状態）',
+    build: (p) => ({ ...p, teeth: { status: `<img src=x onerror="${FIRE}">`, comment: `<img src=x onerror="${FIRE}2">` } }),
+  },
+  {
+    name: 'weights[].ym（体重グラフのラベル）',
+    build: (p) => ({ ...p, weights: [{ ym: `<img src=x onerror="${FIRE}">`, kg: 3.2 }] }),
   },
 ];
 
-const launchOpts = process.env.M6_CHROMIUM ? { executablePath: process.env.M6_CHROMIUM } : {};
-const browser = await chromium.launch(launchOpts);
+const results = [];
+function check(name, pass, detail) {
+  results.push({ name, pass });
+  process.stdout.write(`${pass ? 'PASS' : 'FAIL'}  ${name}${detail ? `  ${detail}` : ''}\n`);
+}
 
-for (const [i, payload] of PAYLOADS.entries()) {
-  const stamp = `${Date.now().toString(36).slice(-4)}${i}`;
-  const owner = await post('/api/owners', { ownerName: `XSS ${stamp}` });
-  const pet = await post('/api/customers', { petName: `検証${stamp}`, ownerSlug: owner.ownerSlug });
+const { base: BASE, stop } = await startLocalWorker({ port: Number(process.env.PORTAL_PORT || 8787) });
+let browser;
+try {
+  const staffSession = await passwordLogin(FIXTURE.staffEmail, LOCAL_PASSWORD);
+  const authHeaders = { Authorization: `Bearer ${staffSession.access_token}`, 'Content-Type': 'application/json' };
 
-  const base = {
-    template: 'ponchi', pet: `検証${stamp}`, date: '2026/08/21', year: '2026', day: '金',
-    weights: [], skin: [], options: [], teeth: {}, ear: {}, nail: {},
-  };
-  await post('/api/reports', { slug: pet.slug, report: payload.build(base) });
+  browser = await chromium.launch(CHROME ? { executablePath: CHROME } : {});
 
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
-  await page.goto(`${BASE}/p/${pet.slug}`, { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(2500);
-  await page.locator('#screen-paw .pad').click({ force: true }).catch(() => {});
-  await page.waitForTimeout(3500);
-  await page.evaluate(() => document.querySelectorAll('details').forEach((d) => { d.open = true; }));
-  await page.waitForTimeout(600);
+  for (const [i, payload] of PAYLOADS.entries()) {
+    const stamp = `${Date.now().toString(36).slice(-4)}${i}`;
+    const petRes = await fetch(`${BASE}/api/owners/${FIXTURE.ownerAOwnerId}/pets`, {
+      method: 'POST', headers: authHeaders,
+      body: JSON.stringify({ ownerId: FIXTURE.ownerAOwnerId, name: `XSS${stamp}`, template: 'ponchi' }),
+    });
+    const pet = (await petRes.json()).pet;
 
-  const fired = await page.evaluate(() => !!window.__XSS_FIRED);
-  check(payload.name, !fired, fired ? '★ 実行された' : '実行されない');
-  await page.close();
+    const base = { template: 'ponchi', pet: `XSS${stamp}`, weights: [], skin: [], options: [], teeth: {}, ear: {}, nail: {} };
+    const reportRes = await fetch(`${BASE}/api/pets/${pet.id}/reports`, {
+      method: 'POST', headers: authHeaders,
+      body: JSON.stringify({ petId: pet.id, reportDate: '2026-08-23', data: payload.build(base) }),
+    });
+    const report = (await reportRes.json()).report;
+    // 作成直後は status='draft'。飼い主には見えないので finalize して確定させる。
+    const finalizeRes = await fetch(`${BASE}/api/pets/${pet.id}/reports/${report.id}/finalize`, {
+      method: 'POST', headers: authHeaders,
+    });
+    if (!finalizeRes.ok) {
+      check(payload.name, false, `確定に失敗 (${finalizeRes.status})。細工データを飼い主画面まで届けられなかった`);
+      continue;
+    }
+
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await page.goto(`${BASE}/my/pets/${pet.id}/reports/${report.id}`);
+    await injectSession(page, FIXTURE.ownerAEmail);
+    await page.reload();
+    await page.waitForTimeout(2500);
+
+    const fired = await page.evaluate(() => !!window.__XSS_FIRED);
+    check(payload.name, !fired, fired ? '★ 実行された' : '実行されない');
+    await page.close();
+  }
+} finally {
+  if (browser) await browser.close();
+  await stop();
 }
 
 const failed = results.filter((r) => !r.pass);
@@ -109,5 +111,4 @@ process.stdout.write(`\n===== XSS: ${results.length - failed.length}/${results.l
 if (failed.length) {
   process.stdout.write('\n保存されたデータが飼い主のブラウザで実行されている。Critical。\n');
 }
-await browser.close();
 process.exit(failed.length ? 1 : 0);

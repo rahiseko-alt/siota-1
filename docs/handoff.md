@@ -48,6 +48,10 @@
 
 ## 2. 現在の状態 (Current State)
 
+> **注記（2026-08-23・F5）**: 以下の verify:* の件数・実行方法（`npm run preview` を別端末で）は
+> KVモード時代のもので、**古い**。現在の Supabase モード版の実行方法・件数は
+> 「F5 の結果」セクション（本ファイル後半、F4の結果の次）を見ること。
+
 ### 機械検証
 
 | コマンド | 結果 |
@@ -162,7 +166,7 @@ Google OAuth も犬一覧も RLS も Supabase 有効化後でないと動かせ�
 2. **`docs/ops/plans/2026-08-23-completion.md`** — 完成までのフェーズ F0〜F6・受け入れ条件・動線図
 3. **`docs/decisions.md`** — マスター決定・私の判断・未決事項の台帳（口頭で流さず必ずここに記録する運用に変更した）
 
-**現在地: F0・F1・F2・F3・F4 完了（ローカルSupabaseで実機確認済み）。次は F5（検査の作り直し）。**
+**現在地: F0・F1・F2・F3・F4・F5 完了。次は F6（独自ドメイン切替、資格情報待ち）。**
 
 **ローカルでの実機検証手段（重要・F5でも使う）**: `CLOUDFLARE_API_TOKEN` もホスト済み
 Supabase プロジェクトの service role key も無いコンテナでも、実ログイン・実DB・実RLSの検証が
@@ -279,6 +283,39 @@ password grant のアクセストークンを取得し、`window.TrimmerAuth.set
   ホスト済み Supabase プロジェクト（`shiota0823.rahiseko.workers.dev`）への実デプロイ後の
   動作（`CLOUDFLARE_API_TOKEN` が要る・D-20260823-U2・低リスクと判断）
 - `npm run build` / `check` / `test` は EXIT 0・67 pass のまま変化なし
+
+### F5 の結果（2026-08-23・実機確認済み）
+
+F4のローカルSupabase実機検証（D-20260823-18）を `scripts/lib/local-stack.mjs`（新設）として
+共通化し、`verify:m6`/`verify:roundtrip`/`verify:empty`/`verify:xss`/`verify:portal` の
+**5本すべて**をこれで動く形に書き直した。
+
+- **実行方法が変わった**: `npm run preview` を別端末で立てておく前提を廃止した。今は
+  `npx supabase start`（ローカルの実Postgres/Auth/PostgREST/Storage）だけを事前に立てておけば、
+  各 `npm run verify:*` は自分で `wrangler dev --config worker/wrangler.local.toml` を
+  起動・停止するところまで自己完結する。ログインは `supabase/seed.sql` のテスト専用
+  アカウント（`staff@local.test` / `owner-a@local.test` / `owner-b@local.test` 等、
+  password login）で自動化する
+- **`verify:m6`（12/12）**: ①ログイン導線→③犬の一覧（飼い主選択層なし）→画面からの
+  新規飼い主・犬登録→④カルテ作成→Konva描画（ペン/色変更/undo）→写真アップロード→
+  保存POST→⑤確認画面（マガジン意匠・F4）→⑥公開URL到達→コンソールエラー0件
+- **`verify:roundtrip`（19/19・最重要）**: 実UI操作でカルテを記入→保存→別ブラウザ
+  コンテキストで飼い主としてログインし直し、13項目すべてが同じ値で届くことを確認。
+  他人（owner-b）には見えないこと（RLS）も同じ実行内で確認
+- **`verify:empty`（7/7）**: カルテ0件の犬に見本画像・タップ可能なリンクが出ないこと、
+  「まだカルテがありません」が出ること（`src/js/supabase-auth.js` の `renderPet()` に追加。
+  今回のUIコード変更点はこれのみ）、トリマー側の新規作成導線が生きていることを確認
+- **`verify:xss`（7/7）**: DOM/extractReportのサニタイズを迂回し、スタッフAPI経由でDBへ
+  直接細工データを書き込んでから飼い主画面で描画させる、より厳しい「出口が安全か」の検査。
+  pet/staffNote/skin.loc/ear.comment/nail.comment/teeth.status・comment/weights[].ym の7経路
+- **`verify:portal`（14/14）**: ログイン前10項目は無変更のまま維持し、ログイン後4項目
+  （自分の犬だけ見える／ログアウトボタン表示／他人の犬は見えないRLS／サインアウトで
+  ログイン画面に戻る）を追加
+- **scope変更（D-20260823-U3）**: `test/e2e/*.cjs`（`npx playwright test` 経由、`npm test`
+  には含まれない）はKVモードのままで書き直していない。計画がF5で名指ししていたのは
+  上記5本のみで、それは完了した
+- **クリーンな状態から確認**: `npx supabase db reset` → `npm run verify:all` で
+  **59/59 PASS**（12+19+7+7+14）。`npm run build`/`check`/`test` も EXIT 0・67件のまま
 
 統合に入る前に `docs/design.md` を読むこと。`finalize_report` が**4条件で黙って `null` を返す**ことなど、
 書き直しを選ばない理由が実物の確認つきで書いてある。
