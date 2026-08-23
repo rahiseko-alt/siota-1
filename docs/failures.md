@@ -265,3 +265,13 @@
 - **Root Cause**: 子プロセスを1個だと思って kill したが、実体は `npx → wrangler(node) → workerd` の3段。加えて kill の**完了を待たずに** exit していたため、待てばポートが解放される場合でも間に合わなかった。「起動する検査」を書いたのに「止まる」ことを検査していなかった。
 - **Guardrail / Prevention**: `detached: true` でプロセスグループを作り、`process.kill(-pid, 'SIGTERM')` でグループごと止め、`exit` を await してから戻る（5秒で SIGKILL へ落とす）。`SIGINT`/`SIGTERM` でも同じ後始末をする。起動前に `net.createServer().listen()` でポートの空きを確かめ、塞がっていれば wrangler の `kj::Exception` ではなく読める文で落とす。**サーバを立てる検査を書いたら、続けて3回流して全部 EXIT 0 になることを確認してから commit する**（今回そうしていれば push 前に見つかっていた）。
 - **Status**: CLOSED
+
+### [F-20260823-01] マイグレーションSQLが一度も実行されておらず、本番投入の1本目で構文エラーになった
+
+- **Date**: 2026-08-23
+- **Category**: db
+- **Trigger/Context**: Supabase 有効化。マスターが `supabase/migrations/` の1本目を Supabase の SQL Editor に流した。
+- **Failure**: `ERROR: 42601: syntax error at or near "window"`（565行目）。`insert into private.rate_limit_windows as window (...)` の別名 `window` が **PostgreSQL の予約語**（WINDOW 句）と衝突していた。同じ形が2箇所（565行・581行）。**5本 1,235行のマイグレーションは、このリポジトリで一度も実際の PostgreSQL に対して実行されたことがなかった。**
+- **Root Cause**: 検査が `node --test` の静的検査（`test:supabase:static` 39件）だけで、**SQL を PostgreSQL に食わせる工程が無かった**。`npm run test:supabase`（`supabase test db`）は Docker 前提で、`docs/handoff.md` に「Docker/Postgres 停止で検証不能」と書かれたまま放置されていた。**動かせない検査は、無い検査と同じ**。加えて統合 plan の各 Phase 合格条件から実 DB 項目を意図的に外していたため（リスク#4）、誰も気づく機会が無かった。
+- **Guardrail / Prevention**: 別名を `limit_window`（非予約語）に変更。あわせて**この環境に PostgreSQL 16 を入れて5本を実際に流し、全て EXIT 0 を確認した**。Supabase が先に用意している土台（`auth.uid()` / `auth.users` / `storage.buckets` / `storage.objects` / `extensions.digest` / ロール3種）は最小のスタブで再現している。**修正前の状態に戻すと同じ行で EXIT 3 になることも確認済み**（検査が本当に落とせるかの確認。`F-20260821-23` と同じ手順）。**SQL を書いたら、実際の PostgreSQL に流すまで「書けた」と言わない。**
+- **Status**: CLOSED
