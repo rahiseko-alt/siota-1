@@ -105,7 +105,7 @@
 
   /* ── 全画面を隠す ────────────────────────────────────────── */
   function hideAll() {
-    ['owner', 'archive', 'report'].forEach(function (s) {
+    ['owner', 'archive', 'report', 'magazine'].forEach(function (s) {
       var el = document.getElementById('screen-' + s);
       if (el) el.style.display = 'none';
     });
@@ -1105,7 +1105,74 @@
    * 「確定（公開）」→ Step 7 (publishReport)。
    * 「やり直す」→ 編集モードに戻り Step 4。
    */
+  /**
+   * Supabase モードの Step 6: マガジン意匠での確認プレビュー。
+   * 公開後に飼い主が /my で見る画面と同じ renderMagazine() を使う
+   * （マスター指定: ⑤確認 と ⑥顧客ページ は同一レンダラ・F4）。
+   * extractReport() は公開前の in-memory データをそのまま返す（写真は
+   * まだ asset:// マーカーではなく、選択済みファイルの data:/blob: URL）ので、
+   * 公開ページのような署名URL解決（hydrateAssetReferences）は不要。
+   */
+  function showMagazinePreview(context) {
+    var report = window.SaltyDogPonchi && typeof window.SaltyDogPonchi.extractReport === 'function'
+      ? window.SaltyDogPonchi.extractReport()
+      : null;
+    var reportSec = document.getElementById('screen-report');
+    var magazineSec = document.getElementById('screen-magazine');
+    if (reportSec) reportSec.style.display = 'none';
+    if (!magazineSec || !report || !window.SaltyDogMagazine) {
+      /* マガジン描画に必要な部品が揃わない場合は、確認を進められない。
+         公開前の防御なので、より安全な旧来の is-readonly 表示にフォールバックする。 */
+      showLegacyPreview(context);
+      return;
+    }
+    magazineSec.style.display = 'block';
+    window.SaltyDogMagazine.renderMagazine(magazineSec, {
+      petName:    report.pet,
+      reportDate: report.isoDate || report.date,
+      data:       report,
+    });
+
+    var existing = document.getElementById('ponchi-confirm-bar');
+    if (existing) existing.remove();
+
+    var bar = document.createElement('div');
+    bar.id = 'ponchi-confirm-bar';
+    bar.className = 'ponchi-confirm-bar';
+    bar.innerHTML =
+      '<p class="ponchi-confirm-msg">これがお客様に届く内容です。よろしければ公開してください。</p>' +
+      '<div class="ponchi-confirm-actions">' +
+      '  <button type="button" class="ponchi-btn-redo">やり直す</button>' +
+      '  <button type="button" class="ponchi-btn-pub">確定（公開）</button>' +
+      '</div>';
+    bar.querySelector('.ponchi-btn-redo').addEventListener('click', function () {
+      bar.remove();
+      magazineSec.style.display = 'none';
+      showCreateFlow(4, context);
+    });
+    bar.querySelector('.ponchi-btn-pub').addEventListener('click', function () {
+      showCreateFlow(7, context);
+    });
+    magazineSec.appendChild(bar);
+  }
+
+  /**
+   * showPreview(context)
+   * Step 6: 閲覧プレビュー。
+   * Supabase モードはマガジン意匠（showMagazinePreview）、
+   * KV モードは従来どおり is-readonly + #screen-report を使う（現行本番・触れない）。
+   * 「確定（公開）」→ Step 7 (publishReport)。
+   * 「やり直す」→ 編集モードに戻り Step 4。
+   */
   function showPreview(context) {
+    if (isSupabaseMode()) {
+      showMagazinePreview(context);
+      return;
+    }
+    showLegacyPreview(context);
+  }
+
+  function showLegacyPreview(context) {
     /* プレビューは is-readonly で .bm-konva(線あり)を隠し .bm-single を表示する。
        切替前に描画(Konva)を静止画化して .bm-single に流し込む（公開ページの applyReport と同等処理）。
        これをしないと .bm-single が元の素図(線なし)のまま＝プレビューに描画線が出ない（真因）。 */
@@ -1285,7 +1352,9 @@
         notice.innerHTML =
           '<p>公開しました！</p>' +
           '<a href="' + escHtml(pubUrl) + '" class="ponchi-pub-link">公開ページを見る →</a>';
-        var sec = document.getElementById('screen-report');
+        /* Supabase モードは確認画面を #screen-magazine で表示している（F4）ので、
+           公開後の通知もそちらへ出す。#screen-report は非表示のままで通知が届かない。 */
+        var sec = document.getElementById(isSupabaseMode() ? 'screen-magazine' : 'screen-report');
         if (sec) sec.appendChild(notice);
       })
       .catch(function (err) {

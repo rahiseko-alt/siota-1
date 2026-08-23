@@ -209,6 +209,42 @@ KV モードの `/o/{ownerSlug}`（公開飼い主ページ）は `renderOwnerIn
 | **記入→確定→飼い主画面** の値の一致 | 13項目すべて一致 |
 | 飼い主に見える写真 | 非公開バケットの署名付きURL経由で表示される |
 
+**【実施済み・2026-08-23・一部未確認】**
+
+**scope 変更（実施時の判明事項・D-20260823-12）**: 上表の `data-view=` grep は
+`ponchi-v2.html` の静的ソースを数える設計だったが、実装では
+`src/js/magazine-view.js` 内の1つのテンプレート文字列（`renderMagazine()`）を
+トリマー確認画面（`#screen-magazine`・`ponchi-v2.html`）と飼い主画面
+（`[data-portal-content]`・`src/my.html`）の両方へ注入する方式にした。静的HTMLの
+二重複製は、直したときに片方だけ古いまま残る「ズレ」を生む——このセッションで
+直してきたバグ（F-20260821-22/23・F-20260823-26/27）と同じ再発条件のため避けた。
+機械チェックは静的 grep から実行時 DOM チェック（下記）へ差し替えた。
+
+実装内容:
+- `src/js/magazine-view.js`（新規）: `renderMagazine(container, report, opts)`。
+  皮膚（10行）・爪・耳（左右）・歯・体重推移（実データから計算したSVG折れ線）・
+  カット写真ギャラリー・担当からの一言・過去レポートのタイムライン（実 reportId
+  リンク）を実データから描画。記入の無い項目は「記録がありません」と出すか、
+  枠ごと隠す（モックの創作文・固定見本は使わない。D-20260823-13）。
+  アコーディオン開閉・クイックジャンプ・ライトボックスも実装
+- `src/js/supabase-auth.js`: `renderReport()` を `renderMagazine()` 呼び出しに
+  差し替え。`hydrateAssetReferences()` で写真の `asset://` マーカーを署名付き
+  ダウンロードへ解決してから渡す
+- `src/js/ponchi-app.js`: Step 6（`showPreview`）を Supabase モードのみ分岐。
+  `showMagazinePreview()` が `extractReport()` の in-memory データをそのまま
+  `renderMagazine()` に渡し、`#screen-magazine` に表示する。KV モードは
+  `showLegacyPreview()` として無変更のまま残した（D-20260823-15・現行本番は触れない）
+- `src/design-samples/ponchi-v2.html`: `#screen-magazine` マウント枠と
+  `magazine-view.js` の読込を追加
+
+**受け入れ条件の確認状況**:
+| 検証 | 状態 |
+|---|---|
+| `renderMagazine()` の実ブラウザ単体検証（Playwright/chromium・合成データ） | ✅ 27/27 PASS。`data-view` 35件・`data-field` 0件、13項目相当の実データ描画、記入なし項目の非表示、XSS注入不実行、アコーディオン/クイックジャンプ/ライトボックス/タイムラインリンク/戻るボタンの実動作、コンソールエラー0件 |
+| `npm run build` / `check` / `test` | ✅ 全て EXIT 0（67件、regressionなし） |
+| **記入→確定→飼い主画面** の実 Supabase 往復（実ログイン・実カルテ作成・実公開） | ⏳ **未確認**（D-20260823-17）。このセッションのコンテナには `CLOUDFLARE_API_TOKEN` も Supabase service role key（テストログイン用）も無く、F1〜F3 と同じ実機検証ができなかった。`wrangler dev` はローカルでCloudflareアカウント無しに動くことは確認済み。ボトルネックは自動ログイン手段（service role key）の方 |
+| 飼い主に見える写真が署名付きURL経由 | ⏳ 未確認（同上。コード上は `hydrateAssetReferences()` を経由する実装になっている） |
+
 ### F5 — 検査を Supabase 版へ作り直す
 
 現行の `verify:m6` / `verify:roundtrip` / `verify:empty` / `verify:xss` は

@@ -1,4 +1,5 @@
 import { hydrateAssetReferences } from './supabase-storage.js';
+import { renderMagazine } from './magazine-view.js';
 
 const UUID_PATTERN = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const ROUTES = [
@@ -129,26 +130,22 @@ function renderPet(container, pet) {
   container.append(list);
 }
 
-async function renderReport(container, report, supabase) {
-  container.replaceChildren();
-  const heading = document.createElement('h2');
-  heading.dataset.testid = 'report-pet-name';
-  heading.textContent = report.pet?.name || '';
-  container.append(heading);
-  const date = document.createElement('p');
-  date.textContent = report.report_date || '';
-  container.append(date);
-  const memo = document.createElement('p');
-  memo.textContent = typeof report.data?.memo === 'string' ? report.data.memo : '';
-  container.append(memo);
+/* トリマーの確認画面（ponchi-app.js の showPreview）と同じ renderMagazine() を使う
+   （マスター指定: ⑤確認 と ⑥顧客ページ は同一レンダラ）。写真は asset:// マーカーの
+   ままでは表示できないため、hydrateAssetReferences で署名付きダウンロードに解決してから渡す。 */
+async function renderReport(container, report, supabase, siblingReports) {
   const hydrated = await hydrateAssetReferences(report.data || {}, report.assets || [], supabase);
-  for (const url of hydrated.objectUrls) {
-    const photo = document.createElement('img');
-    photo.src = url;
-    photo.alt = `${report.pet?.name || ''}のカルテ写真`;
-    photo.loading = 'lazy';
-    container.append(photo);
-  }
+  renderMagazine(container, {
+    petName: report.pet?.name || '',
+    reportDate: report.report_date || '',
+    data: hydrated.data,
+    siblingReports: siblingReports || [],
+    currentReportId: report.id,
+    linkBase: `/my/pets/${encodeURIComponent(report.pet_id || '')}/reports/`,
+  }, {
+    onBack: () => { location.href = `/my/pets/${encodeURIComponent(report.pet_id || '')}`; },
+    backLabel: 'このわんちゃんのカルテ一覧へ戻る',
+  });
 }
 
 async function loadProtectedResource(supabase, route, content) {
@@ -160,7 +157,14 @@ async function loadProtectedResource(supabase, route, content) {
   const body = await response.json();
   if (route.name === 'pets') renderPets(content, body.pets || []);
   if (route.name === 'pet') renderPet(content, body.pet);
-  if (route.name === 'report') await renderReport(content, body.report, supabase);
+  if (route.name === 'report') {
+    let siblings = [];
+    try {
+      const petResponse = await authorizedFetch(supabase, `/api/my/pets/${encodeURIComponent(route.petId)}`);
+      if (petResponse.ok) siblings = ((await petResponse.json()).pet?.reports || []);
+    } catch { /* タイムライン表示は補助情報。取得に失敗してもカルテ本体は表示する */ }
+    await renderReport(content, body.report, supabase, siblings);
+  }
 }
 
 export async function bootProtectedPortal() {
