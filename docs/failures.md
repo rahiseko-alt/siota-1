@@ -295,3 +295,13 @@
 - **Root Cause**: `SupabaseDataStore` が `fetch` をプロパティに持ち `this.fetchImpl(...)` と呼んでいた（`supabase-data-store.js:39`）。Workers の `fetch` はレシーバが globalThis 以外だと実行を拒否する。`worker/src/auth-context.js` が無事だったのは、あちらが引数を `fetchImpl(...)` と**裸で**呼んでいるから。認証だけ通ってデータだけ落ちるという、切り分けにくい症状になった。
 - **Guardrail / Prevention**: コンストラクタで `fetchImpl.bind(globalThis)` して、呼び出し側の書き方に依存させない。**`test/supabase-store.test.mjs` に、fetch のレシーバが store 自身でないことを直接検査するテストを追加**（偽 fetch を通常の関数で受け、`this` を記録して照合する）。`bind` を外すと実際に落ちることを確認済み。**この不具合は既存テストでは原理的に見つからない**——テストが差し込む偽 fetch は `this` を使わないため、本番の制約に触れない。**外部 SDK/ランタイムの API を自前のオブジェクトに持たせるときは、呼び出し規約（レシーバ要求）を確かめること。**
 - **Status**: CLOSED
+
+### [F-20260823-26] Supabase モードで、新規カルテが常に公開できない（日付結合の欠落）
+
+- **Date**: 2026-08-23
+- **Category**: logic
+- **Trigger/Context**: F1（完成までの計画）。ダミーデータで①〜⑥の動線を実ブラウザで辿り、④カルテ作成→公開を実際にクリックして確認した。
+- **Failure**: 「新規カルテ作成」→記入→「確定」→「プレビューを確認」→「確定（公開）」まで正しく進むが、**最後の公開が必ず失敗する**。`alert('日付を YYYY/MM/DD の形式で入力してください。')` が出て止まる。日付ピッカーに触っても触らなくても同じ結果になる——**構造的に直りようがない**バグだった。
+- **Root Cause**: `extractReport()`（`src/js/publish-client-ponchi.js:141`）は `date: field('date')` として日付を取り出すが、`[data-field="date"]`（`src/design-samples/ponchi-v2.html:947`）は「年/月/日」3分割表示のうち**月だけ**を保持する要素で、年は別要素 `[data-field="year"]`、日は `[data-field="day"]`。一方 Supabase モードの公開検証（`src/js/ponchi-app.js:1316-1319`）は `report.date` 単体が `YYYY/MM/DD` 形式であることを要求する。`field('date')` は `"12"` のような1〜2桁にしかならず、この検証を絶対に満たせない。KV モードには同じ検証が無く（`report.date` を月ラベルとしてそのまま使う設計）、Supabase モードを追加した際に**検証だけを足して、日付を結合する処理を足し忘れた**と推測される。
+- **Guardrail / Prevention**: F3（Supabase 経路の結線）で修正する。`extractReport()` で `year`/`date`/`day` を結合するか、`ponchi-engine.js:79` が既に管理している `heroDateInput.value`（ISO形式で最初から存在する）をそのまま使う。修正後、この経路を通す自動検査を追加すること（実ブラウザで新規カルテを1件公開できることを検査に含める）。
+- **Status**: OPEN（F3 で修正予定）
