@@ -266,3 +266,95 @@ test('photo() treats the data-empty marker as an empty slot', () => {
   );
   assert.match(body, /data-empty/, '空スロットの印 data-empty を見ていない');
 });
+
+/* ══════════════════════════════════════════════════════════════
+   トリマーの記入が黙って失われる4経路（D-20260824-30 の 1 / 2 / 6 / 7）
+
+   どれも「画面は何も言わないのに、打ち込んだ内容だけが消える」種類で、
+   現場では気づけない。壊れても実行時エラーにならないので、
+   ソースの形として押さえておく。
+   ══════════════════════════════════════════════════════════════ */
+const ponchiAppSource = fs.readFileSync(new URL('../src/js/ponchi-app.js', import.meta.url), 'utf8');
+const staffSource = fs.readFileSync(new URL('../src/js/supabase-staff.js', import.meta.url), 'utf8');
+
+function publishReportBody() {
+  const start = ponchiAppSource.indexOf('function publishReport(context)');
+  const end = ponchiAppSource.indexOf('function publishErrorMessage(err)');
+  assert.ok(start > 0 && end > start, 'publishReport() の本文を切り出せていない');
+  return ponchiAppSource.slice(start, end);
+}
+
+test('公開の再試行は、いま画面に入っている内容を送る（古い試行の内容を使い回さない）', () => {
+  const body = publishReportBody();
+  const transform = body.indexOf('replaceDataUrlAssets');
+  const retryGuard = body.indexOf('retry.petId !== slug');
+  assert.ok(transform > 0 && retryGuard > 0, '再試行まわりの目印が見つからない');
+  assert.ok(
+    transform < retryGuard,
+    'replaceDataUrlAssets が再試行判定の内側にある。'
+    + '公開に失敗 → 直して再確定、で直した内容が捨てられ「公開しました！」と出る',
+  );
+  assert.match(body, /retry\.data\s*=\s*transformed\.data/, '再試行時に data を今の内容へ更新していない');
+  assert.match(body, /retry\.assets\s*=\s*transformed\.assets/, '再試行時に assets を今の内容へ更新していない');
+});
+
+test('公開の失敗理由がトリマーに届く（何度押しても直らない種類を見分ける）', () => {
+  const start = ponchiAppSource.indexOf('function publishErrorMessage(err)');
+  const body = ponchiAppSource.slice(start, start + 3000);
+  assert.ok(start > 0, 'publishErrorMessage() が無い');
+  assert.match(body, /HEIC/, 'HEIC（何度やっても失敗する）を見分けていない');
+  assert.match(body, /10MB|10 ?MiB/, '写真が大きすぎる場合を見分けていない');
+  assert.match(body, /429/, 'レート制限を見分けていない');
+  assert.match(body, /401/, 'ログイン切れを見分けていない');
+});
+
+test('Worker が返した失敗理由を握りつぶさない', () => {
+  const start = staffSource.indexOf('async function readJson');
+  const body = staffSource.slice(start, staffSource.indexOf('function ensureDialogStyles'));
+  assert.ok(start > 0, 'readJson() が無い');
+  assert.match(body, /error\.reason/, 'サーバの {error} を呼び出し側へ渡していない');
+});
+
+test('下書きは写真を含めずに保存する（localStorage に入る大きさに保つ）', () => {
+  assert.match(publishClientSource, /extractDraft/, 'extractDraft が公開されていない');
+  assert.match(publishClientSource, /skipImages/, 'skipImages 経路が無い');
+  const start = publishClientSource.indexOf('function extractReport(opts)');
+  const end = publishClientSource.indexOf('function applyReport(report)');
+  const body = publishClientSource.slice(start, end);
+  assert.ok(start > 0 && end > start, 'extractReport() の本文を切り出せていない');
+  /* 画像を作る4経路すべてに skipImages の門が要る。1つでも漏れると
+     十数MBの data URL が localStorage へ向かい、保存が丸ごと失敗する。 */
+  const guarded = body.match(/!skipImages && window\.__SALTYDOG_(BM|TEETH|TC|TCN)\b/g) || [];
+  assert.equal(guarded.length, 4, `Konva の書き出し4面のうち ${guarded.length} 面しか止めていない`);
+  assert.doesNotMatch(body.slice(body.indexOf('return {')), /\bphoto\('/, '返り値が photo() を直接呼んでいる（skipImages を素通りする）');
+});
+
+test('下書きは確定できたときに消える（次回の誤復元を防ぐ）', () => {
+  assert.match(ponchiAppSource, /function finishDraftTracking/, 'finishDraftTracking が無い');
+  const body = publishReportBody();
+  const success = body.indexOf('finishDraftTracking()');
+  const notice = body.indexOf("'<p>公開しました！</p>'");
+  assert.ok(success > 0, '公開成功時に下書きを消していない');
+  assert.ok(notice > 0, '成功通知の組み立てが見つからない');
+  assert.ok(success < notice, '成功通知より後で消している（間に失敗すると下書きが残る）');
+});
+
+test('未確定のまま離れようとしたら確認が出る', () => {
+  assert.match(ponchiAppSource, /addEventListener\('beforeunload'/, '離脱確認が無い。戻るの誤タップ1回で記入が消える');
+  assert.match(ponchiAppSource, /_draftUnloadBound/, '離脱確認が二重に登録されうる');
+});
+
+test('確定済みカルテは読むだけにする（書けるのに保存できない状態を作らない）', () => {
+  const start = ponchiAppSource.indexOf('function lockFinalizedReport()');
+  const end = ponchiAppSource.indexOf('function showSupabaseDeleteBar');
+  const body = ponchiAppSource.slice(start, end);
+  assert.ok(start > 0 && end > start, 'lockFinalizedReport() が無い');
+  assert.match(body, /contentEditable\s*=\s*'false'/, 'contenteditable を落としていない');
+  assert.match(body, /is-readonly/, '編集UIを隠していない');
+  /* 入力の無効化は #screen-report の中だけ。body 全体に掛けると
+     犬の一覧の新規登録フォームまで死ぬ。 */
+  assert.doesNotMatch(body, /document\.querySelectorAll\('input/, '画面を限定せずに入力を無効化している');
+  /* 既存カルテを開く2経路（__REPORT__ 注入 / fetch 後）の両方で掛かること。 */
+  const calls = ponchiAppSource.match(/lockFinalizedReport\(\);/g) || [];
+  assert.equal(calls.length, 2, `既存カルテを開く2経路のうち ${calls.length} 経路でしか読み取り専用にしていない`);
+});

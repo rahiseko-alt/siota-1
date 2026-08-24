@@ -46,6 +46,129 @@
     return _reportContext;
   }
 
+  /* ════════════════════════════════════════════════════════════
+   * 下書きの自動保存（D-20260824-30 の 1）
+   *
+   * 記入内容は DOM とメモリにしか無く、サーバに draft ができるのは「確定」を押した後
+   * だけだった。カルテ画面の「戻る」は確認なしで遷移するので、**誤タップ1回で数十分の
+   * 記入がまるごと消える**。施術中のスリープ・着信・引っぱって更新でも同じで、しかも
+   * 消えたこと自体が分からない。
+   *
+   * 直し方は2段構え——(1)入力が止まったら localStorage に置く、(2)未確定のまま
+   * 離れようとしたらブラウザに確認させる。どちらもサーバを増やさずに済み、
+   * オフライン（施術室の電波が悪い）でも効く。
+   *
+   * 保存するのは文字と選択だけ（`extractDraft`）。写真と手描きは容量が桁違いで
+   * localStorage に入らないため保存しない——復元時に既存の写真を消さないよう、
+   * `applyReport` が空の画像キーを無視する性質にそのまま乗せている。
+   * ════════════════════════════════════════════════════════════ */
+  var DRAFT_PREFIX = 'saltydog:draft:';
+  var _draftPetId = null;
+  var _draftBaseline = null;   /* 空のカルテを写した状態。これと違えば「書きかけ」 */
+  var _draftTimer = null;
+  var _draftUnloadBound = false;
+
+  function draftKey(petId) { return DRAFT_PREFIX + String(petId || ''); }
+
+  function snapshotDraft() {
+    if (!window.SaltyDogPonchi || typeof window.SaltyDogPonchi.extractDraft !== 'function') return null;
+    try { return JSON.stringify(window.SaltyDogPonchi.extractDraft()); } catch (_e) { return null; }
+  }
+
+  /* 空のカルテと同じなら「書きかけ」ではない。既定値の一覧を持たずに済むよう、
+     クリア直後の姿を基準にして差分で見る。 */
+  function isDraftDirty(snapshot) {
+    return !!snapshot && !!_draftBaseline && snapshot !== _draftBaseline;
+  }
+
+  function saveDraftNow() {
+    if (!_draftPetId) return;
+    var snapshot = snapshotDraft();
+    try {
+      if (!isDraftDirty(snapshot)) { window.localStorage.removeItem(draftKey(_draftPetId)); return; }
+      /* 保存時刻は「いつの書きかけか」を尋ねるときに出す。差分判定には混ぜない
+         （毎回変わるので、何も書いていなくても常に dirty になってしまう）。 */
+      var withStamp = JSON.parse(snapshot);
+      withStamp.__savedAt = new Date().toLocaleString('ja-JP', {
+        month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit',
+      });
+      window.localStorage.setItem(draftKey(_draftPetId), JSON.stringify(withStamp));
+    } catch (_e) { /* 容量超過やプライベートモード。保存できなくても入力は続けさせる */ }
+  }
+
+  function clearDraft(petId) {
+    try { window.localStorage.removeItem(draftKey(petId || _draftPetId)); } catch (_e) {}
+  }
+
+  function readDraft(petId) {
+    try {
+      var raw = window.localStorage.getItem(draftKey(petId));
+      return raw ? JSON.parse(raw) : null;
+    } catch (_e) { return null; }
+  }
+
+  /**
+   * beginDraftTracking(petId)
+   * 新規カルテを開いたところで一度だけ呼ぶ。クリア直後の姿を基準に取り、
+   * 以降の入力を拾って保存する。
+   */
+  function beginDraftTracking(petId) {
+    if (!petId || _draftPetId === petId) return;
+    _draftPetId = petId;
+    _draftBaseline = snapshotDraft();
+
+    var sec = document.getElementById('screen-report');
+    if (!sec) return;
+    /* 入力（文字）とクリック（選択・トグル）の両方が記入。capture で拾えば
+       個々のUIに手を入れずに済む。1.2秒の間引きは、抽出が10行×4項目を走査するため。 */
+    var schedule = function () {
+      if (_draftTimer) window.clearTimeout(_draftTimer);
+      _draftTimer = window.setTimeout(saveDraftNow, 1200);
+    };
+    sec.addEventListener('input', schedule, true);
+    sec.addEventListener('change', schedule, true);
+    sec.addEventListener('click', schedule, true);
+
+    /* 離脱の確認。ブラウザは文言を出せないので、確認ダイアログが出ること自体が仕事。
+       書きかけでないときは邪魔をしない。犬を変えて2回目に入っても二重に登録しない。 */
+    if (_draftUnloadBound) return;
+    _draftUnloadBound = true;
+    window.addEventListener('beforeunload', function (e) {
+      if (!_draftPetId || !isDraftDirty(snapshotDraft())) return;
+      saveDraftNow();
+      e.preventDefault();
+      e.returnValue = '';
+    });
+  }
+
+  /** 確定できたので下書きは要らない。追跡も止める。 */
+  function finishDraftTracking() {
+    if (_draftTimer) { window.clearTimeout(_draftTimer); _draftTimer = null; }
+    if (_draftPetId) clearDraft(_draftPetId);
+    _draftPetId = null;
+    _draftBaseline = null;
+  }
+
+  /**
+   * offerDraftRestore(petId)
+   * 前回の書きかけが残っていれば、戻すかどうかを尋ねる。
+   * 勝手に戻さないのは、「新しいカルテを作るつもりで開いた」ときに前の内容が
+   * 出てくると、それに気づかず上書き公開してしまうため。
+   */
+  function offerDraftRestore(petId) {
+    var draft = readDraft(petId);
+    if (!draft) return false;
+    var when = draft.__savedAt ? '（' + draft.__savedAt + '）' : '';
+    if (!window.confirm('前回このワンちゃんで書きかけのカルテが残っています' + when
+      + '。\n続きから書きますか？\n\n※写真と手描きは戻りません（文字と選択だけ残しています）'
+      + '\n「キャンセル」を選ぶと、その書きかけは捨てて新しく書き始めます。')) {
+      clearDraft(petId);
+      return false;
+    }
+    if (window.SaltyDogPonchi) window.SaltyDogPonchi.applyReport(draft);
+    return true;
+  }
+
   /* ── ユーティリティ ──────────────────────────────────────── */
   function show(el)  { if (el) el.style.display = 'block'; }
   function hide(el)  { if (el) el.style.display = 'none'; }
@@ -958,9 +1081,11 @@
     if (reportId === 'new') {
       /* 同一セッションで既にクリア済みの場合（プレビュー→やり直しで戻った等）はスキップ */
       var clearKey = (slug || '') + '/new';
+      var justCleared = false;
       if (_clearedReportKey !== clearKey) {
         _clearedReportKey = clearKey;
         clearReport();
+        justCleared = true;
       }
       if (isSupabaseMode() && _reportContext) {
         var scopedPetName = document.querySelector('[data-field="pet"]');
@@ -969,6 +1094,15 @@
       /* 編集モードの場合は確定バーを表示 */
       if (isEditMode()) {
         showCommitBar(params);
+      }
+      /* 下書きの自動保存。基準（空のカルテ）を取ってから、残っていれば復元を尋ねる。
+         復元を尋ねるのは**今クリアしたときだけ**——プレビューから「やり直す」で
+         戻ってきた場合は画面に記入内容が載ったままなので、そこで尋ねると
+         「書きかけがあります」が二重に出て、しかも今の内容を上書きしかねない。
+         KV モードは配線しない——現行の契約に触れずに済ませる。 */
+      if (isSupabaseMode() && isEditMode() && slug) {
+        beginDraftTracking(slug);
+        if (justCleared) offerDraftRestore(slug);
       }
       return;
     }
@@ -980,7 +1114,10 @@
       if (isEditMode() && !isSupabaseMode()) {
         showCommitBar(params);
       }
-      if (isEditMode() && isSupabaseMode()) showSupabaseDeleteBar(slug, reportId);
+      if (isEditMode() && isSupabaseMode()) {
+        showSupabaseDeleteBar(slug, reportId);
+        lockFinalizedReport();   /* 削除バーを出した後に掛ける（isEditMode が false になる） */
+      }
       return;
     }
 
@@ -1009,7 +1146,10 @@
           if (isEditMode() && !isSupabaseMode()) {
             showCommitBar(params);
           }
-          if (isEditMode() && isSupabaseMode()) showSupabaseDeleteBar(slug, reportId);
+          if (isEditMode() && isSupabaseMode()) {
+            showSupabaseDeleteBar(slug, reportId);
+            lockFinalizedReport();   /* 削除バーを出した後に掛ける（isEditMode が false になる） */
+          }
         })
         .catch(function () {
           console.warn('[PonchiApp] report fetch failed:', slug, reportId);
@@ -1017,6 +1157,37 @@
           if (isEditMode() && !isSupabaseMode()) showCommitBar(params);
         });
     }
+  }
+
+  /**
+   * lockFinalizedReport()
+   *
+   * 確定済みカルテを「読むだけ」の状態にする。
+   *
+   * これを入れる前は、過去カルテを開くと本文が contenteditable のままで、指で触れば
+   * 普通に打ち込めた。ところが保存する手段は3層（クライアントの `isExistingEdit` 判定・
+   * store・RLS）すべてで塞がれており、**打ち込んでも離脱すれば黙って消える**。
+   * 「書けるのに保存できない」は現場の時間をそのまま捨てる（D-20260824-30 の 7）。
+   * 上書き保存は設計として存在しないので、**書けないほうに揃える**。
+   *
+   * 起動時の `__VIEW__` 経路（ponchi-engine.js）と同じ処理を、
+   * スタッフ画面で後から掛ける形。入力の無効化は #screen-report の中だけに限る——
+   * body 全体に掛けると犬の一覧の新規登録フォームまで死ぬ。
+   */
+  function lockFinalizedReport() {
+    var sec = document.getElementById('screen-report');
+    if (!sec) return;
+    document.body.classList.add('is-readonly');
+    sec.querySelectorAll('[contenteditable]').forEach(function (el) { el.contentEditable = 'false'; });
+    sec.querySelectorAll('input, textarea, select').forEach(function (el) { el.disabled = true; });
+
+    if (document.getElementById('ponchi-finalized-note')) return;
+    var note = document.createElement('p');
+    note.id = 'ponchi-finalized-note';
+    note.className = 'ponchi-finalized-note';
+    note.textContent = '確定済みのカルテです。内容は変更できません。'
+      + '書き直すときは、このカルテを削除してから作り直してください。';
+    sec.insertBefore(note, sec.firstChild);
   }
 
   function showSupabaseDeleteBar(petId, reportId) {
@@ -1347,23 +1518,25 @@
       /* isoDate は <input type="date"> の値なので、既に YYYY-MM-DD で確定している。 */
       var reportDate = isoDate;
       publishRequest = (async function () {
+        /* 再試行でも「今この画面に入っている内容」を送る。
+           以前はこの変換ごと `if` の中にあり、再試行時は**1回目に失敗したときの内容**を
+           送っていた。公開に失敗 → 原因を直す → もう一度「確定」、という現場で最も自然な
+           操作で、直した内容が黙って捨てられたうえ「公開しました！」と出ていた
+           （D-20260824-30 の 2）。使い回してよいのは draft 行だけである——毎回作ると
+           同じ日付の未確定カルテが溜まるので、そこだけ `if` に残す。 */
+        var transformed = await window.TrimmerSupabaseStorage.replaceDataUrlAssets(report);
         var retry = _supabaseDraftRetry;
         if (!retry || retry.petId !== slug || retry.reportDate !== reportDate) {
-          var transformed = await window.TrimmerSupabaseStorage.replaceDataUrlAssets(report);
           var created = await apiPost('/api/pets/' + pathSegment(slug) + '/reports', {
             petId: slug,
             reportDate: reportDate,
             data: {},
           });
-          retry = {
-            petId: slug,
-            reportDate: reportDate,
-            draft: created.report,
-            data: transformed.data,
-            assets: transformed.assets,
-          };
+          retry = { petId: slug, reportDate: reportDate, draft: created.report };
           _supabaseDraftRetry = retry;
         }
+        retry.data = transformed.data;
+        retry.assets = transformed.assets;
         await window.TrimmerSupabaseStorage.uploadReportAssets({
           client: window.TrimmerAuth.client,
           api: apiRequest,
@@ -1397,6 +1570,10 @@
     publishRequest
       .then(function (data) {
         var newId = (data && data.reportId) || '';
+        /* 確定できたので下書きは役目を終える。ここで消さないと、次に同じ犬の
+           新規カルテを開くたび「書きかけがあります」と誤って尋ねてしまう。
+           離脱確認もここで外れる（公開直後の遷移で確認が出ないように）。 */
+        finishDraftTracking();
         /* 確認バーを除去 */
         if (bar) bar.remove();
         /* Supabaseは認証済み顧客URL、KVデモ版は従来の公開URL */
@@ -1422,10 +1599,54 @@
           var msg2 = bar.querySelector('.ponchi-confirm-msg');
           if (msg2) msg2.textContent = 'これがお客様に届く内容です。よろしければ公開してください。';
         }
-        alert(isSupabaseMode() && _supabaseDraftRetry
-          ? '保存途中の下書きを残しました。同じ画面で、もう一度「確定」を押すと続きから再試行します。'
-          : '公開に失敗しました。もう一度お試しください。');
+        alert(publishErrorMessage(err));
       });
+  }
+
+  /**
+   * publishErrorMessage(err) → string
+   *
+   * 公開が失敗した理由をトリマーに伝える。以前は理由に関わらず
+   * 「公開に失敗しました。もう一度お試しください。」の一文だけを出していたが、
+   * **10MiB超の写真・HEIC・レート制限は、何度押しても同じように失敗する**種類なので、
+   * 「もう一度」と言われた現場は原因が分からないまま詰む（D-20260824-30 の 6）。
+   * 何をすれば通るのかまで書く。
+   */
+  function publishErrorMessage(err) {
+    var canResume = isSupabaseMode() && _supabaseDraftRetry;
+    var resume = canResume
+      ? '\n\n下書きは残っています。直したうえで、同じ画面でもう一度「確定」を押してください。'
+      : '';
+
+    /* 画像の検査（supabase-storage.js）は、そのまま出して意味の通る日本語を投げてくる。
+       HEIC は type が image/heic なので「JPEG, PNG, WebP のみ〜」に落ちる。 */
+    var msg = String((err && err.message) || '');
+    if (msg.indexOf('JPEG, PNG, WebP') === 0) {
+      return '写真の形式が対応外です（iPhone の HEIC はそのままでは使えません）。'
+        + 'カメラ設定を「互換性優先」にするか、JPEG で保存し直して入れ直してください。' + resume;
+    }
+    if (msg.indexOf('画像は10 MiB以下') === 0) {
+      return '写真が大きすぎます（1枚 10MB まで）。'
+        + '撮り直すか、小さいサイズで保存し直して入れ直してください。' + resume;
+    }
+    if (msg.indexOf('画像') === 0) return msg + '。' + resume;
+
+    var status = err && err.status;
+    if (status === 429) {
+      return '短い時間に送りすぎたため、サーバに止められました（10分あたりの上限）。'
+        + '10分ほど置いてから、もう一度「確定」を押してください。' + resume;
+    }
+    if (status === 401 || status === 403) {
+      return 'ログインの有効期限が切れています。'
+        + 'このページを再読み込みしてログインし直してから、もう一度お試しください。';
+    }
+    if (status === 413) return '内容が大きすぎて送れませんでした。写真を減らしてください。' + resume;
+    if (status >= 500) {
+      return 'サーバ側で失敗しました（' + status + '）。少し置いてからもう一度お試しください。' + resume;
+    }
+
+    var reason = err && err.reason ? '（' + err.reason + '）' : (status ? '（' + status + '）' : '');
+    return '公開に失敗しました' + reason + '。' + (resume || 'もう一度お試しください。');
   }
 
   /* ════════════════════════════════════════════════════════════

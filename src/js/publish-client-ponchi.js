@@ -72,7 +72,17 @@
 
   // ===== レポート抽出（DOM → 構造化 JSON: 契約#4 スキーマ）=====
   // extractReport() → applyReport(report) は対称写像
-  function extractReport() {
+  //
+  // opts.skipImages: 写真とKonva4面の書き出しを飛ばす（下書きの自動保存用）。
+  //   画像を入れると1カルテ十数MBになり localStorage の枠（約5MB）に入らないうえ、
+  //   exportImage() は描画アコーディオンを一度開いて reflow させるので、入力中に
+  //   毎回走らせると画面が動いてしまう。下書きに要るのは**打ち込んだ文字と選択**であり、
+  //   写真と手描きはページが飛べばどのみち失われる（ファイル参照が残らない）ので、
+  //   保存しないと決めた側に揃えてある。applyReport は画像キーが空なら触らないので、
+  //   復元時に既にある写真を消す事故も起きない。
+  function extractReport(opts) {
+    var skipImages = !!(opts && opts.skipImages);
+    function img(key) { return skipImages ? '' : photo(key); }
     // --- options[]: .opt.on クラスのリスト ---
     var options = [].map.call(document.querySelectorAll('.opt'), function (el) {
       return { on: el.classList.contains('on') };
@@ -100,7 +110,7 @@
     }
 
     // --- 描画アコーディオンを一時展開して exportImage を安定化させる ---
-    var drawAccs = [].slice.call(document.querySelectorAll('.hd-draw'));
+    var drawAccs = skipImages ? [] : [].slice.call(document.querySelectorAll('.hd-draw'));
     var prevOpen = drawAccs.map(function (d) { return d.open; });
     drawAccs.forEach(function (d) {
       if (!d.open) d.open = true;
@@ -112,26 +122,26 @@
 
     var bodyMarkingImage = '';
     try {
-      if (window.__SALTYDOG_BM && typeof window.__SALTYDOG_BM.exportImage === 'function') {
+      if (!skipImages && window.__SALTYDOG_BM && typeof window.__SALTYDOG_BM.exportImage === 'function') {
         bodyMarkingImage = window.__SALTYDOG_BM.exportImage() || '';
       }
     } catch (_e) { bodyMarkingImage = ''; }
 
     var teethDiagram = '';
     try {
-      if (window.__SALTYDOG_TEETH && typeof window.__SALTYDOG_TEETH.exportImage === 'function') {
+      if (!skipImages && window.__SALTYDOG_TEETH && typeof window.__SALTYDOG_TEETH.exportImage === 'function') {
         teethDiagram = window.__SALTYDOG_TEETH.exportImage() || '';
       }
     } catch (_e) { teethDiagram = ''; }
     var tcDiagram = '';
     try {
-      if (window.__SALTYDOG_TC && typeof window.__SALTYDOG_TC.exportImage === 'function') {
+      if (!skipImages && window.__SALTYDOG_TC && typeof window.__SALTYDOG_TC.exportImage === 'function') {
         tcDiagram = window.__SALTYDOG_TC.exportImage() || '';
       }
     } catch (_e) { tcDiagram = ''; }
     var tcnDiagram = '';
     try {
-      if (window.__SALTYDOG_TCN && typeof window.__SALTYDOG_TCN.exportImage === 'function') {
+      if (!skipImages && window.__SALTYDOG_TCN && typeof window.__SALTYDOG_TCN.exportImage === 'function') {
         tcnDiagram = window.__SALTYDOG_TCN.exportImage() || '';
       }
     } catch (_e) { tcnDiagram = ''; }
@@ -173,17 +183,17 @@
       bmTitle:   field('bm-title'),
       bodyMarkingImage: bodyMarkingImage,
       trimming: {
-        photos:  [photo('trim-1'), photo('trim-2')],
+        photos:  [img('trim-1'), img('trim-2')],
         comment: field('trimming-comment'),
       },
       bodyLanguage: {
         // B固有: 3枚（bl-1 / bl-2 / bl-3）← 契約#4 bodyLanguage.photos（従来bodyLanguage と共存）
-        photos:  [photo('bl-1'), photo('bl-2'), photo('bl-3')],
+        photos:  [img('bl-1'), img('bl-2'), img('bl-3')],
         comment: field('body-language-comment'),
       },
       teeth: {
         status:  teethPick ? (teethPick.dataset.teeth || '') : '',
-        photo:   photo('teeth-real'),
+        photo:   img('teeth-real'),
         diagram: teethDiagram,
         comment: field('teeth-comment'),
       },
@@ -195,15 +205,15 @@
         right:   earRight ? Number(earRight.dataset.val) : 0,
         left:    earLeft  ? Number(earLeft.dataset.val)  : 0,
         comment: field('ear-comment'),
-        photo:   photo('ear'),
+        photo:   img('ear'),
       },
       nail: {
         level:   nailPick ? Number(nailPick.dataset.nail) : 0,
         comment: field('nail-comment'),
       },
       // B固有 3 キー（契約#4 B固有部）
-      heroPhotos:         [photo('hero-1'), photo('hero-2')],
-      bodyLanguagePhotos: [photo('bl-1'), photo('bl-2'), photo('bl-3')],
+      heroPhotos:         [img('hero-1'), img('hero-2')],
+      bodyLanguagePhotos: [img('bl-1'), img('bl-2'), img('bl-3')],
       template:           'ponchi',
     };
   }
@@ -639,5 +649,7 @@
   window.SaltyDogPonchi = {
     extractReport: extractReport,
     applyReport:   applyReport,
+    /* 下書きの自動保存用。写真とKonva4面を含まない軽い抽出（extractReport の opts 参照）。 */
+    extractDraft:  function () { return extractReport({ skipImages: true }); },
   };
 })();

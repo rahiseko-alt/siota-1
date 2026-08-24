@@ -514,6 +514,19 @@ img[data-photo][data-empty="1"] {
 .is-readonly .ponchi-add-btn { display: none !important }
 .is-readonly .ponchi-inline-form { display: none !important }
 
+/* 確定済みカルテを開いたときの注意書き（lockFinalizedReport）。
+   触っても書けないことを、触る前に伝えるためのもの。 */
+.ponchi-finalized-note {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #f3ecfa;
+  border: 1px solid #d9c8ea;
+  color: var(--ink-soft, #6b5c78);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
 /* ══════════════════════════════════════════════════════════ */
 /* 皮膚スパ描画UI */
 .draw-section{position:relative}

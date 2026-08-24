@@ -69,6 +69,14 @@ async function readJson(client, path, options) {
   if (!response.ok) {
     const error = new Error(response.status === 401 ? 'authentication required' : 'not available');
     error.status = response.status;
+    /* Worker は失敗の理由を `{ error: "…" }` で返しているのに、ここで捨てていたため
+       呼び出し側は「何かに失敗した」しか分からなかった。トリマーに原因を出すには
+       status だけでは足りない（429 と 413 と HEIC はどれも「公開失敗」になる）ので、
+       本文も載せて渡す。表示に使うかどうかは呼び出し側が決める。 */
+    try {
+      const body = await response.clone().json();
+      if (body && typeof body.error === 'string') error.reason = body.error;
+    } catch (_) { /* 本文が JSON でないことは失敗時に普通に起きる。status だけで進む */ }
     throw error;
   }
   return response.json();
