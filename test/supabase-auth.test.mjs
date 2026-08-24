@@ -405,3 +405,20 @@ test('削除前の片付けは犬・飼い主の両方の導線に付いてい�
   assert.equal(calls.length, 3, `削除導線3つのうち ${calls.length} つにしか片付けが付いていない`);
   assert.ok(calls.includes("makePurge('owner'"), '飼い主の削除に片付けが付いていない');
 });
+
+test('途中で止まった削除が一覧から消えたままにならない', () => {
+  const storeSource = fs.readFileSync(
+    new URL('../worker/src/data-stores/supabase-data-store.js', import.meta.url), 'utf8',
+  );
+  const start = storeSource.indexOf('async getPet(petId)');
+  const body = storeSource.slice(start, storeSource.indexOf('async createPet'));
+  assert.ok(start > 0, 'getPet() が無い');
+  assert.doesNotMatch(body, /status=neq\.deleting/,
+    'getPet が deleting を隠している。写真ごと残るのに再試行へ到達できなくなる');
+  assert.match(ponchiAppSource, /function makeStuckDeletionRow/, '再試行の導線が無い');
+  const rowStart = ponchiAppSource.indexOf('function makeStuckDeletionRow');
+  const rowBody = ponchiAppSource.slice(rowStart, ponchiAppSource.indexOf('function renderArchiveList'));
+  assert.match(rowBody, /deleteReportAssets/, '再試行が削除の3ステップを呼んでいない');
+  /* 普通のカルテとして開かせない（中身は見えるが削除も編集もできない状態になる）。 */
+  assert.match(ponchiAppSource, /month\.status === 'deleting'/, '一覧で deleting を別扱いにしていない');
+});

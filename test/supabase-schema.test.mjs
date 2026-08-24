@@ -140,3 +140,34 @@ test('migration ledger RPC is admin-scoped and never grants direct table access'
   assert.match(sql, /revoke all on function public\.write_import_ledger[\s\S]*from public, anon/i);
   assert.doesNotMatch(sql, /grant (?:select|insert|update|delete).*import_ledger.*authenticated/i);
 });
+
+/* ══════════════════════════════════════════════════════════════
+   まとめ入力が自店舗のレート制限に当たっていた（D-20260824-30 の 5）
+
+   `consume_rate_limit` は上限表を関数の中に literal で持つので、
+   「最後に定義した 1 本」が実際に効く。マイグレーションを足したのに
+   古い方が残っている、を防ぐため**両方**を見る。
+   ══════════════════════════════════════════════════════════════ */
+const rateLimitMigrationUrl = new URL('../supabase/migrations/202607160006_rate_limit_batch_entry.sql', import.meta.url);
+
+test('アセット登録の上限が、まとめ入力に耐える幅になっている', async () => {
+  const sql = await readFile(rateLimitMigrationUrl, 'utf8');
+  assert.match(sql, /create or replace function public\.consume_rate_limit/, '関数を定義し直していない');
+  const row = sql.match(/\('asset_metadata',\s*(\d+),\s*(\d+)\)/);
+  assert.ok(row, 'asset_metadata の行が無い');
+  const [, limit, windowSeconds] = row.map(Number);
+  /* 1カルテ最大11アセット。10分で10カルテは書けるだけの幅が要る。 */
+  assert.ok(limit >= 11 * 10, `10分あたり ${limit} 回では ${Math.floor(limit / 11)} カルテしか入力できない`);
+  assert.equal(windowSeconds, 600);
+  /* 無制限にはしない——乗っ取られたスタッフ用アカウントへの歯止めでもある。 */
+  assert.ok(limit <= 1000, '上限が実質無くなっている');
+});
+
+test('古い上限を持つ定義が後から上書きし返していない', async () => {
+  const base = await migrationSql();
+  const older = base.match(/\('asset_metadata',\s*(\d+),/);
+  assert.ok(older, '基盤マイグレーションの asset_metadata が読めない');
+  /* 基盤（0001）→ 追加（0006）の順に適用されるので、後勝ちで 0006 が効く。
+     0001 を直接書き換えていないこと（Append-Only）も併せて確かめる。 */
+  assert.equal(Number(older[1]), 60, '基盤マイグレーションを書き換えている（適用済みDBと食い違う）');
+});

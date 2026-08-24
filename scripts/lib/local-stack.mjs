@@ -50,7 +50,13 @@ export async function ensureLocalSupabaseRunning() {
   throw new Error(
     'ローカル Supabase が起動していない（または起動直後で安定していない）。\n'
     + '先に `npx supabase start` を実行し、`curl http://127.0.0.1:54321/auth/v1/health` が\n'
-    + '応答することを確かめてから、この検査を実行すること。',
+    + '応答することを確かめてから、この検査を実行すること。\n'
+    + '\n'
+    + 'コンテナは全部 healthy なのにここで落ちる場合は、Kong の上流キャッシュを疑う。\n'
+    + '`supabase db reset` は auth / storage / realtime を作り直すが Kong はそのまま\n'
+    + '残るため、Kong が古い IP を掴んだままになり /auth/v1/health が 502 を返す。\n'
+    + '  docker restart supabase_kong_trimmer-system\n'
+    + 'で直る（20秒ほどで 200 になる）。実際に1度これで詰まった。',
   );
 }
 

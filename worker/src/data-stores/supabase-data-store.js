@@ -160,7 +160,13 @@ export class SupabaseDataStore {
     const encoded = encodeURIComponent(petId);
     const [pets, reports] = await Promise.all([
       this.request(`/rest/v1/pets?select=id,shop_id,owner_id,name,template,active,created_at,updated_at&id=eq.${encoded}&limit=1`),
-      this.request(`/rest/v1/reports?select=id,shop_id,pet_id,report_date,status,created_at,updated_at&pet_id=eq.${encoded}&status=neq.deleting&order=report_date.desc,created_at.desc`),
+      /* `deleting` も返す。以前は隠していたが、削除が途中で失敗するとカルテは
+         `deleting` のまま残り、**一覧から消えるだけで実体は残る**——写真ごと
+         残っているのに、画面からは再試行にも到達できなかった（D-20260824-30 の 10）。
+         隠すのをやめて、スタッフの一覧に「削除が途中で止まっています」として
+         出し、そこから再試行させる。飼い主側は別経路（RLS が `status='final'` を
+         要求する）なので、これで飼い主に見えるようにはならない。 */
+      this.request(`/rest/v1/reports?select=id,shop_id,pet_id,report_date,status,created_at,updated_at&pet_id=eq.${encoded}&order=report_date.desc,created_at.desc`),
     ]);
     return { ...this.one(pets), reports };
   }

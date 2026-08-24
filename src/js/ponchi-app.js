@@ -894,6 +894,48 @@
       });
   }
 
+  /**
+   * makeStuckDeletionRow(month, petId)
+   * 「削除が途中で止まっています」の行。押すと同じ3ステップをやり直す。
+   * `mark_report_deleting` は既に `deleting` の行も受け付ける（冪等）ので、
+   * 何度押しても壊れない。
+   */
+  function makeStuckDeletionRow(month, petId) {
+    var row = document.createElement('div');
+    row.className = 'archive-stuck';
+    row.setAttribute('data-report-id', month.reportId || '');
+
+    var text = document.createElement('p');
+    text.className = 'archive-stuck-text';
+    text.textContent = (month.dateLabel || month.date || 'このカルテ')
+      + ' は削除が途中で止まっています。写真が残ったままです。';
+    row.appendChild(text);
+
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'archive-stuck-retry ponchi-btn-redo';
+    btn.textContent = '削除をやり直す';
+    btn.addEventListener('click', function () {
+      btn.disabled = true;
+      btn.textContent = '削除中…';
+      window.TrimmerSupabaseStorage.deleteReportAssets({
+        client: window.TrimmerAuth.client,
+        api: apiRequest,
+        petId: petId,
+        reportId: month.reportId,
+      })
+        .then(function () { window.location.reload(); })
+        .catch(function (err) {
+          btn.disabled = false;
+          btn.textContent = '削除をやり直す';
+          console.error('[PonchiApp] stuck deletion retry failed:', err);
+          window.alert((err && err.message) ? err.message : '削除をやり直せませんでした。');
+        });
+    });
+    row.appendChild(btn);
+    return row;
+  }
+
   function renderArchiveList(listEl, months, slug, archiveParams) {
     listEl.innerHTML = '';
 
@@ -927,6 +969,14 @@
     }
 
     months.forEach(function (month) {
+      /* 削除が途中で止まったカルテ。実体（DB行と写真）は残っているのに、
+         以前は一覧から消えるだけで再試行にも到達できなかった（D-20260824-30 の 10）。
+         普通のカルテとして開かせると「中身は見えるが削除も編集もできない」になるので、
+         行ごと別扱いにして、やることを1つだけ出す。 */
+      if (isSupabaseMode() && isEditMode() && month.status === 'deleting') {
+        listEl.appendChild(makeStuckDeletionRow(month, slug));
+        return;
+      }
       listEl.appendChild(createListItem({
         icon:      '📋',
         label:     month.dateLabel || month.date || '',

@@ -87,6 +87,10 @@ try {
   await staff.click('.archive-new-btn');
   await staff.waitForSelector('#heroDateInput', { timeout: 20000 });
   /* 写真を1枚入れる。隠しファイル入力は写真スロットのクリックで開く。 */
+  /* 直接 click すると、確定バーなどに重なった瞬間に届かず 30秒で TimeoutError になる
+     （実際に2回踏んだ）。verify-m6 と同じく、先に視界へ入れてから押す。 */
+  await staff.evaluate(() => document.querySelector('img[data-photo="hero-1"]')?.scrollIntoView({ block: 'center' }));
+  await staff.waitForTimeout(300);
   await staff.click('img[data-photo="hero-1"]');
   await staff.setInputFiles('input[type="file"]', {
     name: 'hero.png', mimeType: 'image/png', buffer: PNG_8X8,
@@ -149,6 +153,10 @@ try {
   await staff.waitForSelector('.archive-new-btn', { timeout: 20000 });
   await staff.click('.archive-new-btn');
   await staff.waitForSelector('#heroDateInput', { timeout: 20000 });
+  /* 直接 click すると、確定バーなどに重なった瞬間に届かず 30秒で TimeoutError になる
+     （実際に2回踏んだ）。verify-m6 と同じく、先に視界へ入れてから押す。 */
+  await staff.evaluate(() => document.querySelector('img[data-photo="hero-1"]')?.scrollIntoView({ block: 'center' }));
+  await staff.waitForTimeout(300);
   await staff.click('img[data-photo="hero-1"]');
   await staff.setInputFiles('input[type="file"]', {
     name: 'hero.png', mimeType: 'image/png', buffer: PNG_8X8,
@@ -190,6 +198,74 @@ try {
   await staff.waitForTimeout(1500);
   const after2 = await countObjects(prefix2);
   check('飼い主ごと削除しても写真が残らない', after2 === 0, `${after2}件 残っている`);
+
+  // ── 途中で止まった削除から復帰できること（D-20260824-30 の 10）──
+  const PET3 = `途中で止まる犬${stamp}`;
+  await staff.goto(`${BASE}/edit`, { waitUntil: 'domcontentloaded' });
+  await staff.waitForSelector('.ponchi-new-karte-form', { timeout: 20000 });
+  await staff.fill('.ponchi-new-karte-form .ponchi-inline-input >> nth=0', PET3);
+  await staff.fill('.ponchi-new-karte-form .ponchi-inline-input >> nth=1', `途中${stamp}`);
+  await Promise.all([
+    staff.waitForURL(/\/edit\/p\//, { timeout: 20000 }),
+    staff.click('.ponchi-new-karte-form .ponchi-add-btn'),
+  ]);
+  const petId3 = staff.url().match(/\/edit\/p\/([0-9a-f-]{36})/)?.[1];
+  await staff.waitForSelector('.archive-new-btn', { timeout: 20000 });
+  await staff.click('.archive-new-btn');
+  await staff.waitForSelector('#heroDateInput', { timeout: 20000 });
+  /* 直接 click すると、確定バーなどに重なった瞬間に届かず 30秒で TimeoutError になる
+     （実際に2回踏んだ）。verify-m6 と同じく、先に視界へ入れてから押す。 */
+  await staff.evaluate(() => document.querySelector('img[data-photo="hero-1"]')?.scrollIntoView({ block: 'center' }));
+  await staff.waitForTimeout(300);
+  await staff.click('img[data-photo="hero-1"]');
+  await staff.setInputFiles('input[type="file"]', {
+    name: 'hero.png', mimeType: 'image/png', buffer: PNG_8X8,
+  });
+  await staff.waitForFunction(
+    () => document.querySelector('img[data-photo="hero-1"]')?.getAttribute('data-empty') === null,
+    { timeout: 15000 },
+  );
+  await staff.click('#ponchi-commit-ok');
+  await staff.waitForSelector('.ponchi-btn-pub', { timeout: 15000 });
+  await staff.click('.ponchi-btn-pub');
+  await staff.waitForSelector('#screen-magazine .magazine-container', { timeout: 20000 });
+  await staff.click('#screen-magazine .ponchi-btn-pub');
+  await staff.waitForSelector('.ponchi-publish-notice', { timeout: 40000 });
+  const reportUrl3 = await staff.evaluate(() => document.querySelector('.ponchi-pub-link')?.getAttribute('href') || '');
+  const reportId3 = reportUrl3.match(/\/reports\/([0-9a-f-]{36})/)?.[1];
+
+  /* 削除の1段目だけを踏んで、写真を消さずに中断した状態を作る。 */
+  const marked = await staff.evaluate(async ([pid, rid]) => {
+    const token = (await window.TrimmerAuth.client.auth.getSession()).data.session.access_token;
+    const r = await fetch(`/api/pets/${pid}/reports/${rid}/delete`, {
+      method: 'POST', headers: { Authorization: `Bearer ${token}` },
+    });
+    return r.status;
+  }, [petId3, reportId3]);
+  check('削除の1段目だけ踏んで中断できる（検査の前提）', marked === 200, `status=${marked}`);
+  const prefix3 = `${petShopId}/${petId3}`;
+  check('中断中: 写真はまだ Storage に残っている', await countObjects(prefix3) > 0);
+
+  await staff.goto(`${BASE}/edit/p/${petId3}`, { waitUntil: 'domcontentloaded' });
+  await staff.waitForSelector('.archive-list', { timeout: 25000 });
+  await staff.waitForTimeout(1500);
+  const stuck = await staff.evaluate(() => {
+    const el = document.querySelector('.archive-stuck');
+    return { shown: !!el, text: el?.textContent || '', retry: !!el?.querySelector('.archive-stuck-retry') };
+  });
+  check('中断したカルテが一覧に出る（消えたまま放置されない）', stuck.shown, stuck.text.slice(0, 40));
+  check('やり直す導線が出ている', stuck.retry);
+
+  if (stuck.retry) {
+    await Promise.all([
+      staff.waitForLoadState('load'),
+      staff.click('.archive-stuck-retry'),
+    ]);
+    await staff.waitForTimeout(3000);
+    check('やり直しで写真が消える', await countObjects(prefix3) === 0);
+    const stuckGone = await staff.evaluate(() => !document.querySelector('.archive-stuck'));
+    check('やり直し後は一覧から消える', stuckGone);
+  }
 } finally {
   if (browser) await browser.close();
   await stop();
