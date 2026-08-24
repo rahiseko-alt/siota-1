@@ -54,3 +54,4 @@ yarn-debug.log*
 *.swp
 *.swo
 .screens/
+.human/

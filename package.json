@@ -23,7 +23,8 @@
     "verify:invitation": "node scripts/build-dist.mjs && node scripts/verify-invitation.mjs",
     "verify:draft": "node scripts/build-dist.mjs && node scripts/verify-draft.mjs",
     "verify:delete": "node scripts/build-dist.mjs && node scripts/verify-delete.mjs",
-    "verify:screens": "node scripts/build-dist.mjs && node scripts/verify-screens.mjs"
+    "verify:screens": "node scripts/build-dist.mjs && node scripts/verify-screens.mjs",
+    "walk": "node scripts/build-dist.mjs && node scripts/walk-human.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.110.6",
