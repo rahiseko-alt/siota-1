@@ -145,6 +145,54 @@ try {
   });
   record('6 写真アップロードが反映される', photo.isData && photo.empty === null, `data-empty=${photo.empty}`);
 
+  // ── 6a. 大きい写真は取り込む時点で縮む（D-20260824-30 の 4）──
+  /* iPhone の原寸をそのまま持つと1カルテ十数MBになり、削除しても Storage からは
+     減らないので積み上がる。ここでは 3000x2000 を入れて、長辺 1600px 以下に
+     収まること・元より小さくなることを見る。小さい画像は拡大しないことも見る
+     （8x8 の PNG が引き伸ばされて汚れるのは、直すつもりの無い副作用）。 */
+  const bigPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'm6-big-')), 'big.png');
+  fs.writeFileSync(bigPath, png);   /* 実体は後で差し替える（下の evaluate で生成） */
+  const bigDataUrl = await page.evaluate(() => {
+    const c = document.createElement('canvas');
+    c.width = 3000; c.height = 2000;
+    const ctx = c.getContext('2d');
+    /* のっぺりした画像は JPEG で潰れすぎるので、ノイズを入れて実写に近づける。 */
+    const img = ctx.createImageData(c.width, c.height);
+    for (let i = 0; i < img.data.length; i += 4) {
+      img.data[i] = (i * 7) % 255; img.data[i + 1] = (i * 13) % 255;
+      img.data[i + 2] = (i * 29) % 255; img.data[i + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    return c.toDataURL('image/png');
+  });
+  fs.writeFileSync(bigPath, Buffer.from(bigDataUrl.split(',')[1], 'base64'));
+  await page.evaluate(() => document.querySelector('img[data-photo="teeth-real"]')?.scrollIntoView());
+  await page.waitForTimeout(300);
+  await page.locator('img[data-photo="teeth-real"]').click();
+  await page.waitForTimeout(300);
+  await page.locator('input[type=file]').first().setInputFiles(bigPath);
+  await page.waitForFunction(
+    () => document.querySelector('img[data-photo="teeth-real"]')?.getAttribute('data-empty') === null,
+    { timeout: 20000 },
+  ).catch(() => {});
+  const shrunk = await page.evaluate(async () => {
+    const el = document.querySelector('img[data-photo="teeth-real"]');
+    const src = el?.getAttribute('src') || '';
+    const probe = new Image();
+    await new Promise((resolve) => { probe.onload = resolve; probe.onerror = resolve; probe.src = src; });
+    return { w: probe.naturalWidth, h: probe.naturalHeight, len: src.length };
+  });
+  record('6a 大きい写真は取り込む時点で縮む',
+    shrunk.w > 0 && Math.max(shrunk.w, shrunk.h) <= 1600 && shrunk.len < bigDataUrl.length,
+    `${shrunk.w}x${shrunk.h} / ${(bigDataUrl.length / 1024 / 1024).toFixed(1)}MB→${(shrunk.len / 1024).toFixed(0)}KB`);
+  const small = await page.evaluate(async () => {
+    const el = document.querySelector('img[data-photo="ear"]');
+    const probe = new Image();
+    await new Promise((resolve) => { probe.onload = resolve; probe.onerror = resolve; probe.src = el?.getAttribute('src') || ''; });
+    return { w: probe.naturalWidth, h: probe.naturalHeight };
+  });
+  record('6a 小さい写真は引き伸ばさない', small.w === 8 && small.h === 8, `${small.w}x${small.h}`);
+
   // ── 6b. 体重の新規登録（旧 test/e2e/e2e-ponchi.spec.cjs E2E-4 の引き継ぎ）──
   await page.evaluate(() => document.getElementById('weightCard')?.scrollIntoView());
   const wcOpen = await page.evaluate(() => document.getElementById('weightCard')?.open);

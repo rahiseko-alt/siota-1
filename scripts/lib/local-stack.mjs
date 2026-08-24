@@ -54,6 +54,28 @@ export async function ensureLocalSupabaseRunning() {
   );
 }
 
+/**
+ * ローカルスタックの service_role key を `supabase status` から取る。
+ *
+ * **RLS を無視して見るためだけに使う。** 「消したはずの写真が本当に消えているか」は、
+ * RLS 越しには確かめられない——犬を消すと `storage_path_staff` が false になり、
+ * 残っていても残っていなくても同じ「見えない」になるからである。検査が
+ * 「見えない＝消えた」で満足してしまうと、まさに直したい不具合を見逃す。
+ *
+ * ハードコードしないのは、リポジトリに service_role と名の付く鍵を置かないため
+ * （ローカルの既定値は公開情報だが、本番の鍵と見分けにくい形で残したくない）。
+ */
+export async function localServiceRoleKey() {
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const { stdout } = await promisify(execFile)('npx', ['supabase', 'status', '-o', 'json'], {
+    maxBuffer: 4 * 1024 * 1024,
+  });
+  const key = JSON.parse(stdout).SERVICE_ROLE_KEY;
+  if (!key) throw new Error('supabase status から SERVICE_ROLE_KEY を読めなかった');
+  return key;
+}
+
 /** password grant でアクセストークンを取る。ログイン画面はGoogle認証のみを表示するので、
  * これはテスト専用の裏口（`supabase/seed.sql` 冒頭のコメント参照）。 */
 export async function passwordLogin(email, password = LOCAL_PASSWORD) {

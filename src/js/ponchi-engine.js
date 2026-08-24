@@ -776,18 +776,60 @@ renderSkinCards();
     fileInput.click();
   }
 
+  /* 取り込んだ写真を縮めてから持つ（D-20260824-30 の 4）。
+     iPhone の 12MP JPEG は 2〜4MB。カルテ1件で写真7枚まで入るので、無加工だと
+     十数MBになり、15件/日で月 7GB を超える（Supabase Free は 1GB・Pro でも 100GB）。
+     しかも削除しても Storage からは減らないので、入れた分だけ積み上がる。
+     カルテは手のひらの画面で見るものなので、長辺 1600px あれば足りる。
+
+     縮小だけで拡大はしない（元が小さい画像をぼかさない）。デコードできない形式
+     （HEIC など）は元のまま通し、これまでどおりアップロード側の検査に弾かせる——
+     ここで握り潰すと「なぜ失敗したか」が出せなくなる。 */
+  var MAX_PHOTO_EDGE = 1600;
+  var PHOTO_QUALITY = 0.82;
+
+  function shrinkPhoto(dataUrl, done){
+    var probe = new Image();
+    probe.onload = function(){
+      var w = probe.naturalWidth || probe.width;
+      var h = probe.naturalHeight || probe.height;
+      var longEdge = Math.max(w, h);
+      if(!longEdge || longEdge <= MAX_PHOTO_EDGE){ done(dataUrl); return; }
+      var scale = MAX_PHOTO_EDGE / longEdge;
+      var canvas = document.createElement('canvas');
+      canvas.width  = Math.max(1, Math.round(w * scale));
+      canvas.height = Math.max(1, Math.round(h * scale));
+      var ctx = canvas.getContext('2d');
+      if(!ctx){ done(dataUrl); return; }
+      var out = '';
+      try {
+        ctx.drawImage(probe, 0, 0, canvas.width, canvas.height);
+        out = canvas.toDataURL('image/jpeg', PHOTO_QUALITY);
+      } catch(_e){ out = ''; }
+      /* 縮めたのに大きくなる場合（元が高圧縮の小さいJPEGなど）は元を使う。 */
+      done(out && out.length < dataUrl.length ? out : dataUrl);
+    };
+    probe.onerror = function(){ done(dataUrl); };
+    probe.src = dataUrl;
+  }
+
   fileInput.addEventListener('change', function(){
     var file = fileInput.files && fileInput.files[0];
     if(!file || !_pendingImg) return;
     var reader = new FileReader();
     reader.onload = function(ev){
-      var src = ev.target.result;
-      _pendingImg.src = src;
-      /* 写真設定後はプレースホルダ属性を除去 */
-      _pendingImg.removeAttribute('data-empty');
-      _photoSlots[_pendingKey] = src;
+      /* 縮小は非同期。待っている間に別のスロットが選ばれても取り違えないよう、
+         対象をここで確定させておく。 */
+      var img = _pendingImg;
+      var key = _pendingKey;
       _pendingKey = null;
       _pendingImg = null;
+      shrinkPhoto(ev.target.result, function(src){
+        img.src = src;
+        /* 写真設定後はプレースホルダ属性を除去 */
+        img.removeAttribute('data-empty');
+        _photoSlots[key] = src;
+      });
     };
     reader.readAsDataURL(file);
   });

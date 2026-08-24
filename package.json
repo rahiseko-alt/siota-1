@@ -16,12 +16,13 @@
     "verify:xss": "node scripts/build-dist.mjs && node scripts/verify-xss.mjs",
     "verify:portal": "node scripts/build-dist.mjs && node scripts/verify-portal.mjs",
     "verify:migrations": "node scripts/verify-migrations.mjs",
-    "verify:all": "node scripts/build-dist.mjs && node scripts/verify-m6.mjs && node scripts/verify-report-roundtrip.mjs && node scripts/verify-invitation.mjs && node scripts/verify-draft.mjs && node scripts/verify-empty-pet.mjs && node scripts/verify-xss.mjs && node scripts/verify-portal.mjs",
+    "verify:all": "node scripts/build-dist.mjs && node scripts/verify-m6.mjs && node scripts/verify-report-roundtrip.mjs && node scripts/verify-invitation.mjs && node scripts/verify-draft.mjs && node scripts/verify-delete.mjs && node scripts/verify-empty-pet.mjs && node scripts/verify-xss.mjs && node scripts/verify-portal.mjs",
     "test:supabase:static": "node --test test/supabase-schema.test.mjs test/supabase-storage.test.mjs test/supabase-store.test.mjs test/supabase-auth.test.mjs",
     "test:supabase": "supabase test db",
     "test:migration": "node --test test/kv-migration.test.mjs",
     "verify:invitation": "node scripts/build-dist.mjs && node scripts/verify-invitation.mjs",
-    "verify:draft": "node scripts/build-dist.mjs && node scripts/verify-draft.mjs"
+    "verify:draft": "node scripts/build-dist.mjs && node scripts/verify-draft.mjs",
+    "verify:delete": "node scripts/build-dist.mjs && node scripts/verify-delete.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.110.6",

@@ -358,3 +358,50 @@ test('確定済みカルテは読むだけにする（書けるのに保存で�
   const calls = ponchiAppSource.match(/lockFinalizedReport\(\);/g) || [];
   assert.equal(calls.length, 2, `既存カルテを開く2経路のうち ${calls.length} 経路でしか読み取り専用にしていない`);
 });
+
+/* ══════════════════════════════════════════════════════════════
+   写真が積み上がる／消したのに残る（D-20260824-30 の 4 と 3）
+   ══════════════════════════════════════════════════════════════ */
+const engineSource = fs.readFileSync(new URL('../src/js/ponchi-engine.js', import.meta.url), 'utf8');
+const storageSource = fs.readFileSync(new URL('../src/js/supabase-storage.js', import.meta.url), 'utf8');
+
+test('取り込んだ写真は縮めてから持つ（拡大はしない）', () => {
+  const start = engineSource.indexOf('function shrinkPhoto(dataUrl, done)');
+  const end = engineSource.indexOf("fileInput.addEventListener('change'");
+  const body = engineSource.slice(start, end);
+  assert.ok(start > 0 && end > start, 'shrinkPhoto() が無い');
+  assert.match(body, /longEdge <= MAX_PHOTO_EDGE/, '元が小さい画像を素通しせず引き伸ばしうる');
+  assert.match(body, /toDataURL\('image\/jpeg'/, '再エンコードしていない（縮めても容量が減らない）');
+  assert.match(body, /out\.length < dataUrl\.length/, '縮めて大きくなった場合に元へ戻していない');
+  /* デコードできない形式（HEIC）はここで握り潰さず、アップロード側の検査へ通す。
+     握り潰すと「なぜ失敗したか」を出せなくなる（30 の 6 と噛み合わない）。 */
+  assert.match(body, /probe\.onerror[\s\S]{0,60}done\(dataUrl\)/, 'デコード失敗時に元を通していない');
+});
+
+test('写真の縮小は data URL のまま返す（保存経路が変わらない）', () => {
+  const start = engineSource.indexOf('function shrinkPhoto(dataUrl, done)');
+  const body = engineSource.slice(start, start + 1600);
+  assert.doesNotMatch(body, /createObjectURL/, 'blob: URL を src に入れている。photo() は data URL を前提にしている');
+});
+
+test('犬・飼い主を消す前に Storage を片付ける（順序を逆にすると触れなくなる）', () => {
+  assert.match(storageSource, /export async function purgePetAssets/, 'purgePetAssets が無い');
+  assert.match(storageSource, /export async function purgeOwnerAssets/, 'purgeOwnerAssets が無い');
+  const start = ponchiAppSource.indexOf('function makeDeleteBtn(confirmMsg, apiPath, aria, beforeDelete)');
+  const end = ponchiAppSource.indexOf('function makePurge(kind, id)');
+  const body = ponchiAppSource.slice(start, end);
+  assert.ok(start > 0 && end > start, 'makeDeleteBtn() が beforeDelete を受け取っていない');
+  const before = body.indexOf('beforeDelete()');
+  const del = body.indexOf("method: 'DELETE'");
+  assert.ok(before > 0 && del > before, 'DELETE より後に片付けている。FK カスケードで reports 行が消え、写真が誰からも触れなくなる');
+  /* 片付けに失敗したら DELETE を送らないこと。両者の間に .catch が挟まると
+     失敗が飲み込まれ、写真を残したまま DB 行だけ消えて回収不能になる。 */
+  assert.doesNotMatch(body.slice(before, del), /\.catch\(/,
+    '片付けと DELETE の間で失敗を飲み込んでいる。写真を残したまま行だけ消える');
+});
+
+test('削除前の片付けは犬・飼い主の両方の導線に付いている', () => {
+  const calls = ponchiAppSource.match(/makePurge\('(pet|owner)'/g) || [];
+  assert.equal(calls.length, 3, `削除導線3つのうち ${calls.length} つにしか片付けが付いていない`);
+  assert.ok(calls.includes("makePurge('owner'"), '飼い主の削除に片付けが付いていない');
+});

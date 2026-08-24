@@ -147,12 +147,19 @@ try {
       editable,
       enabledInputs,
       canDelete: !!document.getElementById('supabase-delete-report'),
+      /* is-readonly は編集UIを広く隠す。戻る導線まで隠すと、確定済みカルテを開いた
+         時点で行き止まりになる（ブラウザの戻るしか残らない）。 */
+      canGoBack: (() => {
+        const el = document.getElementById('reportBackBtn');
+        return !!el && window.getComputedStyle(el).display !== 'none';
+      })(),
     };
   });
   check('確定済みカルテ: 打ち込める場所が残っていない', locked.editable === 0, `編集可能=${locked.editable}`);
   check('確定済みカルテ: 入力欄も無効になっている', locked.enabledInputs === 0, `有効な入力=${locked.enabledInputs}`);
   check('確定済みカルテ: 変更できないと画面に出ている', locked.notice.includes('変更できません'), locked.notice.slice(0, 30));
   check('確定済みカルテ: 削除して作り直す手段は残っている', locked.canDelete);
+  check('確定済みカルテ: 戻る導線が消えていない（行き止まりにならない）', locked.canGoBack);
 } finally {
   if (browser) await browser.close();
   await stop();

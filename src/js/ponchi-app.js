@@ -336,7 +336,18 @@
   }
 
   /* 削除ボタン（飼い主/犬の行に付与・編集モードのみ）。確認→DELETE→リロード */
-  function makeDeleteBtn(confirmMsg, apiPath, aria) {
+  /**
+   * makeDeleteBtn(confirmMsg, apiPath, aria, beforeDelete)
+   *
+   * beforeDelete: DB 行を消す前に済ませておくこと（Promise を返す関数）。
+   *   Storage の写真の片付けがこれに当たる。**順序を逆にしてはいけない**——
+   *   Storage のポリシーは `reports` 行の存在を条件にしており、犬や飼い主を先に
+   *   消すと FK カスケードでその行が消え、写真は残るのに誰も触れなくなる
+   *   （詳細は supabase-storage.js の purgePetAssets）。
+   *   失敗したら DELETE を送らずに止める。中途半端に消えるより、何も消えずに
+   *   もう一度押せるほうがよい。
+   */
+  function makeDeleteBtn(confirmMsg, apiPath, aria, beforeDelete) {
     var del = document.createElement('button');
     del.type = 'button';
     del.className = 'owner-pet-del';
@@ -346,11 +357,32 @@
       e.stopPropagation();
       if (!window.confirm(confirmMsg)) return;
       del.disabled = true;
-      apiRequest(apiPath, { method: 'DELETE' })
+      Promise.resolve()
+        .then(function () { return beforeDelete ? beforeDelete() : null; })
+        .then(function () { return apiRequest(apiPath, { method: 'DELETE' }); })
         .then(function () { window.location.reload(); })
-        .catch(function () { del.disabled = false; window.alert('削除に失敗しました。もう一度お試しください。'); });
+        .catch(function (err) {
+          del.disabled = false;
+          console.error('[PonchiApp] delete error:', err);
+          window.alert(
+            (err && err.message && /写真|情報を読み取れ/.test(err.message))
+              ? err.message + '\n\n写真が消せなかったので、削除は行っていません。'
+              : '削除に失敗しました。もう一度お試しください。',
+          );
+        });
     });
     return del;
+  }
+
+  /** 犬・飼い主を消す前に Storage を片付ける関数を作る（Supabase モードのみ）。 */
+  function makePurge(kind, id) {
+    if (!isSupabaseMode() || !id || !window.TrimmerSupabaseStorage) return null;
+    return function () {
+      var args = { client: window.TrimmerAuth.client, api: apiRequest };
+      return kind === 'owner'
+        ? window.TrimmerSupabaseStorage.purgeOwnerAssets(Object.assign({ ownerId: id }, args))
+        : window.TrimmerSupabaseStorage.purgePetAssets(Object.assign({ petId: id }, args));
+    };
   }
 
   /* owner-pet-row + owner-pet-item + icon/name/arrow の共通DOM生成
@@ -503,8 +535,9 @@
         },
         onDelete:  function () {
           return makeDeleteBtn(
-            pet.petName + ' のカルテをすべて削除します。よろしいですか？',
-            '/api/pets/' + pathSegment(pet.id), pet.petName + ' を削除');
+            pet.petName + ' のカルテと写真をすべて削除します。よろしいですか？',
+            '/api/pets/' + pathSegment(pet.id), pet.petName + ' を削除',
+            makePurge('pet', pet.id));
         },
       });
       listEl.appendChild(row);
@@ -689,8 +722,9 @@
         },
         onDelete:  function () {
           return makeDeleteBtn(
-            pet.petName + ' のカルテをすべて削除します。よろしいですか？',
-            (isSupabaseMode() ? '/api/pets/' : '/api/customers/') + pathSegment(pet.slug), pet.petName + ' を削除');
+            pet.petName + ' のカルテと写真をすべて削除します。よろしいですか？',
+            (isSupabaseMode() ? '/api/pets/' : '/api/customers/') + pathSegment(pet.slug), pet.petName + ' を削除',
+            makePurge('pet', pet.slug));
         },
       }));
     });
@@ -786,8 +820,9 @@
         })(ow.ownerSlug),
         onDelete:  function () {
           return makeDeleteBtn(
-            ow.ownerName + ' と、その犬・カルテをすべて削除します。よろしいですか？',
-            '/api/owners/' + pathSegment(ow.ownerSlug), ow.ownerName + ' を削除');
+            ow.ownerName + ' と、その犬・カルテ・写真をすべて削除します。よろしいですか？',
+            '/api/owners/' + pathSegment(ow.ownerSlug), ow.ownerName + ' を削除',
+            makePurge('owner', ow.ownerSlug));
         },
       }));
     });
