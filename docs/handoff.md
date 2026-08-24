@@ -453,6 +453,15 @@ F4のローカルSupabase実機検証（D-20260823-18）を `scripts/lib/local-s
 | 3 | **空の写真スロットにページURLが保存され、飼い主に壊れた画像が届く** | ✅ 直した |
 | 4 | **スタッフが2人になると管理者の機能が全部 409 で死ぬ** | ✅ 直した |
 
+**4件とも本番へ反映済み（2026-08-24・Version `2911e465`）。** 直してコミットしただけでは
+実店舗には届かないので、`npx wrangler deploy --config worker/wrangler.supabase.toml` で
+`shiota0823` を更新し、**ローカルの検査結果を本番の根拠にしない**ため
+`https://trimmer-system.kouheikosehira.com` に実ブラウザで入って直接確かめた（**8/8 PASS**）——
+スタッフのログイン / 犬の一覧 / **犬の行3件すべてにQRボタンが在る**（行=3 ボタン=3）/
+押すと実際に招待URL（64桁）が発行される / QRが画像で出る / 空スロットがページURLを返さない /
+`/api/staff` が 200 / コンソールエラー0。旧KV版と新版の `workers.dev` が両方 404 であることも
+併せて確認した。検証で発行した招待1件は本番に残さないよう削除済み（D-20260824-32）。
+
 **1. 旧 KV Worker の無認証API（最重要）**
 F6 でカスタムドメインの route は Supabase 版へ移したが、**workers.dev のサブドメインは
 route とは別物**で塞がれていなかった。`saltydog-report-worker.rahiseko.workers.dev/api/customers`
