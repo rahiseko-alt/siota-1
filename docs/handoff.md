@@ -166,7 +166,16 @@ Google OAuth も犬一覧も RLS も Supabase 有効化後でないと動かせ�
 2. **`docs/ops/plans/2026-08-23-completion.md`** — 完成までのフェーズ F0〜F6・受け入れ条件・動線図
 3. **`docs/decisions.md`** — マスター決定・私の判断・未決事項の台帳（口頭で流さず必ずここに記録する運用に変更した）
 
-**現在地: F0〜F5 完了。ホスト済み環境でも①〜⑥が一周（8/8 PASS）。残るは F6（独自ドメイン切替）のみ。**
+**現在地: F0〜F6 すべて完了。計画の全体受け入れ条件7項目を達成した（2026-08-24）。**
+
+**`https://trimmer-system.kouheikosehira.com` は Supabase 版を配信している。**
+同ドメインで①〜⑥を実機で一周させ **9/9 PASS**。旧 KV 版 Worker
+（`saltydog-report-worker`）はルートを外して残してあり、切り戻せる（手順は
+`worker/wrangler.toml` のコメント）。
+
+**コードで解ける作業は残っていない。** 残るのは素材の出所確認
+（`docs/ASSET-PROVENANCE.md` の UNVERIFIED 15件・`docs/decisions.md` D-20260823-U1）で、
+これはマスターの手作業。
 
 **資格情報の在り処（重要・次セッションで探し回らないこと）**: `CLOUDFLARE_API_TOKEN` と
 Supabase の Management API token は、セッションの scratchpad
@@ -377,6 +386,33 @@ F4のローカルSupabase実機検証（D-20260823-18）を `scripts/lib/local-s
 （`supabase-auth.js`）と Worker 側（`auth-context.js`）の同名・同契約の関数を
 両方直し、両方を対象にした回帰テストを追加（テスト 67→68件）。ホスト済み環境で
 「未ログインで `/edit` → ログイン → `/edit` に戻り犬一覧3件」を実機確認済み。
+
+### F6 の結果（2026-08-24・独自ドメインで実機確認済み・9/9 PASS）
+
+**独自ドメイン `trimmer-system.kouheikosehira.com` を Supabase 版へ切り替えた。**
+
+- **Supabase の Site URL / Redirect URLs を独自ドメインへ**変更（Management API 経由）。
+  許可リストには workers.dev も残した——切り戻すときに設定を戻す手間を作らないため
+- **Cloudflare のルートはダウンタイムゼロで付け替えた**。`wrangler deploy` は既存の
+  ルートを削除しないので、設定ファイルの `[[routes]]` を書き換えるだけでは
+  切り替わらない（新 Worker のデプロイが `A route with the same pattern already
+  exists` で弾かれる）。Cloudflare API の
+  `PUT /zones/{zone}/workers/routes/{route_id}` で**ルートを消さず向き先だけ差し替えた**。
+  次に同じことをする人はこの方法を使うこと（`docs/decisions.md` D-20260823-26）
+- **旧 Worker は削除せず残っている**（D-20260823-09）。ルートを持たないのでドメインからは
+  呼ばれない。切り戻し手順は `worker/wrangler.toml` のコメントに書いた
+- Google OAuth 同意画面（D-20260823-07）は**既に本番公開済み**だった。Google 側の
+  Authorized redirect URI は `https://<project>.supabase.co/auth/v1/callback` 固定なので、
+  ドメイン変更の影響を受けない
+- **実機確認 9/9 PASS**: ①ドメイン応答（`/api/config` が `backend:"supabase"`）→②ログイン
+  →③犬の一覧（ポンチ/ムギ/レオが直接出る）→④カルテ作成→⑤確認ページ（マガジン意匠）
+  →公開→⑥顧客ページに同じ値が同じレンダラで出る／編集用フック0件／コンソールエラー0件。
+  DB 側も `status='final'`・`report_date` が実行日・`staff_note` 一致・`report_assets` 4件。
+  テストデータは Storage のファイルごと削除済み
+- **切り替え直後の1回目は `/edit` で「表示できません。」と落ちたが、再実行すると 9/9 で
+  通った**（その間コードもデータも変えていない。Node から直接 `/api/session`・`/api/pets`
+  を叩くとどちらも 200）。エッジ側の一時的な不安定さと判断した。**本番切替の直後に1回
+  落ちても、まず再実行して切り分けること。**
 
 統合に入る前に `docs/design.md` を読むこと。`finalize_report` が**4条件で黙って `null` を返す**ことなど、
 書き直しを選ばない理由が実物の確認つきで書いてある。

@@ -29,9 +29,18 @@ binding = "ASSETS"
 binding = "REPORTS"
 id = "50241192b25149eb8f846653ecae8f64"
 
-# ルート: 全パス（/*）を Worker が一本処理する構成。
-# 特定パス列挙（/p,/o,/api,/edit…）だと / 等が旧 Pages レイヤー（A 残骸）へフォールスルーするため、
-# /* に集約して route 漏れ構造そのものを消す。静的アセット(/js/*等)は [assets] fallthrough で配信。
-[[routes]]
-pattern = "trimmer-system.kouheikosehira.com/*"
-zone_name = "kouheikosehira.com"
+# ██ ルートは 2026-08-23（F6）に Supabase 版 Worker（shiota0823）へ移した。 ██
+#
+#   独自ドメイン trimmer-system.kouheikosehira.com/* を処理するのは
+#   worker/wrangler.supabase.toml の shiota0823 である。この KV 版 Worker
+#   （saltydog-report-worker）は**削除せず残してある**が、ルートを持たないので
+#   どのドメインからも呼ばれない（docs/decisions.md D-20260823-09）。
+#
+#   切り戻しが要る場合は、逆順で行う:
+#     1. wrangler.supabase.toml の [[routes]] を消して deploy（新から外す）
+#     2. 下の [[routes]] を復活させて deploy（旧に戻す）
+#     3. Supabase の Site URL / Redirect URLs を workers.dev へ戻す
+#
+# [[routes]]
+# pattern = "trimmer-system.kouheikosehira.com/*"
+# zone_name = "kouheikosehira.com"

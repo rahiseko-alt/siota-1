@@ -224,6 +224,22 @@
 - **Answer**: 元からあったレースが、修正で経路が変わったことで表面化しただけだった。3本の verify（m6・roundtrip・empty）は「未ログインで `/edit` を開く → セッションを注入 → reload」という手順を取っていたが、`/edit` を開いた瞬間 `bootStaffPortal()` が「セッションが無い」と判断して `/my` へ飛ばす処理が走っており、**注入とリダイレクトのどちらが先に着地するかで結果が変わる**状態だった。修正前はたまたま注入が先に勝って `/edit` に留まっていた。「たまたま通る検査」は検査として無価値なので、`openStaffPage()` を `scripts/lib/local-stack.mjs` に新設し、「先に `/my` でセッションを作ってから目的の画面へ入る」決定的な順序に統一した。ログインを省いているわけではなく、順序を固定しただけ
 - **Impact**: `verify-m6` / `verify-report-roundtrip` / `verify-empty-pet` の3本が同じヘルパーを使う。落ちた時に「実装の問題か検査の不安定さか」を切り分ける手間が消える
 
+### [D-20260823-26] F6: ダウンタイムゼロでルートを付け替えた
+
+- **Date**: 2026-08-24
+- **Kind**: claude-judgment
+- **Question**: 独自ドメインのルートを旧 KV 版 Worker から Supabase 版 Worker へ移す際、`wrangler deploy` で設定ファイルの `[[routes]]` を書き換える方法では「旧から外す→新に付ける」の順になり、その隙間でドメインが無応答になる。どう切り替えるか
+- **Answer**: そもそも `wrangler deploy` は**既存のルートを削除しない**ことが実際にやってみて分かった。旧 Worker の設定から `[[routes]]` を外してデプロイしてもルートは残り、新 Worker のデプロイが `A route with the same pattern already exists` で弾かれた（この時点でサービスは落ちていない）。そこで Cloudflare API の `PUT /zones/{zone}/workers/routes/{route_id}` で、ルートを消さずに**向き先（`script`）だけを差し替えた**。削除と作成の隙間が生まれないので、**ダウンタイムゼロ**で切り替わった
+- **Impact**: `worker/wrangler.toml` の `[[routes]]` はコメントアウトして切り戻し手順を書き添えた（設定ファイルと実際のルートの食い違いを残さないため）。`worker/wrangler.supabase.toml` には `[[routes]]` を実際に追加した。**次に同じことをする人へ**: `wrangler deploy` だけでルートの付け替えは完結しない。API で `script` を差し替えるのが正しい
+
+### [D-20260823-27] F6 完了。全体の受け入れ条件7項目すべて達成
+
+- **Date**: 2026-08-24
+- **Kind**: claude-judgment
+- **Question**: F0〜F6 が完了し、計画の「全体の受け入れ条件」7項目は満たされたか
+- **Answer**: 満たされた。①〜⑥が独自ドメインで実機一周（9/9 PASS）、13項目の往復（19/19）、RLS の実証（別アカウントで確認）、空状態（7/7）、XSS（7/7）、`build`/`check`/`test`（68件）/`verify:all`（61/61）が全て EXIT 0、記録も `docs/handoff.md` にある。Supabase の Site URL / Redirect URLs は独自ドメインへ変更済み（許可リストに workers.dev も残し、切り戻しの手間を作らない）。Google OAuth 同意画面（D-20260823-07）は既に本番公開済みだった
+- **Impact**: **コードで解ける作業は残っていない。** 残るのは `docs/ASSET-PROVENANCE.md` の出所不明素材15件（D-20260823-U1）で、これはマスターの手作業。切り戻しが要る場合の手順は `worker/wrangler.toml` のコメントにある
+
 ---
 
 ## 未決事項（マスター判断待ち）

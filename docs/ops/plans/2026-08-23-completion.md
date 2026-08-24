@@ -330,17 +330,55 @@ Supabase版の経路は上記5本が実DB・実RLS込みで既にカバーして
 | 同ドメインで6段階を一周 | 全て通る |
 | 旧 Worker | 残っているがルート無し（切り戻せる） |
 
+**【完了・2026-08-24】**
+
+実施内容:
+1. **Supabase の Site URL / Redirect URLs を独自ドメインへ**（Management API 経由）。
+   許可リストには workers.dev も残した——切り戻すときに設定を戻す手間を作らないため
+2. **Cloudflare のルートを付け替えた**。`wrangler deploy` は既存ルートを消さないので
+   （旧 Worker の設定から `[[routes]]` を外してデプロイしても route は残り、新 Worker
+   のデプロイが `A route with the same pattern already exists` で弾かれた）、
+   Cloudflare API で **ルートの向き先（script）だけを PUT で差し替えた**。
+   これにより「削除→作成」の隙間が生まれず、**ダウンタイムゼロ**で切り替わった
+3. 旧 Worker `saltydog-report-worker` は**削除せず残っている**（D-20260823-09）。
+   ルートを持たないのでドメインからは呼ばれない。切り戻し手順は
+   `worker/wrangler.toml` のコメントに書いた
+4. Google OAuth 同意画面（D-7）は**既に本番公開済み**だった（`/auth/v1/settings` が
+   `"google":true` を返す。マスターが以前に設定済み）。Google 側の Authorized redirect URI は
+   `https://<project>.supabase.co/auth/v1/callback` 固定なので、ドメイン変更の影響を受けない
+
+**受け入れ条件の確認状況**:
+| 検証 | 結果 |
+|---|---|
+| `https://trimmer-system.kouheikosehira.com/api/config` | ✅ `{"backend":"supabase",...}`（KV版ではない） |
+| **同ドメインで①〜⑥を一周** | ✅ **9/9 PASS**（実ブラウザ）。①ドメイン応答→②ログイン→③犬の一覧（ポンチ/ムギ/レオが直接出る）→④カルテ作成→⑤確認ページ（マガジン意匠）→公開→⑥顧客ページに同じ値が同じレンダラで出る／編集用フック0件／コンソールエラー0件 |
+| ホスト済み DB の保存内容 | ✅ `status='final'`・`report_date` が実行日・`staff_note` が記入値と一致・`report_assets` 4件（Storage への実アップロード成功）。テストデータは Storage のファイルごと削除済み |
+| 旧 Worker | ✅ 残存（`saltydog-report-worker.rahiseko.workers.dev` は 200 を返す）がルート無し |
+
+**注意（同じことで詰まらないために）**: 切り替え直後の1回目の検証は `/edit` で
+「表示できません。」となって落ちたが、同じ検証を再実行すると 9/9 で通り、その間に
+コードもデータも変えていない。Node から直接 `/api/session`・`/api/pets` を叩くと
+どちらも 200 だったことも確認済み。**切り替え直後のエッジ側の不安定さ**と判断した。
+本番切替の直後に1回落ちても、まず再実行して切り分けること。
+
 ---
 
 ## 全体の受け入れ条件（これが満たされたら「完成」）
 
-1. `https://trimmer-system.kouheikosehira.com` で、①〜⑥が**実機で一周する**
-2. トリマーが書いた13項目が、飼い主の画面に**同じ値で**出る（`verify:roundtrip`）
-3. 他人の犬・未確定カルテが**見えない**（RLS の実証）
-4. カルテ0件の犬に**架空の履歴が出ない**（`verify:empty`）
-5. 保存データが飼い主のブラウザで**実行されない**（`verify:xss`）
-6. `npm run build` / `check` / `test` / `verify:all` が全て EXIT 0
-7. 上記1〜6が `docs/handoff.md` に、再現手順つきで記録されている
+**【全項目 達成・2026-08-24】**
+
+| # | 条件 | 結果 |
+|---|---|---|
+| 1 | `https://trimmer-system.kouheikosehira.com` で①〜⑥が**実機で一周する** | ✅ **9/9 PASS**（F6・実ブラウザ） |
+| 2 | トリマーが書いた13項目が飼い主の画面に**同じ値で**出る | ✅ `verify:roundtrip` 19/19 PASS |
+| 3 | 他人の犬・未確定カルテが**見えない**（RLS の実証） | ✅ `verify:roundtrip`・`verify:portal` の両方で別アカウントから確認 |
+| 4 | カルテ0件の犬に**架空の履歴が出ない** | ✅ `verify:empty` 7/7 PASS |
+| 5 | 保存データが飼い主のブラウザで**実行されない** | ✅ `verify:xss` 7/7 PASS |
+| 6 | `build` / `check` / `test` / `verify:all` が全て EXIT 0 | ✅ test 68件・`verify:all` 61/61 PASS |
+| 7 | 上記1〜6が `docs/handoff.md` に再現手順つきで記録されている | ✅ 記録済み |
+
+**残っているのはコードでは解けない1件だけ**: 素材の出所確認（`docs/ASSET-PROVENANCE.md`
+の `UNVERIFIED` 15件・`docs/decisions.md` D-20260823-U1）。マスターの手作業が要る。
 
 ---
 

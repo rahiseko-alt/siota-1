@@ -13,6 +13,15 @@ name = "shiota0823"
 main = "src/index.js"
 compatibility_date = "2025-01-01"
 
+# 独自ドメイン（F6・2026-08-23）。ここを処理していた KV 版 Worker
+# （saltydog-report-worker）はルートを外して残してある——切り戻せる状態を
+# 捨てない（docs/decisions.md D-20260823-09）。切り戻し手順は
+# worker/wrangler.toml のコメントに書いてある。
+# 全パス（/*）を Worker が一本で処理する。静的アセットは [assets] fallthrough で配信。
+[[routes]]
+pattern = "trimmer-system.kouheikosehira.com/*"
+zone_name = "kouheikosehira.com"
+
 [assets]
 directory = "../dist"
 binding = "ASSETS"
