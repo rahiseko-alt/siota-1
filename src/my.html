@@ -262,6 +262,15 @@
     <div class="top-nav__container">
       <div class="top-brand">SALTY DOG カルテ</div>
       <div class="top-nav__actions">
+        <!--
+          スタッフ（トリマー）にだけ出す、自分の作業画面への入口。
+          スタッフ「だけ」の人は supabase-auth.js が /edit へ自動で飛ばすが、
+          **スタッフかつ飼い主のアカウント**（D-20260823-06 = マスター自身）は
+          その条件を外れて /my に留まる。ところが / にも /my にも /edit への
+          リンクが1つも無かったため、URL を手打ちしない限りトリマー画面に
+          行けなかった。招待ボタンと同じ「機能はあるがどこからも辿れない」欠陥。
+        -->
+        <a href="/edit" class="top-nav-btn" data-staff-link hidden>カルテを書く</a>
         <button type="button" class="top-nav-btn" data-sign-out hidden>ログアウト</button>
         <a href="/" class="top-nav-btn">TOPへ戻る</a>
       </div>

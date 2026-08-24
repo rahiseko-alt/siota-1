@@ -191,7 +191,10 @@ test('my.html carries every DOM hook bootProtectedPortal looks up', () => {
   const hooks = [...bootSource.matchAll(/document\.querySelector\('\[([\w-]+)\]'\)/g)].map((m) => m[1]);
   assert.deepEqual(
     hooks,
-    ['data-portal-status', 'data-login-panel', 'data-portal-content', 'data-google-login', 'data-sign-out'],
+    ['data-portal-status', 'data-login-panel', 'data-portal-content', 'data-google-login', 'data-sign-out',
+      /* スタッフかつ飼い主のときだけ出す、トリマー画面への入口。これが無いと、
+         その人は /my に留まったまま自分の作業画面へ行けない（D-20260824-37）。 */
+      'data-staff-link'],
   );
   for (const hook of hooks) {
     assert.ok(hasAttribute(portalHtml, hook), `src/my.html に ${hook} が無い`);
@@ -421,4 +424,43 @@ test('途中で止まった削除が一覧から消えたままにならない',
   assert.match(rowBody, /deleteReportAssets/, '再試行が削除の3ステップを呼んでいない');
   /* 普通のカルテとして開かせない（中身は見えるが削除も編集もできない状態になる）。 */
   assert.match(ponchiAppSource, /month\.status === 'deleting'/, '一覧で deleting を別扱いにしていない');
+});
+
+/* ══════════════════════════════════════════════════════════════
+   スタッフかつ飼い主のアカウントが、トリマー画面へ行けなかった（D-20260824-37）
+
+   `memberships > 0 && ownerLinks === 0` のときだけ /edit へ自動で飛ばす作りで、
+   **両方持っている人**（D-20260823-06 でそう決めた本番のマスター自身）は
+   /my に留まる。ところが / にも /my にも /edit へのリンクが1つも無く、
+   URL を手打ちしない限り仕事を始められなかった。
+   ══════════════════════════════════════════════════════════════ */
+test('スタッフには /my からトリマー画面への入口を出す', () => {
+  const auto = bootSource.indexOf("location.replace('/edit')");
+  const link = bootSource.indexOf('[data-staff-link]');
+  assert.ok(auto > 0, 'スタッフ専用アカウントの自動遷移が無い');
+  assert.ok(link > auto, '自動遷移を外れた人（スタッフかつ飼い主）への入口が無い');
+  /* 出す条件は「スタッフであること」だけ。ownerLinks を条件に混ぜると、
+     まさに穴に落ちていた組み合わせがまた漏れる。 */
+  const guard = bootSource.slice(bootSource.lastIndexOf('if (', link), link);
+  assert.match(guard, /memberships \|\| \[\]\)\.length > 0/, 'スタッフ判定になっていない');
+  assert.doesNotMatch(guard, /ownerLinks/, '飼い主かどうかを条件に混ぜている（穴が再発する）');
+  assert.match(portalHtml, /data-staff-link[^>]*hidden/, '既定で隠れていない（飼い主に見えてしまう）');
+  assert.match(portalHtml, /href="\/edit"[^>]*data-staff-link|data-staff-link[^>]*href="\/edit"/, '/edit を指していない');
+});
+
+test('検査用の fixture に「スタッフかつ飼い主」が居る', async () => {
+  const seed = fs.readFileSync(new URL('../supabase/seed.sql', import.meta.url), 'utf8');
+  const stack = fs.readFileSync(new URL('../scripts/lib/local-stack.mjs', import.meta.url), 'utf8');
+  /* この組み合わせの fixture が無かったので、検査5本すべてが穴を素通りした。 */
+  assert.match(seed, /staff-owner@local\.test/, 'seed にスタッフかつ飼い主のアカウントが無い');
+  assert.match(stack, /staffOwnerEmail/, 'FIXTURE から参照できない');
+  const userId = '20000000-0000-0000-0000-0000000000c1';
+  assert.ok(
+    new RegExp(`shop_memberships[\\s\\S]*${userId}`).test(seed),
+    'そのアカウントがスタッフになっていない',
+  );
+  assert.ok(
+    new RegExp(`owner_users[\\s\\S]*${userId}`).test(seed),
+    'そのアカウントが飼い主になっていない',
+  );
 });

@@ -16,6 +16,7 @@
  *   owner-a@local.test — 犬 X/Y/Z の飼い主（スタッフではない）
  *   owner-b@local.test — 犬 Q の飼い主（スタッフではない）
  *   uninvited@local.test — どの犬にも紐付いていない飼い主
+ *   staff-owner@local.test — **スタッフかつ飼い主**（本番のマスター自身と同じ形・D-20260823-06）
  * パスワードはどれも同じ: LocalOnly-Password-2026!（本番の秘密情報ではない）
  */
 
@@ -35,6 +36,9 @@ export const FIXTURE = {
   ownerBEmail: 'owner-b@local.test',
   ownerBOwnerId: '30000000-0000-0000-0000-0000000000b1',
   uninvitedEmail: 'uninvited@local.test',
+  /* スタッフかつ飼い主。本番のマスター自身がこの形（D-20260823-06）。
+     この組み合わせだけが /my に留まるので、導線の穴はここでしか出ない。 */
+  staffOwnerEmail: 'staff-owner@local.test',
   petX: '40000000-0000-0000-0000-0000000000a1', // owner-a
   petY: '40000000-0000-0000-0000-0000000000a2', // owner-a
   petZ: '40000000-0000-0000-0000-0000000000a3', // owner-a

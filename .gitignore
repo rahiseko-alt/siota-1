@@ -53,3 +53,4 @@ yarn-debug.log*
 !.vscode/extensions.json
 *.swp
 *.swo
+.screens/

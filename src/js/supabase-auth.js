@@ -251,6 +251,14 @@ export async function bootProtectedPortal() {
       location.replace('/edit');
       return;
     }
+    /* スタッフかつ飼い主のアカウントは上の分岐を外れて /my に留まる。ところが
+       `/` にも `/my` にも `/edit` へのリンクが1つも無く、**URL を手打ちしない限り
+       トリマー画面に行けなかった**。ログイン後の着地はここなので、ここに入口を出す。
+       （D-20260823-06 で管理者を飼い主にも紐付けた結果、いちばん現実に使う
+       アカウントだけがこの穴に落ちていた。） */
+    if ((session.memberships || []).length > 0) {
+      show(document.querySelector('[data-staff-link]'), true);
+    }
     await loadProtectedResource(supabase, route, content);
     sessionStorage.removeItem('auth_reload_once');
     show(loginPanel, false);
