@@ -16,6 +16,9 @@
  */
 
 import { chromium } from 'playwright';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { startLocalWorker, injectSession, passwordLogin, openStaffPage, FIXTURE, LOCAL_PASSWORD } from './lib/local-stack.mjs';
 
 const CHROME = process.env.M6_CHROMIUM;
@@ -114,6 +117,38 @@ try {
   await pick(`.ear-cell[data-ear="left"][data-val="${INPUT.earLeft}"]`);
   await pick(`.nail-lv[data-nail="${INPUT.nail}"]`);
 
+  /* 写真を1枚だけ入れる。**残りのスロットは意図的に空のままにする。**
+     ここが要点で、空スロットの抽出が `img.src`（プロパティ）だと、ブラウザは空文字ではなく
+     現在のページURLを返すため、使わなかったスロット全部に
+     `https://.../edit/p/{petId}` が保存され、飼い主の画面に壊れた画像が並ぶ。
+     1枚だけ入れて「入れたものは届く／入れなかったものは何も出ない」を同時に見る。 */
+  const pngPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'rt-')), 'hero.png');
+  fs.writeFileSync(pngPath, Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAI0lEQVQoU2NkYGD4z0AEYBxVSFJ4jCo'
+    + 'kKTxGFZIUHqMKSQoPAGa2Awtc4h1sAAAAAElFTkSuQmCC', 'base64'));
+  await page.evaluate(() => document.querySelector('img[data-photo="hero-1"]')?.scrollIntoView());
+  await page.click('img[data-photo="hero-1"]');
+  await page.locator('input[type=file]').first().setInputFiles(pngPath);
+  await page.waitForFunction(
+    () => (document.querySelector('img[data-photo="hero-1"]')?.src || '').startsWith('data:image'),
+    null, { timeout: 10000 },
+  );
+
+  /* 抽出した時点で、空スロットにページURLが混ざっていないこと。
+     ここで捕まえておくと、DBに入る前に落とせる。 */
+  const extracted = await page.evaluate(() => {
+    const r = window.SaltyDogPonchi.extractReport();
+    const all = [].concat(r.heroPhotos || [], (r.trimming || {}).photos || [],
+      (r.bodyLanguage || {}).photos || [], [(r.ear || {}).photo], [(r.teeth || {}).photo]);
+    return {
+      filled: all.filter((v) => typeof v === 'string' && v.startsWith('data:image')).length,
+      pageUrls: all.filter((v) => typeof v === 'string' && /^https?:\/\//.test(v)),
+    };
+  });
+  check('写真: 入れた1枚が抽出される', extracted.filled >= 1 ? 'ok' : `${extracted.filled}枚`, 'ok');
+  check('写真: 空スロットにページURLが混ざらない',
+    extracted.pageUrls.length === 0 ? 'ok' : `混入 ${extracted.pageUrls.length}件: ${extracted.pageUrls[0]}`, 'ok');
+
   // 確定 → プレビューを確認(showMagazinePreview) → 確定（公開）
   await page.click('#ponchi-commit-ok');
   await page.waitForSelector('.ponchi-btn-pub', { timeout: 10000 });
@@ -153,6 +188,15 @@ try {
   check('爪のコメント', seenText.includes(INPUT.nailComment) ? INPUT.nailComment : '(欠落)', INPUT.nailComment);
   check('歯のコメント', seenText.includes(INPUT.teethComment) ? INPUT.teethComment : '(欠落)', INPUT.teethComment);
   check('担当からの一言', seenText.includes(INPUT.staffNote) ? INPUT.staffNote : '(欠落)', INPUT.staffNote);
+
+  /* 飼い主の画面に壊れた画像が出ていないこと。空スロットがページURLとして保存されると、
+     ここに <img src="https://.../edit/p/{petId}"> が並び、読み込めない枠だけが出る。 */
+  const ownerImgs = await ownerPage.evaluate(() => [...document.querySelectorAll('.magazine-container img')]
+    .map((el) => el.getAttribute('src') || ''));
+  check('飼い主画面: 壊れた画像（ページURL）が出ていない',
+    ownerImgs.filter((src) => /^https?:\/\/[^/]+\/(edit|my)\//.test(src)).length === 0 ? 'ok' : `混入 ${JSON.stringify(ownerImgs.slice(0, 2))}`, 'ok');
+  check('飼い主画面: 入れた写真が1枚届く',
+    ownerImgs.filter((src) => src.startsWith('blob:') || src.startsWith('data:image')).length >= 1 ? 'ok' : `${ownerImgs.length}枚`, 'ok');
 
   const noEditHooks = await ownerPage.evaluate(() => document.querySelectorAll('[data-field]').length === 0);
   check('飼い主画面に編集用フック(data-field)が無い', noEditHooks ? 'ok' : 'あり', 'ok');

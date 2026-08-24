@@ -85,10 +85,22 @@ export class SupabaseDataStore {
     return rows[0];
   }
 
+  /**
+   * この利用者が所属する店舗を1つに決める。2つ以上あれば「どの店舗か」を決められないので 409。
+   *
+   * **`user_id` で必ず絞ること。** RLS の `memberships_authorized_select` は
+   * `user_id = auth.uid() or private.is_shop_admin(shop_id)` なので、**管理者には店舗の
+   * 全メンバー行が返る**。以前ここに `user_id` フィルタが無く、スタッフが2人になった
+   * 瞬間に管理者だけが 409 になっていた——飼い主の新規作成・招待の発行と一覧・
+   * スタッフ管理（＝退職者の停止）が全部使えなくなる。日々のカルテ作成は
+   * この関数を通らないので、しばらく気づけない類の壊れ方だった。
+   */
   async getStaffShopId() {
     if (this.staffShopId) return this.staffShopId;
+    if (!this.userId) throw new StoreError(401, 'missing_user');
     const memberships = await this.request(
-      '/rest/v1/shop_memberships?select=shop_id&active=eq.true&order=created_at.asc&limit=2',
+      `/rest/v1/shop_memberships?select=shop_id&user_id=eq.${encodeURIComponent(this.userId)}`
+      + '&active=eq.true&order=created_at.asc&limit=2',
     );
     if (!Array.isArray(memberships) || memberships.length === 0) throw new StoreError(403, 'not_staff');
     if (memberships.length > 1) throw new StoreError(409, 'shop_selection_required');

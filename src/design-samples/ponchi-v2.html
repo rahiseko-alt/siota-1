@@ -315,6 +315,17 @@ img[data-photo][data-empty="1"] {
 .owner-pet-del:hover, .owner-pet-del:active { background: #ffe9ef; transform: translateY(-2px); }
 .owner-pet-del:disabled { opacity: .5; cursor: default; }
 .is-readonly .owner-pet-del { display: none; }
+/* 初回登録QR（飼い主をアカウントに紐付ける唯一の手段。犬の行から直接発行する） */
+.owner-pet-invite {
+  flex: 0 0 auto; width: 48px; height: 48px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1.5px solid #cdd8f3; border-radius: var(--r-md);
+  background: #fff; color: var(--grape); font-size: 0.72rem; font-weight: 700;
+  cursor: pointer; box-shadow: var(--sh-card); transition: background .15s, transform .15s;
+}
+.owner-pet-invite:hover, .owner-pet-invite:active { background: #efeaff; transform: translateY(-2px); }
+.owner-pet-invite:disabled { opacity: .5; cursor: default; }
+.is-readonly .owner-pet-invite { display: none; }
 /* カード行（犬名・月名共通） */
 .owner-pet-item {
   display: flex;

@@ -18,6 +18,24 @@ name = "saltydog-report-worker"
 main = "src/index.js"
 compatibility_date = "2025-01-01"
 
+# ██ workers.dev を無効化する。██
+#
+#   この Worker は KV モード（`/api/config` が backend:"kv"）で動き、その API 群は
+#   **無認証**である（`src/index.js` の `/api/customers` `/api/owners` `/api/reports` は
+#   GET / POST / DELETE のいずれも認証チェックを持たない。無認証化は当時の意図的な設計）。
+#
+#   F6 でカスタムドメインのルートは Supabase 版へ移したが、**workers.dev のサブドメインは
+#   ルートとは別物**なので、`https://saltydog-report-worker.<sub>.workers.dev/api/customers`
+#   が誰でも叩ける状態のまま残っていた。実際に 200 で顧客一覧が返ることを確認した
+#   （2026-08-24）。読み取りだけでなく `DELETE /api/owners/{slug}` によるカスケード削除も
+#   無認証で通る。
+#
+#   D-20260823-09 の「切り戻せるように Worker は残す」は維持したまま、外から叩けない
+#   ようにする。切り戻しはカスタムドメインの route を戻す操作なので、workers.dev を
+#   閉じても切り戻し能力は失われない。
+workers_dev = false
+preview_urls = false
+
 # Static Assets: ../dist 配下を Worker に同梱（ponchi-v2.html 注入配信用）
 # Worker ルート（/p/* /o/* /api/* /edit/*）が優先処理し、それ以外は Assets フォールスルーで配信。
 [assets]

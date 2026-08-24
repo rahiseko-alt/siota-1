@@ -232,3 +232,37 @@ test('my.html ships no sample report content of its own', () => {
   assert.doesNotMatch(portalHtml, /20\d\d[.\-/]\d\d[.\-/]\d\d/, '架空の来店日が埋まっている');
   assert.doesNotMatch(portalHtml, /\d+(\.\d+)?\s*kg/i, '架空の体重が埋まっている');
 });
+
+/* 写真スロットの抽出は `img.src`（プロパティ）を読んではいけない。
+   `<img src="">` や `img.src = ''` の状態でプロパティを読むと、ブラウザは空文字ではなく
+   **現在のページのURL**を返す（HTML仕様のURL解決）。実ブラウザで確認済み:
+   `img.src = ''` → `http://host/edit/p/{petId}`。
+
+   ここを間違えると、トリマーが使わなかった写真スロット全部にページURLが保存され、
+   replaceDataUrlAssets は data:image/ しか変換しないのでそのままDBへ入り、
+   飼い主のマガジン画面に壊れた画像として出る。耳と歯は最初から src="" なので常に、
+   ヒーローは hero-1 が空だと hero-2 の実写真より優先されて壊れる。
+   ほぼ全カルテで起きるのに、画面もコンソールも何も言わない類の壊れ方だった。 */
+const publishClientSource = fs.readFileSync(new URL('../src/js/publish-client-ponchi.js', import.meta.url), 'utf8');
+
+test('photo() reads the src attribute, never the resolved img.src property', () => {
+  const body = publishClientSource.slice(
+    publishClientSource.indexOf('function photo(key)'),
+    publishClientSource.indexOf('function monthKey'),
+  );
+  assert.ok(body.length > 0, 'photo() の本文を切り出せていない');
+  assert.match(body, /getAttribute\(\s*['"]src['"]\s*\)/, 'src を属性として読んでいない');
+  assert.doesNotMatch(
+    body,
+    /\bimg\.src\b/,
+    'img.src（プロパティ）を読んでいる。空スロットに現在のページURLが入り、飼い主に壊れた画像が届く',
+  );
+});
+
+test('photo() treats the data-empty marker as an empty slot', () => {
+  const body = publishClientSource.slice(
+    publishClientSource.indexOf('function photo(key)'),
+    publishClientSource.indexOf('function monthKey'),
+  );
+  assert.match(body, /data-empty/, '空スロットの印 data-empty を見ていない');
+});

@@ -244,12 +244,47 @@
       '<span class="owner-pet-name">' + escHtml(opts.label) + '</span>' +
       '<span class="owner-pet-arrow" aria-hidden="true">›</span>';
     item.addEventListener('click', opts.onSelect);
-    if (!opts.onDelete) return item;
+    if (!opts.onDelete && !opts.onActions) return item;
     var row = document.createElement('div');
     row.className = 'owner-pet-row';
     row.appendChild(item);
-    if (isEditMode()) row.appendChild(opts.onDelete());
+    if (isEditMode()) {
+      /* onActions は削除以外の行アクション（初回登録QR等）を要素の配列で返す。
+         削除より前に置く——削除は最も戻せない操作なので、行の端に隔離しておく。 */
+      if (opts.onActions) {
+        opts.onActions().forEach(function (el) { if (el) row.appendChild(el); });
+      }
+      if (opts.onDelete) row.appendChild(opts.onDelete());
+    }
     return row;
+  }
+
+  /**
+   * makeInviteBtn(ownerId, ownerName)
+   * 飼い主に「初回登録QR」を発行するボタン。
+   *
+   * これは飾りではなく、**飼い主を自分のアカウントに紐付ける唯一の手段**である。
+   * カルテを作っただけでは飼い主は自分のカルテを見られない——RLS
+   * （`pets_customer_select` → `private.is_owner_user`）は `owner_users` を経由してしか
+   * 通らず、`owner_users` に行を入れられるのは `claim_invitation`（招待の消化）だけだから。
+   * つまりこのボタンに到達できないと、新規のお客様は永久に自分の犬のカルテを見られない。
+   */
+  function makeInviteBtn(ownerId, ownerName) {
+    if (!isSupabaseMode() || !ownerId || !window.TrimmerSupabaseStaff) return null;
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'owner-pet-invite';
+    btn.textContent = 'QR';
+    btn.title = (ownerName || '飼い主') + ' 様に初回登録QRを発行';
+    btn.setAttribute('aria-label', (ownerName || '飼い主') + ' 様に初回登録QRを発行');
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      btn.disabled = true;
+      window.TrimmerSupabaseStaff.showOwnerInvitation(ownerId, ownerName)
+        .catch(function () { window.alert('招待を発行できませんでした。'); })
+        .finally(function () { btn.disabled = false; });
+    });
+    return btn;
   }
 
   /* ════════════════════════════════════════════════════════════
@@ -336,6 +371,13 @@
           lockReportContext({ petId: pet.id, ownerId: pet.ownerId, petName: pet.petName });
           window.location.href = '/edit/p/' + pathSegment(pet.id);
         },
+        /* 飼い主の初回登録QR。F2 で「飼い主を選ぶ層」を撤去したとき、QR発行ボタンが
+           乗っていた画面ごと動線から外れてしまい、新規のお客様をアカウントに紐付ける
+           手段が本番から消えていた（D-20260823-05 は「残す」と決めていた）。
+           飼い主を選ぶ層は戻さず、犬の行から直接発行できるようにして塞ぐ。 */
+        onActions: function () {
+          return [makeInviteBtn(pet.ownerId, pet.ownerName)];
+        },
         onDelete:  function () {
           return makeDeleteBtn(
             pet.petName + ' のカルテをすべて削除します。よろしいですか？',
@@ -400,6 +442,20 @@
           fail('作成に失敗しました。もう一度お試しください。');
         });
     });
+
+    /* スタッフ管理（管理者のみ）。F2 で「飼い主を選ぶ層」を撤去したとき、このボタンが
+       乗っていた画面ごと動線から外れ、2人目のトリマーを追加する手段が本番から消えていた
+       （D-20260823-05 は「残す」と決めていた）。犬の一覧の最後に置いて塞ぐ。 */
+    if (isSupabaseMode() && window.TrimmerSupabaseStaff && window.TrimmerSupabaseStaff.isAdmin()) {
+      var staffBtn = createAddButton('スタッフ管理', 'ponchi-add-btn');
+      listEl.appendChild(staffBtn);
+      staffBtn.addEventListener('click', function () {
+        staffBtn.disabled = true;
+        window.TrimmerSupabaseStaff.showStaffManager()
+          .catch(function () { window.alert('スタッフ情報を表示できませんでした。'); })
+          .finally(function () { staffBtn.disabled = false; });
+      });
+    }
   }
 
   function renderPetList(listEl, pets, ownerData) {

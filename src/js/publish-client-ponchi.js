@@ -44,9 +44,23 @@
   function field(name) { return txt('[data-field="' + cssAttrSafe(name) + '"]'); }
 
   // 契約#5: img[data-photo="key"] の src を抽出
+  //
+  // **img.src（プロパティ）を読んではいけない。** `<img src="">` や `img.src = ''` の状態で
+  // プロパティを読むと、ブラウザは空文字ではなく**現在のページのURL**を返す（HTML仕様の
+  // URL解決による。実ブラウザで確認済み: `img.src=''` → `http://host/edit/p/{petId}`）。
+  // そのため以前はここが真を返し、トリマーが使わなかった写真スロット全部に
+  // `https://trimmer-system.kouheikosehira.com/edit/p/{petId}` が保存されていた。
+  // `replaceDataUrlAssets` は `data:image/` しか変換しないのでそのままDBに入り、
+  // 飼い主のマガジン画面に壊れた画像として出ていた（耳と歯は最初から src="" なので常に、
+  // ヒーローは hero-1 が空だと hero-2 の実写真より優先されて壊れる）。
+  //
+  // 属性を直接読む。空スロットの印 data-empty も併せて見る。
   function photo(key) {
     var img = document.querySelector('img[data-photo="' + cssAttrSafe(key) + '"]');
-    return img && img.src ? img.src : '';
+    if (!img) return '';
+    if (img.getAttribute('data-empty') === '1') return '';
+    var raw = img.getAttribute('src');
+    return raw ? raw.trim() : '';
   }
 
   // 'YYYY/MM/DD' → 'YYYY-MM'（表示用）
