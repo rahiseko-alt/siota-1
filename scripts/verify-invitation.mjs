@@ -152,6 +152,74 @@ try {
   const strangerGotIn = await reusePage.evaluate((p) => [...document.querySelectorAll('.pet-card')].some((e) => e.textContent.includes(p)), PET_NAME);
   check('消化済みの招待は使い回せない（別人が入り込めない）', !strangerGotIn, statusText.slice(0, 60));
   await reuse.close();
+
+  // ── 退会扱い（owners.active=false）にしたら、飼い主からも見えなくなること ──
+  /* スタッフ側の一覧は `active=eq.true` で絞るので退会扱いの飼い主は画面から消えるが、
+     以前は飼い主側の判定が `owner_users` の行しか見ておらず、**その飼い主は /my で
+     今まで通り読めた**。「退会済みに見えるのに見えている」食い違い（D-20260824-30 の 8）。 */
+  const ownerId = await staff.evaluate(async (id) => {
+    const token = (await window.TrimmerAuth.client.auth.getSession()).data.session.access_token;
+    const r = await fetch(`/api/pets/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+    return (await r.json())?.pet?.owner_id || '';
+  }, petId);
+  check('飼い主IDを取得できる（検査の前提）', !!ownerId, ownerId);
+
+  await staff.evaluate(async (oid) => {
+    const token = (await window.TrimmerAuth.client.auth.getSession()).data.session.access_token;
+    await fetch(`/api/owners/${oid}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active: false }),
+    });
+  }, ownerId);
+  await customer.goto(`${BASE}/my`, { waitUntil: 'domcontentloaded' });
+  await customer.waitForTimeout(3500);
+  const petsWhenInactive = await customer.evaluate(() => [...document.querySelectorAll('.pet-card')].map((e) => e.textContent.trim()));
+  check('退会扱いにしたら飼い主の画面から犬が消える', !petsWhenInactive.includes(PET_NAME), JSON.stringify(petsWhenInactive));
+  await customer.goto(`${BASE}${reportUrl}`, { waitUntil: 'domcontentloaded' });
+  await customer.waitForTimeout(3500);
+  const noteWhenInactive = await customer.evaluate((n) => document.body.textContent.includes(n), NOTE);
+  check('退会扱いにしたらカルテの中身も読めない', !noteWhenInactive);
+
+  /* 元に戻して、次の検査（紐付けの解除）を素の状態から始める。 */
+  await staff.evaluate(async (oid) => {
+    const token = (await window.TrimmerAuth.client.auth.getSession()).data.session.access_token;
+    await fetch(`/api/owners/${oid}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active: true }),
+    });
+  }, ownerId);
+  await customer.goto(`${BASE}/my`, { waitUntil: 'domcontentloaded' });
+  await customer.waitForSelector('.pet-card', { timeout: 25000 }).catch(() => {});
+  const backAgain = await customer.evaluate(() => [...document.querySelectorAll('.pet-card')].map((e) => e.textContent.trim()));
+  check('退会を取り消せば元に戻る', backAgain.includes(PET_NAME), JSON.stringify(backAgain));
+
+  // ── 間違えて登録された相手の紐付けを外せること ──
+  /* 招待リンクは最初にクリックした Google アカウントに結び付く。誤送信・転送で
+     第三者が先に開くと、以前はその人が永久に読めた（外す手段が無かった）。 */
+  await staff.goto(`${BASE}/edit`, { waitUntil: 'domcontentloaded' });
+  await staff.waitForSelector('.owner-pet-item', { timeout: 20000 });
+  await staff.locator('.owner-pet-row', { hasText: PET_NAME }).first().locator('.owner-pet-invite').click();
+  await staff.waitForSelector('dialog[open] .supabase-owner-links', { timeout: 25000 });
+  const linkRows = await staff.locator('dialog[open] .supabase-owner-links .supabase-staff-row').count();
+  check('紐付いているアカウントが画面に出る', linkRows === 1, `${linkRows}件`);
+
+  staff.once('dialog', async (d) => { await d.accept(); });
+  await staff.locator('dialog[open] .supabase-owner-links .supabase-staff-row button').first().click();
+  await staff.waitForTimeout(2500);
+  const revoked = await staff.evaluate(() => (document.querySelector('dialog[open] .supabase-owner-links')?.textContent || '').includes('解除しました'));
+  check('紐付けを解除できる', revoked);
+
+  await customer.goto(`${BASE}/my`, { waitUntil: 'domcontentloaded' });
+  await customer.waitForTimeout(3500);
+  const afterRevoke = await customer.evaluate(() => [...document.querySelectorAll('.pet-card')].map((e) => e.textContent.trim()));
+  check('解除された相手はもう犬を見られない', !afterRevoke.includes(PET_NAME), JSON.stringify(afterRevoke));
+  await customer.goto(`${BASE}${reportUrl}`, { waitUntil: 'domcontentloaded' });
+  await customer.waitForTimeout(3500);
+  const noteAfterRevoke = await customer.evaluate((n) => document.body.textContent.includes(n), NOTE);
+  check('解除された相手はカルテの中身も読めない', !noteAfterRevoke);
+
   await after.close();
 } finally {
   if (browser) await browser.close();

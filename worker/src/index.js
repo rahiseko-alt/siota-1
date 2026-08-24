@@ -258,6 +258,16 @@ async function handleSupabaseApi(request, store, path, cors, env) {
       }
       if (request.method === 'DELETE') return json(await store.deleteOwner(ownerId), 200, cors);
     }
+    /* 飼い主に紐付いたアカウントの確認と解除（D-20260824-30 の 9）。
+       招待リンクは最初にクリックした Google アカウントに結び付くので、
+       誤送信・転送で第三者が入ったときに外す手段が要る。
+       RPC 側で「自店舗のスタッフか」を見る。 */
+    if (parts.length === 4 && parts[3] === 'links') {
+      if (request.method === 'GET') return json({ links: await store.listOwnerLinks(ownerId) }, 200, cors);
+    }
+    if (parts.length === 6 && parts[3] === 'links' && isUuid(parts[4]) && parts[5] === 'revoke') {
+      if (request.method === 'POST') return json(await store.revokeOwnerLink(ownerId, parts[4]), 200, cors);
+    }
     if (parts.length === 4 && parts[3] === 'pets') {
       if (request.method === 'GET') return json({ pets: await store.listOwnerPets(ownerId) }, 200, cors);
       if (request.method === 'POST') {

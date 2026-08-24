@@ -180,7 +180,80 @@ async function showInvitationDialog(body, label) {
   actions.append(copy, revoke);
   appendCloseButton(dialog, actions);
   dialog.append(explanation, expiry, qr, urlInput, status, actions);
+  /* 飼い主招待のときだけ、いま紐付いているアカウントを出す。
+     招待リンクは**最初にクリックした Google アカウント**に結び付くので、
+     誤送信・転送で第三者が先に開くと、その人が飼い主のカルテを永久に読める。
+     外す手段がアプリのどこにも無く、復旧は飼い主ごと削除しかなかった
+     ——それは犬もカルテも写真も道連れにする（D-20260824-30 の 9）。 */
+  if (body.invitationType === 'owner' && body.ownerId) {
+    dialog.append(await buildOwnerLinkSection(body.ownerId, label));
+  }
   dialog.showModal();
+}
+
+/**
+ * buildOwnerLinkSection(ownerId, label)
+ * 「このカルテを見られるアカウント」と、その解除ボタン。
+ * 解除された相手はその瞬間から /my で何も見られなくなる（RLS が link を要求する）。
+ */
+async function buildOwnerLinkSection(ownerId, label) {
+  const section = document.createElement('div');
+  section.className = 'supabase-owner-links';
+  const heading = document.createElement('h3');
+  heading.textContent = 'このカルテを見られるアカウント';
+  section.append(heading);
+
+  let links = [];
+  try {
+    const response = await globalThis.TrimmerStaffApi.request(`/api/owners/${encodeURIComponent(ownerId)}/links`);
+    links = response.links || [];
+  } catch {
+    const failed = document.createElement('p');
+    failed.textContent = '紐付きを読み取れませんでした。';
+    section.append(failed);
+    return section;
+  }
+
+  if (links.length === 0) {
+    const none = document.createElement('p');
+    none.textContent = 'まだ誰も登録していません。上のQR・URLを渡してください。';
+    section.append(none);
+    return section;
+  }
+
+  for (const link of links) {
+    const row = document.createElement('div');
+    row.className = 'supabase-staff-row';
+    const who = document.createElement('code');
+    who.textContent = link.user_id;
+    const since = document.createElement('span');
+    since.textContent = link.created_at ? new Date(link.created_at).toLocaleDateString('ja-JP') : '';
+    const cut = document.createElement('button');
+    cut.type = 'button';
+    cut.textContent = '解除';
+    cut.onclick = async () => {
+      if (!globalThis.confirm(
+        `${label} 様のカルテを、このアカウントから見られないようにします。\n`
+        + '間違えて別の人が登録してしまったときに使ってください。\n\nよろしいですか？',
+      )) return;
+      cut.disabled = true;
+      try {
+        await globalThis.TrimmerStaffApi.request(
+          `/api/owners/${encodeURIComponent(ownerId)}/links/${encodeURIComponent(link.user_id)}/revoke`,
+          { method: 'POST' },
+        );
+        row.replaceChildren(Object.assign(document.createElement('span'), {
+          textContent: '解除しました。このアカウントからは見られません。',
+        }));
+      } catch {
+        cut.disabled = false;
+        globalThis.alert('解除できませんでした。もう一度お試しください。');
+      }
+    };
+    row.append(who, since, cut);
+    section.append(row);
+  }
+  return section;
 }
 
 async function showStaffManager() {

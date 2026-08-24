@@ -311,6 +311,27 @@ export class SupabaseDataStore {
     return { ok: true };
   }
 
+  /**
+   * 飼い主に紐付いているアカウントの一覧。
+   * 招待リンクは最初にクリックした Google アカウントに結び付くので、
+   * 誤送信・転送で第三者が入ったときに**誰が入っているのかを見る**手段が要る
+   * （D-20260824-30 の 9）。RLS `owner_users_staff_select` が自店舗に絞る。
+   */
+  async listOwnerLinks(ownerId) {
+    return this.request(
+      `/rest/v1/owner_users?select=owner_id,user_id,created_at&owner_id=eq.${encodeURIComponent(ownerId)}&order=created_at.asc`,
+    );
+  }
+
+  /** 紐付けを外す。外れた相手はその瞬間から /my で何も見られなくなる。 */
+  async revokeOwnerLink(ownerId, userId) {
+    const revoked = await this.request('/rest/v1/rpc/revoke_owner_link', {
+      method: 'POST', body: { target_owner: ownerId, target_user: userId },
+    });
+    if (revoked !== true) throw new StoreError(404, 'not_found');
+    return { ok: true };
+  }
+
   async listStaff() {
     const shopId = await this.getStaffShopId();
     return this.request(
