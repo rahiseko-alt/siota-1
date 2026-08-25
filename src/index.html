@@ -579,7 +579,11 @@ button, input, textarea, select {
 
 .editor-columns {
   display: grid;
-  grid-template-columns: 1fr;
+  /* `1fr` は `minmax(auto, 1fr)`＝下限が min-content なので、中の1要素が縮まないと
+     枠ごと広がる。iPhone 13（390px）で 465px まで広がり、確定ボタンのタップを
+     別要素が奪って⑤へ進めなかった。下限を 0 にして、中身を幅に合わせて折り返す。
+     **文字サイズも余白も変えない**（マスター決定・`docs/decisions.md` D-20260825-39）。 */
+  grid-template-columns: minmax(0, 1fr);
   gap: 24px;
   padding: 24px 16px;
 }
@@ -1731,6 +1735,12 @@ button, input, textarea, select {
 
       <div class="karte-cards-grid" id="karte-cards-container"><!-- /js/ui.js が仮データから描く --></div>
 
+      <div style="margin-top: 28px;">
+        <button class="boxbutton boxbutton--white boxbutton--full" onclick="App.createNewKarte()">
+          <span>＋ 新規カルテを作成する</span>
+        </button>
+      </div>
+
     </div>
   </section>
 
@@ -1794,7 +1804,7 @@ button, input, textarea, select {
             </div>
             
             <div class="guide-diagram-box">
-              <img src="" alt="爪の解剖図">
+              <img alt="爪の解剖図">
               <span class="guide-diagram-box__caption">爪の基準図</span>
             </div>
 
@@ -1848,7 +1858,7 @@ button, input, textarea, select {
             </div>
 
             <div class="guide-diagram-box">
-              <img src="" alt="歯の頭骨解剖図">
+              <img alt="歯の頭骨解剖図">
               <span class="guide-diagram-box__caption">頭骨解剖図</span>
             </div>
 
@@ -2042,7 +2052,7 @@ button, input, textarea, select {
 
         <div class="magazine-hero__media-grid">
           <div class="magazine-hero-photo-main">
-            <img src="" alt="ポンチ 仕上がり写真" onclick="App.openLightbox(this.src)">
+            <img alt="ポンチ 仕上がり写真" onclick="App.openLightbox(this.src)">
           </div>
           <div class="magazine-hero-side-card">
             <div>
@@ -2104,7 +2114,7 @@ button, input, textarea, select {
           <div class="wave-card-body">
             <div class="wave-body-grid-2col">
               <div class="wave-body-img-frame">
-                <img src="" alt="皮膚被毛" onclick="App.openLightbox(this.src)">
+                <img alt="皮膚被毛" onclick="App.openLightbox(this.src)">
               </div>
               <div>
                 <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 6px;">皮膚・被毛のコンディション</h4>
@@ -2137,7 +2147,7 @@ button, input, textarea, select {
           <div class="wave-card-body">
             <div class="wave-body-grid-2col">
               <div class="wave-body-img-frame">
-                <img src="" alt="爪解剖図" onclick="App.openLightbox(this.src)">
+                <img alt="爪解剖図" onclick="App.openLightbox(this.src)">
               </div>
               <div>
                 <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 6px;">爪の長さと接地状態の解説</h4>
@@ -2170,7 +2180,7 @@ button, input, textarea, select {
           <div class="wave-card-body">
             <div class="wave-body-grid-2col">
               <div class="wave-body-img-frame">
-                <img src="" alt="耳の様子" onclick="App.openLightbox(this.src)">
+                <img alt="耳の様子" onclick="App.openLightbox(this.src)">
               </div>
               <div>
                 <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 6px;">左右耳道の清潔度</h4>
@@ -2203,7 +2213,7 @@ button, input, textarea, select {
           <div class="wave-card-body">
             <div class="wave-body-grid-2col">
               <div class="wave-body-img-frame">
-                <img src="" alt="頭骨歯列図" onclick="App.openLightbox(this.src)">
+                <img alt="頭骨歯列図" onclick="App.openLightbox(this.src)">
               </div>
               <div>
                 <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 6px;">口腔内・歯石の判定結果</h4>
@@ -2283,15 +2293,15 @@ button, input, textarea, select {
                 <div class="gallery-mosaic-caption">カット中の真剣な表情</div>
               </div>
               <div class="gallery-mosaic-item" onclick="App.openLightbox('')">
-                <img src="" alt="お手ポーズ">
+                <img alt="お手ポーズ">
                 <div class="gallery-mosaic-caption">上手にお手</div>
               </div>
               <div class="gallery-mosaic-item" onclick="App.openLightbox('')">
-                <img src="" alt="肉球ケア">
+                <img alt="肉球ケア">
                 <div class="gallery-mosaic-caption">肉球ぷるぷる保湿</div>
               </div>
               <div class="gallery-mosaic-item" onclick="App.openLightbox('')">
-                <img src="" alt="仕上がり">
+                <img alt="仕上がり">
                 <div class="gallery-mosaic-caption">ご機嫌な仕上がり</div>
               </div>
             </div>
@@ -2327,7 +2337,7 @@ button, input, textarea, select {
 <!-- Lightbox Modal -->
 <div class="lightbox-modal" id="lightbox-modal" onclick="App.closeLightbox()">
   <div class="lightbox-close-btn">&times;</div>
-  <img id="lightbox-img" src="" alt="拡大画像">
+  <img id="lightbox-img" alt="拡大画像">
 </div>
 
 <!-- JS Logic (独創メソッド削除) -->
