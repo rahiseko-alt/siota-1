@@ -110,6 +110,6 @@ design/        意匠見本。統合で src/ へ貼り替える目標。import �
 
 - **Supabase の有効化** — プロジェクト作成と Google OAuth 設定はマスター作業。
   済むまで KV モードで動かす。実装は済んでいる
-- **意匠の貼り替え** — `design/mock-4step.html` への再スキン（`docs/ops/plans/2026-08-21-integration.md` の P0〜P9）。
+- **意匠の貼り替え** — `design/mock-4step.html` への再スキン（（旧計画・削除済み） の P0〜P9）。
   V1 の JS を温存したまま HTML/CSS を差し替える方式で確定している
 - **素材の出所** — `docs/ASSET-PROVENANCE.md` の `UNVERIFIED` 15件。コードでは解けない

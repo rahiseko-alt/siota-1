@@ -1,8 +1,26 @@
-# Supabase 先行版のローカル／開発専用 Worker。
-# production route、KV namespace、service role key をこのファイルへ追加しない。
-name = "saltydog-report-worker-supabase-dev"
+# Supabase 版 Worker（shiota0823）。
+#
+# 独自ドメインには紐付けない。デプロイ先は workers.dev のサブドメインで、
+# 現行本番（wrangler.toml の trimmer-system.kouheikosehira.com / KV モード）とは
+# 完全に別物として並走する。production route、KV namespace、
+# service role key をこのファイルへ追加しない。
+#
+# ここに書く2つの値はどちらも公開情報である。SUPABASE_URL はブラウザの
+# 通信先として誰にでも見え、publishable key は「匿名で入れる」ことを前提に
+# 発行された鍵で、実際のアクセス制御は DB 側の RLS が行う。
+# service_role key と secret key は別物であり、絶対にここへ書かない。
+name = "shiota0823"
 main = "src/index.js"
 compatibility_date = "2025-01-01"
+
+# 独自ドメイン（F6・2026-08-23）。ここを処理していた KV 版 Worker
+# （saltydog-report-worker）はルートを外して残してある——切り戻せる状態を
+# 捨てない（docs/decisions.md D-20260823-09）。切り戻し手順は
+# worker/wrangler.toml のコメントに書いてある。
+# 全パス（/*）を Worker が一本で処理する。静的アセットは [assets] fallthrough で配信。
+[[routes]]
+pattern = "trimmer-system.kouheikosehira.com/*"
+zone_name = "kouheikosehira.com"
 
 [assets]
 directory = "../dist"
@@ -11,3 +29,5 @@ binding = "ASSETS"
 [vars]
 DATA_BACKEND = "supabase"
 SUPABASE_REPORT_ASSETS_BUCKET = "report-assets"
+SUPABASE_URL = "https://bcodloqwnrhcuvevfguy.supabase.co"
+SUPABASE_PUBLISHABLE_KEY = "sb_publishable_jdfWplKTWyEEqNYn4gcBvQ_yvmoKIml"

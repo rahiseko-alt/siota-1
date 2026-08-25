@@ -505,3 +505,79 @@ test('finalize keeps a report draft when storage metadata or objects are incompl
   assert.equal(response.status, 409);
   assert.deepEqual(await response.json(), { error: 'report assets are incomplete' });
 });
+
+/* 本番の Cloudflare Workers では、fetch をレシーバ付きで呼ぶと
+   `TypeError: Illegal invocation` で落ちる。`this.fetchImpl(...)` と書いていたため
+   Supabase への REST 呼び出しが本番で全滅していた（`F-20260821-25`）。
+   テストが差し込む偽の fetch は `this` を見ないので、この不具合は
+   「テストは通るのに本番だけ落ちる」形になる。レシーバを直接検査する。 */
+test('the Supabase store never calls fetch with itself as the receiver', async () => {
+  const receivers = [];
+  const store = new SupabaseDataStore({
+    supabaseUrl: 'https://project.supabase.co',
+    publishableKey: 'publishable-key',
+    accessToken: 'user-jwt',
+    // アロー関数だと `this` が束縛済みで検査にならないので、通常の関数で受ける。
+    fetchImpl: function fake() {
+      receivers.push(this);
+      return Response.json([]);
+    },
+  });
+
+  await store.getSessionContext('20000000-0000-0000-0000-0000000000a1');
+
+  assert.ok(receivers.length >= 2, 'fetch が呼ばれていない');
+  for (const receiver of receivers) {
+    assert.notEqual(receiver, store, 'fetch のレシーバが store になっている（本番で Illegal invocation）');
+  }
+});
+
+/* RLS の `memberships_authorized_select` は
+   `user_id = auth.uid() or private.is_shop_admin(shop_id)` なので、**管理者には店舗の
+   全メンバー行が返る**。getStaffShopId が user_id で絞っていないと、スタッフが2人に
+   なった瞬間に管理者だけが 409 になり、飼い主の新規作成・招待の発行と一覧・スタッフ管理
+   （退職者の停止）が全部使えなくなる。日々のカルテ作成はこの関数を通らないので気づけない。 */
+test('getStaffShopId asks only for the caller own membership', async () => {
+  const urls = [];
+  const store = new SupabaseDataStore({
+    supabaseUrl: 'https://project.supabase.co',
+    publishableKey: 'publishable-key',
+    accessToken: 'user-jwt',
+    userId: '20000000-0000-0000-0000-000000000001',
+    fetchImpl: (url) => {
+      urls.push(String(url));
+      // 管理者が自分で絞らずに問い合わせた場合に RLS が返すもの（店舗の全メンバー）
+      if (!String(url).includes('user_id=eq.')) {
+        return Response.json([
+          { shop_id: '10000000-0000-0000-0000-000000000001' },
+          { shop_id: '10000000-0000-0000-0000-000000000001' },
+        ]);
+      }
+      return Response.json([{ shop_id: '10000000-0000-0000-0000-000000000001' }]);
+    },
+  });
+
+  const shopId = await store.getStaffShopId();
+  assert.equal(shopId, '10000000-0000-0000-0000-000000000001');
+  const membershipUrl = urls.find((u) => u.includes('/shop_memberships?'));
+  assert.ok(membershipUrl, 'shop_memberships を問い合わせていない');
+  assert.match(
+    membershipUrl,
+    /user_id=eq\.20000000-0000-0000-0000-000000000001/,
+    'user_id で絞っていない。管理者はスタッフが2人になった瞬間に 409 で詰む',
+  );
+});
+
+test('getStaffShopId still reports 409 when the caller really belongs to two shops', async () => {
+  const store = new SupabaseDataStore({
+    supabaseUrl: 'https://project.supabase.co',
+    publishableKey: 'publishable-key',
+    accessToken: 'user-jwt',
+    userId: '20000000-0000-0000-0000-000000000001',
+    fetchImpl: () => Response.json([
+      { shop_id: '10000000-0000-0000-0000-000000000001' },
+      { shop_id: '10000000-0000-0000-0000-000000000002' },
+    ]),
+  });
+  await assert.rejects(() => store.getStaffShopId(), (e) => e instanceof StoreError && e.status === 409);
+});

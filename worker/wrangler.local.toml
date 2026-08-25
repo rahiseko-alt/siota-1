@@ -1,0 +1,21 @@
+# ローカル Supabase（`supabase start`）向けの Worker 設定。
+#
+# CLOUDFLARE_API_TOKEN も、ホスト済み Supabase プロジェクトの service role key も
+# 無くても、実ブラウザ・実DB・実RLSでの検証を回せるようにするためのもの。
+# `supabase/seed.sql` のローカル専用テストアカウント（password login）と対で使う。
+# デプロイ用ではない（`wrangler dev` でのみ使用）。ここに書く値は
+# Supabase CLI のローカル開発用デフォルト鍵（`supabase start` の出力そのもの）で、
+# 本番の秘密情報ではない。
+name = "shiota0823-local"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+[assets]
+directory = "../dist"
+binding = "ASSETS"
+
+[vars]
+DATA_BACKEND = "supabase"
+SUPABASE_REPORT_ASSETS_BUCKET = "report-assets"
+SUPABASE_URL = "http://127.0.0.1:54321"
+SUPABASE_PUBLISHABLE_KEY = "sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH"

@@ -13,6 +13,10 @@ build/
 .wrangler/
 worker/.wrangler/
 
+# Supabase CLI のローカル実行状態（`supabase start`）
+supabase/.branches/
+supabase/.temp/
+
 # Playwright
 test/e2e-results.json
 playwright-report/
@@ -49,3 +53,10 @@ yarn-debug.log*
 !.vscode/extensions.json
 *.swp
 *.swo
+.screens/
+.human/
+
+# 特定の AI だけが読む設定は置かない（正は AGENTS.md ひとつ）
+.claude/
+.codex/
+*.claude.json

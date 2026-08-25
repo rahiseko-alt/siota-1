@@ -10,7 +10,11 @@ insert into auth.users (
   ('00000000-0000-0000-0000-000000000000', '20000000-0000-0000-0000-000000000002', 'authenticated', 'authenticated', 'staff@local.test', extensions.crypt('LocalOnly-Password-2026!', extensions.gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}', '{"full_name":"Local Staff"}', now(), now(), '', '', '', ''),
   ('00000000-0000-0000-0000-000000000000', '20000000-0000-0000-0000-0000000000a1', 'authenticated', 'authenticated', 'owner-a@local.test', extensions.crypt('LocalOnly-Password-2026!', extensions.gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}', '{"full_name":"Owner A"}', now(), now(), '', '', '', ''),
   ('00000000-0000-0000-0000-000000000000', '20000000-0000-0000-0000-0000000000b1', 'authenticated', 'authenticated', 'owner-b@local.test', extensions.crypt('LocalOnly-Password-2026!', extensions.gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}', '{"full_name":"Owner B"}', now(), now(), '', '', '', ''),
-  ('00000000-0000-0000-0000-000000000000', '20000000-0000-0000-0000-0000000000f1', 'authenticated', 'authenticated', 'uninvited@local.test', extensions.crypt('LocalOnly-Password-2026!', extensions.gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}', '{"full_name":"Uninvited"}', now(), now(), '', '', '', '')
+  ('00000000-0000-0000-0000-000000000000', '20000000-0000-0000-0000-0000000000f1', 'authenticated', 'authenticated', 'uninvited@local.test', extensions.crypt('LocalOnly-Password-2026!', extensions.gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}', '{"full_name":"Uninvited"}', now(), now(), '', '', '', ''),
+  -- スタッフかつ飼い主。本番のマスター自身がこの形（D-20260823-06）で、
+  -- **この組み合わせだけ**が「/my に留まるのにトリマー画面へ行けない」穴に落ちていた。
+  -- fixture がこの形を持っていなかったので、検査5本すべてが素通りしていた。
+  ('00000000-0000-0000-0000-000000000000', '20000000-0000-0000-0000-0000000000c1', 'authenticated', 'authenticated', 'staff-owner@local.test', extensions.crypt('LocalOnly-Password-2026!', extensions.gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}', '{"full_name":"Staff And Owner"}', now(), now(), '', '', '', '')
 on conflict (id) do nothing;
 
 insert into auth.identities (
@@ -28,7 +32,8 @@ from (values
   ('21000000-0000-0000-0000-000000000002'::uuid, '20000000-0000-0000-0000-000000000002'::uuid, 'staff@local.test'),
   ('21000000-0000-0000-0000-0000000000a1'::uuid, '20000000-0000-0000-0000-0000000000a1'::uuid, 'owner-a@local.test'),
   ('21000000-0000-0000-0000-0000000000b1'::uuid, '20000000-0000-0000-0000-0000000000b1'::uuid, 'owner-b@local.test'),
-  ('21000000-0000-0000-0000-0000000000f1'::uuid, '20000000-0000-0000-0000-0000000000f1'::uuid, 'uninvited@local.test')
+  ('21000000-0000-0000-0000-0000000000f1'::uuid, '20000000-0000-0000-0000-0000000000f1'::uuid, 'uninvited@local.test'),
+  ('21000000-0000-0000-0000-0000000000c1'::uuid, '20000000-0000-0000-0000-0000000000c1'::uuid, 'staff-owner@local.test')
 ) fixture(identity_id, user_id, email)
 on conflict (provider_id, provider) do nothing;
 
@@ -38,7 +43,8 @@ on conflict (id) do nothing;
 
 insert into public.shop_memberships (shop_id, user_id, role) values
   ('10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', 'admin'),
-  ('10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000002', 'staff')
+  ('10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000002', 'staff'),
+  ('10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-0000000000c1', 'staff')
 on conflict (shop_id, user_id) do nothing;
 
 insert into public.owners (id, shop_id, name, legacy_slug) values
@@ -48,7 +54,9 @@ on conflict (id) do nothing;
 
 insert into public.owner_users (owner_id, user_id) values
   ('30000000-0000-0000-0000-0000000000a1', '20000000-0000-0000-0000-0000000000a1'),
-  ('30000000-0000-0000-0000-0000000000b1', '20000000-0000-0000-0000-0000000000b1')
+  ('30000000-0000-0000-0000-0000000000b1', '20000000-0000-0000-0000-0000000000b1'),
+  -- staff-owner@local.test をスタッフかつ飼い主にする（D-20260823-06 と同じ形）。
+  ('30000000-0000-0000-0000-0000000000a1', '20000000-0000-0000-0000-0000000000c1')
 on conflict (owner_id, user_id) do nothing;
 
 insert into public.pets (id, shop_id, owner_id, name, legacy_slug, template) values

@@ -1,4 +1,5 @@
 import { hydrateAssetReferences } from './supabase-storage.js';
+import { renderMagazine } from './magazine-view.js';
 
 const UUID_PATTERN = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const ROUTES = [
@@ -8,10 +9,16 @@ const ROUTES = [
 ];
 const INVITATION_TOKEN_PATTERN = /^[0-9a-f]{64}$/i;
 
+/* ログイン後に戻す先。オープンリダイレクト防止のため、同一オリジンの保護された
+   内部ルート（飼い主の /my とトリマーの /edit）だけを通し、それ以外は /my に潰す。
+   /edit を通すのは、スタッフが未ログインで /edit を開いた場合にログイン後そこへ
+   戻すため。ここを /my だけにしていると、スタッフかつ飼い主のアカウント
+   （D-20260823-06 で管理者を飼い主にも紐付けた＝マスター自身）が、ログイン後に
+   飼い主画面へ着いてトリマー画面に戻れなくなる。 */
 export function safeReturnPath(value) {
   if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//')) return '/my';
   const url = new URL(value, 'https://local.invalid');
-  return /^\/my(?:\/|$)/.test(url.pathname) ? `${url.pathname}${url.search}` : '/my';
+  return /^\/(?:my|edit)(?:\/|$)/.test(url.pathname) ? `${url.pathname}${url.search}` : '/my';
 }
 
 export function parseProtectedRoute(pathname) {
@@ -118,9 +125,16 @@ function renderPet(container, pet) {
   heading.dataset.testid = 'pet-name';
   heading.textContent = pet.name;
   container.append(heading);
+  const reports = pet.reports || [];
+  if (reports.length === 0) {
+    const empty = document.createElement('p');
+    empty.textContent = 'まだカルテがありません。';
+    container.append(empty);
+    return;
+  }
   const list = document.createElement('div');
   list.className = 'report-list';
-  for (const report of pet.reports || []) {
+  for (const report of reports) {
     const link = document.createElement('a');
     link.href = `/my/pets/${encodeURIComponent(pet.id)}/reports/${encodeURIComponent(report.id)}`;
     link.textContent = report.report_date;
@@ -129,38 +143,47 @@ function renderPet(container, pet) {
   container.append(list);
 }
 
-async function renderReport(container, report, supabase) {
-  container.replaceChildren();
-  const heading = document.createElement('h2');
-  heading.dataset.testid = 'report-pet-name';
-  heading.textContent = report.pet?.name || '';
-  container.append(heading);
-  const date = document.createElement('p');
-  date.textContent = report.report_date || '';
-  container.append(date);
-  const memo = document.createElement('p');
-  memo.textContent = typeof report.data?.memo === 'string' ? report.data.memo : '';
-  container.append(memo);
+/* トリマーの確認画面（ponchi-app.js の showPreview）と同じ renderMagazine() を使う
+   （マスター指定: ⑤確認 と ⑥顧客ページ は同一レンダラ）。写真は asset:// マーカーの
+   ままでは表示できないため、hydrateAssetReferences で署名付きダウンロードに解決してから渡す。 */
+async function renderReport(container, report, supabase, siblingReports) {
   const hydrated = await hydrateAssetReferences(report.data || {}, report.assets || [], supabase);
-  for (const url of hydrated.objectUrls) {
-    const photo = document.createElement('img');
-    photo.src = url;
-    photo.alt = `${report.pet?.name || ''}のカルテ写真`;
-    photo.loading = 'lazy';
-    container.append(photo);
-  }
+  renderMagazine(container, {
+    petName: report.pet?.name || '',
+    reportDate: report.report_date || '',
+    data: hydrated.data,
+    siblingReports: siblingReports || [],
+    currentReportId: report.id,
+    linkBase: `/my/pets/${encodeURIComponent(report.pet_id || '')}/reports/`,
+  }, {
+    onBack: () => { location.href = `/my/pets/${encodeURIComponent(report.pet_id || '')}`; },
+    backLabel: 'このわんちゃんのカルテ一覧へ戻る',
+  });
 }
 
 async function loadProtectedResource(supabase, route, content) {
   let apiPath = '/api/my/pets';
   if (route.name === 'pet') apiPath = `/api/my/pets/${encodeURIComponent(route.petId)}`;
   if (route.name === 'report') apiPath = `/api/my/pets/${encodeURIComponent(route.petId)}/reports/${encodeURIComponent(route.reportId)}`;
+
+  /* report ルートはタイムライン用に犬本体（兄弟レポート一覧）も要るが、補助情報でしか
+     ないので、本体取得と並行に投げる（直列にすると往復が倍かかる）。 */
+  const siblingsPromise = route.name === 'report'
+    ? authorizedFetch(supabase, `/api/my/pets/${encodeURIComponent(route.petId)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => data?.pet?.reports || [])
+      .catch(() => [] /* タイムライン表示は補助情報。取得に失敗してもカルテ本体は表示する */)
+    : null;
+
   const response = await authorizedFetch(supabase, apiPath);
   if (!response.ok) throw new Error(response.status === 401 ? 'authentication required' : 'not available');
   const body = await response.json();
   if (route.name === 'pets') renderPets(content, body.pets || []);
   if (route.name === 'pet') renderPet(content, body.pet);
-  if (route.name === 'report') await renderReport(content, body.report, supabase);
+  if (route.name === 'report') {
+    const siblings = await siblingsPromise;
+    await renderReport(content, body.report, supabase, siblings);
+  }
 }
 
 export async function bootProtectedPortal() {
@@ -170,14 +193,16 @@ export async function bootProtectedPortal() {
   const loginButton = document.querySelector('[data-google-login]');
   const signOutButton = document.querySelector('[data-sign-out]');
   captureInvitationToken(location.search);
+  let supabase;
   try {
-    const supabase = await createAuthClient();
+    supabase = await createAuthClient();
     globalThis.TrimmerAuth = {
       client: supabase,
       setSession: (session) => supabase.auth.setSession(session),
     };
     const restored = await restoreProtectedRoute(supabase);
     if (restored.state === 'signed-out') {
+      sessionStorage.removeItem('auth_reload_once');
       show(loginPanel, true);
       show(content, false);
       setMessage(status, 'Googleでログインしてください');
@@ -226,7 +251,16 @@ export async function bootProtectedPortal() {
       location.replace('/edit');
       return;
     }
+    /* スタッフかつ飼い主のアカウントは上の分岐を外れて /my に留まる。ところが
+       `/` にも `/my` にも `/edit` へのリンクが1つも無く、**URL を手打ちしない限り
+       トリマー画面に行けなかった**。ログイン後の着地はここなので、ここに入口を出す。
+       （D-20260823-06 で管理者を飼い主にも紐付けた結果、いちばん現実に使う
+       アカウントだけがこの穴に落ちていた。） */
+    if ((session.memberships || []).length > 0) {
+      show(document.querySelector('[data-staff-link]'), true);
+    }
     await loadProtectedResource(supabase, route, content);
+    sessionStorage.removeItem('auth_reload_once');
     show(loginPanel, false);
     show(content, true);
     show(signOutButton, true);
@@ -236,6 +270,19 @@ export async function bootProtectedPortal() {
       location.replace('/my');
     };
   } catch (error) {
+    /* セッション確認後（restored.state === 'signed-in'）にトークンが失効するなどして
+       ここへ来た場合、ログインボタンはまだ結線されていない（それは signed-out 分岐でしか
+       行わない）。ただの reload では、壊れた/失効したセッションが localStorage に
+       残ったままだと restoreProtectedRoute() が再び signed-in と判定して同じ場所に
+       戻ってしまう（詰み）。signOut() でセッションを消してから 1回だけ再読み込みし、
+       signed-out 判定からやり直す。 */
+    if (error.message === 'authentication required' && !sessionStorage.getItem('auth_reload_once')) {
+      sessionStorage.setItem('auth_reload_once', '1');
+      try { await supabase?.auth.signOut(); } catch { /* セッションが既に壊れていても reload は続ける */ }
+      location.reload();
+      return;
+    }
+    sessionStorage.removeItem('auth_reload_once');
     show(loginPanel, false);
     show(content, false);
     setMessage(status, error.message === 'authentication required' ? 'Googleでログインしてください' : '表示できません');

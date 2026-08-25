@@ -562,32 +562,34 @@ begin
   where limits.scope = target_scope;
   if not found then return false; end if;
 
-  insert into private.rate_limit_windows as window (scope, key_hash, window_started, request_count)
+  /* 別名を `window` にすると PostgreSQL の予約語（WINDOW 句）と衝突して
+     `syntax error at or near "window"` で落ちる。別名は非予約語にする。 */
+  insert into private.rate_limit_windows as limit_window (scope, key_hash, window_started, request_count)
   values (target_scope, encode(extensions.digest(actor::text, 'sha256'), 'hex'), now_value, 1)
   on conflict (scope, key_hash) do update set
     request_count = case
-      when window.window_started + make_interval(secs => window_seconds) <= now_value then 1
-      else window.request_count + 1
+      when limit_window.window_started + make_interval(secs => window_seconds) <= now_value then 1
+      else limit_window.request_count + 1
     end,
     window_started = case
-      when window.window_started + make_interval(secs => window_seconds) <= now_value then now_value
-      else window.window_started
+      when limit_window.window_started + make_interval(secs => window_seconds) <= now_value then now_value
+      else limit_window.window_started
     end
   returning request_count into user_count;
 
   if user_count > request_limit then return false; end if;
   if ip_hash is null or ip_hash !~ '^[0-9a-f]{64}$' then return true; end if;
 
-  insert into private.rate_limit_windows as window (scope, key_hash, window_started, request_count)
+  insert into private.rate_limit_windows as limit_window (scope, key_hash, window_started, request_count)
   values (target_scope || ':ip', ip_hash, now_value, 1)
   on conflict (scope, key_hash) do update set
     request_count = case
-      when window.window_started + make_interval(secs => window_seconds) <= now_value then 1
-      else window.request_count + 1
+      when limit_window.window_started + make_interval(secs => window_seconds) <= now_value then 1
+      else limit_window.request_count + 1
     end,
     window_started = case
-      when window.window_started + make_interval(secs => window_seconds) <= now_value then now_value
-      else window.window_started
+      when limit_window.window_started + make_interval(secs => window_seconds) <= now_value then now_value
+      else limit_window.window_started
     end
   returning request_count into ip_count;
   return ip_count <= request_limit * 2;

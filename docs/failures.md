@@ -245,3 +245,103 @@
 - **Root Cause**: bot からの通知を**結果**として読み、**状態**として読まなかった。`Review skipped` と `Review limit reached` は「レビューが無かった」であって「問題が無かった」ではない。さらに Free プランは概要と walkthrough のみで**行単位の指摘を出さない**ことも、通知本文に書いてあったのに報告に反映していなかった。
 - **Guardrail / Prevention**: 自動レビューの結果を報告するときは、**レビューが走ったこと自体を先に確認する**。`Review skipped` / `Review limit reached` / `rate limited` を含む通知は「未実施」と報告し、「指摘なし」とは書かない。あわせて、外部 bot に独立レビューを依存しない——`AGENTS.md` LEVEL C の INDEPENDENT CRITIC は Level 2 以上で自前で回す工程であって、bot はその代替ではない。
 - **Status**: CLOSED
+
+### [F-20260821-22] 飼い主のマイページが、架空の犬のカルテを見せる静的モックのままだった
+
+- **Date**: 2026-08-21
+- **Category**: logic
+- **Trigger/Context**: P8（顧客ポータルの再結線）。`src/my.html` を開いた。
+- **Failure**: 2つが同時にあった。(1) `supabase-auth.js` の `bootProtectedPortal()` が探す DOM フック5種（`data-portal-status` / `data-login-panel` / `data-portal-content` / `data-google-login` / `data-sign-out`）と、起動条件の `data-portal="customer"` が**1つも無く**、さらに `supabase-auth.js` 自体が読み込まれてすらいなかった。`/my` は開いてもポータルが起動しない。(2) 代わりに出ていたのは、犬名「ポンチ くん」・体重 2.79kg・来店日 2026.08.15・他所の犬の写真7枚・担当トリマーの文面まで書かれた**静的モック**。Supabase を有効化した瞬間、ログインしていない誰にでも、実在しないカルテがそう見える形で出る状態だった。
+- **Root Cause**: 意匠モックを `src/my.html` という**本番の実体の場所**にそのまま置いたこと。`design/mock-4step.html` の `#screen-4` と同じ意匠であり、置き場所さえ間違えなければ D-1 が隔離してくれた。`F-20260821-15`（カルテ0件の犬に見本を出していた）と同型で、あちらが公開ページ、こちらがマイページというだけの違い。**「まだ繋いでいない画面」を、繋いだ後の見た目で埋めておくと、繋がっていないこと自体が見えなくなる。**
+- **Guardrail / Prevention**: `src/my.html` をポータルの器だけに置き換えた（意匠は `design/mock-4step.html` に既にある。P6 の `renderMagazine` で実データから作る）。機械強制を2本入れた。(1) `test/supabase-auth.test.mjs` が `bootProtectedPortal()` の**ソースから** `querySelector` の引数を抜き出し、その全部が `src/my.html` に在ることを要求する（フックを足したら HTML 側も要求される）。あわせて `<img>` と `/assets/photo-*` と日付・体重らしき文字列が my.html に無いことを検査する。(2) `npm run verify:portal` が実ブラウザで `/my` を開き、ポータルが起動してログイン導線が出るところまで 10 項目見る。**ただしこの検査はログイン前までしか見ていない**——ログイン後の犬一覧・カルテ表示・RLS は Supabase 有効化後に別途要る（`F-20260821-11` の「静的に通ったを動くと書かない」の適用）。
+- **Status**: CLOSED (P8-a)
+
+### [F-20260821-23] 新設した検査が、2回目の実行で必ず落ちた（自前で立てた Worker を止め切れていない）
+
+- **Date**: 2026-08-21
+- **Category**: test
+- **Trigger/Context**: `F-20260821-22` の再発防止に足した `npm run verify:portal`。1回目 10/10 PASS を確認して commit・push した後、**同じコマンドを続けて2回流したら 2回目が落ちた**。
+- **Failure**: `Address already in use (127.0.0.1:8788)`。`spawn('npx', ['wrangler','dev',…])` の戻り値に `kill('SIGTERM')` を送っていたが、死ぬのは `npx` だけで、その下の wrangler(node) と workerd は生き残りポートを掴んだままだった（`ps` で親 node が生存、workerd 2件が Z のまま残留）。**検査そのものは正しく通っていたので、1回しか回さなければ気づけない。**
+- **Root Cause**: 子プロセスを1個だと思って kill したが、実体は `npx → wrangler(node) → workerd` の3段。加えて kill の**完了を待たずに** exit していたため、待てばポートが解放される場合でも間に合わなかった。「起動する検査」を書いたのに「止まる」ことを検査していなかった。
+- **Guardrail / Prevention**: `detached: true` でプロセスグループを作り、`process.kill(-pid, 'SIGTERM')` でグループごと止め、`exit` を await してから戻る（5秒で SIGKILL へ落とす）。`SIGINT`/`SIGTERM` でも同じ後始末をする。起動前に `net.createServer().listen()` でポートの空きを確かめ、塞がっていれば wrangler の `kj::Exception` ではなく読める文で落とす。**サーバを立てる検査を書いたら、続けて3回流して全部 EXIT 0 になることを確認してから commit する**（今回そうしていれば push 前に見つかっていた）。
+- **Status**: CLOSED
+
+### [F-20260823-01] マイグレーションSQLが一度も実行されておらず、本番投入の1本目で構文エラーになった
+
+- **Date**: 2026-08-23
+- **Category**: db
+- **Trigger/Context**: Supabase 有効化。マスターが `supabase/migrations/` の1本目を Supabase の SQL Editor に流した。
+- **Failure**: `ERROR: 42601: syntax error at or near "window"`（565行目）。`insert into private.rate_limit_windows as window (...)` の別名 `window` が **PostgreSQL の予約語**（WINDOW 句）と衝突していた。同じ形が2箇所（565行・581行）。**5本 1,235行のマイグレーションは、このリポジトリで一度も実際の PostgreSQL に対して実行されたことがなかった。**
+- **Root Cause**: 検査が `node --test` の静的検査（`test:supabase:static` 39件）だけで、**SQL を PostgreSQL に食わせる工程が無かった**。`npm run test:supabase`（`supabase test db`）は Docker 前提で、`docs/handoff.md` に「Docker/Postgres 停止で検証不能」と書かれたまま放置されていた。**動かせない検査は、無い検査と同じ**。加えて統合 plan の各 Phase 合格条件から実 DB 項目を意図的に外していたため（リスク#4）、誰も気づく機会が無かった。
+- **Guardrail / Prevention**: 別名を `limit_window`（非予約語）に変更。あわせて**この環境に PostgreSQL 16 を入れて5本を実際に流し、全て EXIT 0 を確認した**。Supabase が先に用意している土台（`auth.uid()` / `auth.users` / `storage.buckets` / `storage.objects` / `extensions.digest` / ロール3種）は最小のスタブで再現している。**修正前の状態に戻すと同じ行で EXIT 3 になることも確認済み**（検査が本当に落とせるかの確認。`F-20260821-23` と同じ手順）。**SQL を書いたら、実際の PostgreSQL に流すまで「書けた」と言わない。**
+- **Status**: CLOSED
+
+### [F-20260821-24] マイグレーションが一度も実行されておらず、予約語で構文エラーのまま置かれていた
+
+- **Date**: 2026-08-23
+- **Category**: db
+- **Trigger/Context**: Supabase 有効化。マスターが `202607160001_supabase_base.sql` を本番の SQL Editor に貼って実行した。
+- **Failure**: `ERROR: 42601: syntax error at or near "window"`（565行目）。`insert into private.rate_limit_windows as window (…)` の別名が PostgreSQL の予約語（WINDOW 句）と衝突し、**パースすら通らない**。この文は `enforce_rate_limit()` の本体にあり、2箇所ある。つまり**このマイグレーションはどの PostgreSQL でも一度も走ったことがなかった**。テーブルもポリシーも Storage バケットも、1つも作られたことがない状態で「実装済み」として扱われていた。
+- **Root Cause**: SQL に対して**実行を伴う検査が1つも無かった**。`npm test` の 66件は JS だけを見ており、`supabase/migrations/` は誰も読まない текст ファイルと同じ扱いだった。`npm run test:supabase`（pgTAP）は Docker 前提で、`docs/handoff.md` に「Docker/Postgres 停止で検証不能」と書かれたまま放置されていた。**検証できない状態を「未検証」と記録するに留め、検証できる形へ作り替えなかった**のが本体。予約語の知識の問題ではない——実行していれば1秒で分かる。
+- **Guardrail / Prevention**: 別名を `limit_window` に変更（2箇所）。`npm run verify:migrations` を新設し、素の PostgreSQL を1つ立てて `scripts/lib/supabase-stub.sql`（Supabase が先に用意している auth / storage の最小再現）+ 5本を順に流し、1本でも落ちれば EXIT 1 にする。**Docker は要らない**（`apt-get install postgresql` か `MIGRATION_PG_URL` で足りる）。バグを戻すと 0/5・EXIT 1、直すと 5/5・EXIT 0 になることを実際に確認した。**`supabase/migrations/` に手を入れたら、必ずこれを回してから渡すこと。** なお本検査は構文とスキーマ内の参照までで、RLS が実際に誰に何を見せるかは pgTAP の領分（未着手）。
+- **Status**: CLOSED
+
+### [F-20260821-25] Workers の fetch をレシーバ付きで呼んでいて、本番の Supabase 通信が全滅した
+
+- **Date**: 2026-08-23
+- **Category**: api
+- **Trigger/Context**: Supabase 有効化後、初回ログイン。Google 認証は成功し `auth.users` に行も出来たのに、`/my` が「Googleでログインしてください」に戻る（＝ログインパネルも消えた catch 分岐）。
+- **Failure**: `GET /api/session` が **502**。Supabase 側は完全に正常で、同じトークン・同じ publishable key で `/auth/v1/user` も `/rest/v1/shop_memberships` も `/rest/v1/owner_users` も 200 を返す。Worker のログを取って初めて原因が出た——`TypeError: Illegal invocation: function called with incorrect 'this' reference`。**Supabase への REST 呼び出しが1本残らず失敗していた。**
+- **Root Cause**: `SupabaseDataStore` が `fetch` をプロパティに持ち `this.fetchImpl(...)` と呼んでいた（`supabase-data-store.js:39`）。Workers の `fetch` はレシーバが globalThis 以外だと実行を拒否する。`worker/src/auth-context.js` が無事だったのは、あちらが引数を `fetchImpl(...)` と**裸で**呼んでいるから。認証だけ通ってデータだけ落ちるという、切り分けにくい症状になった。
+- **Guardrail / Prevention**: コンストラクタで `fetchImpl.bind(globalThis)` して、呼び出し側の書き方に依存させない。**`test/supabase-store.test.mjs` に、fetch のレシーバが store 自身でないことを直接検査するテストを追加**（偽 fetch を通常の関数で受け、`this` を記録して照合する）。`bind` を外すと実際に落ちることを確認済み。**この不具合は既存テストでは原理的に見つからない**——テストが差し込む偽 fetch は `this` を使わないため、本番の制約に触れない。**外部 SDK/ランタイムの API を自前のオブジェクトに持たせるときは、呼び出し規約（レシーバ要求）を確かめること。**
+- **Status**: CLOSED
+
+### [F-20260823-26] Supabase モードで、新規カルテが常に公開できない（日付結合の欠落）
+
+- **Date**: 2026-08-23
+- **Category**: logic
+- **Trigger/Context**: F1（完成までの計画）。ダミーデータで①〜⑥の動線を実ブラウザで辿り、④カルテ作成→公開を実際にクリックして確認した。
+- **Failure**: 「新規カルテ作成」→記入→「確定」→「プレビューを確認」→「確定（公開）」まで正しく進むが、**最後の公開が必ず失敗する**。`alert('日付を YYYY/MM/DD の形式で入力してください。')` が出て止まる。日付ピッカーに触っても触らなくても同じ結果になる——**構造的に直りようがない**バグだった。
+- **Root Cause**: `extractReport()`（`src/js/publish-client-ponchi.js:141`）は `date: field('date')` として日付を取り出すが、`[data-field="date"]`（`src/design-samples/ponchi-v2.html:947`）は「年/月/日」3分割表示のうち**月だけ**を保持する要素で、年は別要素 `[data-field="year"]`、日は `[data-field="day"]`。一方 Supabase モードの公開検証（`src/js/ponchi-app.js:1316-1319`）は `report.date` 単体が `YYYY/MM/DD` 形式であることを要求する。`field('date')` は `"12"` のような1〜2桁にしかならず、この検証を絶対に満たせない。KV モードには同じ検証が無く（`report.date` を月ラベルとしてそのまま使う設計）、Supabase モードを追加した際に**検証だけを足して、日付を結合する処理を足し忘れた**と推測される。
+- **Guardrail / Prevention**: `extractReport()`（`publish-client-ponchi.js`）に `isoDate` キーを新設し、`#heroDateInput`（`<input type="date">`、常に `YYYY-MM-DD`）の値をそのまま返すようにした。`date`/`year`/`day` の3キーは KV モード（A版14キー契約）が使い続けるので変更していない。`ponchi-app.js` の公開検証は `report.date` ではなく `report.isoDate` を見るように差し替えた。実ブラウザで、日付ピッカーに一切触れずに新規カルテを作成→確定→プレビュー→公開まで通し、Supabase 側の `reports.status` が `final` になり、写真4枚を含めて保存されることを確認した（F3）。
+- **Status**: CLOSED（F3）
+
+### [F-20260823-27] 新規カルテの日付ピッカーが、静的HTMLの既定値のまま残っていた
+
+- **Date**: 2026-08-23
+- **Category**: logic
+- **Trigger/Context**: `F-20260823-26` を `isoDate` で修正した直後、実ブラウザで「新規カルテ作成」ボタンを押し、日付ピッカーに一切触れずに検証したところ、`#heroDateInput.value` が `"2026-12-05"`（`src/design-samples/ponchi-v2.html` に書かれた静的な既定値）のままだった。
+- **Failure**: `F-20260823-26` の修正だけでは、公開自体は成功するようになるが、**トリマーが日付ピッカーに触れない限り、常に架空の日付（2026年12月5日）でカルテが保存される**。実際の来店日と異なる日付が記録され続ける状態で、修正前より発見しにくい不具合になるところだった。
+- **Root Cause**: 新規カルテ作成時に呼ばれる `clearReport()`（`ponchi-app.js:754`）は `date`/`year` の表示スパンをテキストクリアするだけで、**`#heroDateInput` 自体には触れていなかった**。`ponchi-engine.js` の日付同期処理は起動時に一度 `fromSpans()`（表示スパン→input）を呼ぶだけで、`clearReport()` 後に再同期する仕組みが無い。
+- **Guardrail / Prevention**: `clearReport()` に、`#heroDateInput.value` を**今日の日付**へ設定し `change` イベントを発火する処理を追加した（`ponchi-engine.js` の既存リスナーが表示スパンへ同期する）。実ブラウザで、新規カルテ作成直後に `#heroDateInput.value` が実行日の日付になっていることを確認した。**この経路の自動検査は未整備**——`verify:*` 4本は F2 で KV モード前提のまま壊れており、F5 で Supabase 版へ作り直す際に「新規カルテを1件、日付ピッカーに触れずに公開できる」ことを検査項目へ追加すること。
+- **Status**: CLOSED（F3）
+
+### [F-20260825-28] 「F1 の隔離はほぼ完了」と報告したが、承認済みバッドシナリオ10件のうち8件が実際に該当した
+
+- **Date**: 2026-08-25
+- **Category**: test
+- **Trigger/Context**: F1（UI とバックエンドの隔離）の完了条件は「A: `src/` に UI 以外が無い／B: UI から `backend/` への参照が 0（**機械で確認**）／C: build・check・test が EXIT 0」。私は C が緑であることを根拠に「F1 はほぼ完了。残りは隔離の機械確認を `npm run check` に足すだけ」と報告していた。マスター指定の②バッドシナリオ・サブが10件を出し、承認を受けて実測した。
+- **Failure**: 10件中 **8件が該当した**。うち2件は測定時点で既に現実だった。(1) `npm run check` に隔離検査が1本も無い（`grep -c backend` = 0）＝**完了条件 B が機械で確認されていない**。(2) `backend/js/supabase-auth.js:2` が削除済みの `magazine-view.js` を import したままで、`backend/js/` 4本のうち **2本が import 不能**。他に「検査が `src/index.html`（2,339行）を走査しない」「わざと壊しても赤くならない」「`src/assets/` の9件がどこからも参照されない」「`npm test` 58件が `src/` も `backend/` も1行も見ていない」「`src-dist-guard.config.json` が実在しない `src/design-samples` を指し guard が黙って飛ばす」「clean clone では build 前の `npm run check` が必ず EXIT 1」。
+- **Root Cause**: 完了条件に「機械で確認」と明記されているのに、**その機械を作る前に「ほぼ完了」と判定した**。判定の根拠にした緑（build/test）は、隔離について何も保証しない検査だった（偽解決の手口5「別の緑で覆う」）。加えて `backend/` を隔離する際、`src/js/` の削除に巻き込んで `magazine-view.js` を消したまま、呼び出し元の生存を `grep -c` で確認していなかった（D-6 違反）。
+- **Guardrail / Prevention**: AGENTS.md に **D-18**（調べた／直した／解決したの三層、真解決の定義＝赤→緑→戻して赤、偽解決12種カタログ）を追加。`scripts/guard/solved.mjs` が「該当した」1件につき3出力を要求し、`gate.mjs --end` から呼ばれてフェーズを閉じさせない。**判定を「該当せず」に書き換えて逃げる穴は git 履歴の全版を見て塞いだ**（実際に書き換えて8件とも捕まることを確認済み）。8件の解決は次セッションの作業（`docs/ops/plan.md` 第2章）。
+- **Status**: OPEN（F1 の該当8件は未解決。`docs/ops/bad-scenarios-F1.md` に実測記録あり）
+
+### [F-20260825-29] 該当した項目に対し、「該当しない判定になる仕様」を書こうとした
+
+- **Date**: 2026-08-25
+- **Category**: test
+- **Trigger/Context**: F-20260825-28 の8件をどう潰すかの計画をマスターに提示した際、「これは該当するという結果に対して、どうするつもりだ？該当しない判定になる仕様に変えるのか？」と問われた。
+- **Failure**: 自分の計画を読み直したところ、**8件のうち3件が「仕様を変えて該当しないことにする」案だった**。(1) 未参照ファイル9件を「台帳に載せて通す」＝例外リストの追加（偽-3）、(2) テストが画面を見ない問題に対し backend の import テストを足す＝**問題の半分しか潰さないのに全部潰した扱い**（偽-5）、(3) clean clone で赤い問題に対し `npm run check` の先頭に `build` を足す＝**赤くなる原因を消しているだけ**（偽-4）。マスターの指摘が無ければ、そのまま実行して「8件すべて解決」と報告していた。
+- **Root Cause**: 「該当しない判定の取り方は無限にある」（マスター）。合否の定義を私が書ける限り、私は必ず通る定義を選ぶ。緑を目的にしている以上、これは意志の問題ではなく構造の問題。
+- **Guardrail / Prevention**: 偽解決12種を AGENTS.md D-18 に列挙し、各項に潰し方を書いた。特に **(a) 例外は `docs/deferred.md` の番号必須（無条件の免罪符にしない）、(b)「解決」と呼べないものは `種別: 回避`／`種別: 保留` と書かせる、(c) 対の指標（緑の隣にあと回し件数・経過観察件数を並記）**。さらに外部照合（ACH／除外診断／内的妥当性の脅威／eliminative argumentation／プレモーテム）で「リストは本人がその場で作らない」ことが共通の掟だと判明したため、ひな形（`docs/ops/template.md`・未作成）は**外部既製リスト**（認知的ウォークスルー4問＋ニールセン10）を骨格にする。
+- **Status**: OPEN（ひな形は未作成。`docs/reference/ai-development-harness.md` に一般化して記載済み）
+
+### [F-20260825-30] 自作した関所が、手順の説明文と改名パスを誤判定した
+
+- **Date**: 2026-08-25
+- **Category**: logic
+- **Trigger/Context**: `scripts/guard/` の3本（scope / gate / solved）を作り、わざと範囲外を触って止まることを確認していた。
+- **Failure**: (1) `gate.mjs` の実行漏れ判定 `/結果:\s*未/` が、`bad-scenarios-F1.md` の**手順説明文**「`結果: 未` を `該当せず`／`該当した` に書き換える」に一致し、10件すべて実測済みなのに「まだ実行されていない」と報告した。(2) `run.mjs` が `git status --porcelain -z` の改名レコード（`RY NEW\0OLD\0`）で、接頭辞の無い旧パスからも3文字を削り、`scripts/hooks/plan-guard.mjs` を `ipts/hooks/plan-guard.mjs` として「範囲外」と誤検出した。
+- **Root Cause**: (1) 見出し行に限定せず本文全体を対象にした。(2) `-z` 形式で改名だけレコード構造が変わることを確認せず、全フィールドを一律 `slice(3)` した。どちらも**自作の検査を、わざと壊して赤くする確認だけして、正常系で誤検出しないかの確認をしていなかった**。
+- **Guardrail / Prevention**: (1) `/^###.*結果:\s*未\s*$/m` と見出し行に限定。(2) 状態の1文字目が `R`/`C` のとき次のフィールドを旧パスとして接頭辞なしで読む。両方とも修正後に `npm run guard` が「すべて範囲内」を返すことを確認した。**教訓: 検査を作ったら、赤くなること（偽陰性が無いこと）と、緑のままであること（偽陽性が無いこと）の両方を見る。**
+- **Status**: CLOSED

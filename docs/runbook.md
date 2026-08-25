@@ -79,7 +79,7 @@ npx wrangler dev --local
 > 「`src/` が静的モックで本番と別世代」という前提が siota-1 では成立しないため
 > 移設していない。`npm run predeploy-check` は**存在しない**。
 > つまり機械的に止めるものが何も無いので、実行前に必ずマスターの承認を取ること。
-> 経緯 → `docs/ops/plans/2026-08-21-migration.md`
+> 経緯 → （旧計画・削除済み）
 
 ### A. Worker をデプロイ
 

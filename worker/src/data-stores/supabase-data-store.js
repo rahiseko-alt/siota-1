@@ -21,7 +21,12 @@ export class SupabaseDataStore {
     this.publishableKey = publishableKey;
     this.accessToken = accessToken;
     this.userId = userId;
-    this.fetchImpl = fetchImpl;
+    /* Workers の fetch は、レシーバ付きで呼ぶと `TypeError: Illegal invocation` で落ちる。
+       `this.fetchImpl(...)` はレシーバが SupabaseDataStore になるため、そのまま持つと
+       本番の全 REST 呼び出しが失敗する（auth-context.js が無事なのは、あちらが
+       `fetchImpl(...)` と裸で呼んでいるから）。ここで束ねてしまい、呼び出し側の
+       書き方に依存させない。テストが差し込む偽の fetch は `this` を使わないので影響しない。 */
+    this.fetchImpl = fetchImpl.bind(globalThis);
     this.staffShopId = null;
   }
 
@@ -66,15 +71,36 @@ export class SupabaseDataStore {
     return this.request('/rest/v1/pets?select=id,shop_id,owner_id,name,template,active,created_at,updated_at&active=eq.true&order=created_at.desc');
   }
 
+  /* スタッフ側の「犬を選ぶ」画面（/edit）用。飼い主を経由せず店舗の犬を直接一覧する（F2）。
+     RLS（pets_staff_all）が店舗のスタッフにだけ全件を返す。owners(name) は PostgREST の
+     embed 構文で、pets_owner_shop_fkey を辿って飼い主名を1回の問い合わせで取得する。 */
+  async listPetsWithOwner() {
+    return this.request(
+      '/rest/v1/pets?select=id,shop_id,owner_id,name,template,active,created_at,owners(name)&active=eq.true&order=created_at.desc',
+    );
+  }
+
   one(rows) {
     if (!Array.isArray(rows) || rows.length === 0) throw new StoreError(404, 'not_found');
     return rows[0];
   }
 
+  /**
+   * この利用者が所属する店舗を1つに決める。2つ以上あれば「どの店舗か」を決められないので 409。
+   *
+   * **`user_id` で必ず絞ること。** RLS の `memberships_authorized_select` は
+   * `user_id = auth.uid() or private.is_shop_admin(shop_id)` なので、**管理者には店舗の
+   * 全メンバー行が返る**。以前ここに `user_id` フィルタが無く、スタッフが2人になった
+   * 瞬間に管理者だけが 409 になっていた——飼い主の新規作成・招待の発行と一覧・
+   * スタッフ管理（＝退職者の停止）が全部使えなくなる。日々のカルテ作成は
+   * この関数を通らないので、しばらく気づけない類の壊れ方だった。
+   */
   async getStaffShopId() {
     if (this.staffShopId) return this.staffShopId;
+    if (!this.userId) throw new StoreError(401, 'missing_user');
     const memberships = await this.request(
-      '/rest/v1/shop_memberships?select=shop_id&active=eq.true&order=created_at.asc&limit=2',
+      `/rest/v1/shop_memberships?select=shop_id&user_id=eq.${encodeURIComponent(this.userId)}`
+      + '&active=eq.true&order=created_at.asc&limit=2',
     );
     if (!Array.isArray(memberships) || memberships.length === 0) throw new StoreError(403, 'not_staff');
     if (memberships.length > 1) throw new StoreError(409, 'shop_selection_required');
@@ -134,7 +160,13 @@ export class SupabaseDataStore {
     const encoded = encodeURIComponent(petId);
     const [pets, reports] = await Promise.all([
       this.request(`/rest/v1/pets?select=id,shop_id,owner_id,name,template,active,created_at,updated_at&id=eq.${encoded}&limit=1`),
-      this.request(`/rest/v1/reports?select=id,shop_id,pet_id,report_date,status,created_at,updated_at&pet_id=eq.${encoded}&status=neq.deleting&order=report_date.desc,created_at.desc`),
+      /* `deleting` も返す。以前は隠していたが、削除が途中で失敗するとカルテは
+         `deleting` のまま残り、**一覧から消えるだけで実体は残る**——写真ごと
+         残っているのに、画面からは再試行にも到達できなかった（D-20260824-30 の 10）。
+         隠すのをやめて、スタッフの一覧に「削除が途中で止まっています」として
+         出し、そこから再試行させる。飼い主側は別経路（RLS が `status='final'` を
+         要求する）なので、これで飼い主に見えるようにはならない。 */
+      this.request(`/rest/v1/reports?select=id,shop_id,pet_id,report_date,status,created_at,updated_at&pet_id=eq.${encoded}&order=report_date.desc,created_at.desc`),
     ]);
     return { ...this.one(pets), reports };
   }
@@ -274,6 +306,27 @@ export class SupabaseDataStore {
   async revokeInvitation(invitationId) {
     const revoked = await this.request('/rest/v1/rpc/revoke_invitation', {
       method: 'POST', body: { target_invitation: invitationId },
+    });
+    if (revoked !== true) throw new StoreError(404, 'not_found');
+    return { ok: true };
+  }
+
+  /**
+   * 飼い主に紐付いているアカウントの一覧。
+   * 招待リンクは最初にクリックした Google アカウントに結び付くので、
+   * 誤送信・転送で第三者が入ったときに**誰が入っているのかを見る**手段が要る
+   * （D-20260824-30 の 9）。RLS `owner_users_staff_select` が自店舗に絞る。
+   */
+  async listOwnerLinks(ownerId) {
+    return this.request(
+      `/rest/v1/owner_users?select=owner_id,user_id,created_at&owner_id=eq.${encodeURIComponent(ownerId)}&order=created_at.asc`,
+    );
+  }
+
+  /** 紐付けを外す。外れた相手はその瞬間から /my で何も見られなくなる。 */
+  async revokeOwnerLink(ownerId, userId) {
+    const revoked = await this.request('/rest/v1/rpc/revoke_owner_link', {
+      method: 'POST', body: { target_owner: ownerId, target_user: userId },
     });
     if (revoked !== true) throw new StoreError(404, 'not_found');
     return { ok: true };

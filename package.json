@@ -5,20 +5,15 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build-dist.mjs",
-    "check": "node scripts/src-dist-drift-guard.mjs . && node scripts/design-isolation-guard.mjs .",
-    "preview": "node scripts/build-dist.mjs && npx wrangler dev --config worker/wrangler.toml",
-    "preview:supabase": "npm run build && npx wrangler dev --config worker/wrangler.supabase.toml",
-    "test": "npm run test:unit && npm run test:supabase:static && npm run test:migration",
+    "check": "node scripts/guard/run.mjs && node scripts/src-dist-drift-guard.mjs . && node scripts/design-isolation-guard.mjs .",
+    "test": "npm run test:unit && npm run test:schema && npm run test:migration",
     "test:unit": "node --test test/worker-unit.test.mjs",
-    "test:e2e": "npx playwright test",
-    "verify:m6": "node scripts/verify-m6.mjs",
-    "verify:roundtrip": "node scripts/verify-report-roundtrip.mjs",
-    "verify:empty": "node scripts/verify-empty-pet.mjs",
-    "verify:xss": "node scripts/verify-xss.mjs",
-    "verify:all": "npm run verify:m6 && npm run verify:roundtrip && npm run verify:empty && npm run verify:xss",
-    "test:supabase:static": "node --test test/supabase-schema.test.mjs test/supabase-storage.test.mjs test/supabase-store.test.mjs test/supabase-auth.test.mjs",
-    "test:supabase": "supabase test db",
-    "test:migration": "node --test test/kv-migration.test.mjs"
+    "verify:migrations": "node scripts/verify-migrations.mjs",
+    "test:migration": "node --test test/kv-migration.test.mjs",
+    "walk": "node scripts/build-dist.mjs && node scripts/walk-human.mjs",
+    "test:schema": "node --test test/supabase-schema.test.mjs test/supabase-storage.test.mjs test/supabase-store.test.mjs",
+    "serve": "node scripts/serve-ui.mjs",
+    "guard": "node scripts/guard/run.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.110.6",
