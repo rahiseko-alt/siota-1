@@ -92,7 +92,7 @@ App.setStamp('赤み'  App.setStamp('しこり/イボ'  App.setStamp('毛玉'
 **`#1` と重なるのが最悪の形。** ⑥には「今月もとってもお利口に…」という偽の手紙が出て、
 **同じ画面で、本当に見つかったしこりの印だけが落ちている。**
 
-### 4. 写真の取得に失敗すると、その写真だけ黙って消える — 結果: 該当した
+### 4. 写真の取得に失敗すると、その写真だけ黙って消える — 結果: 該当した ／ 解決済み
 - **人間**: お客さんのカルテに載るはずの写真が、取得に失敗すると**エラーも出ずに、その写真だけ無かったことになる**。店の人は「載せたはず」、お客さんは「載っていない」。どちらも気づけない。
 - **AI**: `hydrateAssetReferences` は `const { data: blob, error } = await client.storage.from(bucket).download(...)` の直後で **`if (error || !blob) continue;`**（`backend/js/supabase-storage.js:158-159`）。握りつぶしで、件数の報告も無い。`#1` と重なると「手紙は偽物・写真は欠落」の両方が無言で起きる。
 
@@ -212,7 +212,7 @@ $ grep -rn "esbuild" scripts/
 | 1 | I | **解決済み** | `renderMagazine(_, null)` が例外なく無変更で帰る → 器を空にして投げる（`solved-F3.md` #1） |
 | 2 | I | **解決済み** | 順序の検査 **0件** → `delete-order.mjs` を新設し `check` に組込（`solved-F3.md` #2） |
 | 3 | II | **解決済み** | 出す側 **0件** → `App.exportBodyMarking()` を新設（`solved-F3.md` #3） |
-| 4 | II | 該当した | `if (error || !blob) continue;`（報告なし） |
+| 4 | II | **解決済み** | `continue` で握りつぶし → `failed` で報告し、画面に出す（`solved-F3.md` #4） |
 | 5 | II | 該当した | 壊した SQL で `npm test` **EXIT 0** / `verify:migrations` **EXIT 1** |
 | 6 | III | 該当した | 消えたのは **9本**、記録は **7本**（`delete` ほか4本が記録漏れ） |
 | 7 | III | 該当した | `src/my.html` と `test/supabase-auth.test.mjs` が**同時に**消えている |

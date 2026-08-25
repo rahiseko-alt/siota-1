@@ -563,3 +563,84 @@ EXIT=1
 出す側がまだ無い**。`F-20260821-12/-13`「保存はされるのに復元で静かに消える」は
 このズレから起きる型なので、④の保存を書くときは**キーの突き合わせから始める**
 （`docs/ops/failure-check-F3-start.md` の持ち込み条件 1）。
+
+---
+
+### 4. 写真の取得に失敗すると、その写真だけ黙って消える
+種別: 解決
+
+**原因**: `hydrateAssetReferences` が `download` の失敗を **`if (error || !blob) continue;`**
+で捨てていた（`backend/js/supabase-storage.js:158-159`）。件数の報告も無い。
+そこから先は**黙って消える経路が繋がっていた**:
+
+```
+download 失敗 → 記録なし（continue）
+  → replaceMarkers: `urls.get(id) || ''` で **空文字**に置換
+    → setImage: `has === false` なので枠ごと `hidden`
+      → 飼い主の画面には、**その写真が最初から無かったように見える**
+```
+
+店の人は「載せたはず」、飼い主は「載っていない」。**どちらも気づけない。**
+
+**直したこと**:
+1. `hydrateAssetReferences` が **`failed`** を返す。`error.message` が無い場合
+   （`blob` が空）も「中身が空でした」として拾う——**`error` が無いから成功、にしない**
+2. **投げない。** 1枚読めないだけでカルテ全体を止めるのは飼い主にとって損なので、
+   読めた分は表示し、読めなかった分を報告する
+3. **呼び出し側が必ず見えるところに出す。** `backend/js/supabase-auth.js` の
+   `renderReport` が `showAssetFailures()` で件数を画面に出す。
+   **報告する値を誰も読まなければ、握りつぶしと同じ**なので、そこまでを1組にした
+4. 飼い主の画面に**保存先のパスは出さない**。件数と、やり直す方法だけ
+
+#### 直す前（赤）
+```
+$ sed -n '157,160p' backend/js/supabase-storage.js
+    const { data: blob, error } = await client.storage.from(bucket).download(asset.storage_path);
+    if (error || !blob) continue;
+                            # 失敗を数えても報告してもいない
+
+$ npm test
+not ok 26 - 写真が読めなかったら、黙って消さずに報告する
+not ok 27 - 中身が空でも失敗として報告する（error が無くても見逃さない）
+not ok 28 - 読めた写真だけが URL になり、読めた分は失敗に数えない
+not ok 29 - 全部読めたときは、失敗は 0 件
+not ok 30 - 呼び出し側が failed を必ず見ている（握りつぶしに戻っていない）
+EXIT=1
+```
+
+#### 直した後（緑）
+```
+$ npm test
+# pass 14   (test:unit)
+# pass 56   (test:schema)
+# pass 6    (test:migration)
+# pass 6    (test:backend)
+EXIT=0
+```
+
+**握りつぶしに戻れないよう、呼び出し側も検査している**——
+`supabase-auth.js` が `hydrated.failed` を読み、`showAssetFailures` を持つことを
+テストが要求する。片方だけ戻すと落ちる。`npm test` は 77件 → **82件**。
+
+#### 直しを戻した（また赤）
+`backend/js/supabase-storage.js` と `supabase-auth.js` を元に戻すと、同じ5件が落ちる。
+
+```
+$ git checkout -- backend/js/supabase-storage.js backend/js/supabase-auth.js
+$ npm test
+not ok 26 - 写真が読めなかったら、黙って消さずに報告する
+not ok 27 - 中身が空でも失敗として報告する（error が無くても見逃さない）
+not ok 28 - 読めた写真だけが URL になり、読めた分は失敗に数えない
+not ok 29 - 全部読めたときは、失敗は 0 件
+not ok 30 - 呼び出し側が failed を必ず見ている（握りつぶしに戻っていない）
+EXIT=1
+```
+
+**この記録の限界**: 確かめたのは**報告されること**と**呼び出し側が読んでいること**まで。
+**実際の画面にその字が出ることは見ていない**（`D-18` 偽-5）。絵で確かめるのは
+`npm run walk` の領分だが、⑥はまだ結線されていないので撮れない（`#7` `#10` が未解決）。
+
+また、`magazine-view.js:322` の **`img.src = has ? src : ''`** はそのまま。
+空文字を入れると `img.src` はページURLを返す（`D-20260824-30 #3` の再発条件）。
+いまは枠が `hidden` なので見えないが、**繋ぐ前に直す**必要がある。
+`docs/deferred.md` #16 に登録した。

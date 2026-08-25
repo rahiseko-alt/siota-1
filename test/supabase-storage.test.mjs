@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFile } from 'node:fs/promises';
 
 import {
   buildAssetPath,
   deleteReportAssets,
+  hydrateAssetReferences,
   purgeOwnerAssets,
   purgePetAssets,
   replaceDataUrlAssets,
@@ -208,4 +210,79 @@ test('飼い主の片付けは、その飼い主の犬すべてを回る', async
   assert.ok(removed.some((p) => p.includes(petB)));
   /* 読み取りだけ。DB を変える呼び出しは無い（あれば makeApi が投げている）。 */
   assert.ok(calls.every((c) => c.method === 'GET'));
+});
+
+/* ── 読み込めなかった写真を握りつぶさない（bad-scenarios-F3 #4） ──
+   以前は download 失敗を `continue` で捨てており、失敗した写真は
+   記録なし → マーカーが `''` → 枠ごと非表示、と流れて**最初から無かったように
+   見えて**いた。店の人は「載せたはず」、飼い主は「載っていない」。
+   1枚読めないだけでカルテ全体を止めるのは飼い主にとって損なので投げない。
+   代わりに `failed` で必ず報告する。 */
+
+/** download の成否を差し替えられる偽 client。 */
+function makeHydrateClient(results) {
+  return { storage: { from: () => ({
+    download: async (storagePath) => results[storagePath]
+      || { data: null, error: { message: 'not found' } },
+  }) } };
+}
+
+/* Node の URL.createObjectURL は本物の Blob しか受け取らない。 */
+const okBlob = { data: new Blob(['png']), error: null };
+
+test('写真が読めなかったら、黙って消さずに報告する', async () => {
+  const assets = [{ id: ids.asset, storage_path: 'a/b/c/one.webp' }];
+  const client = makeHydrateClient({ 'a/b/c/one.webp': { data: null, error: { message: 'network' } } });
+
+  const out = await hydrateAssetReferences({ photo: `asset://${ids.asset}` }, assets, client);
+
+  assert.equal(out.failed.length, 1);
+  assert.equal(out.failed[0].id, ids.asset);
+  assert.equal(out.failed[0].reason, 'network');
+});
+
+test('中身が空でも失敗として報告する（error が無くても見逃さない）', async () => {
+  const assets = [{ id: ids.asset, storage_path: 'a/b/c/one.webp' }];
+  const client = makeHydrateClient({ 'a/b/c/one.webp': { data: null, error: null } });
+
+  const out = await hydrateAssetReferences({}, assets, client);
+
+  assert.equal(out.failed.length, 1);
+  assert.equal(out.failed[0].reason, '中身が空でした');
+});
+
+test('読めた写真だけが URL になり、読めた分は失敗に数えない', async () => {
+  const other = '60000000-0000-0000-0000-0000000000b2';
+  const assets = [
+    { id: ids.asset, storage_path: 'a/b/c/one.webp' },
+    { id: other, storage_path: 'a/b/c/two.webp' },
+  ];
+  const client = makeHydrateClient({
+    'a/b/c/one.webp': okBlob,
+    'a/b/c/two.webp': { data: null, error: { message: 'gone' } },
+  });
+
+  const out = await hydrateAssetReferences(
+    { good: `asset://${ids.asset}`, bad: `asset://${other}` }, assets, client,
+  );
+
+  assert.equal(out.failed.length, 1);
+  assert.equal(out.failed[0].id, other);
+  assert.equal(out.objectUrls.length, 1);
+  assert.notEqual(out.data.good, '');
+});
+
+test('全部読めたときは、失敗は 0 件', async () => {
+  const assets = [{ id: ids.asset, storage_path: 'a/b/c/one.webp' }];
+  const client = makeHydrateClient({ 'a/b/c/one.webp': okBlob });
+
+  const out = await hydrateAssetReferences({ photo: `asset://${ids.asset}` }, assets, client);
+
+  assert.deepEqual(out.failed, []);
+});
+
+test('呼び出し側が failed を必ず見ている（握りつぶしに戻っていない）', async () => {
+  const auth = await readFile(new URL('../backend/js/supabase-auth.js', import.meta.url), 'utf8');
+  assert.match(auth, /hydrated\.failed/, '飼い主の画面が failed を読んでいない');
+  assert.match(auth, /showAssetFailures/, '読み込めなかった写真を見せる導線が無い');
 });
