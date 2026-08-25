@@ -730,7 +730,19 @@ function createAppStateScript({ screen, view = false, backend = null, owner = nu
 }
 
 async function renderAppPage(env, state) {
-  const templateHtml = await fetchAssetHtml(env, '/ponchi-v2.html');
+  /* 正UI（`src/index.html`）を配る。
+
+     ここは `6685df5`「古いUIをはがし…」まで `/ponchi-v2.html` を読んでいたが、
+     **その commit がテンプレート本体を削除していた**ため、`/edit` は
+     `502 Template Not Found` を返す状態のまま放置されていた（`docs/deferred.md` #20）。
+     `bad-scenarios-F3` #6 の9本のうち8本が `/edit` を開くので、ここが塞がっていた。
+
+     スクリプトは**この場で注入する**（`src/index.html` に直接書かない）。
+     `backend/js/supabase-auth.js` は **import しただけで起動する**
+     （`data-portal` が無ければ `bootLoginPage()`）ので、静的配信の `/`＝
+     `npm run walk` の経路に混ぜると F2 の合否そのものを壊す。
+     注入なら `/edit` だけに載る。 */
+  const templateHtml = await fetchAssetHtml(env, '/index.html');
   if (!templateHtml || !templateHtml.includes('</head>')) {
     console.error('[renderAppPage] valid template not found');
     return new Response('Template Not Found', {
@@ -741,9 +753,12 @@ async function renderAppPage(env, state) {
 
   const injection = createAppStateScript(state);
   const supabaseScripts = state.backend === 'supabase'
-    ? '<script src="/js/supabase-vendor.js"></script>' +
-      '<script type="module" src="/js/supabase-auth.js"></script>' +
-      '<script type="module" src="/js/supabase-staff.js"></script>'
+    /* 置き場所は F1 で `src/js/` → `backend/js/` へ移った。
+       vendor は `iife` で `globalThis.TrimmerSupabaseVendor` に載るので古典スクリプト、
+       残り2本は ES モジュール（`bad-scenarios-F3` #10 で固定した繋ぎ方）。順序も同じ。 */
+    ? '<script src="/backend/js/supabase-vendor.js"></script>' +
+      '<script type="module" src="/backend/js/supabase-auth.js"></script>' +
+      '<script type="module" src="/backend/js/supabase-staff.js"></script>'
     : '';
   const injectedHtml = templateHtml.replace('</head>', `${injection}${supabaseScripts}\n</head>`);
   return new Response(injectedHtml, { status: 200, headers: HTML_HEADERS });

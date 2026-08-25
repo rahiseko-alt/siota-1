@@ -112,6 +112,11 @@ jobs:
       - name: 飼い主の画面を確かめる
         run: npm run verify:portal
 
+      # トリマーの画面。502 のまま放置されていた /edit が正UI を配れているか
+      # （deferred #20）。残り8本の verify:* はここが通らないと戻せない。
+      - name: トリマーの画面を確かめる
+        run: npm run verify:edit
+
       - name: Supabase を止める
         if: always()
         run: npx supabase stop || true
