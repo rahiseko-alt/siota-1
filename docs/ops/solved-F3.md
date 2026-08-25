@@ -644,3 +644,101 @@ EXIT=1
 空文字を入れると `img.src` はページURLを返す（`D-20260824-30 #3` の再発条件）。
 いまは枠が `hidden` なので見えないが、**繋ぐ前に直す**必要がある。
 `docs/deferred.md` #16 に登録した。
+
+---
+
+### 5. SQL を壊しても `npm test` は緑のまま
+種別: 解決
+
+**原因**: 実 PostgreSQL に流す唯一の検査 `verify:migrations` が **`npm test` から
+呼ばれていなかった**（`docs/deferred.md` #9）。`test:schema` は SQL を**文字列として**
+grep するだけなので構文を見ない。`F-20260821-24`（予約語 `window` でパースすら
+通らず、マイグレーションが**一度も実行されたことがなかった**）の再発条件が、
+そのまま残っていた。気づいたのはマスターが本番の SQL Editor に貼ったときだった。
+
+**素直に `npm test` へ足すのは誤り**（`F-20260825-33` を繰り返す）。
+`verify-migrations.mjs` は実 PostgreSQL を起動し、`sh -c command -v`・
+`/usr/lib/postgresql`・`su postgres` を使う。**マスターの環境は Windows** なので、
+直接足すと `findPgBin()` が `null` を返して**マスターの `npm test` が必ず落ちる**。
+
+**直したこと**: 「SQL の中身の指紋」と「その指紋で**実際に流して通った**記録」を
+突き合わせる検査 `scripts/guard/sql-verified.mjs` を作り、`npm test` に組み込んだ
+（`test:sql`）。
+
+- **SQL を触ったら、実際に流すまで緑にならない**
+- **触っていなければ、PostgreSQL の無い環境でも緑のまま**——マスターの `npm test` は壊れない
+- 記録 `supabase/.sql-verified` は **git に入る**ので、まっさらな作業場でも
+  PostgreSQL 無しで照合できる（`checkout.mjs` の6番目もこの条件で通る）
+- **「動かせないから飛ばす」分岐は作らない**（`D-18` 偽-2）。
+  PostgreSQL が無ければ緑にできない、と検査自身が言う
+- 記録を更新するのは `verify:migrations` が **EXIT 0 のときだけ**。
+  失敗したときは更新しない（壊れた SQL の指紋が記録されない）
+
+#### 直す前（赤）
+`F-20260821-24` と同じ形（予約語 `window`）を実際に入れて測った。
+
+```
+$ printf '\ncreate table as window (id uuid);\n' >> supabase/migrations/202607160001_supabase_base.sql
+
+$ npm test
+EXIT=0                      # ← 緑。壊れているのに通る
+
+$ npm run verify:migrations
+EXIT=1                      # ← これだけが捕まえる（npm test からは呼ばれない）
+
+$ node -e "console.log(require('./package.json').scripts.test)"
+npm run test:unit && npm run test:schema && npm run test:migration && npm run test:backend
+                            # verify:migrations は入っていない
+```
+
+#### 直した後（緑）
+同じ壊し方をして `npm test` を通す。
+
+```
+$ printf '\ncreate table as window (id uuid);\n' >> supabase/migrations/202607160001_supabase_base.sql
+$ npm test
+❌ SQL が「実際に流して通った」記録と一致しません
+      npm run verify:migrations
+  PostgreSQL が無い環境（Windows 等）では流せません。**その場合は緑にできません**
+npm test EXIT=1             # ← 止まるようになった
+
+$ npm run verify:migrations
+FAIL  202607160001_supabase_base.sql
+6/7 PASS
+verify EXIT=1               # 失敗したので記録は更新されない
+```
+
+壊した箇所を戻すと緑に戻る。
+
+```
+$ git checkout -- supabase/migrations/202607160001_supabase_base.sql
+$ npm test
+[sql-verified] SQL 8 本を照合
+✅ SQL は、いまの中身のまま実際の PostgreSQL を通っている
+npm test EXIT=0
+```
+
+**PostgreSQL の無い作業場でも通る**ことを、まっさらな複製で確かめた
+（マスターの Windows と同じ条件＝SQL を触っていない場合）。
+
+```
+$ cd $SB && node scripts/guard/sql-verified.mjs
+[sql-verified] SQL 8 本を照合
+✅ SQL は、いまの中身のまま実際の PostgreSQL を通っている
+EXIT=0
+```
+
+#### 直しを戻した（また赤）
+`npm test` から `test:sql` を外すと、壊れた SQL が**また素通りする**。
+
+```
+$ # package.json の test から `&& npm run test:sql` を外す
+$ printf '\ncreate table as window (id uuid);\n' >> supabase/migrations/202607160001_supabase_base.sql
+$ npm test
+EXIT=0                      # ← 緑。壊れているのに通る
+```
+
+**この記録の限界**: 見ているのは**構文とスキーマ内の参照**まで（`verify-migrations.mjs`
+自身がそう書いている）。**RLS が実際に誰に何を見せるか**は含まない。
+記録は手で書き換えれば通せる——**手で書かないこと**をファイル自身に書いてあるが、
+機械で防いではいない。`#2` の限界と同じく、実体を確かめる検査は `#6` の領分。

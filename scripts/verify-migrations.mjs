@@ -26,6 +26,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { writeLedger, LEDGER } from './guard/sql-verified.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MIGRATIONS = path.join(ROOT, 'supabase', 'migrations');
@@ -147,4 +148,12 @@ for (const file of files) {
 stop();
 process.stdout.write(`\n${files.length - failed}/${files.length} PASS\n`);
 process.stdout.write('構文とスキーマ内の参照までを見る検査。RLS が実際に誰に何を見せるかは含まない。\n');
+
+/* 通ったときだけ記録を更新する。`npm test` の `sql-verified` がこれを見て、
+   **SQL を触ったら実際に流すまで緑にしない**（bad-scenarios-F3 #5）。 */
+if (failed === 0) {
+  const fingerprint = writeLedger(ROOT, `${files.length}/${files.length} PASS`);
+  process.stdout.write(`実際に流して通った記録を更新した: ${LEDGER} (${fingerprint.slice(0, 16)}…)\n`);
+}
+
 process.exit(failed === 0 ? 0 : 1);

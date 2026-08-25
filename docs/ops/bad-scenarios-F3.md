@@ -103,7 +103,7 @@ $ sed -n '157,160p' backend/js/supabase-storage.js
                                # 失敗を数えても報告してもいない
 ```
 
-### 5. SQL を壊しても `npm test` は緑のまま — 結果: 該当した
+### 5. SQL を壊しても `npm test` は緑のまま — 結果: 該当した ／ 解決済み
 - **人間**: データベースの設計図を壊しても、**検査は「全部OK」と言う**。マスターが本番に貼って初めてエラーになる。これは**一度実際に起きた事故**で、F3 は設計図を触る段。
 - **AI**: `npm test` は `test:unit` `test:schema` `test:migration` `test:backend` の4本で、**実 PostgreSQL に流す唯一の検査 `verify:migrations` を呼んでいない**（`docs/deferred.md` #9）。`test:schema` は SQL を**文字列として** grep するだけなので構文エラーを見ない。`F-20260821-24`（予約語 `window`）の再来条件がそのまま残っている。
 
@@ -213,7 +213,7 @@ $ grep -rn "esbuild" scripts/
 | 2 | I | **解決済み** | 順序の検査 **0件** → `delete-order.mjs` を新設し `check` に組込（`solved-F3.md` #2） |
 | 3 | II | **解決済み** | 出す側 **0件** → `App.exportBodyMarking()` を新設（`solved-F3.md` #3） |
 | 4 | II | **解決済み** | `continue` で握りつぶし → `failed` で報告し、画面に出す（`solved-F3.md` #4） |
-| 5 | II | 該当した | 壊した SQL で `npm test` **EXIT 0** / `verify:migrations` **EXIT 1** |
+| 5 | II | **解決済み** | 壊した SQL で `npm test` **EXIT 0** → `test:sql` で止める（`solved-F3.md` #5） |
 | 6 | III | 該当した | 消えたのは **9本**、記録は **7本**（`delete` ほか4本が記録漏れ） |
 | 7 | III | 該当した | `src/my.html` と `test/supabase-auth.test.mjs` が**同時に**消えている |
 | 8 | IV | **解決済み** | `walk` **EXIT 1** → 在るものを探して使う（`solved-F3.md` #8）。`checkout` が walk を見ない件は `deferred` #15 |
