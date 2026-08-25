@@ -311,7 +311,7 @@ function firstNonEmpty(list) {
 
 function setText(root, view, text) {
   const el = root.querySelector(`[data-view="${view}"]`);
-  if (el) el.textContent = text;
+  if (el) el.innerHTML = text;
   return el;
 }
 
