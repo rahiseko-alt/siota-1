@@ -8,7 +8,7 @@ import {
   uploadReportAssets,
   validateAsset,
   validateAssetContent,
-} from '../src/js/supabase-storage.js';
+} from '../backend/js/supabase-storage.js';
 
 const ids = {
   shop: '10000000-0000-0000-0000-000000000001',
