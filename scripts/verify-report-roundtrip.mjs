@@ -74,13 +74,7 @@ try {
 
   const filled = await page.evaluate((input) => {
     const missing = [];
-    /* 値が日本語のものは、ボタンを全部見て中身で選ぶ（`D-9`・`F-12`/`F-17`）。 */
-    const clickByText = (selector, text) => {
-      const hit = [...document.querySelectorAll(selector)]
-        .find((el) => el.textContent.replace(/\s+/g, '').includes(text.replace(/\s+/g, '')));
-      if (!hit) { missing.push(`${selector} → ${text}`); return; }
-      hit.click();
-    };
+    let teethLabel = '';
     const note = document.querySelector('[data-field="staff-note"]');
     if (!note) missing.push('[data-field="staff-note"]');
     else { note.value = input.staffNote; note.dispatchEvent(new Event('input', { bubbles: true })); }
@@ -105,7 +99,18 @@ try {
       if (!btn) missing.push(`ear ${side}=${value}`); else btn.click();
     }
 
-    clickByText('.teeth-pill-btn', input.teeth);
+    /* 歯は**保存される値**で選ぶ。ボタンの表示（`ちょっと付着💦`）と
+       保存される値（`ちょっと歯石💦`）は**違う**ので、表示で選ぶと押せない。
+       最初これで落ちた——`F-20260825-35`/`-36` と同じ「実際の仕組みに合わせて
+       書かなかった」型。日本語は**セレクタに連結せず**、属性を読んで比べる（`D-9`）。
+       表示と値がずれていること自体は `docs/deferred.md` #24 に記録した。 */
+    const teethBtn = [...document.querySelectorAll('.teeth-pill-btn')]
+      .find((el) => (el.getAttribute('onclick') || '').includes(`'${input.teeth}'`));
+    if (!teethBtn) missing.push(`teeth=${input.teeth}`);
+    else {
+      teethLabel = (teethBtn.querySelector('.name') || {}).textContent || '';
+      teethBtn.click();
+    }
 
     /* 犬体図に印を1つ付ける。押した所見が残る道はここしか無い（`#3`）。 */
     const canvas = document.getElementById('marking-canvas');
@@ -118,10 +123,21 @@ try {
         clientY: rect.top + rect.height / 2,
       }));
     }
-    return missing;
+    return { missing, teethLabel };
   }, INPUT);
-  check('1. 記入先の要素がすべて実在する', filled.length === 0 ? 'ok' : `欠落 ${JSON.stringify(filled)}`, 'ok');
-  if (filled.length > 0) throw new Error('UI と保存契約が食い違っている');
+  check('1. 記入先の要素がすべて実在する',
+    filled.missing.length === 0 ? 'ok' : `欠落 ${JSON.stringify(filled.missing)}`, 'ok');
+  if (filled.missing.length > 0) throw new Error('UI と保存契約が食い違っている');
+
+  /* **押した表示と、届く値がずれていないか。** ここは合否にしない——
+     ずれていること自体は既知（`docs/deferred.md` #24・マスター判断待ち）で、
+     この検査の担当は「書いた値が同じで届くか」だからである。**隠さずに出す。** */
+  if (filled.teethLabel && filled.teethLabel !== INPUT.teeth) {
+    process.stdout.write(
+      `\n【表示と値のずれ・1件】歯: トリマーが押したボタンの表示 "${filled.teethLabel}" / `
+      + `飼い主に届く値 "${INPUT.teeth}"（docs/deferred.md #24）\n\n`,
+    );
+  }
 
   /* ── ④確定 → ⑤確認へ。**保存されたものを開き直す**ので、ここに出ている値は
         既にサーバを往復している（`D-12`）。 ── */
