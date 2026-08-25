@@ -7,8 +7,9 @@
  */
 import fs from 'node:fs';
 import http from 'node:http';
+import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
@@ -32,14 +33,34 @@ export function startUiServer(port = 8800) {
     fs.createReadStream(file).pipe(res);
   });
   return new Promise((resolve) => {
-    server.listen(port, '127.0.0.1', () => resolve({
-      base: `http://127.0.0.1:${port}`,
+    /* 既定は自分のパソコンからだけ（127.0.0.1）。
+       スマホの実機で見たいときだけ `UI_HOST=0.0.0.0` を付ける——同じ Wi-Fi の
+       他の端末からも見えるようになるので、既定にはしない。 */
+    const host = process.env.UI_HOST || '127.0.0.1';
+    server.listen(port, host, () => resolve({
+      base: `http://${host === '0.0.0.0' ? '127.0.0.1' : host}:${port}`,
+      host,
       stop: () => new Promise((done) => server.close(done)),
     }));
   });
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
-  const { base } = await startUiServer(Number(process.env.UI_PORT || 8800));
-  process.stdout.write(`${base}\n`);
+/* Windows では `process.argv[1]` が `C:\...` 形式なので、`file://` を前置しても
+   `import.meta.url`（`file:///C:/...`）と一致しない＝直接実行しても何も起きない。
+   `pathToFileURL()` は Node 標準で、どの OS でも同じ形にそろえる。 */
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const port = Number(process.env.UI_PORT || 8800);
+  const { base, host } = await startUiServer(port);
+  process.stdout.write(`\n  画面を配っています（Ctrl+C で止める）\n\n`);
+  process.stdout.write(`    このパソコンで見る : ${base}\n`);
+  if (host === '0.0.0.0') {
+    const nets = Object.values(os.networkInterfaces()).flat()
+      .filter((n) => n && n.family === 'IPv4' && !n.internal);
+    for (const n of nets) {
+      process.stdout.write(`    スマホで見る       : http://${n.address}:${port}  （同じ Wi-Fi から）\n`);
+    }
+  } else {
+    process.stdout.write(`    スマホでも見るなら : UI_HOST=0.0.0.0 を付けて起動し直す\n`);
+  }
+  process.stdout.write('\n');
 }

@@ -15,6 +15,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 /* フェーズに関係なく触ってよい場所（生成物・作業場・この仕組みそのもの）。 */
 export const ALWAYS = [
@@ -96,7 +97,10 @@ export function checkCommand(root, phase, cmd) {
 }
 
 /* ── 直接叩かれたとき ── */
-if (import.meta.url === `file://${process.argv[1]}`) {
+/* Windows では `process.argv[1]` が `C:\...` 形式なので、`file://` を前置しても
+   `import.meta.url`（`file:///C:/...`）と一致しない＝直接実行しても何も起きない。
+   `pathToFileURL()` は Node 標準で、どの OS でも同じ形にそろえる。 */
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const root = process.env.REPO_ROOT || process.cwd();
   const phase = readPhase(root);
   if (!phase) process.exit(0);

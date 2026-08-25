@@ -23,6 +23,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { readPhase, rel, ALWAYS } from './scope.mjs';
 import { checkSolved } from './solved.mjs';
+import { pathToFileURL } from 'node:url';
 
 /** 関所を通さずに書いてよい場所（＝成果物と仕組みの置き場）。 */
 const EXEMPT = ALWAYS;
@@ -71,7 +72,10 @@ export function missingArtifacts(root, phase, { end = false } = {}) {
 }
 
 /* ── 直接叩かれたとき ── */
-if (import.meta.url === `file://${process.argv[1]}`) {
+/* Windows では `process.argv[1]` が `C:\...` 形式なので、`file://` を前置しても
+   `import.meta.url`（`file:///C:/...`）と一致しない＝直接実行しても何も起きない。
+   `pathToFileURL()` は Node 標準で、どの OS でも同じ形にそろえる。 */
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const root = process.env.REPO_ROOT || process.cwd();
   const phase = readPhase(root);
   if (!phase) process.exit(0);
