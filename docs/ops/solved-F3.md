@@ -1291,3 +1291,205 @@ npm error   npm run
 ——書いている途中で**実際に3件落ちた**からである（上の表）。とくに犬体図の印は、
 文字の項目が全部 PASS していた回に **17/19** で落ちた。この検査が無ければ
 「トリマーが付けた印が空の画像として保存される」ことに誰も気づけなかった。
+
+
+### 14. 削除したのに写真が実体として残る（`verify:delete` が無い）
+種別: 解決
+
+**原因**: `6685df5` が `scripts/verify-delete.mjs` を消し、`#2`（消したはずの写真が残り、
+誰も回収できなくなる）の唯一の防波堤が無くなっていた。**`docs/deferred.md` #8 の記録から
+漏れていた4本の1つ**で、無いことにすら気づかれていなかった。
+
+**RLS 越しに見てはいけない。** Storage のポリシーは「その `reports` 行が存在すること」を
+条件にしているので、削除で行が消えると**写真が残っていても残っていなくても同じ「見えない」**
+になる——RLS 越しの確認は必ず合格し、まさに直したい不具合を見逃す。`service_role` で数える。
+
+**入口を思いつきで足していない**（D-18 偽-7）。正UI にも意匠モックにも削除のボタンが無く、
+置き場所が決まらない（`docs/deferred.md` #25）。走らせるのは**製品と同じ関数**
+`deleteReportAssets` を実ブラウザの中から呼ぶ形で、検査用の別経路は書かない
+——別経路だと製品が使う順序（Storage → DB・`D-20260824-34`）を通らないまま緑になる。
+
+**復元ではなく書き直した。** 旧版が掴んでいた目印は正UI に1つも無い
+（`docs/ops/verify-restore-F3.md` の実測）。見るものだけを引き継ぎ、掴む場所を合わせた。
+
+**この検査が保証しないこと**: 削除の**入口**が画面に在るかは見ない（無いので）。検査は毎回その1件を出力する。
+
+#### 直す前（赤）
+
+`origin/master` の `package.json`。検査そのものが存在しない。
+
+```
+$ npm run verify:delete
+npm error Missing script: "verify:delete"
+npm error
+npm error To see a list of scripts, run:
+npm error   npm run
+```
+
+#### 直した後（緑）
+
+CI の `verify` ジョブ（実 Supabase・実ログイン・実 RLS・実ブラウザ）。
+
+```
+PASS  0. 検査用の犬を登録できた  status=201
+PASS  1. 写真つきのカルテを確定できた
+PASS  2. 写真の実体が Storage に在る（service_role で数える）  1件
+PASS  3. 製品の削除の道が最後まで通った
+PASS  4. 写真の実体が Storage から消えた（service_role で数える）  0件
+PASS  5. 飼い主のページからカルテが消えている  link=0
+
+【画面に無いもの・1件】カルテを削除する入口: 無い（docs/deferred.md #25）
+
+6/6 PASS
+```
+
+#### 直しを戻した（また赤）
+
+直したのは「検査が存在しないこと」なので、戻すのは `package.json` の口である。
+`verify:delete` の行を消して実行した。**①と同じ症状の行が出る**（実測で一致を確認）。
+
+```
+$ npm run verify:delete
+npm error Missing script: "verify:delete"
+npm error
+npm error To see a list of scripts, run:
+npm error   npm run
+```
+
+
+### 16. カルテ0件の犬に、存在しない履歴が見える（`verify:empty` が無い）
+種別: 解決
+
+**原因**: `6685df5` が `scripts/verify-empty-pet.mjs` を消し、`AGENTS.md` D-10
+（書いていないことは空で出す）の機械強制が無くなっていた。カルテを1件も作っていない犬の
+ページに他の犬の写真や見本が並ぶのは納品物として成立しない——お客さんはそれを**本当のこと**
+だと読む（`F-14`・`F-15`）。実店舗の初日は、どの犬もカルテ0件から始まる。
+
+**旧版から1つ足した**——確定していない下書きが飼い主に見えないこと。
+**確定前のものが届くのも「存在しない履歴」**である。
+
+**復元ではなく書き直した。** 旧版が掴んでいた目印は正UI に1つも無い
+（`docs/ops/verify-restore-F3.md` の実測）。見るものだけを引き継ぎ、掴む場所を合わせた。
+
+**この検査が保証しないこと**: トリマー側の画面に見本が残っているかは見ない（`verify:edit` の 14/16 の担当）。
+
+#### 直す前（赤）
+
+`origin/master` の `package.json`。検査そのものが存在しない。
+
+```
+$ npm run verify:empty
+npm error Missing script: "verify:empty"
+npm error
+npm error To see a list of scripts, run:
+npm error   npm run
+```
+
+#### 直した後（緑）
+
+CI の `verify` ジョブ（実 Supabase・実ログイン・実 RLS・実ブラウザ）。
+
+```
+PASS  1. 犬の名前は出ている（ページ自体は開けている）
+PASS  2. 正直な空の状態が出ている
+PASS  3. 写真が1枚も出ていない  img=0
+PASS  4. 履歴の行が1つも出ていない  link=0
+PASS  5. 見本の文章が出ていない
+PASS  6. 確定していないカルテは飼い主に見えない  link=0
+PASS  7. 下書きの中身が漏れていない
+PASS  8. トリマーは1件目を作る画面に入れる  active=screen-3
+PASS  9. 確定のボタンが在る（行き止まりでない）
+
+11/11 PASS
+```
+
+#### 直しを戻した（また赤）
+
+直したのは「検査が存在しないこと」なので、戻すのは `package.json` の口である。
+`verify:empty` の行を消して実行した。**①と同じ症状の行が出る**（実測で一致を確認）。
+
+```
+$ npm run verify:empty
+npm error Missing script: "verify:empty"
+npm error
+npm error To see a list of scripts, run:
+npm error   npm run
+```
+
+
+### 19. 押すべきボタンが画面から消えても、誰も気づかない（`verify:screens` が無い）
+種別: 解決
+
+**原因**: `6685df5` が `scripts/verify-screens.mjs` を消していた。**記録から漏れていた
+4本の1つ。** ほかの `verify:*` は「この操作をするとこの結果になる」しか見ないので、
+**手順の外——画面に何が乗っているか、そこからどこへ行けるか——は誰も見ていない**。
+実際それで2回やられている:
+
+  1. 招待QRのボタンが F2 で画面から消えた。機能は生きていたが、どこからも押せなかった
+     （`D-20260824-29`）。検査は fixture で招待を迂回していたので気づけなかった
+  2. **スタッフかつ飼い主**のアカウントが `/my` に留まるのに `/edit` への入口が1つも無く、
+     トリマーが自分の作業画面へ行けなかった。fixture にその組み合わせが無かったので、
+     検査5本が揃って素通りした（`D-20260823-06`）
+
+入口が**在る**だけでなく、押したら**着く**ことまで見る。
+
+**復元ではなく書き直した。** 旧版が掴んでいた目印は正UI に1つも無い
+（`docs/ops/verify-restore-F3.md` の実測）。見るものだけを引き継ぎ、掴む場所を合わせた。
+
+**この検査が保証しないこと**: 画面の見た目・使いやすさは見ない。**人が使えるかは `npm run walk` の絵だけで決める**（D-14）。
+
+#### 直す前（赤）
+
+`origin/master` の `package.json`。検査そのものが存在しない。
+
+```
+$ npm run verify:screens
+npm error Missing script: "verify:screens"
+npm error
+npm error To see a list of scripts, run:
+npm error   npm run
+```
+
+#### 直した後（緑）
+
+CI の `verify` ジョブ（実 Supabase・実ログイン・実 RLS・実ブラウザ）。
+
+```
+PASS  1. `/` が配信される  status=200
+PASS  2. `/` に4画面が乗っている  screen=4
+PASS  3. `/` に段のタブが4つ在る  tab=4
+PASS  4. `/` はログイン画面から始まる  active=screen-1
+PASS  5. スタッフ兼飼い主は `/my` に留まる  path=/my
+PASS  6. その人に作業画面（`/edit`）への入口が出ている  visible=true href=/edit
+PASS  7. サインアウトの入口も出ている
+PASS  8. その入口を押すと、犬の一覧に着く  url=/edit
+PASS  9. 飼い主だけの人に作業画面の入口を出していない
+PASS  10. 飼い主には自分の犬が並んでいる  pet=14
+PASS  11. ②一覧に犬のカードが並んでいる  card=15
+PASS  12. ②一覧に探す手段が在る
+PASS  13. ②一覧から新規カルテを作れる入口が在る
+PASS  14. カードを押すと③カルテ作成に着く  active=screen-3
+PASS  15. ③に確定の入口が在る（行き止まりでない）
+PASS  16. ③に犬体図が在る
+
+16/16 PASS
+```
+
+#### 直しを戻した（また赤）
+
+直したのは「検査が存在しないこと」なので、戻すのは `package.json` の口である。
+`verify:screens` の行を消して実行した。**①と同じ症状の行が出る**（実測で一致を確認）。
+
+```
+$ npm run verify:screens
+npm error Missing script: "verify:screens"
+npm error
+npm error To see a list of scripts, run:
+npm error   npm run
+```
+
+#### 補足: この検査が空でないことの確認
+
+**書いた時点で1件、実際に見つけている。** 「招待（QR）を発行する入口が無い」——
+`showOwnerInvitation` は在るのにどの画面からも押せない状態を、この検査が数えて出した
+（`#17`）。それを受けて入口を戻したので、いまは 0 件になっている。
