@@ -293,6 +293,16 @@ const App = {
   },
 
   goToStep(stepNum) {
+    /* **②へ戻るとき、一覧を持っていなければ URL で開き直す。**
+       `/edit/p/{petId}` で開いた画面は、その犬の分しか読んでいない（backend の
+       `bootStaffPortal` が route ごとに必要なものだけ取る）。この状態で段のタブ
+       「02」を押すと、screen-2 に移りはするが**中身が空**で、犬を選び直せない
+       ——「押せた」だけで「戻れて」いない（`D-14` の2問目）。
+       `verify:m6` がこれを見つけた。 */
+    if (stepNum === 2 && this.dogs === null && globalThis.TrimmerSupabaseStaff) {
+      location.href = '/edit';
+      return;
+    }
     this.currentStep = stepNum;
 
     document.querySelectorAll('.btn-step').forEach(btn => {

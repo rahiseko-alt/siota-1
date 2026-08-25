@@ -87,21 +87,33 @@ try {
 
   /* ── 間違えたときに2タッチ以内で戻れるか（D-14 の2問目の機械版） ──
      ③に居るとき、段のタブ（01〜04）で1タッチで②へ戻れること。 */
-  const backOk = await page.evaluate(() => {
+  await page.evaluate(() => {
     const tab = [...document.querySelectorAll('.btn-step')].find((el) => el.dataset.step === '2');
-    if (!tab) return false;
-    tab.click();
-    return (document.querySelector('.screen-panel.is-active') || {}).id === 'screen-2';
+    if (tab) tab.click();
   });
-  check('★. 間違えても1タッチで一覧へ戻れる', backOk === true);
-  /* 戻って、もう一度同じ犬へ入り直せること（＝戻り先が行き止まりでない）。 */
-  await page.evaluate((name) => {
+  /* **「画面が移った」で合格にしない。** `/edit/p/{petId}` で開いた画面は、その犬の分しか
+     読んでいない。タブを押すと screen-2 に移りはするが**中身が空**で、犬を選び直せない
+     ——押せただけで戻れていない（`D-14` の2問目）。ここで一度落ちて見つけた。
+     **戻り先で犬が並んでいること**まで見る。 */
+  await page.waitForSelector('.karte-card', { timeout: 20_000 }).catch(() => {});
+  const back = await page.evaluate(() => ({
+    active: (document.querySelector('.screen-panel.is-active') || {}).id,
+    cards: document.querySelectorAll('.karte-card').length,
+  }));
+  check('★. 間違えても1タッチで一覧へ戻れる', back.active === 'screen-2', `active=${back.active}`);
+  check('★b. 戻った先に犬が並んでいる（空の一覧に置き去りにしない）',
+    back.cards > 0, `card=${back.cards}`);
+
+  /* もう一度同じ犬へ入り直せること（＝戻り先が行き止まりでない）。 */
+  const reentered = await page.evaluate((name) => {
     const card = [...document.querySelectorAll('.karte-card')]
       .find((el) => (el.querySelector('.karte-card__dog-name') || {}).textContent === name);
+    if (!card) return false;
     card.click();
+    return true;
   }, `動線${stamp}`);
+  check('★c. 戻ってから、もう一度同じ犬に入れる', reentered === true);
   await page.waitForSelector('#screen-3.is-active', { timeout: 20_000 });
-  check('★b. 戻ってから、もう一度同じ犬に入れる', true);
 
   /* ── ⑤ 確認 ── */
   await Promise.all([
