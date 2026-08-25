@@ -9,8 +9,8 @@
  *
  * 見るのは4つ。どれも `scripts/lib/local-stack.mjs` の既存の部品を使う（新しく書かない）:
  *   1. Supabase が起きているか（`/auth/v1/health`）
- *   2. **マイグレーションが実際に当たっているか**（PostgREST 越しにテーブルを引く）
- *   3. **seed が入っているか＝実ログインが通るか**（`staff@local.test`）
+ *   2. **seed が入っているか＝実ログインが通るか**（`staff@local.test`）
+ *   3. **マイグレーションが実際に当たっているか**（**その token で** テーブルを引く）
  *   4. **RLS が効いているか**（鍵なしの素の GET が拒まれる）
  *
  * 接続先は `SUPABASE_LOCAL_URL` で差し替えられる（`D-20260825-44`）。
@@ -33,24 +33,43 @@ process.stdout.write(`[verify-stack] 接続先: ${LOCAL_SUPABASE_URL}\n`);
 await ensureLocalSupabaseRunning();
 check('Supabase が起きている', true);
 
-/* 2. マイグレーションが当たっているか。テーブルが無ければ PostgREST は 404 を返す。 */
-const petsRes = await fetch(`${LOCAL_SUPABASE_URL}/rest/v1/pets?select=id&limit=1`, {
-  headers: { apikey: LOCAL_ANON_KEY },
-});
-check('マイグレーションが当たっている（pets が引ける）', petsRes.status !== 404,
-  `HTTP ${petsRes.status}`);
-
-/* 3. seed が入っているか。実ログインが通れば、DB と Auth の両方が生きている。 */
-let token = null;
+/* 2. seed が入っているか。実ログインが通れば、DB と Auth の両方が生きている。
+      **先にこれをやる。** 3 で使う token がここから出るため。 */
+let session = null;
 try {
-  token = await passwordLogin(FIXTURE.staffEmail);
+  session = await passwordLogin(FIXTURE.staffEmail);
 } catch (e) {
   check('seed のアカウントで実ログインできる', false, String(e).split('\n')[0]);
 }
-if (token) check('seed のアカウントで実ログインできる', true, FIXTURE.staffEmail);
+check('seed のアカウントで実ログインできる', Boolean(session?.access_token), FIXTURE.staffEmail);
 
-/* 4. RLS が効いているか。**鍵も token も無い素の GET が通ってしまうなら、
-      この土台の上で「誰に何が見えるか」を測っても意味がない。** */
+/* 3. マイグレーションが当たっているか。
+
+      **token を付けて引く。** 最初はここを `apikey` だけで叩き「404 でなければ PASS」に
+      していたが、それは**間違った理由で緑になる検査**だった（`F-20260825-35`）。
+      PostgREST は JWT が無ければ **401** を返すので、テーブルが1つも無くても 401。
+      つまり**マイグレーションが1本も当たっていなくても PASS**していた。
+      実際 CI の初回はここが `HTTP 401` のまま PASS と表示された。
+
+      いまは「**200 が返り、中身が配列である**」ことまで見る。
+      401/404 のどちらでも落ちる。 */
+if (session?.access_token) {
+  const res = await fetch(`${LOCAL_SUPABASE_URL}/rest/v1/pets?select=id&limit=1`, {
+    headers: { apikey: LOCAL_ANON_KEY, Authorization: `Bearer ${session.access_token}` },
+  });
+  let body = null;
+  try { body = await res.json(); } catch { /* JSON でないなら下で落ちる */ }
+  check('マイグレーションが当たっている（pets を実際に引ける）',
+    res.status === 200 && Array.isArray(body),
+    `HTTP ${res.status}${Array.isArray(body) ? ` / ${body.length}件` : ' / 配列ではない'}`);
+} else {
+  check('マイグレーションが当たっている（pets を実際に引ける）', false, 'ログインできていないので確かめられない');
+}
+
+/* 4. 鍵も token も無い素の GET が拒まれるか。
+      **これは 3 とは別のことを見ている。** 3 が「token を付ければ読める」、
+      4 が「付けなければ読めない」。片方だけでは、
+      「全部 401」と「ちゃんと効いている」を区別できない。 */
 const naked = await fetch(`${LOCAL_SUPABASE_URL}/rest/v1/pets?select=id&limit=1`);
 check('鍵なしでは読めない（RLS/ゲートウェイが効いている）', naked.status >= 400,
   `HTTP ${naked.status}`);
