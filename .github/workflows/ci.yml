@@ -123,6 +123,12 @@ jobs:
       - name: 細工したカルテが実行されないことを確かめる
         run: npm run verify:xss
 
+      # **このアプリが在る理由そのもの**（D-12）。トリマーが正UI で記入 → 確定 →
+      # 飼い主が /my で開く、の往復で1項目でも値が変わったら落ちる。
+      # `bad-scenarios-F3` #13。入力欄を足したら必ずこの検査にも足すこと。
+      - name: 書いたものが飼い主に同じ値で届くか確かめる
+        run: npm run verify:roundtrip
+
       - name: Supabase を止める
         if: always()
         run: npx supabase stop || true

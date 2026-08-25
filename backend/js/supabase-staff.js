@@ -1,5 +1,5 @@
 import { authorizedFetch, createAuthClient } from './supabase-auth.js';
-import { hydrateAssetReferences } from './supabase-storage.js';
+import { hydrateAssetReferences, replaceDataUrlAssets, uploadReportAssets } from './supabase-storage.js';
 import { renderMagazine } from './magazine-view.js';
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
@@ -392,11 +392,58 @@ async function bootStaffPortal(PonchiApp) {
   if (globalThis.SaltyDogPonchi) globalThis.SaltyDogPonchi.applyReport(globalThis.__REPORT__);
 }
 
+/**
+ * saveReport(petId, reportData) — ④保存・確定（`plan.md` 4-1 の結線表）
+ *
+ * 画面が作った中身を、飼い主に届く形にして残す。順序に意味がある:
+ *
+ *   1. `replaceDataUrlAssets` … 中身に混ざっている `data:image/…` を `asset://{id}` に置き換え、
+ *      実体（Blob）を取り出す。**JSONB に画像そのものを入れない**
+ *   2. `POST /api/pets/{petId}/reports` … まず `draft` として作る。この時点では飼い主に見えない
+ *   3. `uploadReportAssets` … 実体を Storage へ上げ、`report_assets` に登録する
+ *   4. `POST …/finalize` … `finalize_report` RPC。**写真が1枚でも登録されていなければ
+ *      サーバが 409 `storage_incomplete` を返す**（`supabase-data-store.js:255`）。
+ *      `D-2`「`null` 返却は必ず失敗として扱う」はサーバ側で既に守られている
+ *
+ * **握りつぶさない。** どの段で落ちても投げる。ここで黙ると
+ * 「保存しました」と出たのに残っていない、が起きる（`D-2`・`bad-scenarios-F3` #1）。
+ *
+ * 戻り値は確定したカルテ。呼び出し側は**その id で画面を開き直す**こと——
+ * 手元の値をそのまま出すと、届いたかどうかを見ないまま「届いた」と言うことになる
+ * （`D-12`「押せた ではなく 同じ値で届いた で見る」）。
+ */
+async function saveReport(petId, reportData, reportDate) {
+  const client = globalThis.TrimmerAuth && globalThis.TrimmerAuth.client;
+  const api = globalThis.TrimmerStaffApi && globalThis.TrimmerStaffApi.request;
+  if (!client || typeof api !== 'function') throw new Error('保存できません（ログインし直してください）');
+
+  const { data, assets } = await replaceDataUrlAssets(reportData);
+  const created = await api(`/api/pets/${encodeURIComponent(petId)}/reports`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ petId, reportDate, data }),
+  });
+  const report = created.report;
+  if (!report || !report.id) throw new Error('カルテを作れませんでした');
+
+  if (assets.length > 0) {
+    await uploadReportAssets({ client, api, report, petId, assets });
+  }
+
+  const finalized = await api(
+    `/api/pets/${encodeURIComponent(petId)}/reports/${encodeURIComponent(report.id)}/finalize`,
+    { method: 'POST' },
+  );
+  if (!finalized || !finalized.report) throw new Error('カルテを確定できませんでした');
+  return finalized.report;
+}
+
 globalThis.TrimmerSupabaseStaff = {
   /* ⑤確認 と ⑥顧客ページ は同一のレンダラを使う（マスター指定）。
      `ui.js` は古典スクリプトで ES モジュールを import できないので、
      backend 側が globalThis に載せて渡す（`bad-scenarios-F3` #10 で固定した繋ぎ方）。 */
   renderMagazine,
+  saveReport,
   isAdmin: () => activeMembership?.role === 'admin',
   showOwnerInvitation: (ownerId, ownerName) => showInvitationDialog(
     { invitationType: 'owner', ownerId }, ownerName || '飼い主',

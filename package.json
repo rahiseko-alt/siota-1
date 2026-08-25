@@ -14,6 +14,7 @@
     "verify:portal": "node scripts/build-dist.mjs && node scripts/verify-portal.mjs",
     "verify:edit": "node scripts/build-dist.mjs && node scripts/verify-edit.mjs",
     "verify:xss": "node scripts/build-dist.mjs && node scripts/verify-xss.mjs",
+    "verify:roundtrip": "node scripts/build-dist.mjs && node scripts/verify-report-roundtrip.mjs",
     "test:migration": "node --test test/kv-migration.test.mjs",
     "test:sql": "node scripts/guard/sql-verified.mjs",
     "walk": "node scripts/build-dist.mjs && node scripts/walk-human.mjs",

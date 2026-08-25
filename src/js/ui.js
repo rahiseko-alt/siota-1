@@ -504,11 +504,19 @@ const App = {
       report.ear = { right: this.form.ear.right, left: this.form.ear.left };
     }
     if (this.form.teeth) report.teeth = { status: this.form.teeth };
-    if (this.form.weight) report.weights = [{ kg: this.form.weight }];
+    /* **`ym` を必ず添える。** ⑥は `weights` を `w.ym` が在るものだけに絞ってから描く
+       （`magazine-view.js:575`）ので、`kg` だけ出すと**体重は「未記録」になる**——
+       書いたのに届かない（`F-20260821-12`/`-13` の型）。月は施術日から作る。 */
+    if (this.form.weight) report.weights = [{ ym: this.today().slice(0, 7), kg: this.form.weight }];
 
+    /* **⑥が読むのは `trimming.comment` と `trimming.photos` だけ**（`magazine-view.js:582`）。
+       `length` / `style` という名前で出しても、どこにも表示されない。
+       画面に在る2つの select は「カットの長さ」と「スタイル」なので、
+       ⑥が出す場所——トリミングの一言——にまとめて入れる。 */
     const length = text('[data-field="trim-length"]');
     const style = text('[data-field="trim-style"]');
-    if (length || style) report.trimming = { length, style };
+    const trimming = [length, style].filter(Boolean).join(' / ');
+    if (trimming) report.trimming = { comment: trimming };
 
     /* 犬体図の印。**印が無ければキーごと出さない**（白紙の絵を「所見あり」にしない）。
        印が在るのに描き先が無ければ `exportBodyMarking()` が投げる——握らない。 */
@@ -516,6 +524,45 @@ const App = {
     if (marking) report.bodyMarkingImage = marking;
 
     return report;
+  },
+
+/* ④保存・確定 — ドックの「確定してお客様カルテを見る」から呼ばれる。
+
+     backend が居なければ、これまでどおり画面を移すだけ（仮データの `/`＝F2 の
+     `npm run walk` の経路。ここを壊すと合否の絵が撮れなくなる）。
+
+     居るときは**保存して、保存されたものを開き直す**。手元の値をそのまま
+     screen-4 に出すと、届いたかどうかを見ないまま「届いた」と言うことになる
+     （`D-12`「押せた ではなく 同じ値で届いた で見る」）。
+
+     失敗したら**画面を移さず、理由を出す。** 黙って進むと「保存しました」と
+     出たのに残っていない、が起きる（`D-2`・`bad-scenarios-F3` #1）。 */
+  async commitReport() {
+    const staff = globalThis.TrimmerSupabaseStaff;
+    const context = globalThis.__REPORT_CONTEXT__;
+    if (!staff || !staff.saveReport || !context || !context.petId) {
+      this.goToStep(4);
+      return;
+    }
+    const button = document.querySelector('.dock-action-wrap .boxbutton');
+    if (button) button.disabled = true;
+    try {
+      const saved = await staff.saveReport(context.petId, this.extractReport(), this.today());
+      location.href = `/edit/p/${encodeURIComponent(context.petId)}/${encodeURIComponent(saved.id)}`;
+    } catch (error) {
+      if (button) button.disabled = false;
+      /* 理由をそのまま出す。「失敗しました」だけだと、やり直せばよいのか
+         人を呼ぶのかが分からない。 */
+      globalThis.alert(`カルテを保存できませんでした。\n\n${error.message}\n\nもう一度お試しください。`);
+    }
+  },
+
+  /* 施術日。正UI に日付の入力欄が無いので、**押した日**を使う
+     （`docs/ops/key-parity-F3.md`: `date` / `isoDate` は出どころが無い6キーのうちの2つ）。 */
+  today() {
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
   },
 
   exportBodyMarking() {

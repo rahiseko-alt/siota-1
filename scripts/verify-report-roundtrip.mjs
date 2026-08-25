@@ -1,0 +1,216 @@
+/**
+ * verify-report-roundtrip.mjs — トリマーが書いたものが、飼い主にそのまま届くか
+ *
+ * **このアプリが在る理由そのものを見る検査**（`AGENTS.md` D-12 の機械強制）。
+ * `bad-scenarios-F3.md` #13。画面が出る・ボタンが押せるではなく、
+ * **記入 → 確定 → 飼い主が `/my` で開く**の往復で、1項目でも値が変わったら失格とする。
+ *
+ * `6685df5^` の版から**書き直した**（復元ではない）。旧版が掴んでいた目印
+ * （`.owner-pet-item` `#ponchi-commit-ok` `[data-field="skin-loc-1"]` …）は
+ * 正UI に1つも無い（`docs/ops/verify-restore-F3.md`）。**見るもの**——入力した値が
+ * 受け手に同一で届いたか——だけを引き継ぎ、掴む場所を正UI に合わせた。
+ *
+ * 入力欄を足したら、必ずここにも足すこと（`AGENTS.md` STEP 5 の指示）。
+ * いま正UI に在る入力は `docs/ops/key-parity-F3.md` の突き合わせが正。
+ *
+ * **日本語をセレクタに連結しない**（`D-9`）。歯の状態のように値が日本語のものは、
+ * ボタンを全部見て**中身で選ぶ**（`pickByValue`）。
+ *
+ *   npm run verify:roundtrip
+ *   （CI では .github/workflows/ci.yml が自動で走らせる）
+ *
+ * EXIT 0 = 全項目が往復した / EXIT 1 = 1項目でも変わった・消えた
+ */
+
+import { startLocalWorker, injectSession, passwordLogin, FIXTURE, LOCAL_PASSWORD } from './lib/local-stack.mjs';
+import { launchChromium } from './lib/chromium.mjs';
+
+/** トリマーが1回の施術で入れる値。**正UI に実在する入力だけ**を使う。 */
+const INPUT = {
+  staffNote: '耳の裏を丁寧に洗いました。来月もお待ちしています。',
+  nail: 2,          /* 爪レベル（1〜3） */
+  earRight: 3,
+  earLeft: 1,
+  teeth: 'ちょっと歯石💦',   /* 値が日本語。セレクタに連結しない（D-9） */
+  weight: 3.42,
+};
+
+const results = [];
+function check(name, actual, expected) {
+  const pass = String(actual) === String(expected);
+  results.push({ name, pass });
+  process.stdout.write(
+    `${pass ? 'PASS' : 'FAIL'}  ${name}`
+    + (pass ? `  "${String(actual).slice(0, 30)}"` : `\n        期待: "${expected}"\n        実際: "${actual}"`)
+    + '\n',
+  );
+}
+
+const { base: BASE, stop } = await startLocalWorker({ port: Number(process.env.ROUNDTRIP_PORT || 8791) });
+let browser = null;
+try {
+  /* 既存の飼い主（owner-a）の下に犬を作る。新しい飼い主を作ると `owner_users` に
+     紐付かない孤児になり、**誰も飼い主として読めない**——RLS がそこしか通さない。 */
+  const staffSession = await passwordLogin(FIXTURE.staffEmail, LOCAL_PASSWORD);
+  const authHeaders = { Authorization: `Bearer ${staffSession.access_token}`, 'Content-Type': 'application/json' };
+  const PET_NAME = `RT${Math.random().toString(36).slice(2, 7)}`;
+  const petRes = await fetch(`${BASE}/api/owners/${FIXTURE.ownerAOwnerId}/pets`, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ ownerId: FIXTURE.ownerAOwnerId, name: PET_NAME, template: 'ponchi' }),
+  });
+  check('0. 検査用の犬を登録できた', petRes.status, 201);
+  const pet = (await petRes.json()).pet;
+
+  browser = await launchChromium();
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const pageErrors = [];
+  page.on('pageerror', (e) => pageErrors.push(e.message));
+
+  /* ── トリマー側: ④カルテ作成に入って記入する ── */
+  await page.goto(`${BASE}/my`);
+  await injectSession(page, FIXTURE.staffEmail);
+  await page.goto(`${BASE}/edit/p/${pet.id}`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('#screen-3.is-active', { timeout: 15_000 });
+
+  const filled = await page.evaluate((input) => {
+    const missing = [];
+    /* 値が日本語のものは、ボタンを全部見て中身で選ぶ（`D-9`・`F-12`/`F-17`）。 */
+    const clickByText = (selector, text) => {
+      const hit = [...document.querySelectorAll(selector)]
+        .find((el) => el.textContent.replace(/\s+/g, '').includes(text.replace(/\s+/g, '')));
+      if (!hit) { missing.push(`${selector} → ${text}`); return; }
+      hit.click();
+    };
+    const note = document.querySelector('[data-field="staff-note"]');
+    if (!note) missing.push('[data-field="staff-note"]');
+    else { note.value = input.staffNote; note.dispatchEvent(new Event('input', { bubbles: true })); }
+
+    const weight = document.getElementById('input-weight');
+    if (!weight) missing.push('#input-weight');
+    else {
+      weight.value = String(input.weight);
+      weight.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    /* 爪は `App.selectStepper(this,'nail',N)` を持つボタン。N で選ぶ（ASCII）。 */
+    const nailBtn = [...document.querySelectorAll('#nail-stepper-wrap .stepper-btn')]
+      .find((el) => (el.getAttribute('onclick') || '').includes(`'nail', ${input.nail}`));
+    if (!nailBtn) missing.push(`nail=${input.nail}`); else nailBtn.click();
+
+    for (const [side, value] of [['right', input.earRight], ['left', input.earLeft]]) {
+      const group = document.querySelector(`[data-ear="${side}"]`);
+      if (!group) { missing.push(`[data-ear="${side}"]`); continue; }
+      const btn = [...group.querySelectorAll('.stepper-btn')]
+        .find((el) => (el.querySelector('.val') || {}).textContent === String(value));
+      if (!btn) missing.push(`ear ${side}=${value}`); else btn.click();
+    }
+
+    clickByText('.teeth-pill-btn', input.teeth);
+
+    /* 犬体図に印を1つ付ける。押した所見が残る道はここしか無い（`#3`）。 */
+    const canvas = document.getElementById('marking-canvas');
+    if (!canvas) missing.push('#marking-canvas');
+    else {
+      const rect = canvas.getBoundingClientRect();
+      canvas.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true,
+        clientX: rect.left + rect.width / 2,
+        clientY: rect.top + rect.height / 2,
+      }));
+    }
+    return missing;
+  }, INPUT);
+  check('1. 記入先の要素がすべて実在する', filled.length === 0 ? 'ok' : `欠落 ${JSON.stringify(filled)}`, 'ok');
+  if (filled.length > 0) throw new Error('UI と保存契約が食い違っている');
+
+  /* ── ④確定 → ⑤確認へ。**保存されたものを開き直す**ので、ここに出ている値は
+        既にサーバを往復している（`D-12`）。 ── */
+  await Promise.all([
+    page.waitForURL(/\/edit\/p\/[0-9a-f-]+\/[0-9a-f-]+/, { timeout: 30_000 }),
+    page.click('.dock-action-wrap .boxbutton'),
+  ]);
+  await page.waitForSelector('#screen-4 .magazine-container', { timeout: 20_000 });
+  const reportId = new URL(page.url()).pathname.split('/').pop();
+  check('2. 確定してカルテが1件できた', /^[0-9a-f-]{36}$/.test(reportId) ? 'ok' : page.url(), 'ok');
+
+  const view = async (target) => target.evaluate(() => {
+    const at = (name) => {
+      const el = document.querySelector(`[data-view="${name}"]`);
+      return el ? el.textContent.trim() : '(器が無い)';
+    };
+    return {
+      dogName: at('dog-name'),
+      staffNote: at('staff-note'),
+      nailPill: at('nail-pill'),
+      earPill: at('ear-pill'),
+      teethPill: at('teeth-pill'),
+      weightPill: at('weight-pill'),
+      /* 犬体図の印が**画像として**届いているか。`asset://` のままだと出ない。 */
+      skinImage: (document.querySelector('[data-view="skin-image"]') || {}).getAttribute
+        ? (document.querySelector('[data-view="skin-image"]').getAttribute('src') || '')
+        : '',
+      pageUrlImgs: [...document.querySelectorAll('img')]
+        .map((el) => el.getAttribute('src') || '')
+        .filter((src) => /^https?:\/\/[^/]+\/(edit|my)\//.test(src)).length,
+    };
+  });
+
+  process.stdout.write('\n── ⑤確認（トリマー）に出ている値 ──\n');
+  const staffView = await view(page);
+  check('3. 確認: 担当からの一言', staffView.staffNote, INPUT.staffNote);
+  check('4. 確認: 爪', staffView.nailPill, `Lv.${INPUT.nail}`);
+  check('5. 確認: 耳', staffView.earPill, `右 Lv.${INPUT.earRight} / 左 Lv.${INPUT.earLeft}`);
+  check('6. 確認: 歯', staffView.teethPill, INPUT.teeth);
+  check('7. 確認: 体重', staffView.weightPill, `${INPUT.weight}kg`);
+  check('8. 確認: 犬体図の印が画像として出ている',
+    /^(blob:|data:image)/.test(staffView.skinImage) ? 'ok' : `src=${staffView.skinImage.slice(0, 40)}`, 'ok');
+
+  /* ── 飼い主側: 別のブラウザ文脈でログインし直し、`/my` で同じ値を見る ── */
+  const ownerContext = await browser.newContext();
+  const ownerPage = await ownerContext.newPage();
+  await ownerPage.goto(`${BASE}/my`);
+  await injectSession(ownerPage, FIXTURE.ownerAEmail);
+  await ownerPage.goto(`${BASE}/my/pets/${pet.id}/reports/${reportId}`, { waitUntil: 'networkidle' });
+  await ownerPage.waitForSelector('.magazine-container', { timeout: 20_000 });
+
+  process.stdout.write('\n── ⑥飼い主が /my で見るもの ──\n');
+  const ownerView = await view(ownerPage);
+  check('9. 飼い主: 犬の名前', ownerView.dogName, PET_NAME);
+  check('10. 飼い主: 担当からの一言', ownerView.staffNote, INPUT.staffNote);
+  check('11. 飼い主: 爪', ownerView.nailPill, `Lv.${INPUT.nail}`);
+  check('12. 飼い主: 耳', ownerView.earPill, `右 Lv.${INPUT.earRight} / 左 Lv.${INPUT.earLeft}`);
+  check('13. 飼い主: 歯', ownerView.teethPill, INPUT.teeth);
+  check('14. 飼い主: 体重', ownerView.weightPill, `${INPUT.weight}kg`);
+  check('15. 飼い主: 犬体図の印が画像として届く',
+    /^(blob:|data:image)/.test(ownerView.skinImage) ? 'ok' : `src=${ownerView.skinImage.slice(0, 40)}`, 'ok');
+  check('16. 飼い主: 壊れた画像（ページURL）が出ていない', ownerView.pageUrlImgs, 0);
+
+  /* 他人には見えないこと（RLS）。届くことだけを見て、届いてはいけない相手に
+     届いていないかを見ないのは、検査として半分しかやっていない。 */
+  const strangerContext = await browser.newContext();
+  const strangerPage = await strangerContext.newPage();
+  await strangerPage.goto(`${BASE}/my`);
+  await injectSession(strangerPage, FIXTURE.ownerBEmail);
+  await strangerPage.goto(`${BASE}/my/pets/${pet.id}/reports/${reportId}`, { waitUntil: 'networkidle' });
+  await strangerPage.waitForTimeout(2_000);
+  const strangerSees = await strangerPage.evaluate(
+    (note) => document.body.textContent.includes(note), INPUT.staffNote,
+  );
+  check('17. 他人には見えない（RLS）', strangerSees ? '見えた' : 'ok', 'ok');
+  await ownerContext.close();
+  await strangerContext.close();
+
+  check('18. アプリ由来のエラーが無い', pageErrors.length === 0 ? 'ok' : pageErrors.join(' | '), 'ok');
+} catch (error) {
+  check('検査を最後まで実行できた', error.message, 'ok');
+} finally {
+  if (browser) await browser.close();
+  await stop();
+}
+
+const passed = results.filter((r) => r.pass).length;
+process.stdout.write(`\n===== 往復: ${passed}/${results.length} =====\n`);
+if (passed !== results.length) {
+  process.stdout.write('\nトリマーが書いたのに、飼い主に同じ値で届いていない項目がある。\n');
+}
+process.exit(passed === results.length ? 0 : 1);
