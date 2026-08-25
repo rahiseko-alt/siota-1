@@ -129,6 +129,17 @@ jobs:
       - name: 書いたものが飼い主に同じ値で届くか確かめる
         run: npm run verify:roundtrip
 
+      # カルテ0件の犬に、存在しない履歴を見せていないこと（D-10）。
+      # 確定していない下書きが飼い主に見えないことも見る。`bad-scenarios-F3` #16。
+      - name: 空のカルテが空として出ることを確かめる
+        run: npm run verify:empty
+
+      # 決め打ちの手順の**外**を見る唯一の検査。各画面に在るべきボタンが在るか。
+      # 過去2回「押すべきボタンが画面から消えた」事故を、5本の検査が揃って
+      # 見逃している（D-20260824-29 / D-20260823-06）。`bad-scenarios-F3` #19。
+      - name: 各画面に在るべきものが在るか確かめる
+        run: npm run verify:screens
+
       - name: Supabase を止める
         if: always()
         run: npx supabase stop || true
