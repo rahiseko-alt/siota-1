@@ -140,6 +140,12 @@ jobs:
       - name: 各画面に在るべきものが在るか確かめる
         run: npm run verify:screens
 
+      # 削除したら写真も**本当に**消えること（`#2` の唯一の防波堤）。
+      # RLS 越しでは必ず合格するので service_role で実体を数える。
+      # `bad-scenarios-F3` #14。
+      - name: 削除したら写真も消えることを確かめる
+        run: npm run verify:delete
+
       - name: Supabase を止める
         if: always()
         run: npx supabase stop || true

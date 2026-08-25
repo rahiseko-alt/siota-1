@@ -17,6 +17,7 @@
     "verify:roundtrip": "node scripts/build-dist.mjs && node scripts/verify-report-roundtrip.mjs",
     "verify:empty": "node scripts/build-dist.mjs && node scripts/verify-empty-pet.mjs",
     "verify:screens": "node scripts/build-dist.mjs && node scripts/verify-screens.mjs",
+    "verify:delete": "node scripts/build-dist.mjs && node scripts/verify-delete.mjs",
     "test:migration": "node --test test/kv-migration.test.mjs",
     "test:sql": "node scripts/guard/sql-verified.mjs",
     "walk": "node scripts/build-dist.mjs && node scripts/walk-human.mjs",
