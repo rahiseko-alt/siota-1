@@ -45,7 +45,7 @@
 | # | 見つけた日 | 場所 | 何が起きているか | 先へ進めるか | 状態 |
 |---|---|---|---|---|---|
 | 7 | 2026-08-25 | `src/js/ui.js:102` | どの犬でも「4歳 / 2.79kg」と出る。`src/js/dummy.js` は犬ごとに `age` と `weight` を持っているのに使っていない。`F-20260821-06`（既定値が残る）と同型 | 進める | あと回し・F2 で直す |
-| 8 | 2026-08-25 | `package.json` の `verify:*` | 飼い主に届く中身を見ていた検査7本（`m6` / `roundtrip` / `empty` / `xss` / `portal` / `all` / `preview`）が、UI をはがしたとき一緒に消えた。**`AGENTS.md` D-9〜D-12 の機械強制はいま存在しない。** 復元元は `git show 6685df5^:scripts/verify-*.mjs` | 進める | **F3 で必ず作り直す**（繋ぐ前に決める） |
+| 8 | 2026-08-25 | `package.json` の `verify:*` | 飼い主に届く中身を見ていた検査が、UI をはがしたとき一緒に消えた。**消えたのはファイル9本**（`delete` / `draft` / `empty-pet` / `invitation` / `m6` / `portal` / `report-roundtrip` / `screens` / `xss`）。**この欄は当初「7本（`m6`/`roundtrip`/`empty`/`xss`/`portal`/`all`/`preview`）」と書いていたが誤り**——`all` と `preview` はファイルではなく npm の集約スクリプトで、実体で消えた `delete`・`draft`・`invitation`・`screens` の4本が記録から漏れていた（`bad-scenarios-F3.md` #6 が指摘）。復元は `docs/ops/verify-restore-F3.md` が正。復元元は `git show 6685df5^:scripts/verify-*.mjs` | 進める | **F3 で作り直す**。いま **1/9**（`portal` のみ・CI で 14/14 PASS） |
 | 9 | 2026-08-25 | `package.json` の `test` | 実 PostgreSQL に SQL を流す唯一の検査 `verify:migrations` が、`npm test` から呼ばれていない。`supabase/migrations/` を触ったとき、人の記憶だけが担保（`F-20260821-24`） | 進める | あと回し・F3 で SQL を触る前に |
 | 10 | 2026-08-25 | 削除の順序（F3 で作り直す導線） | 写真は **Storage を片付けてから DB 行を消す**。逆にすると RLS の条件が崩れ、写真が誰からも取れなくなる（`D-20260824-34`）。実装は `git show 6685df5^:src/js/ponchi-app.js` の `purgePetAssets` / `purgeOwnerAssets` | 進める | **F3 で削除導線を作るとき必ず参照** |
 

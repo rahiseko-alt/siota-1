@@ -974,3 +974,86 @@ npm test EXIT=1
 それは Worker 側＝**F3 の結線本体**。ここでは静的配信での起動しか見ていない。
 戻せなかった 12件の検査は、はがした UI を作り直すときに
 `git show 6685df5^:test/supabase-auth.test.mjs` から読み直すこと。
+
+
+### 6. お客さんに届く中身を見る検査が、1本も存在しない
+種別: 解決
+
+**この項が言っていたのは2つ**——(a)「お客さんに届く中身を見る検査が**1本も無い**」と
+(b)「**消えたものの記録が間違っていて**、一番大事な1本が記録から漏れている」。
+
+**(a) は成り立たなくなった。** `verify:portal`（`/my` を実ログイン・実データ・RLS 下で見る
+14項目）が戻り、CI で 14/14 PASS している。**ただし戻ったのは 9本中1本**で、
+残り8本は `#12`〜`#19` に1本ずつ立て直した（すべて未解決のまま）。
+**この項が緑であることを「検査が戻った」と読まないこと**（D-18 偽-5）。
+
+**(b) の原因に触れた。** 原因は「記録を人が書くだけで、**実体と突き合わせる機械が無かった**」こと。
+`docs/deferred.md` #8 は消えた検査を「7本」と書き、`all` と `preview`（npm の集約スクリプトで
+ファイルではない）を数え、実体で消えた `delete`・`draft`・`invitation`・`screens` の4本を
+落としていた。書き直すだけでは同じズレがまた起きるので（D-7）、次の3つを置いた:
+
+| 置いたもの | 何をするか |
+|---|---|
+| `docs/ops/verify-restore-F3.md` | 9本の台帳（正）。1本ずつ **状態**（`復元済み` / `未復元`）と、戻すのに要るものを書く |
+| `scripts/guard/verify-inventory.mjs` | **毎回 git と突き合わせる。** 消えた検査が台帳に無い／状態が実体と食い違う／`復元済み` なのに `package.json` から呼ばれていない、で EXIT 1 |
+| `npm run check` への追加 | 忘れても止まる（`AGENTS.md` D-7） |
+
+**この検査が保証しないこと**: 戻っている検査の**中身が正しいか**は見ない。本数と名前と
+状態が実体と一致しているかだけを見る（D-18 偽-5 への自己申告）。
+
+**あわせて計画の誤りを1つ直した。** `plan.md` 4-0-d は「`/edit` を開く8本は戻せない」と
+書いていたが、実測すると **`verify-xss` は `/edit` を一度も開かない**（細工はスタッフ API で
+入れ、見るのは飼い主の画面だけ）。要る入口は `worker/src/index.js` に全部実在するので、
+**`#12` は結線を待たずに戻せる**。台帳に記載した。
+
+#### 直す前（赤）
+
+`origin/master` の記録の状態（台帳が無く、`deferred.md` #8 が「検査7本」と書いている）。
+
+```
+$ grep -c "検査7本" docs/deferred.md
+1
+$ node scripts/guard/verify-inventory.mjs; echo EXIT=$?
+[verify-inventory] 消えた検査 9本を台帳と突き合わせた
+❌ 台帳そのものが無い: docs/ops/verify-restore-F3.md
+
+台帳の正は docs/ops/verify-restore-F3.md。実体に合わせて直すこと。
+EXIT=1
+```
+
+#### 直した後（緑）
+
+```
+$ grep -c "検査7本" docs/deferred.md
+0
+$ node scripts/guard/verify-inventory.mjs; echo EXIT=$?
+[verify-inventory] 消えた検査 9本を台帳と突き合わせた
+✅ 台帳 OK（本数と名前と状態が実体と一致。**中身の正しさは見ていない**）
+EXIT=0
+```
+
+#### 直しを戻した（また赤）
+
+台帳を消し、`deferred.md` を `origin/master` の版に戻した。**①と同じ症状の行が出る**
+（`diff` で完全一致を確認済み）。
+
+```
+$ grep -c "検査7本" docs/deferred.md
+1
+$ node scripts/guard/verify-inventory.mjs; echo EXIT=$?
+[verify-inventory] 消えた検査 9本を台帳と突き合わせた
+❌ 台帳そのものが無い: docs/ops/verify-restore-F3.md
+
+台帳の正は docs/ops/verify-restore-F3.md。実体に合わせて直すこと。
+EXIT=1
+```
+
+**機械が本当に噛むことを、別の壊し方でも確かめた**——台帳の状態だけを実体からズラす:
+
+```
+$ sed -i 's/| 1 | `portal` | 復元済み |/| 1 | `portal` | 未復元 |/' docs/ops/verify-restore-F3.md
+$ node scripts/guard/verify-inventory.mjs; echo EXIT=$?
+[verify-inventory] 消えた検査 9本を台帳と突き合わせた
+❌ 台帳が実体と食い違う: verify-portal.mjs（台帳=未復元 / 実体=在る）
+EXIT=1
+```
