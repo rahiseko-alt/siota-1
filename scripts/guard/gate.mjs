@@ -12,6 +12,8 @@
  *   docs/ops/solved-F{n}.md                「解決した」の3出力（D-18）※閉じるときだけ
  *
  * 揃うまで、そのフェーズの**作業場**を書き換えない。
+ * バッドシナリオの未解決は、**作業中は「減っていること」・閉じるときは「0 件」**を要求する
+ * （常に 0 件を要求すると、作業場の中にある地雷を潰す作業そのものが止まるため）。
  * 記録と仕組みの置き場（docs/ scripts/guard/ .agents/）は、いつでも書ける——
  * そこを止めたら、成果物そのものが作れなくなる。
  *
@@ -21,12 +23,61 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { execSync } from 'node:child_process';
 import { readPhase, rel, ALWAYS } from './scope.mjs';
 import { checkSolved } from './solved.mjs';
 import { pathToFileURL } from 'node:url';
 
 /** 関所を通さずに書いてよい場所（＝成果物と仕組みの置き場）。 */
 const EXEMPT = ALWAYS;
+
+/** 見出し行だけを見て、手つかずの「該当した」の**番号**を返す。
+
+    行末で判定しない。`結果: 該当した（マスター作業・未着手）` のように**後ろに何か書くだけで
+    数から外れてしまう**ため（実際に旧 #3 がそうなっていた）。
+    「解決済み」と書いてあるかどうかだけで決める。 */
+export function unresolvedNumbers(text) {
+  const out = [];
+  for (const line of text.split('\n')) {
+    if (!line.startsWith('###')) continue;
+    if (!/結果:\s*該当した/.test(line)) continue;
+    if (/解決済み/.test(line)) continue;
+    const m = line.match(/^###\s*(\d+)\./);
+    out.push(m ? m[1] : line.trim());
+  }
+  return out;
+}
+
+export function unresolvedCount(text) {
+  return unresolvedNumbers(text).length;
+}
+
+/** **出発点**の未解決数。「減っているか」を言うには、比べる相手が要る。
+
+    ①本流（`origin/master`）に在ればそれ。②無ければ**この書類が最初にコミットされた版**
+    ——つまり提案した時点。③どちらも取れなければ項目数。
+
+    ②が要る理由: この枝で始めたフェーズでは本流にまだ書類が無い。そこで項目数を出発点に
+    すると、**`結果: 該当せず` の項を新しく足すだけで出発点が1つ増え、条件が緩む**。
+    「提案した時点」を出発点にすれば、あとから何を足しても出発点は動かない。 */
+function baselineUnresolvedNumbers(root, phase, currentText) {
+  const rel = `docs/ops/bad-scenarios-${phase}.md`;
+  for (const ref of ['origin/master', 'origin/main', 'master', 'main']) {
+    try {
+      const past = execSync(`git show ${ref}:${rel}`, { cwd: root, stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+      return unresolvedNumbers(past);
+    } catch { /* その ref に無い。次を試す */ }
+  }
+  try {
+    const first = execSync(`git log --diff-filter=A --format=%H -- ${rel}`, { cwd: root, stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString().trim().split('\n').filter(Boolean).pop();
+    if (first) {
+      const past = execSync(`git show ${first}:${rel}`, { cwd: root, stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+      return unresolvedNumbers(past);
+    }
+  } catch { /* まだ一度もコミットしていない */ }
+  return unresolvedNumbers(currentText);
+}
 
 /** 揃っていない成果物の一覧。空なら開いている。 */
 export function missingArtifacts(root, phase, { end = false } = {}) {
@@ -50,12 +101,37 @@ export function missingArtifacts(root, phase, { end = false } = {}) {
     } else if (/^###.*結果:\s*未\s*$/m.test(text)) {
       missing.push(`② バッドシナリオが**まだ実行されていない** → docs/ops/bad-scenarios-${phase}.md\n`
         + `   結果が「未」の行が残っている。10個を実行し、該当しないことを確かめること。`);
-      /* 「該当した」のまま手つかずの項だけを止める。
+      /* 「該当した」のまま手つかずの項を見る。
          「該当した ／ 解決済み」は solved.mjs が3出力で裏を取る。
-         書き換えて「該当せず」にする逃げ道は solved.mjs 側で塞いである。 */
-    } else if (/^###.*結果:\s*該当した\s*$/m.test(text)) {
-      missing.push(`② バッドシナリオに**手つかずの「該当した」が残っている** → docs/ops/bad-scenarios-${phase}.md\n`
-        + `   解決したら見出しを「結果: 該当した ／ 解決済み」にし、docs/ops/solved-${phase}.md に3出力を貼ること。`);
+         書き換えて「該当せず」にする逃げ道は solved.mjs 側で塞いである。
+
+         **閉じるときは 0 件を要求する。作業中は「減っていること」を要求する。**
+         0 件を常に要求すると、**地雷を潰す作業そのものが止まる**——#8 や #9 のように
+         直す場所が作業場の中にある項は、永久に着手できなくなっていた（マスター判断・2026-08-25）。
+         増やす変更は従来どおり止まるので、緩めたことにはならない。 */
+    } else {
+      const now = unresolvedCount(text);
+      if (end) {
+        if (now > 0) {
+          missing.push(`② バッドシナリオに**手つかずの「該当した」が ${now}件**残っている → docs/ops/bad-scenarios-${phase}.md\n`
+            + `   フェーズを閉じるには 0 件にすること。`
+            + `解決したら見出しを「結果: 該当した ／ 解決済み」にし、docs/ops/solved-${phase}.md に3出力を貼る。`);
+        }
+      } else {
+        /* 数えるのは**出発点に在った項目**だけ。作業中に新しく見つけた項目を
+           分母に入れると、**見つけて記録するほど条件が厳しくなる**——
+           記録しないほうが得になってしまう。F2 の #11 のように、
+           作業中に見つかるものこそ重い（マスター判断・2026-08-25）。
+           新しい項目も**閉じるときには 0 件を要求される**ので、逃がしてはいない。 */
+        const base = baselineUnresolvedNumbers(root, phase, text);
+        const stillOpen = unresolvedNumbers(text).filter((n) => base.includes(n));
+        if (base.length > 0 && stillOpen.length >= base.length) {
+          missing.push(`② バッドシナリオの**未解決が減っていない**（出発点 ${base.length}件 → いま ${stillOpen.length}件） → docs/ops/bad-scenarios-${phase}.md\n`
+            + `   作業場を触ってよいのは、**この書類の未解決を減らす変更**のときだけです。\n`
+            + `   1件でも解決して（見出しを「結果: 該当した ／ 解決済み」にし、docs/ops/solved-${phase}.md に3出力を貼る）から進めてください。\n`
+            + `   まだ手つかず: ${stillOpen.join(', ')}`);
+        }
+      }
     }
   }
   if (end) {
