@@ -479,3 +479,87 @@ $ npm run check
 同じファイルの中で片付けを**削除の後**に書いても、この検査は通ってしまう。
 実体を数える検査（`verify-delete.mjs` の作り直し）は **`#6`** の領分で、
 service_role が要るため**まだ作れていない**。`#6` はまだ未解決。
+
+---
+
+### 3. トリマーが見つけた「しこり・イボ」が、どこにも残らず消える
+種別: 解決
+
+**原因**: `App.marks`（`src/js/ui.js:11`）は素の配列で、`pointerdown` で積んで
+`drawCanvas()` で描くだけ。**取り出す道が1本も無かった**——`toDataURL` / `toBlob` /
+`bodyMarkingImage` が `src/` に **0件**。一方で受け手 `backend/js/magazine-view.js:534` は
+`data.bodyMarkingImage` を読む。**受ける側だけが在って、出す側が無い**状態だった。
+画面を移れば `marks` は失われるので、トリマーが体を触って見つけた
+**しこりが、飼い主にも記録にも残らずに消える**。
+
+**直したこと**: `App.exportBodyMarking()` を足した。⑥の受け手が読む
+`data.bodyMarkingImage` へ渡す**唯一の道**で、行き先は既にある設計に合わせただけ
+（部位名の付け方などを自分で発明していない——`plan.md` 第3章）。
+
+**黙って消えないことを、返り値の設計で担保した**:
+- 印が1つも無いときは `null`。**白紙の絵を「所見あり」として残さない**
+- 印が在るのに描き先が無いときは**投げる**。ここで黙って `null` を返すと、
+  見つけた所見が消えたことに誰も気づけない（`#1` と同じ型）
+- 取り出す前に `drawCanvas()` を通す。印を載せていない空の絵を出さない
+
+`test/ui-body-marking.test.mjs` を新設し、**`test:unit` に組み込んだ**。
+`src/js/ui.js` は古典スクリプトで `import` できないため、`vm` に最小限の
+`document` を置いて読み込んでいる——**これ自体が `#10` の未解決の現れ**なので、
+テストの冒頭にその旨を書いた。
+
+#### 直す前（赤）
+```
+$ grep -cE "toDataURL|toBlob|bodyMarkingImage" src/js/ui.js src/index.html
+src/js/ui.js:0
+src/index.html:0            # 保存する道が1本も無い
+
+$ grep -n "bodyMarkingImage" backend/js/magazine-view.js
+534:  setImage(container, 'skin-image-frame', 'skin-image', data.bodyMarkingImage);
+                            # 受ける側だけが在る
+
+$ npm test
+not ok 5 - 印が1つも無いときは null（白紙の絵を「所見あり」として残さない）
+not ok 6 - 印を付けたら、カルテに残せる形で取り出せる
+not ok 7 - 印の種類が変わっても、消えずに残る
+not ok 8 - 印が在るのに描き先が無いときは、黙って null を返さず投げる
+EXIT=1
+```
+
+#### 直した後（緑）
+```
+$ npm test
+# pass 14   (test:unit)
+# pass 51   (test:schema)
+# pass 6    (test:migration)
+# pass 6    (test:backend)
+EXIT=0
+```
+
+3種類の印（`赤み` / `しこり/イボ` / `毛玉`）すべてで取り出せること、
+印が在るのに描き先が無いときは投げること、**受け手が
+`data.bodyMarkingImage` を読み続けていること**（出す側の行き先が消えていないこと）を
+それぞれ検査している。`npm test` は 72件 → **77件**。
+
+#### 直しを戻した（また赤）
+`src/js/ui.js` だけを元に戻すと、同じ4件が落ちる。
+
+```
+$ git checkout -- src/js/ui.js
+$ npm test
+not ok 5 - 印が1つも無いときは null（白紙の絵を「所見あり」として残さない）
+not ok 6 - 印を付けたら、カルテに残せる形で取り出せる
+not ok 7 - 印の種類が変わっても、消えずに残る
+not ok 8 - 印が在るのに描き先が無いときは、黙って null を返さず投げる
+EXIT=1
+```
+
+**この記録の限界**: 作ったのは**道**であって、**まだ誰も通っていない**。
+④の保存そのもの（`finalize_report` への結線）は F3 の本体作業で、未着手。
+`exportBodyMarking()` を呼ぶ場所ができるまで、実際の絵は飼い主に届かない。
+
+また、突き合わせたのは `bodyMarkingImage` **1キーだけ**。⑥は `data.*` を
+**14キー**読んでおり（`bestWeight` `bodyLanguage` `date` `ear` `heroPhotos` `isoDate`
+`nail` `pet` `skin` `staffNote` `teeth` `trimming` `weights`）、**残り13キーは
+出す側がまだ無い**。`F-20260821-12/-13`「保存はされるのに復元で静かに消える」は
+このズレから起きる型なので、④の保存を書くときは**キーの突き合わせから始める**
+（`docs/ops/failure-check-F3-start.md` の持ち込み条件 1）。

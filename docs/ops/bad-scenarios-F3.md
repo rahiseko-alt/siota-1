@@ -65,7 +65,7 @@ RLS 越しの確認は必ず合格してしまう。service_role で実体を数
 
 ## 段 II — 黙って失う
 
-### 3. トリマーが見つけた「しこり・イボ」が、どこにも残らず消える — 結果: 該当した
+### 3. トリマーが見つけた「しこり・イボ」が、どこにも残らず消える — 結果: 該当した ／ 解決済み
 - **人間**: 犬の体の図に「🔴 赤み」「🟡 しこり/イボ」「🔵 毛玉」と印を付けられます。ところがこの印は**画面の中だけの一時的なもので、保存する道がどこにも作られていません**。トリマーが体を触って見つけた**しこりが、飼い主にも記録にも残らずに消えます**。次の月には誰も覚えていません。
 - **AI**: `App.marks`（`src/js/ui.js:11`）は素の配列で、`pointerdown` で積んで `drawCanvas()` で描くだけ。**`toDataURL` / `toBlob` / `bodyMarkingImage` が `src/` に 1件も無い**。受け手の `magazine-view.js:534` は `data.bodyMarkingImage` を読むので、**出す側が無いまま受ける側だけが在る**状態。画面を移ると `marks` は失われる。`docs/deferred.md` #6（Konva の結線は F3）と同じ場所の、より重い側面。
 
@@ -211,7 +211,7 @@ $ grep -rn "esbuild" scripts/
 |---|---|---|---|
 | 1 | I | **解決済み** | `renderMagazine(_, null)` が例外なく無変更で帰る → 器を空にして投げる（`solved-F3.md` #1） |
 | 2 | I | **解決済み** | 順序の検査 **0件** → `delete-order.mjs` を新設し `check` に組込（`solved-F3.md` #2） |
-| 3 | II | 該当した | `toDataURL`/`toBlob`/`bodyMarkingImage` が `src/` に **0件**（受け手だけ在る） |
+| 3 | II | **解決済み** | 出す側 **0件** → `App.exportBodyMarking()` を新設（`solved-F3.md` #3） |
 | 4 | II | 該当した | `if (error || !blob) continue;`（報告なし） |
 | 5 | II | 該当した | 壊した SQL で `npm test` **EXIT 0** / `verify:migrations` **EXIT 1** |
 | 6 | III | 該当した | 消えたのは **9本**、記録は **7本**（`delete` ほか4本が記録漏れ） |
