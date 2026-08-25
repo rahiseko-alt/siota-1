@@ -146,6 +146,19 @@ jobs:
       - name: 削除したら写真も消えることを確かめる
         run: npm run verify:delete
 
+      # 記入が黙って消えないこと（誤タップ1回で数十分が失われない）。#15。
+      - name: 記入が下書きとして残ることを確かめる
+        run: npm run verify:draft
+
+      # 新規のお客様が自分のカルテを見られるまで。招待は飾りではなく必須経路。#17。
+      - name: 招待から閲覧まで通ることを確かめる
+        run: npm run verify:invitation
+
+      # マスター指定の動線①〜⑥を実データで一気通貫。F3 の完了条件そのもの。#18。
+      # **人が使えるかの判定ではない**（それは D-14・npm run walk の絵で決める）。
+      - name: 動線が一気通貫で通ることを確かめる
+        run: npm run verify:m6
+
       - name: Supabase を止める
         if: always()
         run: npx supabase stop || true

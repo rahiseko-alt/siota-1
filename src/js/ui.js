@@ -21,6 +21,12 @@ const App = {
      ——書いていないことが書いてあるように見える（`D-10`）。 */
   form: { nail: 0, ear: { right: 0, left: 0 }, teeth: '', weight: 0 },
 
+  /* 下書きの居場所。`null` は「まだ1度も保存していない」。 */
+  draftPetId: null,
+  draftReportId: null,
+  draftWatching: false,
+  draftTimer: null,
+
   init() {
     this.initCanvas();
 
@@ -64,6 +70,7 @@ const App = {
       const dates = (pet.months || []).map((m) => m && m.date).filter(Boolean).sort();
       return {
         id: pet.id,
+        ownerId: pet.ownerId || '',
         name: pet.petName || '',
         owner: pet.ownerName || '',
         breed: '',
@@ -81,6 +88,104 @@ const App = {
      過去カルテを開く導線は ④保存・確定 と一緒に作る（`docs/deferred.md` #23）。 */
   showPetKarte(pet) {
     this.selectKarte(pet.petName || '', pet.ownerName || '', '');
+    this.resumeDraft(pet.id);
+  },
+
+  /* ── ④の記入を、黙って失わないための下書き ──────────────────────
+     `bad-scenarios-F3` #15。記入は DOM とメモリにしか無く、サーバに残るのは
+     「確定」の後だけだった。カルテ画面の「戻る」は確認なしで遷移するので、
+     **誤タップ1回で数十分の記入が消える**。スリープ・着信・引っぱって更新でも同じで、
+     しかも消えたことに気づけない（`D-20260824-30` の 1 と 7）。 */
+
+  /** 前回の続きを読み込む。無ければ何もしない（新規のまま）。 */
+  resumeDraft(petId) {
+    const staff = globalThis.TrimmerSupabaseStaff;
+    if (!staff || !staff.findDraft || !petId) return;
+    this.draftPetId = petId;
+    staff.findDraft(petId).then((draft) => {
+      if (draft) {
+        this.draftReportId = draft.id;
+        this.applyReport(draft.data || {});
+      }
+      this.watchDraft();
+    }).catch(() => {
+      /* 読み込めなくても記入は続けられる。**続きから書けないことだけは伝える。** */
+      const status = document.getElementById('dock-status-text');
+      if (status) status.textContent = '前回の続きを読み込めませんでした';
+      this.watchDraft();
+    });
+  },
+
+  /** 触られたら下書きを保存する。1秒まとめてから1回だけ送る。 */
+  watchDraft() {
+    const panel = document.getElementById('screen-3');
+    if (!panel || this.draftWatching) return;
+    this.draftWatching = true;
+    const queue = () => {
+      clearTimeout(this.draftTimer);
+      this.draftTimer = setTimeout(() => this.saveDraft(), 1000);
+    };
+    panel.addEventListener('input', queue);
+    panel.addEventListener('click', queue);
+    panel.addEventListener('pointerdown', queue);
+  },
+
+  saveDraft() {
+    const staff = globalThis.TrimmerSupabaseStaff;
+    if (!staff || !staff.saveDraft || !this.draftPetId) return;
+    /* 印は PNG から戻せないので、**印そのもの**も一緒に置く（`__marks`）。
+       ⑥ は読まないキーなので、確定のときに落とす。 */
+    const data = { ...this.extractReport(), __marks: this.marks };
+    staff.saveDraft(this.draftPetId, this.draftReportId, data, this.today())
+      .then((id) => { this.draftReportId = id; })
+      .catch(() => {
+        /* **黙って捨てない。** 保存できていないことを画面に出す（`D-2` の型）。 */
+        const status = document.getElementById('dock-status-text');
+        if (status) status.textContent = '⚠️ 下書きを保存できていません';
+      });
+  },
+
+  /** 下書きを画面に戻す。`extractReport()` の逆。 */
+  applyReport(data) {
+    const set = (selector, value) => {
+      const el = document.querySelector(selector);
+      if (el && value != null) el.value = value;
+    };
+    set('[data-field="staff-note"]', data.staffNote || '');
+    /* カットの長さ・スタイルは、⑥が読む形（`trimming.comment`）に**まとめて**入れて
+       いるので、そこから2つの選択に戻す規則が無い。戻さない
+       （`docs/deferred.md` #26）。戻せないものを推測で埋めない。 */
+    const weight = (data.weights || [])[0];
+    if (weight && weight.kg) {
+      set('#input-weight', weight.kg);
+      this.onWeightChange(weight.kg);
+    }
+    const nail = (data.nail || {}).level;
+    if (nail) {
+      const btn = [...document.querySelectorAll('#nail-stepper-wrap .stepper-btn')]
+        .find((el) => (el.getAttribute('onclick') || '').includes(`'nail', ${nail}`));
+      if (btn) btn.click();
+    }
+    for (const side of ['right', 'left']) {
+      const value = (data.ear || {})[side];
+      if (!value) continue;
+      const group = document.querySelector(`[data-ear="${side}"]`);
+      if (!group) continue;
+      const btn = [...group.querySelectorAll('.stepper-btn')]
+        .find((el) => (el.querySelector('.val') || {}).textContent === String(value));
+      if (btn) btn.click();
+    }
+    const teeth = (data.teeth || {}).status;
+    if (teeth) {
+      /* 日本語はセレクタに連結しない。属性を読んで比べる（`D-9`）。 */
+      const btn = [...document.querySelectorAll('.teeth-pill-btn')]
+        .find((el) => (el.getAttribute('onclick') || '').includes(`'${teeth}'`));
+      if (btn) btn.click();
+    }
+    if (Array.isArray(data.__marks) && data.__marks.length > 0) {
+      this.marks = data.__marks;
+      this.resizeCanvas();
+    }
   },
 
   /* ⑤確認 — 実データのカルテを screen-4 に描く。
@@ -106,6 +211,16 @@ const App = {
 
   /* 実データのカードを押したとき。URL を変えて backend に読み直させる
      （画面の中だけで完結させない——戻る・共有・再読み込みが効かなくなる）。 */
+  /* 初回登録の QR / URL を出す。中身は backend が持っている（`showOwnerInvitation`）。
+     押せる場所を1つ作っただけで、発行の仕組みは足していない。 */
+  showInvitation(ownerId, ownerName) {
+    const staff = globalThis.TrimmerSupabaseStaff;
+    if (!staff || !staff.showOwnerInvitation) return;
+    Promise.resolve(staff.showOwnerInvitation(ownerId, ownerName)).catch((error) => {
+      globalThis.alert(`初回登録用のQRを出せませんでした。\n\n${error.message}`);
+    });
+  },
+
   openPet(petId) {
     location.href = `/edit/p/${encodeURIComponent(petId)}`;
   },
@@ -144,6 +259,7 @@ const App = {
         + '</div></div>'
         + '<div class="karte-card__actions">'
         +   '<button class="btn-clone-karte">前回を複製</button>'
+        +   '<button class="btn-invite" hidden>初回登録QR</button>'
         +   '<button class="boxbutton boxbutton--sm">選択</button>'
         + '</div>';
       /* 値は textContent で入れる。仮データでも、名前を HTML として解釈させない。 */
@@ -157,6 +273,19 @@ const App = {
       else alert.remove();
       const clone = card.querySelector('.btn-clone-karte');
       clone.onclick = (e) => { e.stopPropagation(); this.cloneAndCreate(dog.name, dog); };
+      /* 初回登録（QR）の入口。**新規のお客様はこれを通らないと自分のカルテを
+         永久に見られない**——飼い主側の RLS は `owner_users` 経由でしか通らず、
+         そこへ行を入れられるのは `claim_invitation`（招待の消化）だけである。
+         F2 で飼い主を選ぶ画面ごと動線から外れ、**本番で招待を発行する手段が
+         消えていた**（`D-20260823-05` は残すと決めていたのに・`D-20260824-29`）。
+         仮データの犬は飼い主 id を持たないので出さない。 */
+      const invite = card.querySelector('.btn-invite');
+      if (dog.ownerId) {
+        invite.hidden = false;
+        invite.onclick = (e) => { e.stopPropagation(); this.showInvitation(dog.ownerId, dog.owner); };
+      } else {
+        invite.remove();
+      }
       box.appendChild(card);
     });
     const total = document.getElementById('karte-total-count');
@@ -569,7 +698,10 @@ const App = {
     const button = document.querySelector('.dock-action-wrap .boxbutton');
     if (button) button.disabled = true;
     try {
-      const saved = await staff.saveReport(context.petId, this.extractReport(), this.today());
+      clearTimeout(this.draftTimer);
+      const saved = await staff.saveReport(
+        context.petId, this.extractReport(), this.today(), this.draftReportId,
+      );
       location.href = `/edit/p/${encodeURIComponent(context.petId)}/${encodeURIComponent(saved.id)}`;
     } catch (error) {
       if (button) button.disabled = false;

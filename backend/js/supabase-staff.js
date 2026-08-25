@@ -412,18 +412,75 @@ async function bootStaffPortal(PonchiApp) {
  * 手元の値をそのまま出すと、届いたかどうかを見ないまま「届いた」と言うことになる
  * （`D-12`「押せた ではなく 同じ値で届いた で見る」）。
  */
-async function saveReport(petId, reportData, reportDate) {
+/**
+ * saveDraft(petId, reportId, reportData, reportDate) — 記入を下書きとして残す
+ *
+ * `bad-scenarios-F3.md` #15。トリマーの記入は DOM とメモリにしか無く、サーバに残るのは
+ * 「確定」を押した後だけだった。カルテ画面の「戻る」は確認なしで遷移するので、
+ * **誤タップ1回で数十分の記入が消える**。施術中のスリープ・着信・引っぱって更新でも
+ * 同じで、しかも消えたことに気づけない（`D-20260824-30` の 1 と 7）。
+ *
+ * 下書きは `status = 'draft'` のまま置く。**飼い主には見えない**——
+ * 見えたら「存在しない履歴」になる（`#16` がそれを毎回確かめる）。
+ *
+ * 写真は下書きの時点では Storage へ上げない。上げると、下書きを捨てたときに
+ * 誰も回収できない孤児が残る（`#2` と同じ形）。`data:` のまま JSONB に置き、
+ * **確定のときにまとめて上げる**。
+ *
+ * 戻り値は下書きの id。呼び出し側は次回からそれを渡すこと。
+ */
+async function saveDraft(petId, reportId, reportData, reportDate) {
+  const api = globalThis.TrimmerStaffApi && globalThis.TrimmerStaffApi.request;
+  if (typeof api !== 'function') throw new Error('下書きを保存できません');
+  if (reportId) {
+    const updated = await api(
+      `/api/pets/${encodeURIComponent(petId)}/reports/${encodeURIComponent(reportId)}`,
+      { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: reportData }) },
+    );
+    if (!updated || !updated.report) throw new Error('下書きを保存できませんでした');
+    return updated.report.id;
+  }
+  const created = await api(`/api/pets/${encodeURIComponent(petId)}/reports`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ petId, reportDate, data: reportData }),
+  });
+  if (!created || !created.report) throw new Error('下書きを作れませんでした');
+  return created.report.id;
+}
+
+/** その犬の、確定していない下書きを1件返す（無ければ null）。 */
+async function findDraft(petId) {
+  const api = globalThis.TrimmerStaffApi && globalThis.TrimmerStaffApi.request;
+  if (typeof api !== 'function') return null;
+  const body = await api(`/api/pets/${encodeURIComponent(petId)}/reports`);
+  const draft = (body.reports || []).find((report) => report.status === 'draft');
+  if (!draft) return null;
+  const full = await api(
+    `/api/pets/${encodeURIComponent(petId)}/reports/${encodeURIComponent(draft.id)}`,
+  );
+  return { id: draft.id, data: (full.report && full.report.data) || {} };
+}
+
+async function saveReport(petId, reportData, reportDate, draftId) {
   const client = globalThis.TrimmerAuth && globalThis.TrimmerAuth.client;
   const api = globalThis.TrimmerStaffApi && globalThis.TrimmerStaffApi.request;
   if (!client || typeof api !== 'function') throw new Error('保存できません（ログインし直してください）');
 
   const { data, assets } = await replaceDataUrlAssets(reportData);
-  const created = await api(`/api/pets/${encodeURIComponent(petId)}/reports`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ petId, reportDate, data }),
-  });
-  const report = created.report;
+  /* 下書きが在ればそれを確定させる。**新しく作らない**——作ると下書きが残り、
+     次に開いたときに古い記入が蘇る（`#15` の 3 が見ているのはそこ）。 */
+  const saved = draftId
+    ? await api(
+      `/api/pets/${encodeURIComponent(petId)}/reports/${encodeURIComponent(draftId)}`,
+      { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data }) },
+    )
+    : await api(`/api/pets/${encodeURIComponent(petId)}/reports`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ petId, reportDate, data }),
+    });
+  const report = saved.report;
   if (!report || !report.id) throw new Error('カルテを作れませんでした');
 
   if (assets.length > 0) {
@@ -444,6 +501,8 @@ globalThis.TrimmerSupabaseStaff = {
      backend 側が globalThis に載せて渡す（`bad-scenarios-F3` #10 で固定した繋ぎ方）。 */
   renderMagazine,
   saveReport,
+  saveDraft,
+  findDraft,
   isAdmin: () => activeMembership?.role === 'admin',
   showOwnerInvitation: (ownerId, ownerName) => showInvitationDialog(
     { invitationType: 'owner', ownerId }, ownerName || '飼い主',
