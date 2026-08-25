@@ -13,6 +13,7 @@
  *
  * 何を保証するか: 画面の側が、バックエンドにも外の世界にも繋がっていないこと。
  *   そして `src/` に、どこからも呼ばれないまま置かれているファイルが無いこと。
+ *   起点は `index.html`（トリマー）と `my.html`（飼い主）の2つ。
  * **何を保証しないか**: 画面が正しく動くこと・意匠が合っていること・
  *   到達できるファイルの中身が正しいこと。ここは**繋がりと在庫だけ**を見る（D-18 偽-5）。
  *
@@ -110,15 +111,24 @@ function deferredNames(repoRoot) {
 const repoRoot = process.env.REPO_ROOT || process.cwd();
 const uiDir = process.argv[2] || 'src';
 const root = path.join(repoRoot, uiDir);
-const entry = 'index.html';
 
-if (!fs.existsSync(path.join(root, entry))) {
-  process.stderr.write(`❌ ${uiDir}/${entry} が無い。走査の起点が無いので判定できない。\n`);
+/* このアプリの入口は2つ。**片方だけを起点にすると、もう片方が丸ごと
+   「どこからも繋がっていない」と出る**（`my.html` を戻したときに実際に出た）。
+     index.html … トリマーの画面
+     my.html    … 飼い主のマイページ（`bootProtectedPortal` が起動する器）
+   `my.html` は無い時期があるので、在るものだけを起点にする。
+   起点を勝手に増やせば条件Aは通しやすくなるので、**使った起点は必ず出力する**（D-18 偽-2）。 */
+const ENTRIES = ['index.html', 'my.html'];
+const entries = ENTRIES.filter((e) => fs.existsSync(path.join(root, e)));
+const entry = entries[0];
+
+if (!entries.includes('index.html')) {
+  process.stderr.write(`❌ ${uiDir}/index.html が無い。走査の起点が無いので判定できない。\n`);
   process.exit(1);
 }
 
 const all = listFiles(root).map((f) => path.normalize(f)).sort();
-const reachable = reachableFrom(root, entry);
+const reachable = new Set(entries.flatMap((e) => [...reachableFrom(root, e)]));
 const deferred = deferredNames(repoRoot);
 
 /* ── A: 到達できないファイル ── */
@@ -140,7 +150,7 @@ for (const f of checkB ? scanned : []) {
 }
 
 process.stdout.write(
-  `[isolation] ${uiDir}/ を走査: 全 ${all.length} ファイル / ${entry} から到達 ${reachable.size} / `
+  `[isolation] ${uiDir}/ を走査: 全 ${all.length} ファイル / 起点 ${entries.join(' + ')} から到達 ${reachable.size} / `
   + `中身を読んだ ${checkB ? scanned.length : 0}\n`,
 );
 
@@ -157,7 +167,7 @@ if (!checkB) {
 const problems = [];
 if (unregistered.length > 0) {
   problems.push(
-    `【条件A】${uiDir}/${entry} からどこにも繋がっていないファイルが ${unregistered.length} 件あります。\n`
+    `【条件A】${uiDir}/（起点 ${entries.join(' + ')}）からどこにも繋がっていないファイルが ${unregistered.length} 件あります。\n`
     + unregistered.map((f) => `    ${uiDir}/${f}`).join('\n')
     + `\n  UI として使われていないなら、${uiDir}/ に置いたままにしない。\n`
     + `  いま消せない事情があるなら docs/deferred.md に**番号付きで**1行残す（ルール⑤）。\n`

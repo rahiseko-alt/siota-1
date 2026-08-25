@@ -790,12 +790,20 @@ $ grep -n "^export" backend/js/*.js | wc -l
 21
 $ grep -c 'onclick="App\.' src/index.html
 61                          # ← グローバル App に依存している数（属性全体では 63件）
-
-$ node scripts/guard/ui-script-format.mjs
-（この検査は存在しない）
 ```
 
-危ない繋ぎ方を置いても、既存の `npm run check` は何も言わない。
+`ui.js` を `type="module"` にした複製（`onclick` 63件が壊れる状態）で、
+当時の `npm run check` を通した。**何も言わない。**
+
+```
+$ # src/index.html の <script src="/js/ui.js"> を type="module" にする
+$ npm run check
+✅ 条件A のみ OK（条件A: 未到達 0 件・あと回し登録済み 11 件は除く / 条件B: **見ていない**）
+✅ 条件A のみ OK（条件A: 未到達 0 件・あと回し登録済み 11 件は除く / 条件B: **見ていない**）
+✅ src→dist parity OK
+✅ design/ isolation OK
+npm run check EXIT=0
+```
 
 #### 直した後（緑）
 壊れる3通りを実際に作って、全部止まることを確かめた。
@@ -835,14 +843,134 @@ check EXIT=0
 #### 直しを戻した（また赤）
 `npm run check` から `ui-script-format` を外すと、A・B・C のどれを置いても素通りする。
 
+`npm run check` から `ui-script-format` を外すと、**①と一字一句同じ出力**に戻る。
+
 ```
 $ # package.json の check から `&& node scripts/guard/ui-script-format.mjs` を外す
 $ # ui.js を type="module" にする（onclick 63件が壊れる状態）
 $ npm run check
-check EXIT=0                # ← 緑。63件が壊れているのに通る
+✅ 条件A のみ OK（条件A: 未到達 0 件・あと回し登録済み 11 件は除く / 条件B: **見ていない**）
+✅ 条件A のみ OK（条件A: 未到達 0 件・あと回し登録済み 11 件は除く / 条件B: **見ていない**）
+✅ src→dist parity OK
+✅ design/ isolation OK
+npm run check EXIT=0        # ← 緑。63件が壊れているのに通る
 ```
 
 **この記録の限界**: 固定したのは**規格**だけで、**まだ1本も繋いでいない**。
 `src/index.html` に backend のモジュールを読む行は入れていない——それは `#7`（⑥の器）と
 ④の保存の結線で、F3 の本体作業。この検査は、その作業が**間違った道に入ったときに止める**
 ためのもの。繋いだ結果が正しく動くことは何も言っていない（`D-18` 偽-5）。
+
+---
+
+### 7. ⑥の器そのものが `src/` に無く、その見張りも一緒に消えている
+種別: 解決
+
+**原因**: `6685df5`「古いUIをはがし、正しいUIだけにする」が、`src/my.html`（飼い主の
+マイページ）と `test/supabase-auth.test.mjs`（その見張り）を**同時に**消していた。
+さらに `scripts/build-dist.mjs` から **vendor バンドルの生成手順ごと**消していた
+（`esbuild` が devDependency に宣言されたまま `scripts/` から未使用だったのは、そのため）。
+結線表の「⑥顧客ページ → `bootProtectedPortal` + `hydrateAssetReferences` +
+`renderMagazine`」に、**起動先の器が無い**状態だった。
+
+**マスター指定により、逐語で戻した**（自分で意匠を足していない）。
+`git show 6685df5^:src/my.html`。**架空のカルテは 0件**で、P8-a の掃除は保たれていた。
+
+**逐語から変えたのは、F1 の移設で強制される置き場所だけ**:
+
+| 変えた場所 | 前 | 後 | 理由 |
+|---|---|---|---|
+| `src/my.html` の2行 | `/js/supabase-vendor.js` `/js/supabase-auth.js` | `/backend/js/…` | F1 が `src/js/` → `backend/js/` へ移した |
+| テストの import 4行 | `../src/js/…` | `../backend/js/…` | 同上 |
+| テストの vendor 検査 | `src="/js/…"` | `src="/backend/js/…"` | 同上（**見ている中身は同じ**——vendor が先・portal は `type="module"`） |
+
+**戻せなかった 12件は、削ったのではなく「見張る実体が無い」。**
+`publish-client-ponchi.js` / `ponchi-app.js` / `ponchi-engine.js` は `6685df5` が
+消した古い UI で、戻すと即座に `ENOENT` で落ちる。**失われた知見のうち、いま効く2つは
+引き継ぎ先を作って明記した**（テストファイル内に全文を残した）:
+
+1. **`img.src`（プロパティ）を読んではいけない**——空のとき**ページURL**が返る。
+   同じ形が `magazine-view.js:322` に在り、`docs/deferred.md` #16 に登録済み
+2. **削除の順序**（`beforeDelete()` が `DELETE` より前・間に `.catch(` を挟まない・
+   導線3つ全部に付いている）。いまは `delete-order.mjs` が引き継ぐが、
+   **ここに在った版のほうが強い**（順序まで見ていた）。`#2` の限界に追記した
+
+**あわせて直したもの**:
+- `isolation.mjs` の起点を **`index.html` + `my.html` の2つ**にした。片方だけを起点に
+  すると、もう片方が丸ごと「どこからも繋がっていない」と出る（実際に出た）。
+  起点を増やせば条件Aは通しやすくなるので、**使った起点を必ず出力する**
+- `build-dist.mjs` に `my.html` と `backend/js` の配布、および vendor バンドルの
+  生成（`iife` + `globalName` → `globalThis.TrimmerSupabaseVendor`）を戻した。
+  `6685df5^` から置き場所だけ読み替えたもの
+- `supabase-staff.js` は**トリマー側**の部品で読み込む側がまだ無いため、
+  検査が用意している正規の手順どおり `docs/deferred.md` #17 に番号付きで登録した
+
+#### 直す前（赤）
+```
+$ ls src/my.html
+★ src/my.html は存在しない
+$ ls test/supabase-auth.test.mjs
+★ 無い
+$ git log --oneline --diff-filter=D -- src/my.html
+6685df5 古いUIをはがし、正しいUIだけにする（第1段・第2段の途中）
+
+$ grep -rn "esbuild" scripts/
+                            # 0件。vendor の生成手順も一緒に消えていた
+```
+
+#### 直した後（緑）
+器と見張りが戻り、**実ブラウザで起動する**ことまで確かめた。
+
+```
+$ npm run build
+[build] backend/js  4件
+[build] backend/js  supabase-vendor.js（bundle）
+[build] 完了  35件
+
+$ npm run check
+✅ 条件A のみ OK（起点 index.html + my.html / 未到達 0 件）
+✅ src→dist parity OK
+check EXIT=0
+
+$ npm test
+# pass 14 / 56 / 6 / 24      → 100件（それまで 82件）
+test EXIT=0
+```
+
+**実ブラウザで `/my.html` を開いた**（静的サーバ配信）:
+
+```
+vendor グローバル      : object / createClient: function
+data-portal            : customer
+フック（6種のうち）    : 6
+画面に出ている文言     : "表示できません"
+ページのエラー         : なし
+```
+
+`createClient` がグローバルに載っているのは、`#10` で固定した橋
+（`iife` + `globalName` → 古典スクリプトから見える）が実際に働いているということ。
+**「表示できません」は正しい振る舞い**——静的サーバに `/api` が無いので設定を取れず、
+`bootProtectedPortal` が**そう言って止まっている**。架空の中身を出していない（`#1` と同じ原則）。
+
+#### 直しを戻した（また赤）
+`src/my.html` を消すと、**①とまったく同じ状態**に戻る。違うのは、
+いまは**見張りがそれを報せる**ことだけ。
+
+```
+$ rm src/my.html
+$ ls src/my.html
+★ src/my.html は存在しない
+
+$ npm test
+not ok 2 - test/supabase-auth.test.mjs
+npm test EXIT=1
+```
+
+①では同じ `★ src/my.html は存在しない` が出ても、**`npm test` は EXIT 0 だった**
+（見張りが消えていたので誰も気づけなかった）。そこが直った部分。
+
+**この記録の限界**: 戻したのは**器と見張りと配り方**まで。
+`/my` が実データを出すには Supabase の設定を配る経路（`/api/config`）が要り、
+それは Worker 側＝**F3 の結線本体**。ここでは静的配信での起動しか見ていない。
+戻せなかった 12件の検査は、はがした UI を作り直すときに
+`git show 6685df5^:test/supabase-auth.test.mjs` から読み直すこと。

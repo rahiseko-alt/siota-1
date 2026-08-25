@@ -138,7 +138,7 @@ $ node -e "console.log(Object.keys(require('./package.json').scripts).filter(x=>
 [ 'verify:migrations' ]        # 残っているのは1本だけ
 ```
 
-### 7. ⑥の器そのものが `src/` に無く、その見張りも一緒に消えている — 結果: 該当した
+### 7. ⑥の器そのものが `src/` に無く、その見張りも一緒に消えている — 結果: 該当した ／ 解決済み
 - **人間**: **お客さんが見るページ（`my.html`）が、もう存在しない。** 前のセッションで作り直したはずのものが、UI をはがしたときに一緒に消えた。さらに、それを見張るための検査も同時に消えたので、**消えたこと自体を誰も報せない**。
 - **AI**: `6685df5` が `src/my.html` と `test/supabase-auth.test.mjs` を**同時に**削除。後者は `bootProtectedPortal()` のソースから `querySelector` の引数を抜き出し、その全部が `my.html` に在ることを要求していた検査（P8-a で追加）。結線表の「⑥顧客ページ → `bootProtectedPortal` + `hydrateAssetReferences` + `renderMagazine`」に、**起動先の器が無い**。
 
@@ -215,7 +215,7 @@ $ grep -rn "esbuild" scripts/
 | 4 | II | **解決済み** | `continue` で握りつぶし → `failed` で報告し、画面に出す（`solved-F3.md` #4） |
 | 5 | II | **解決済み** | 壊した SQL で `npm test` **EXIT 0** → `test:sql` で止める（`solved-F3.md` #5） |
 | 6 | III | 該当した | 消えたのは **9本**、記録は **7本**（`delete` ほか4本が記録漏れ） |
-| 7 | III | 該当した | `src/my.html` と `test/supabase-auth.test.mjs` が**同時に**消えている |
+| 7 | III | **解決済み** | 器・見張り・vendor の生成手順を戻し、実ブラウザで起動確認（`solved-F3.md` #7） |
 | 8 | IV | **解決済み** | `walk` **EXIT 1** → 在るものを探して使う（`solved-F3.md` #8）。`checkout` が walk を見ない件は `deferred` #15 |
 | 9 | IV | **解決済み** | 結線2行で条件B **3件**・EXIT 1 → フェーズで切替（`solved-F3.md` #9） |
 | 10 | IV | **解決済み** | `type="module"` **0件** vs `export` **21件** → 橋を固定（`solved-F3.md` #10） |
