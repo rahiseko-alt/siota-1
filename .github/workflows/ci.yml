@@ -89,6 +89,14 @@ jobs:
       - name: ブラウザを入れる
         run: npx playwright install --with-deps chromium
 
+      # SQL を**実際の PostgreSQL に流す**（ランナーに入っている）。
+      #
+      # 手元では「流して通った記録」（supabase/.sql-verified）と突き合わせる形にしていたが、
+      # **札は手で書き換えられる**——CI が無いことの代用品だった（`#5` の限界）。
+      # ここで毎回本物を流すので、札は「手元で気づくための前倒し」に格下げになる。
+      - name: SQL を実際に流す
+        run: npm run verify:migrations
+
       - name: Supabase を起こす
         run: npx supabase start
 
