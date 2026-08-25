@@ -105,6 +105,9 @@ try {
   await staff.waitForSelector('.karte-card', { timeout: 20_000 });
   const listView = await staff.evaluate(() => ({
     cards: document.querySelectorAll('.karte-card').length,
+    /* 招待（QR）の入口。**数える**——「押すべきボタンが画面に無い」を見るのが
+       この検査の役目なので、在るふりも無いふりもしない（`#17`・`D-20260824-29`）。 */
+    invites: document.querySelectorAll('.btn-invite:not([hidden])').length,
     search: !!document.getElementById('dir-search-input'),
     newKarte: [...document.querySelectorAll('[onclick]')]
       .some((el) => (el.getAttribute('onclick') || '').includes('createNewKarte')),
@@ -112,30 +115,44 @@ try {
   check('11. ②一覧に犬のカードが並んでいる', listView.cards > 0, `card=${listView.cards}`);
   check('12. ②一覧に探す手段が在る', listView.search === true);
   check('13. ②一覧から新規カルテを作れる入口が在る', listView.newKarte === true);
+  check('13c. ②一覧に初回登録（QR）の入口が在る', listView.invites > 0, `${listView.invites}件`);
 
+  /* **犬の名前を押す。** カードそのものの中心を押すと、`.karte-card__actions` に並ぶ
+     ボタン（前回を複製／初回登録QR／選択）に当たることがある。初回登録QR は
+     `stopPropagation()` するので画面は移らない——実際それで一度落ちた。
+     人が犬を選ぶときに押すのは名前なので、そこを押す。 */
+  const beforePick = new URL(staff.url()).pathname;
   await Promise.all([
     staff.waitForURL(/\/edit\/p\/[0-9a-f-]+$/, { timeout: 20_000 }),
-    staff.click('.karte-card'),
+    staff.click('.karte-card .karte-card__dog-name'),
   ]);
+  check('13b. 犬の名前を押すと画面が移る', new URL(staff.url()).pathname !== beforePick,
+    `${beforePick} → ${new URL(staff.url()).pathname}`);
   await staff.waitForSelector('#screen-3.is-active', { timeout: 20_000 });
   const editView = await staff.evaluate(() => ({
     active: (document.querySelector('.screen-panel.is-active') || {}).id,
     commit: !!document.querySelector('.dock-action-wrap .boxbutton'),
     canvas: !!document.getElementById('marking-canvas'),
-    /* 招待の発行はまだ導線が無い（`#17`）。**在るふりをしない**ので合否にはしないが、
-       数えて出す——「押すべきボタンが画面に無い」を見るのがこの検査の役目である。 */
-    invite: [...document.querySelectorAll('[onclick]')]
-      .some((el) => (el.getAttribute('onclick') || '').includes('Invitation')),
   }));
-  check('14. カードを押すと③カルテ作成に着く', editView.active === 'screen-3', `active=${editView.active}`);
+  check('14. 犬を選ぶと③カルテ作成に着く', editView.active === 'screen-3', `active=${editView.active}`);
   check('15. ③に確定の入口が在る（行き止まりでない）', editView.commit === true);
   check('16. ③に犬体図が在る', editView.canvas === true);
 
+  /* 招待の入口は**カードの中に在って、犬の選択とぶつかっていない**こと。
+     押すと画面が移ってしまうなら、犬を選べなくなっている。 */
+  await staff.goto(`${BASE}/edit`, { waitUntil: 'networkidle' });
+  await staff.waitForSelector('.btn-invite:not([hidden])', { timeout: 20_000 });
+  const beforeInvite = new URL(staff.url()).pathname;
+  await staff.click('.btn-invite');
+  await staff.waitForTimeout(1_500);
+  check('17. 招待の入口を押しても、犬の選択には移らない',
+    new URL(staff.url()).pathname === beforeInvite, `path=${new URL(staff.url()).pathname}`);
+  check('18. 招待の入口を押すと、その場で出る',
+    (await staff.locator('dialog.supabase-dialog[open]').count()) === 1);
+
   process.stdout.write(
-    `\n【画面に無いもの・${editView.invite ? 0 : 1}件】招待（QR）を発行する入口: `
-    + `${editView.invite ? '在る' : '無い'}\n`
-    + '  `TrimmerSupabaseStaff.showOwnerInvitation` は在るが、どの画面からも押せない。\n'
-    + '  新規のお客様は自分のカルテを見られない（`bad-scenarios-F3` #17・未解決）。\n',
+    `\n【画面に在る入口】犬の選択・新規カルテ・初回登録QR（${listView.invites}件）・`
+    + '確定 ／ **削除の入口はまだ無い**（docs/deferred.md #25）\n',
   );
   await staff.close();
 } catch (error) {
