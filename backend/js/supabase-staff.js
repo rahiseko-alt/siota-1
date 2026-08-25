@@ -1,5 +1,6 @@
 import { authorizedFetch, createAuthClient } from './supabase-auth.js';
 import { hydrateAssetReferences } from './supabase-storage.js';
+import { renderMagazine } from './magazine-view.js';
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const STAFF_ROUTES = [
@@ -392,6 +393,10 @@ async function bootStaffPortal(PonchiApp) {
 }
 
 globalThis.TrimmerSupabaseStaff = {
+  /* ⑤確認 と ⑥顧客ページ は同一のレンダラを使う（マスター指定）。
+     `ui.js` は古典スクリプトで ES モジュールを import できないので、
+     backend 側が globalThis に載せて渡す（`bad-scenarios-F3` #10 で固定した繋ぎ方）。 */
+  renderMagazine,
   isAdmin: () => activeMembership?.role === 'admin',
   showOwnerInvitation: (ownerId, ownerName) => showInvitationDialog(
     { invitationType: 'owner', ownerId }, ownerName || '飼い主',

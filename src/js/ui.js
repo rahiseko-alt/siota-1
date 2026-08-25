@@ -11,9 +11,98 @@ const App = {
   marks: [],
   allWavesOpen: true,
 
+  /* 実データで動いているときに backend から入る犬の一覧。
+     `null` のあいだは「まだ受け取っていない」。仮データ（`window.DUMMY`）を使うのは
+     backend が居ないとき——つまり静的配信の `/`（F2 の `npm run walk` の経路）だけ。 */
+  dogs: null,
+
   init() {
-    this.renderDogs();
     this.initCanvas();
+
+    /* backend が載っていれば、そちらに描画を任せる（`/edit`）。
+       載っていなければ仮データで描く（`/`）。**判定は「居るか」だけ**で、
+       URL を見ない——見ると経路が増えたときに黙って片方が壊れる。
+
+       `supabase-staff.js` は ES モジュールなので `defer` 相当で走り、
+       `DOMContentLoaded` の時点では `globalThis.TrimmerSupabaseStaff` が載っている
+       （`bad-scenarios-F3` #10 で固定した繋ぎ方: backend が自分で globalThis に登録し、
+       `ui.js` は古典スクリプトのままそれを使う）。 */
+    if (globalThis.TrimmerSupabaseStaff) {
+      globalThis.TrimmerSupabaseStaff.boot(this);
+      return;
+    }
+    this.renderDogs();
+  },
+
+  /* ── 描画係の口 ────────────────────────────────────────────────
+     `TrimmerSupabaseStaff.boot(App)` が、取ってきたものをここへ渡す。
+     backend は `App` を依存ではなく**差し替え可能な口**として扱うので、
+     こちら側が `show(screen, data)` を満たしていればよい（`plan.md` 4-1）。
+
+     受け取る画面は4つ。知らない画面が来たら**投げる**——黙って無視すると、
+     前の画面（意匠モックの既定文が入っている）が残り、
+     お客さんがそれを本当のことだと読む（`bad-scenarios-F3` #1・`D-10`）。 */
+  show(screen, data) {
+    if (screen === 'owner') return this.showDogList(data || {});
+    if (screen === 'archive') return this.showPetKarte(data || {});
+    if (screen === 'report') return this.showReport(data || {});
+    throw new Error(`描画できない画面が来ました: ${screen}`);
+  },
+
+  /* ②一覧 — 実データの犬をカードにする。
+     `mapPet()` の形（`petName` / `ownerName` / `months`）を、カードの形に写すだけ。
+     **持っていない項目は空で出す。** 犬種も担当も `pets` テーブルに無いので、
+     ここで見本を入れると「書いていないことが書いてあるように見える」（`D-10`）。 */
+  showDogList(data) {
+    const pets = data.petListFlat || (data.owner && data.owner.pets) || [];
+    this.dogs = pets.map((pet) => {
+      const dates = (pet.months || []).map((m) => m && m.date).filter(Boolean).sort();
+      return {
+        id: pet.id,
+        name: pet.petName || '',
+        owner: pet.ownerName || '',
+        breed: '',
+        lastVisit: dates.length > 0 ? dates[dates.length - 1] : '',
+        staff: '',
+        incomplete: '',
+      };
+    });
+    this.renderDogs();
+    this.goToStep(2);
+  },
+
+  /* ③選択のあと — その犬のカルテ画面へ。
+     いまは最新1件を開く導線が無いので、カルテ作成（screen-3）に入る。
+     過去カルテを開く導線は ④保存・確定 と一緒に作る（`docs/deferred.md` #23）。 */
+  showPetKarte(pet) {
+    this.selectKarte(pet.petName || '', pet.ownerName || '', '');
+  },
+
+  /* ⑤確認 — 実データのカルテを screen-4 に描く。
+     **描くのは backend のレンダラ**（`renderMagazine`）で、⑥顧客ページと同一のもの
+     （マスター指定）。器の中身は丸ごと差し替わるので、意匠モックの既定文もここで消える。
+
+     カルテが取れていなければ `renderMagazine` は器を空にしてから投げる。
+     ここで握りつぶすと**誰も書いていない手紙が残る**ので、そのまま外へ出す。 */
+  showReport(pet) {
+    const render = globalThis.TrimmerSupabaseStaff && globalThis.TrimmerSupabaseStaff.renderMagazine;
+    if (!render) throw new Error('カルテの描画係が載っていません');
+    const panel = document.getElementById('screen-4');
+    if (!panel) throw new Error('screen-4 が見つかりません');
+    const report = globalThis.__REPORT__;
+    /* **描いてから移る。** 先に移ると、描画に失敗したときに空の器へ人を運ぶ。 */
+    render(panel, report && {
+      petName: pet.petName || '',
+      reportDate: report.isoDate || report.date || '',
+      data: report,
+    });
+    this.goToStep(4);
+  },
+
+  /* 実データのカードを押したとき。URL を変えて backend に読み直させる
+     （画面の中だけで完結させない——戻る・共有・再読み込みが効かなくなる）。 */
+  openPet(petId) {
+    location.href = `/edit/p/${encodeURIComponent(petId)}`;
   },
 
   /* 犬の一覧を仮データ（window.DUMMY）から描く。
@@ -21,13 +110,18 @@ const App = {
      飼い主名まで見ないと見分けられない場面を、絵で確かめるため。 */
   renderDogs() {
     const box = document.getElementById('karte-cards-container');
-    const data = (window.DUMMY && window.DUMMY.dogs) || [];
+    /* 実データを受け取っていればそれ。まだなら仮データ（`/` の経路だけ）。 */
+    const data = this.dogs || (window.DUMMY && window.DUMMY.dogs) || [];
     if (!box) return;
     box.innerHTML = '';
     data.forEach((dog) => {
       const card = document.createElement('div');
       card.className = 'karte-card';
-      card.onclick = () => this.selectKarte(dog.name, dog.owner, dog.breed);
+      /* 実データの犬は `id` を持つ。持っていれば URL で開く、持っていなければ
+         画面の中だけで進む（仮データ）。**データの形で決める**——URL を見ない。 */
+      card.onclick = () => (dog.id
+        ? this.openPet(dog.id)
+        : this.selectKarte(dog.name, dog.owner, dog.breed));
       card.innerHTML =
         '<div class="karte-card-top-row">'
         + '<div class="karte-card__avatar"></div>'
@@ -97,9 +191,15 @@ const App = {
     this.currentDog.owner = ownerName;
     this.currentDog.breed = breed;
 
-    document.getElementById('editor-dog-header').textContent = `${dogName} カルテ入力`;
-    document.getElementById('mag-dog-name').textContent = `${dogName} くん`;
-    document.getElementById('mag-dog-sub').textContent = `${breed} / 4歳 / 2.79kg`;
+    /* screen-4 は実データのときレンダラが器ごと差し替えるので、この3つは
+       在るとは限らない。無い前提で触る（`renderMagazine` が入ったあとに
+       ここへ来ると、素で書くと TypeError で導線が止まる）。 */
+    const header = document.getElementById('editor-dog-header');
+    if (header) header.textContent = `${dogName} カルテ入力`;
+    const magName = document.getElementById('mag-dog-name');
+    if (magName) magName.textContent = `${dogName} くん`;
+    const magSub = document.getElementById('mag-dog-sub');
+    if (magSub) magSub.textContent = `${breed} / 4歳 / 2.79kg`;
 
     // 爪の未選択リセット & フッターを赤（未記入あり）にセット
     const nailWrap = document.getElementById('nail-stepper-wrap');

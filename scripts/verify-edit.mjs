@@ -10,8 +10,10 @@
  *   `502 Template Not Found` を返す実装なので、`/edit` は壊れたまま放置されていた。
  *   注入するスクリプトの置き場所も `/js/` のままで、実体は `backend/js/` へ移っていた。
  *
- * 見るのは「配れているか」まで。**中身の結線（一覧・保存・確定）はまだ見ない**——
- * それは 4-1 の残りで、`PonchiApp` に相当する描画係を正UI 側に用意してから。
+ * **1〜7 は「配れているか」まで。8〜 は結線（`plan.md` 4-1）を見る。**
+ * `App.show(screen, data)` を正UI 側に用意し、`TrimmerSupabaseStaff.boot(App)` へ渡した。
+ * ここで見るのは②一覧と⑤確認——**実データの犬が出ること**と、
+ * **仮データ（`window.DUMMY`）も意匠モックの既定文も出ていないこと**（`D-10`・`#1`）。
  *
  *   npm run verify:edit
  */
@@ -80,6 +82,61 @@ try {
 
   /* 7. 読み込みで落ちていないか。`#10` の壊れ方（App が消える）はここに出る。 */
   check('7. アプリ由来のエラーが無い', consoleErrors.length === 0, consoleErrors.join(' | '));
+
+  /* ── ここから結線（4-1）────────────────────────────────────────
+     `boot(App)` → `App.show('owner', { petListFlat })` → `renderDogs()` の往復が
+     実データで成立しているかを見る。**「カードが在る」では足りない**——仮データでも
+     カードは出る。出ている**名前が seed の犬と一致すること**まで見る
+     （`F-20260825-35`/`-36`: 期待する成功の形を直接書く）。 */
+  await page.waitForSelector('.karte-card', { timeout: 15_000 });
+  const list = await page.evaluate(() => ({
+    names: [...document.querySelectorAll('.karte-card__dog-name')].map((el) => el.textContent.trim()),
+    breeds: [...document.querySelectorAll('.karte-card__breed')].map((el) => el.textContent.trim()),
+    staff: [...document.querySelectorAll('.karte-card .js-staff')].map((el) => el.textContent.trim()),
+    total: (document.getElementById('karte-total-count') || {}).textContent,
+    activeScreen: (document.querySelector('.screen-panel.is-active') || {}).id,
+    body: document.body.textContent,
+  }));
+
+  const seeded = ['Q', 'X', 'Y', 'Z'];
+  check('8. ②一覧が実データの犬になっている',
+    JSON.stringify([...list.names].sort()) === JSON.stringify(seeded),
+    `出た名前=${JSON.stringify(list.names)}`);
+
+  /* 仮データが混ざっていないこと。`window.DUMMY` の犬が1頭でも出ているなら、
+     `renderDogs()` が backend の結果ではなく仮データを描いている。 */
+  const dummyDogs = ['ポンチ', 'レオ', 'モカ', 'モモ'];
+  const leaked = dummyDogs.filter((name) => list.names.includes(name));
+  check('9. 仮データ（window.DUMMY）の犬が出ていない', leaked.length === 0, `混入=${JSON.stringify(leaked)}`);
+
+  /* `pets` テーブルは犬種も担当も持っていない。**持っていないものは空で出す**
+     ——意匠モックの「トイプードル」「塩田」が残っていたら D-10 違反。 */
+  check('10. 持っていない項目（犬種・担当）が空で出ている',
+    list.breeds.every((v) => v === '') && list.staff.every((v) => v === ''),
+    `犬種=${JSON.stringify(list.breeds)} 担当=${JSON.stringify(list.staff)}`);
+
+  check('11. 件数が実データと合っている', list.total === '4件', `total=${list.total}`);
+  check('12. 一覧の画面（screen-2）が開いている', list.activeScreen === 'screen-2', `active=${list.activeScreen}`);
+
+  /* ⑤確認 — 実カルテを開き、**意匠モックの既定文が消えていること**を見る。
+     `renderMagazine` は器ごと差し替えるので、残っていたら結線できていない。
+     残ったままだと「誰も書いていない手紙」が担当トリマーの名前で出る（`#1`）。 */
+  const REPORT_URL = `${BASE}/edit/p/${FIXTURE.petX}/50000000-0000-0000-0000-0000000000a1`;
+  await page.goto(REPORT_URL, { waitUntil: 'networkidle' });
+  await page.waitForSelector('#screen-4 .magazine-container', { timeout: 15_000 });
+  const report = await page.evaluate(() => ({
+    activeScreen: (document.querySelector('.screen-panel.is-active') || {}).id,
+    body: document.body.textContent,
+    /* 空の写真スロットが**ページURL**を指していないか（`docs/deferred.md` #16）。 */
+    pageUrlImgs: [...document.querySelectorAll('#screen-4 img')]
+      .map((el) => el.getAttribute('src'))
+      .filter((src) => src && /^https?:\/\/[^/]+\/(edit|my)\//.test(src)),
+  }));
+  check('13. ⑤確認の画面（screen-4）が開いている', report.activeScreen === 'screen-4', `active=${report.activeScreen}`);
+  check('14. 意匠モックの既定文が消えている（誰も書いていない手紙が出ない）',
+    !report.body.includes('今月もとってもお利口に'), '★ 文例が残っている');
+  check('15. 空の写真スロットがページURLを指していない',
+    report.pageUrlImgs.length === 0, `混入=${JSON.stringify(report.pageUrlImgs.slice(0, 2))}`);
 } catch (error) {
   check('検査を最後まで実行できた', false, error.message);
 } finally {
@@ -89,5 +146,5 @@ try {
 
 const passed = results.filter((r) => r.pass).length;
 process.stdout.write(`\n${passed}/${results.length} PASS\n`);
-process.stdout.write('/edit が配れているかまでの検査。中身の結線は 4-1 の残りで見る。\n');
+process.stdout.write('1〜7 は /edit が配れているか。8〜15 は結線（②一覧・⑤確認）。④保存・確定はまだ見ていない。\n');
 process.exit(passed === results.length ? 0 : 1);
