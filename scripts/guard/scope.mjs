@@ -42,6 +42,9 @@ export const SCOPE = {
     allow: [
       'src/', 'backend/', 'scripts/', 'test/', 'supabase/', 'worker/',
       'package.json', 'package-lock.json',
+      /* 検査を走らせる場所（D-20260825-44）。製品には入らず `npm install` も伴わない。
+         ここを許さないと `#6` の9本を「一台の机の上でしか動かない形」で作り直すことになる。 */
+      '.github/',
     ],
   },
 };
@@ -100,7 +103,10 @@ export function checkCommand(root, phase, cmd) {
 /* Windows では `process.argv[1]` が `C:\...` 形式なので、`file://` を前置しても
    `import.meta.url`（`file:///C:/...`）と一致しない＝直接実行しても何も起きない。
    `pathToFileURL()` は Node 標準で、どの OS でも同じ形にそろえる。 */
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+/* `process.argv[1]` は `node -e` などでは undefined で、`pathToFileURL` が投げる。
+   直接実行かどうかを見るだけの分岐で落ちると、**このファイルを import した側**が
+   道連れになる（F-20260825-33 の型）。存在を先に確かめる。 */
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const root = process.env.REPO_ROOT || process.cwd();
   const phase = readPhase(root);
   if (!phase) process.exit(0);

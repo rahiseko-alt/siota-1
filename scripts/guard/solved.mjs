@@ -138,7 +138,10 @@ export function checkSolved(root, phase) {
 /* Windows では `process.argv[1]` が `C:\...` 形式なので、`file://` を前置しても
    `import.meta.url`（`file:///C:/...`）と一致しない＝直接実行しても何も起きない。
    `pathToFileURL()` は Node 標準で、どの OS でも同じ形にそろえる。 */
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+/* `process.argv[1]` は `node -e` などでは undefined で、`pathToFileURL` が投げる。
+   直接実行かどうかを見るだけの分岐で落ちると、**このファイルを import した側**が
+   道連れになる（F-20260825-33 の型）。存在を先に確かめる。 */
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const root = process.env.REPO_ROOT || process.cwd();
   const phase = process.argv[2] || readPhase(root);
   if (!phase) process.exit(0);

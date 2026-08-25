@@ -89,7 +89,10 @@ export function checkUiScriptFormat(root) {
 }
 
 /* ── 直接叩かれたとき ── */
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+/* `process.argv[1]` は `node -e` などでは undefined で、`pathToFileURL` が投げる。
+   直接実行かどうかを見るだけの分岐で落ちると、**このファイルを import した側**が
+   道連れになる（F-20260825-33 の型）。存在を先に確かめる。 */
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const root = process.env.REPO_ROOT || process.cwd();
   const { handlers, problems } = checkUiScriptFormat(root);
 
