@@ -124,19 +124,47 @@ try {
   const REPORT_URL = `${BASE}/edit/p/${FIXTURE.petX}/50000000-0000-0000-0000-0000000000a1`;
   await page.goto(REPORT_URL, { waitUntil: 'networkidle' });
   await page.waitForSelector('#screen-4 .magazine-container', { timeout: 15_000 });
-  const report = await page.evaluate(() => ({
+  const MOCK_LETTER = '今月もとってもお利口に';
+  const report = await page.evaluate((mock) => ({
     activeScreen: (document.querySelector('.screen-panel.is-active') || {}).id,
-    body: document.body.textContent,
+    /* **器を名指しで見る。** 最初はここを `document.body` にしていたが、それだと
+       2つの別物を同時に測っていた——⑤確認の器（screen-4）に文例が残っているか、と、
+       ④カルテ作成の入力欄（screen-3 の `#editor-trimmer-letter`）に文例が
+       最初から入っているか。落ちたのは**後者**で、これは結線とは別の欠陥として
+       `docs/deferred.md` #13 に登録済み・**マスター判断待ち**である
+       （`src/index.html:1953` と `:2076` の既定文2か所）。
+       範囲を狭めて緑にしたのではなく、**別々の主張に分けた**。残っているほうは
+       下の `letterInput` で件数を出し、隠さない。 */
+    screen4: (document.getElementById('screen-4') || {}).textContent || '',
+    letterInput: ((document.getElementById('editor-trimmer-letter') || {}).value || '').includes(mock),
+    /* カルテに担当メッセージが無いとき、⑤確認が**文例で埋まっていない**こと。
+       `renderMagazine` は空なら手紙の節ごと隠す。 */
+    letterHidden: !!(document.querySelector('#screen-4 [data-view="letter-section"]') || {}).hidden,
+    letterText: ((document.querySelector('#screen-4 [data-view="staff-note"]') || {}).textContent || '').trim(),
     /* 空の写真スロットが**ページURL**を指していないか（`docs/deferred.md` #16）。 */
     pageUrlImgs: [...document.querySelectorAll('#screen-4 img')]
       .map((el) => el.getAttribute('src'))
       .filter((src) => src && /^https?:\/\/[^/]+\/(edit|my)\//.test(src)),
-  }));
+  }), MOCK_LETTER);
   check('13. ⑤確認の画面（screen-4）が開いている', report.activeScreen === 'screen-4', `active=${report.activeScreen}`);
-  check('14. 意匠モックの既定文が消えている（誰も書いていない手紙が出ない）',
-    !report.body.includes('今月もとってもお利口に'), '★ 文例が残っている');
+  check('14. ⑤確認の器から意匠モックの既定文が消えている',
+    !report.screen4.includes(MOCK_LETTER), '★ 文例が残っている（renderMagazine が器を差し替えていない）');
   check('15. 空の写真スロットがページURLを指していない',
     report.pageUrlImgs.length === 0, `混入=${JSON.stringify(report.pageUrlImgs.slice(0, 2))}`);
+  /* 書かれていないものは、書かれていないと出す（`D-10`）。fixture のカルテに
+     担当メッセージは無いので、手紙の節は隠れていて中身も空でなければならない。 */
+  check('16. 担当メッセージが無いカルテで、文例が出ていない',
+    report.letterHidden === true && report.letterText === '',
+    `hidden=${report.letterHidden} text=${JSON.stringify(report.letterText)}`);
+
+  /* **隠さない。** ④カルテ作成の入力欄には、まだ文例が最初から入っている。
+     結線とは別の欠陥で `docs/deferred.md` #13（マスター判断待ち）。
+     ④保存・確定を結線すると、この文が**そのまま飼い主に届く**——`F-20260821-14` の再来。 */
+  process.stdout.write(
+    `\n【残っているもの・${report.letterInput ? 1 : 0}件】④の入力欄 #editor-trimmer-letter の既定文: `
+    + `${report.letterInput ? '在る（docs/deferred.md #13・マスター判断待ち）' : '無い'}\n`
+    + '  ④保存・確定を結線する前に、マスターの判断が要る。\n',
+  );
 } catch (error) {
   check('検査を最後まで実行できた', false, error.message);
 } finally {
@@ -146,5 +174,5 @@ try {
 
 const passed = results.filter((r) => r.pass).length;
 process.stdout.write(`\n${passed}/${results.length} PASS\n`);
-process.stdout.write('1〜7 は /edit が配れているか。8〜15 は結線（②一覧・⑤確認）。④保存・確定はまだ見ていない。\n');
+process.stdout.write('1〜7 は /edit が配れているか。8〜16 は結線（②一覧・⑤確認）。④保存・確定はまだ見ていない。\n');
 process.exit(passed === results.length ? 0 : 1);
