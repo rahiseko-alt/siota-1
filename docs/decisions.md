@@ -30,7 +30,7 @@
 - **Kind**: master-decision
 - **Question**: 「完成」をどこまでと定義するか
 - **Answer**: 実店舗で使える状態。トリマーが実際に犬のカルテを書き、飼い主がスマホで読める。意匠は当面 V1 のままでよい
-- **Impact**: `docs/ops/plans/2026-08-23-completion.md` の全体受け入れ条件を規定する
+- **Impact**: （旧計画・削除済み） の全体受け入れ条件を規定する
 
 ### [D-20260823-02] 現行本番の扱い
 
@@ -116,7 +116,7 @@
 
 - **Date**: 2026-08-23
 - **Kind**: claude-judgment
-- **Question**: 計画（`docs/ops/plans/2026-08-23-completion.md` F4）は「`grep -c 'data-view=' src/design-samples/ponchi-v2.html` が20以上」を機械チェックとして書いていた。この通りに、マガジンの静的HTMLを `ponchi-v2.html`（トリマー確認画面）と `src/my.html`（飼い主画面）の両方に複製すべきか
+- **Question**: 計画（（旧計画・削除済み） F4）は「`grep -c 'data-view=' src/design-samples/ponchi-v2.html` が20以上」を機械チェックとして書いていた。この通りに、マガジンの静的HTMLを `ponchi-v2.html`（トリマー確認画面）と `src/my.html`（飼い主画面）の両方に複製すべきか
 - **Answer**: しなかった。`data-view` 付きマークアップは `src/js/magazine-view.js` 内の1つのテンプレート文字列にだけ存在し、`renderMagazine()` が両画面の描画先へ同一内容を注入する。理由: 2ファイルに同じマークアップを手で複製すると、どちらかを直したときにもう一方だけ古いまま残る「ズレ」を生む。これはまさに今セッションで直してきたバグ（F-20260821-22/23・F-20260823-26/27）と同じ種類の再発条件であり、避けるべきだと判断した。マスター指定の「⑤と⑥は同一のレンダラを共有する」を、DOM構造だけでなく1本の関数・1本のテンプレートとして文字通り実装した形になる
 - **Impact**: 計画の機械チェックを、静的 grep から実行時 DOM チェックへ差し替えた。ローカルの Playwright 単体検証（`renderMagazine()` を合成データで描画）で `[data-view]` 要素35件・`[data-field]` 要素0件を確認済み（本文参照）。CSS も同じ理由で `magazine-view.js` 内の `injectStyle()` が1本だけ持つ
 
@@ -166,7 +166,7 @@
 - **Kind**: claude-judgment
 - **Question**: D-20260823-17 で「実ログイン手段（service role key）が無く実機検証できない」と記録したが、他に手段はないか
 - **Answer**: あった。`supabase/seed.sql` に、まさにこの用途のために先行実装済みのローカル専用テストアカウント（`staff@local.test` / `owner-a@local.test` / `owner-b@local.test` など、password login）が既にあった。`docker` と `supabase` CLI がこの環境で使えたので `supabase start` でローカルに実 Postgres・実 Auth（GoTrue）・実 PostgREST・実 Storage を一式起動し（`supabase/config.toml` に `[edge_runtime] enabled=false` を追加——使わない上にこのサンドボックスでは rlimit 権限エラーで起動できなかったため）、`worker/wrangler.local.toml`（新規・ローカル専用・秘密情報なし）でそのローカル Supabase を指す `wrangler dev` を立てて検証した。password grant でアクセストークンを取得し、`window.TrimmerAuth.setSession()`（`supabase-auth.js`/`supabase-staff.js` が既に公開している口）へ注入する形でログインを自動化した。ホスト済み Supabase プロジェクトの service role key も、Cloudflare へのデプロイも一切使っていない
-- **Impact**: F4 の受け入れ条件（記入→確定→飼い主画面の値の一致・写真の署名付きURL経由表示・他人の犬が見えないこと）を、Playwright（chromium）で実際に **19/19 PASS** で確認した。詳細は本文および `docs/ops/plans/2026-08-23-completion.md` の F4 セクション参照。D-20260823-17 の「未確認」は解消。D-20260823-U2 は「ローカル検証は解決・ホスト済みプロジェクトへの実デプロイ確認だけがまだ」に格下げする（下記 D-20260823-U2 更新参照）。この手段は F5（`verify:*` の作り直し）でも同じ土台を使い回せる
+- **Impact**: F4 の受け入れ条件（記入→確定→飼い主画面の値の一致・写真の署名付きURL経由表示・他人の犬が見えないこと）を、Playwright（chromium）で実際に **19/19 PASS** で確認した。詳細は本文および （旧計画・削除済み） の F4 セクション参照。D-20260823-17 の「未確認」は解消。D-20260823-U2 は「ローカル検証は解決・ホスト済みプロジェクトへの実デプロイ確認だけがまだ」に格下げする（下記 D-20260823-U2 更新参照）。この手段は F5（`verify:*` の作り直し）でも同じ土台を使い回せる
 
 ### [D-20260823-19] F5: verify:* 5本をSupabase版へ書き直し、共通の土台に格上げした（私の判断）
 
