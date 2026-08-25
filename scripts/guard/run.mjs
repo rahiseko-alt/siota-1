@@ -20,14 +20,41 @@ if (!phase) {
 }
 console.log(`[guard] いまのフェーズ: ${phase}（${SCOPE[phase].label}）`);
 
-/** HEAD から変わったファイル（未追跡も含む。改名は新旧どちらも見る）。
+/** 出発点（`origin/master`）から変わったファイル。
+    **HEAD との差分ではない。** `git status` は未コミットの変更しか返さないので、
+    それだけを見ていると **`git commit` しただけで `変更なし` になり、関所が素通りする**
+    （`bad-scenarios-F3.md` #11・実測で確認）。検査を書き換えずに `A-4` を破れてしまう形だった。
+    だから「この枝で出発点から何を変えたか」を見る: コミット済みの差分 ＋ 未コミットの変更。 */
+function baseRef() {
+  for (const ref of ['origin/master', 'origin/main', 'master', 'main']) {
+    try {
+      execSync(`git rev-parse --verify --quiet ${ref}`, { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] });
+      return ref;
+    } catch { /* 次の候補へ */ }
+  }
+  return null;   /* 出発点が分からないときは、未コミット分だけを見る（従来どおり） */
+}
+
+const committed = [];
+const base = baseRef();
+if (base) {
+  try {
+    const mb = execSync(`git merge-base ${base} HEAD`, { cwd: ROOT }).toString().trim();
+    committed.push(
+      ...execSync(`git diff --name-only -z ${mb} HEAD`, { cwd: ROOT })
+        .toString('utf8').split('\0').filter(Boolean),
+    );
+  } catch { /* 履歴が繋がっていないときは諦めて未コミット分だけを見る */ }
+}
+
+/** 未コミットの変更（未追跡も含む。改名は新旧どちらも見る）。
     `-z` の並びは `XY PATH\0`、改名だけ `RY NEW\0OLD\0` と**接頭辞の無い**行が続く。 */
 const fields = execSync('git status --porcelain=v1 -z --untracked-files=all', { cwd: ROOT })
   .toString('utf8')
   .split('\0')
   .filter(Boolean);
 
-const changed = [];
+const changed = [...committed];
 for (let i = 0; i < fields.length; i += 1) {
   const status = fields[i].slice(0, 2);
   changed.push(fields[i].slice(3));
@@ -40,7 +67,7 @@ const seen = new Set();
 const files = changed.filter((f) => f && !f.endsWith('/') && !seen.has(f) && seen.add(f));
 
 if (files.length === 0) {
-  console.log('[guard] 変更なし');
+  console.log(`[guard] 変更なし（${base ? `${base} から` : '未コミット分のみ'}）`);
   process.exit(0);
 }
 
@@ -67,7 +94,8 @@ if (workArea.length > 0) {
 }
 
 if (problems.length === 0) {
-  console.log(`[guard] ${files.length}件の変更、すべて ${phase} の範囲内`);
+  console.log(`[guard] ${files.length}件の変更（${base ? `${base} から` : '未コミット分のみ'}）、`
+    + `すべて ${phase} の範囲内`);
   process.exit(0);
 }
 console.error(`\n[guard] ${problems.length}件、止めました\n`);

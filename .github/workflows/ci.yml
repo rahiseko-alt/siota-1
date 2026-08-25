@@ -1,0 +1,122 @@
+# ci.yml — 検査を「一台の机の上」から出す（docs/ops/plan.md 4-0-b / D-20260825-44）
+#
+# なぜ要るか:
+#   このリポジトリで一番大事な検査（飼い主に何が届くか）は、`supabase start` が必要で
+#   Docker を要求する。マスターの環境は Windows、エージェントはコンテナの中で、
+#   **どちらでも動かない**。結果、その種の検査は9本とも消えたまま放置されていた。
+#   GitHub のランナーには Docker が在るので、ここに置けば誰の PC にも要らなくなる。
+#
+#   もう1つの理由は、**渡した後に壊れたと分かること**（plan.md 第7章 7-1）。
+#   人が思い出して叩く検査は、納品後には走らない。
+#
+# いまはまだ骨組み（build / check / test）。`supabase start` と verify:* は 4-0-c / 4-0-d で足す。
+
+name: check
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+# 同じ枝で新しい push が来たら、古い実行は止める（待たせない・無駄に回さない）。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # **浅いクローンにしない。**
+          # `scripts/guard/run.mjs` は「origin/master から何を変えたか」を見る（#11 の修正）。
+          # 既定の fetch-depth: 1 だと origin/master が無く、比較相手を見失って
+          # 「変更なし」で素通りする——**関所がある顔をして何も見ていない**状態になる。
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # 手元と同じ条件にする。lockfile どおりに入れる（npm install ではない）。
+      - run: npm ci
+
+      - name: build
+        run: npm run build
+
+      # guard（逸脱監視・関所）/ 隔離 src+dist / src↔dist parity / design 隔離 /
+      # 削除の順序 / 画面と裏側の繋ぎ方
+      - name: check
+        run: npm run check
+
+      # 単体 / スキーマ / 移行 / backend / SQL を実際に流した記録との照合
+      - name: test
+        run: npm test
+
+      # 関所が本当に見ているかを、CI 自身が確かめる。
+      # ここが「変更なし」だけを出しているなら、上の check は素通りしている。
+      - name: guard が何を見たかを残す
+        if: always()
+        run: node scripts/guard/run.mjs || true
+
+  # 土台（実 Supabase）が要る検査。ランナーには Docker が在るので `supabase start` が動く
+  # ——マスターの Windows にもエージェントのコンテナにも Docker は要らない。
+  #
+  # 上の check とは別の job にしてある。こちらは分単位（イメージの取得）で、
+  # build/check/test の速さを巻き込みたくないため。
+  #
+  # いまは土台そのものの検査だけ。飼い主に届く中身を見る9本は 4-0-d で足す。
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # devDependency の supabase CLI を使う（新しく入れない・ルール①）。
+      # 絵を撮る・画面を操作する検査に要る。ランナーには入っていないので毎回入れる。
+      # `--with-deps` は chromium が要る OS 側のライブラリまで入れる。
+      - name: ブラウザを入れる
+        run: npx playwright install --with-deps chromium
+
+      # SQL を**実際の PostgreSQL に流す**（ランナーに入っている）。
+      #
+      # 手元では「流して通った記録」（supabase/.sql-verified）と突き合わせる形にしていたが、
+      # **札は手で書き換えられる**——CI が無いことの代用品だった（`#5` の限界）。
+      # ここで毎回本物を流すので、札は「手元で気づくための前倒し」に格下げになる。
+      - name: SQL を実際に流す
+        run: npm run verify:migrations
+
+      - name: Supabase を起こす
+        run: npx supabase start
+
+      # 起きたこと・マイグレーションが当たったこと・seed で実ログインできること・
+      # 鍵なしでは読めないこと。ここが緑でなければ verify:* を書いても意味がない。
+      - name: 土台を確かめる
+        run: npm run verify:stack
+
+      # **飼い主に届く中身を見る検査**（bad-scenarios-F3 #6 の1本目）。
+      # `/my` を実ブラウザで開き、ログイン前の起動・ログイン後に自分の犬だけが
+      # 見えること・他人の犬が見えないこと（RLS）・サインアウトまでを見る。
+      # 残り8本は `/edit` を開くので、結線（plan.md 4-1）とセットで戻す。
+      - name: 飼い主の画面を確かめる
+        run: npm run verify:portal
+
+      # トリマーの画面。502 のまま放置されていた /edit が正UI を配れているか
+      # （deferred #20）。残り8本の verify:* はここが通らないと戻せない。
+      - name: トリマーの画面を確かめる
+        run: npm run verify:edit
+
+      - name: Supabase を止める
+        if: always()
+        run: npx supabase stop || true

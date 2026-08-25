@@ -2,10 +2,18 @@
  * isolation.mjs — F1 の完了条件 A・B を機械で確かめる
  *
  * **A**: `src/` に UI 以外が無い（＝ `src/index.html` から到達できないファイルが無い）
- * **B**: UI から backend への参照が 0
+ * **B**: UI から backend への参照が 0 ——**F1 / F2 でだけ見る**
+ *
+ * **B はフェーズで切り替わる（D-20260825-42）。** F1 の「隔離」と F3 の「結線」は
+ * 目的が正面から矛盾する——F3 の仕事はまさに UI と backend をつなぐことなので、
+ * B を掛けたままだと結線の1行目で赤くなる。だから F3 では B を外す。
+ * **ただし黙って外さない。** 外した回は「何を見ていないか」を必ず出力する。
+ * 緑を見た人が「隔離も見た」と誤読しないため（D-18 偽-2「対象を減らして0件にする」）。
+ * A は F3 でも残す。置いたきり誰からも呼ばれないファイルを増やさない検査で、結線と矛盾しない。
  *
  * 何を保証するか: 画面の側が、バックエンドにも外の世界にも繋がっていないこと。
  *   そして `src/` に、どこからも呼ばれないまま置かれているファイルが無いこと。
+ *   起点は `index.html`（トリマー）と `my.html`（飼い主）の2つ。
  * **何を保証しないか**: 画面が正しく動くこと・意匠が合っていること・
  *   到達できるファイルの中身が正しいこと。ここは**繋がりと在庫だけ**を見る（D-18 偽-5）。
  *
@@ -21,9 +29,14 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { readPhase } from './scope.mjs';
 
 /* 中身を読んで参照を辿る対象。これ以外（画像・フォント）は葉として扱う。 */
 const TEXT = new Set(['.html', '.css', '.js', '.mjs', '.json', '.svg']);
+
+/* B を掛けるフェーズ。ここに無いフェーズでは B を見ない（D-20260825-42）。
+   `docs/ops/phase` が読めないときは**掛ける側**に倒す——検査は緩いほうへ倒さない。 */
+const B_PHASES = new Set(['F1', 'F2']);
 
 /* B: UI に在ってはならないもの。名前は人間に見せる文言。 */
 const FORBIDDEN = [
@@ -98,15 +111,24 @@ function deferredNames(repoRoot) {
 const repoRoot = process.env.REPO_ROOT || process.cwd();
 const uiDir = process.argv[2] || 'src';
 const root = path.join(repoRoot, uiDir);
-const entry = 'index.html';
 
-if (!fs.existsSync(path.join(root, entry))) {
-  process.stderr.write(`❌ ${uiDir}/${entry} が無い。走査の起点が無いので判定できない。\n`);
+/* このアプリの入口は2つ。**片方だけを起点にすると、もう片方が丸ごと
+   「どこからも繋がっていない」と出る**（`my.html` を戻したときに実際に出た）。
+     index.html … トリマーの画面
+     my.html    … 飼い主のマイページ（`bootProtectedPortal` が起動する器）
+   `my.html` は無い時期があるので、在るものだけを起点にする。
+   起点を勝手に増やせば条件Aは通しやすくなるので、**使った起点は必ず出力する**（D-18 偽-2）。 */
+const ENTRIES = ['index.html', 'my.html'];
+const entries = ENTRIES.filter((e) => fs.existsSync(path.join(root, e)));
+const entry = entries[0];
+
+if (!entries.includes('index.html')) {
+  process.stderr.write(`❌ ${uiDir}/index.html が無い。走査の起点が無いので判定できない。\n`);
   process.exit(1);
 }
 
 const all = listFiles(root).map((f) => path.normalize(f)).sort();
-const reachable = reachableFrom(root, entry);
+const reachable = new Set(entries.flatMap((e) => [...reachableFrom(root, e)]));
 const deferred = deferredNames(repoRoot);
 
 /* ── A: 到達できないファイル ── */
@@ -114,9 +136,11 @@ const unreachable = all.filter((f) => !reachable.has(f));
 const unregistered = unreachable.filter((f) => !deferred.has(path.basename(f)));
 
 /* ── B: 到達できるファイルの中の、あってはならない参照 ── */
+const phase = readPhase(repoRoot);
+const checkB = phase === null || B_PHASES.has(phase);
 const scanned = [...reachable].filter((f) => TEXT.has(path.extname(f))).sort();
 const violations = [];
-for (const f of scanned) {
+for (const f of checkB ? scanned : []) {
   const lines = fs.readFileSync(path.join(root, f), 'utf8').split('\n');
   lines.forEach((line, i) => {
     for (const { name, re } of FORBIDDEN) {
@@ -126,14 +150,24 @@ for (const f of scanned) {
 }
 
 process.stdout.write(
-  `[isolation] ${uiDir}/ を走査: 全 ${all.length} ファイル / ${entry} から到達 ${reachable.size} / `
-  + `中身を読んだ ${scanned.length}\n`,
+  `[isolation] ${uiDir}/ を走査: 全 ${all.length} ファイル / 起点 ${entries.join(' + ')} から到達 ${reachable.size} / `
+  + `中身を読んだ ${checkB ? scanned.length : 0}\n`,
 );
+
+/* 外した回は、外したと声に出す。黙って消さない（A-4 / D-18 偽-2）。 */
+if (!checkB) {
+  process.stdout.write(
+    `⚠️  【条件B は見ていません】フェーズ ${phase} では UI→backend の隔離を検査しません（D-20260825-42）。\n`
+    + `    F3 の仕事は UI と backend をつなぐことなので、B を掛けたままだと結線できません。\n`
+    + `    **この実行が緑でも「隔離できている」ことの証明にはなりません。** 見たのは条件A だけです。\n`
+    + `    B を戻すには docs/ops/phase を F1 / F2 に戻します（書き換えは要りません）。\n`,
+  );
+}
 
 const problems = [];
 if (unregistered.length > 0) {
   problems.push(
-    `【条件A】${uiDir}/${entry} からどこにも繋がっていないファイルが ${unregistered.length} 件あります。\n`
+    `【条件A】${uiDir}/（起点 ${entries.join(' + ')}）からどこにも繋がっていないファイルが ${unregistered.length} 件あります。\n`
     + unregistered.map((f) => `    ${uiDir}/${f}`).join('\n')
     + `\n  UI として使われていないなら、${uiDir}/ に置いたままにしない。\n`
     + `  いま消せない事情があるなら docs/deferred.md に**番号付きで**1行残す（ルール⑤）。\n`
@@ -151,8 +185,9 @@ if (violations.length > 0) {
 if (problems.length === 0) {
   const escaped = unreachable.length - unregistered.length;
   process.stdout.write(
-    `✅ 隔離 OK（条件A: 未到達 0 件${escaped > 0 ? `・あと回し登録済み ${escaped} 件は除く` : ''}`
-    + ` / 条件B: 繋がり 0 件）\n`,
+    `✅ ${checkB ? '隔離 OK' : '条件A のみ OK'}（条件A: 未到達 0 件`
+    + `${escaped > 0 ? `・あと回し登録済み ${escaped} 件は除く` : ''}`
+    + ` / 条件B: ${checkB ? '繋がり 0 件' : '**見ていない**'}）\n`,
   );
   process.exit(0);
 }

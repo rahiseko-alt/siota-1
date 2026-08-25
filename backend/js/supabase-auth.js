@@ -159,6 +159,21 @@ async function renderReport(container, report, supabase, siblingReports) {
     onBack: () => { location.href = `/my/pets/${encodeURIComponent(report.pet_id || '')}`; },
     backLabel: 'このわんちゃんのカルテ一覧へ戻る',
   });
+  showAssetFailures(container, hydrated.failed);
+}
+
+/* 読み込めなかった写真を、黙って消さずに見えるところへ出す（bad-scenarios-F3 #4）。
+   件数だけを出し、保存先のパスは出さない——飼い主の画面に出す情報ではない。
+   `renderMagazine` が器を作り直した**後**に差し込む。 */
+function showAssetFailures(container, failed) {
+  if (!container || !failed || failed.length === 0) return;
+  const notice = document.createElement('p');
+  notice.dataset.assetFailures = String(failed.length);
+  notice.style.cssText = 'margin:0;padding:12px 16px;background:#fdf3f2;border-left:3px solid #d32f2f;'
+    + 'color:#8c3b36;font-size:13px;line-height:1.8';
+  notice.textContent = `写真を ${failed.length}枚 読み込めませんでした。`
+    + '通信の状態を確かめて、ページを開き直してください。';
+  container.prepend(notice);
 }
 
 async function loadProtectedResource(supabase, route, content) {

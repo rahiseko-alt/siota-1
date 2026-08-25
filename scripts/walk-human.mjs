@@ -22,6 +22,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, devices } from 'playwright';
 import { startUiServer } from './serve-ui.mjs';
+import { launchChromium } from './lib/chromium.mjs';
+
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MODE = process.argv[2] === 'mistakes' ? 'mistakes' : 'correct';
@@ -38,11 +40,14 @@ let browser;
 try {
   /* playwright が同梱を期待するビルド番号と、環境に在るブラウザが食い違うことがある
      （`Executable doesn't exist at .../chromium_headless_shell-1217/...`）。
-     そのときは実行ファイルを直接渡す: `WALK_CHROMIUM=/path/to/chrome npm run walk`
-     アプリの不具合と、ブラウザが無いだけの失敗を混同しないため。 */
-  browser = await chromium.launch(
-    process.env.WALK_CHROMIUM ? { executablePath: process.env.WALK_CHROMIUM } : {},
-  );
+     マスターの PC では一致していても、**新しいコンテナでは一致しない**——
+     そして D-14 の合否はこのスクリプトが撮る絵だけで決まるので、
+     ここで落ちると「合格とも不合格とも言えない」状態になる（F-20260825-33 の型）。
+
+     だから: ①明示の指定があればそれ ②既定で起動できればそれ
+             ③駄目なら**在るものを探して**使う ④無ければ、何をすればよいかを言って落ちる。
+     ③で使ったときは必ず声に出す。黙って別のブラウザを使わない。 */
+  browser = await launchChromium();
   const ctx = await browser.newContext({ ...devices['iPhone 13'] });
   const page = await ctx.newPage();
   page.on('dialog', async (d) => { await d.accept(); });

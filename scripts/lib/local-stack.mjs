@@ -6,7 +6,8 @@
  * 組み合わせて、CLOUDFLARE_API_TOKEN もホスト済み Supabase の service role key も
  * 無しに実ログイン・実DB・実RLSの検証を行うための共通部品。
  *
- * 前提: `supabase start` は事前に（このプロセスの外で）起動しておくこと。
+ * 前提: Supabase は事前に（このプロセスの外で）起動しておくこと。
+ * 接続先は `SUPABASE_LOCAL_URL` で差し替えられる（既定はローカルの `supabase start`）。
  * 5本の verify:* を毎回 Postgres ごと起動/停止するのは重いため、
  * 起動は `npm run verify:all`（または手動の `npx supabase start`）が1回だけ行う。
  *
@@ -23,8 +24,21 @@
 import { spawn } from 'node:child_process';
 import net from 'node:net';
 
-export const LOCAL_SUPABASE_URL = 'http://127.0.0.1:54321';
-export const LOCAL_ANON_KEY = 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH';
+/* **接続先は差し替えられるようにする**（`D-20260825-44`）。
+
+   ここを直書きにしていたため、`verify:*` は「`supabase start` が同じ機械で動いていること」
+   を前提にするしかなく、**特定の一台の机の上でしか動かない検査**になっていた。
+   マスターの環境（Windows）でも、エージェントのコンテナでも動かない。
+   差し替え可能にすれば、同じ検査が CI のランナーからでも走る。
+
+   既定値は従来どおり `supabase start` の既定ポート。何も設定しなければ挙動は変わらない。
+   変数名 `SUPABASE_LOCAL_URL` は `.env.example:10` に**最初から在った**——使っていなかっただけ。 */
+export const LOCAL_SUPABASE_URL = process.env.SUPABASE_LOCAL_URL || 'http://127.0.0.1:54321';
+
+/* ローカル用の publishable key。秘密情報ではない（`AGENTS.md` D-3 / A-1 の対象外）が、
+   接続先を差し替えるなら鍵も一緒に差し替わらないと意味がないので、同じ扱いにする。 */
+export const LOCAL_ANON_KEY = process.env.SUPABASE_LOCAL_ANON_KEY
+  || 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH';
 export const LOCAL_PASSWORD = 'LocalOnly-Password-2026!';
 
 export const FIXTURE = {
@@ -53,7 +67,7 @@ export async function ensureLocalSupabaseRunning() {
   } catch { /* fallthrough */ }
   throw new Error(
     'ローカル Supabase が起動していない（または起動直後で安定していない）。\n'
-    + '先に `npx supabase start` を実行し、`curl http://127.0.0.1:54321/auth/v1/health` が\n'
+    + `先に \`npx supabase start\` を実行し、\`curl ${LOCAL_SUPABASE_URL}/auth/v1/health\` が\n`
     + '応答することを確かめてから、この検査を実行すること。\n'
     + '\n'
     + 'コンテナは全部 healthy なのにここで落ちる場合は、Kong の上流キャッシュを疑う。\n'

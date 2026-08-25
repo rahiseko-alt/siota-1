@@ -348,6 +348,24 @@ const App = {
     this.drawCanvas();
   },
 
+  /* 犬体図に付けた印を、カルテに残せる形（PNG）で取り出す。
+
+     印は `marks` に載っているだけで、**画面を移れば消える**。トリマーが体を触って
+     見つけた「しこり/イボ」も、ここを通らなければ飼い主にも記録にも残らない
+     （`docs/ops/bad-scenarios-F3.md` #3）。⑥の受け手は
+     `backend/js/magazine-view.js` の `data.bodyMarkingImage` で、**そこへ渡す唯一の道**。
+
+     印が1つも無いときは `null` を返す——白紙の絵を「所見あり」として残さない。
+     印が在るのに描き先が無いときは**投げる**。黙って `null` を返すと、
+     見つけた所見が消えたことに誰も気づけない（`#1` と同じ型）。 */
+  exportBodyMarking() {
+    if (this.marks.length === 0) return null;
+    const canvas = document.getElementById('marking-canvas');
+    if (!canvas) throw new Error('犬体図が見つからないため、付けた印を保存できません');
+    this.drawCanvas();
+    return canvas.toDataURL('image/png');
+  },
+
   drawCanvas() {
     const canvas = document.getElementById('marking-canvas');
     if (!canvas) return;

@@ -151,17 +151,37 @@ async function replaceMarkers(value, urls) {
   return value;
 }
 
+/**
+ * hydrateAssetReferences — `asset://` のマーカーを、実際に表示できる URL に置き換える。
+ *
+ * **読めなかったものを握りつぶさない**（`docs/ops/bad-scenarios-F3.md` #4）。
+ * 以前はここで `continue` しており、失敗した写真は
+ *   download 失敗 → 記録なし → replaceMarkers が `''` に置換 → setImage が枠ごと非表示
+ * と流れて、**その写真が最初から無かったように見えて**いた。店の人は「載せたはず」、
+ * 飼い主は「載っていない」。どちらも気づけない。
+ *
+ * 1枚読めないだけでカルテ全体を出さないのは飼い主にとって損なので、**投げない**。
+ * 代わりに `failed` に積んで返し、**呼び出し側が必ず見えるところに出す**。
+ */
 export async function hydrateAssetReferences(data, assets, client, bucket = 'report-assets') {
   const urls = new Map();
   const objectUrls = [];
+  const failed = [];
   for (const asset of assets || []) {
     const { data: blob, error } = await client.storage.from(bucket).download(asset.storage_path);
-    if (error || !blob) continue;
+    if (error || !blob) {
+      failed.push({
+        id: asset.id,
+        path: asset.storage_path,
+        reason: (error && error.message) || '中身が空でした',
+      });
+      continue;
+    }
     const url = URL.createObjectURL(blob);
     urls.set(asset.id, url);
     objectUrls.push(url);
   }
-  return { data: await replaceMarkers(data, urls), objectUrls };
+  return { data: await replaceMarkers(data, urls), objectUrls, failed };
 }
 
 export async function deleteReportAssets({ client, api, petId, reportId, bucket = 'report-assets' }) {

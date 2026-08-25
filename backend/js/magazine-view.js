@@ -511,8 +511,25 @@ function renderTimeline(root, report) {
  * }
  * opts: { onBack, backLabel }      // 戻るボタン（任意）
  */
+/** カルテが取れなかったときに器へ入れる、正直な空の状態。
+    ここに文例を置かない——置いた瞬間に #1 が戻る。 */
+const EMPTY_HTML = '<p style="padding:28px 24px;color:#8c8c88;font-size:14px;line-height:2">'
+  + 'このカルテはまだ表示できません。</p>';
+
 export function renderMagazine(container, report, opts = {}) {
-  if (!container || !report) return;
+  if (!container) throw new Error('renderMagazine: 描画先の器がありません');
+  if (!report) {
+    /* **静かに帰らない。** 帰ると、器に前から入っていたものが残る。
+       ⑥の器（`src/index.html` の screen-4）には意匠モック由来の
+       「担当トリマーからのメッセージ」の文例が入っているので、
+       **誰も書いていない手紙が、担当トリマーが書いたものとして飼い主に見え続ける**
+       （`docs/ops/bad-scenarios-F3.md` #1）。`D-2`「null は必ず失敗として扱う」の表示側。
+
+       先に器を空にしてから投げる。呼び出し側が握りつぶしても、
+       **偽の手紙だけは残らない**ようにするため。 */
+    container.innerHTML = EMPTY_HTML;
+    throw new Error('renderMagazine: カルテがありません（呼び出し側で必ず扱うこと）');
+  }
   injectStyle();
   container.innerHTML = TEMPLATE;
   const data = report.data || {};
