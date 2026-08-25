@@ -20,6 +20,7 @@ import path from 'node:path';
 export const ALWAYS = [
   'dist/', '.human/', '.screens/', 'node_modules/', '.git/',
   'docs/', 'scripts/guard/', '.agents/',
+  'AGENTS.md', 'CLAUDE.md', 'README.md',   /* ルールと記録は、いつでも書ける */
 ];
 
 /* フェーズごとに触ってよい場所。ここに無い場所は、すべて範囲外。 */
@@ -28,7 +29,7 @@ export const SCOPE = {
     label: 'UI とバックエンドの隔離',
     allow: [
       'src/', 'backend/', 'test/', 'scripts/', 'package.json', 'package-lock.json',
-      '.gitignore', 'AGENTS.md', 'CLAUDE.md', 'README.md', 'src-dist-guard.config.json', '.claude/',
+      '.gitignore', 'src-dist-guard.config.json', '.claude/',
     ],
   },
   F2: {

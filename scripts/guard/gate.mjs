@@ -43,7 +43,7 @@ export function missingArtifacts(root, phase, { end = false } = {}) {
     if (!/^承認:\s*済/m.test(text)) {
       missing.push(`② バッドシナリオに**マスターの承認印が無い** → docs/ops/bad-scenarios-${phase}.md\n`
         + `   10個を提案し、承認を受けてから「承認: 済」を書き、10個を実行すること。`);
-    } else if (/\|\s*未\s*\|?\s*$/m.test(text)) {
+    } else if (/結果:\s*未/.test(text) || /\|\s*未\s*\|?\s*$/m.test(text)) {
       missing.push(`② バッドシナリオが**まだ実行されていない** → docs/ops/bad-scenarios-${phase}.md\n`
         + `   結果が「未」の行が残っている。10個を実行し、該当しないことを確かめること。`);
     } else if (/該当した/.test(text)) {

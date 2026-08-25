@@ -2,29 +2,66 @@
 
 承認: 未
 
-> F1 の完了条件（`docs/ops/plan.md`）
-> **A**: `src/` に UI 以外が無い ／ **B**: UI から `backend/` への参照が 0（**機械で確認**） ／ **C**: `npm run build` / `npm run check` / `npm test` が EXIT 0
+> **F1 の完了条件**
+> **A** `src/` に UI 以外が無い ／ **B** UI から `backend/` への参照が 0（機械で確認） ／ **C** `build`・`check`・`test` が EXIT 0
 >
-> 判定基準: 「これを1つ見落としたら、A・B・C のどれかが満たせなくなるか」だけ。
-> **未実行**（承認前）。`結果` はすべて `未`。
-
-| # | 見落とし | これを外すと完了条件のどれが満たせないか | 確かめ方 | 結果 |
-|---|---|---|---|---|
-| 1 | `npm run check` に隔離の検査が**1本も無い**。中身は `src-dist-drift-guard`（dist に同名ファイルが在るか）と `design-isolation-guard`（`design/` だけ）の2本で、`backend` という語がどちらにも1度も出てこない | **B**。「機械で確認」が存在しないので、いま緑でも B は未達。緑が「隔離できている」を意味しない | `grep -n '"check"' package.json; grep -rc backend scripts/src-dist-drift-guard.mjs scripts/design-isolation-guard.mjs` | 未 |
-| 2 | 隔離検査を足すとき、走査先を `src/js/*.js` にしてしまい **`src/index.html` を見ない**。UI の実体は 2,339行の index.html 側にあり、`.js` は 448行しかない | **B**。UI 本体が素通りするので、参照0を数えたことにならない | `wc -l src/index.html src/js/ui.js src/js/dummy.js; printf '\n<script src="/../backend/js/supabase-auth.js"></script>\n' >> src/index.html; npm run check; echo "EXIT=$?"; git checkout src/index.html` | 未 |
-| 3 | 「`backend/` への参照」を**文字列 `backend/` だけで数える**。実際に繋ぐときは `backend/` と書かない — `@supabase/supabase-js` の直 import（`backend/js/supabase-vendor-entry.mjs` がまさにこの形）、`fetch('/api/...')`、`https://….supabase.co`、そして**もう1つのバックエンド `worker/`** | **B**。数え方が狭いと 0 と出るが、UI は繋がっている | `grep -rn -e backend -e supabase -e /api/ -e "fetch(" -e "http" -e worker/ src/` | 未 |
-| 4 | 足した検査が「**わざと違反を置いたら赤くなる**」ことを一度も確かめていない。常に緑を返す検査は無い検査と同じ（`F-20260821-23` / `F-20260823-01` と同じ形） | **B・C**。検査が偽物なら B は永久に未達のまま、C の EXIT 0 も嘘になる | `printf '\nimport "../../backend/js/supabase-auth.js";\n' >> src/js/ui.js; npm run check; echo "EXIT=$?"; git checkout src/js/ui.js` | 未 |
-| 5 | 検査対象を `src/` だけにして、**実際に配信される `dist/` を見ない**。人が触るのは `scripts/serve-ui.mjs` が配る dist の方 | **B**。src が0でも、配信物が0である保証にならない | `npm run build; grep -rn -e backend -e supabase dist/; diff -rq src dist` | 未 |
-| 6 | 条件 **A（`src/` に UI 以外が無い）にも機械確認が無い**。しかも「UI 以外」の基準が決まっていない。現に `src/assets/konva.min.js` は UI から1行も呼ばれていない第三者ライブラリとして残っている | **A**。人の目でしか見ておらず、「無い」と宣言できない | `ls -R src/; grep -rn -e Konva -e konva src/; grep -rno "assets/[A-Za-z0-9._/-]*" src/index.html src/js/ui.js` | 未 |
-| 7 | 隔離が「**移設**」ではなく「**削除**」になっている。`backend/js/supabase-auth.js` は消えた `magazine-view.js` を import したままで、**いま import できない**（`Cannot find module`）。UI 側を消せば B は 0 になるが、それは隔離ではなく破壊 | **A・B の達成の仕方**。「UI と backend を隔離した」が成立していない。F3 で繋ぎ直す相手が壊れている | `ls backend/js/; node --input-type=module -e "import('./backend/js/supabase-auth.js').then(()=>console.log('OK')).catch(e=>console.log('IMPORT FAIL:',e.message))"` | 未 |
-| 8 | `npm test` が **UI を1行も見ておらず、backend の検査も消えている**。残るのは `worker/` 3本と `backend/js/supabase-storage.js` 1本だけ。隔離のとき `test/supabase-auth.test.mjs`（466行）を削除している | **C**。EXIT 0 が「何も見ていないから緑」になる。C を満たしても隔離の裏付けにならない | `npm test; grep -rn -e "../src/" -e "../backend/" -e "../worker/" test/; git show --stat 6685df5 -- test/` | 未 |
-| 9 | `npm run check` の drift-guard は **dist に同名ファイルが在るかだけ**を見て中身を見ない。さらに config の3項目のうち1つは**既に削除された `src/design-samples/`** を指しており、`existsSync` が false で**黙って0件**になる。`manifest.json` と `assets/` は最初から検査対象外 | **C**。check の緑が「src と dist が一致している」を意味しない。検査項目が黙って消えても誰も気づかない | `cat src-dist-guard.config.json; ls src/design-samples; echo "EXIT=$?"; printf 'x' >> dist/js/ui.js; npm run check; echo "EXIT=$?"; npm run build` | 未 |
-| 10 | `dist/` は `.gitignore` されており **リポジトリに1ファイルも入っていない**。clean clone / CI では `npm run build` より先に `npm run check` を走らせると drift-guard が必ず EXIT 1 になる。手元には dist が残っているので気づけない | **C**。「3本とも EXIT 0」が手元でだけ成立し、他所では成立しない | `git ls-files dist; grep -n "^dist/" .gitignore; rm -rf dist; npm run check; echo "EXIT=$?"; npm run build; npm run check` | 未 |
+> 選ぶ基準は1つだけ: 「これを1つ見落としたら、A・B・C のどれかが満たせなくなるか」。
+> ルールは2行で書く（AGENTS.md D-17）。**人間の行だけ読めば、承認の可否は判断できる。**
+>
+> **未実行**（承認前）。結果はすべて `未`。
 
 ---
 
-## 水増しを避けるために落とした候補
+### 1. 「分けた」と言いながら、分けたかを誰も確かめていない — 結果: 未
+- **人間**: 分けたつもりでも、分けられたか調べる検査が1本も無い。だから「終わった」と言えない。
+- **AI**: `npm run check` に隔離検査が無い（`grep -c backend` = 0）。B が機械で確認されていない。確かめ方: `npm run check` の中身を読み、`backend` の語を数える。
 
-- `scripts/build-dist.mjs` の `ENTRIES` が4つ固定（`index.html` / `manifest.json` / `js` / `assets`）で、これに無いものは dist に出ないまま build が EXIT 0 になる → いま src はちょうどこの4つで、F1 で UI を足す予定も無い。**将来の話**なので出さない。
-- `src/manifest.json` が `src/index.html` から一度も読み込まれていない（`<link rel="manifest">` が無い）→ A・B・C のどれも崩さない。
-- `src/assets/` に UI から参照されない図版が8件残っている（`icon-*.png` / `nail-diagram.png` / `teeth-diagram.jpg` / `body-side.png`）→ 掃除の話で、完了条件を崩さない。#6 で「UI 以外の基準が無い」として1本にまとめた。
+### 2. 検査が、いちばん大きい画面ファイルを見ていない — 結果: 未
+- **人間**: 画面の本体は2,339行の1ファイル。ここを見ない検査は、見ていないのと同じ。
+- **AI**: 隔離検査を `.js` だけに掛け `src/index.html` を走査しない。確かめ方: 検査の対象拡張子を確認し、`src/index.html` が含まれるか見る。
+
+### 3. 「つながっている」の数え方が狭すぎる — 結果: 未
+- **人間**: `backend` という言葉だけ探しても、別の名前でつながっていれば見逃す。
+- **AI**: `@supabase/supabase-js` 直 import・`fetch('/api/…')`・実 URL・`worker/` を数えない。確かめ方: `grep -rn 'backend/\|supabase\|/api/\|https\?://' src/`
+
+### 4. 検査が、赤くなるところを一度も見ていない — 結果: 未
+- **人間**: いつも緑の検査は、壊れていても緑のまま。わざと壊して赤くなるか見ていない。
+- **AI**: 違反行を一時的に置き EXIT 1 を確認していない。確かめ方: `src/js/ui.js` に `import '../backend/js/supabase-auth.js'` を置き `npm run check` が EXIT 1 になるか。
+
+### 5. 検査が、実際に配られるものを見ていない — 結果: 未
+- **人間**: お客さんに届くのは `dist`。`src` だけ見て合格にすると、届くものは確かめていない。
+- **AI**: 検査対象が `src/` のみで `dist/` を見ない。確かめ方: `npm run build` 後に `dist/` へ同じ検査を掛ける。
+
+### 6. 「UI 以外が無い」の基準が無い — 結果: 未
+- **人間**: 何が「UI 以外」なのか決めていないので、残っていても気づけない。
+- **AI**: A に機械確認も定義も無い。`src/assets/konva.min.js` が未参照のまま残存。確かめ方: `src/` の全ファイルを、`src/index.html` からの参照有無で分類する。
+
+### 7. 分けたのではなく、片方を消してしまっている — 結果: 未
+- **人間**: 引っ越しのつもりが、置いてきた。いま呼び出そうとしても動かない部品がある。
+- **AI**: `backend/js/supabase-auth.js` が削除済み `magazine-view.js` を import したまま。確かめ方: `node -e "import('./backend/js/supabase-auth.js')"`
+
+### 8. 検査は緑だが、中身が空っぽ — 結果: 未
+- **人間**: 通ったテストが画面を1行も見ていない。緑に意味が無い。
+- **AI**: `npm test` が UI を検査せず、backend 側の検査も削除済み。確かめ方: `npm test` の対象ファイルを列挙し、`src/` を見るものが何本あるか数える。
+
+### 9. 検査の設定が、もう無い場所を指している — 結果: 未
+- **人間**: 存在しない場所を調べているので、0件で通る。調べていないのに合格になる。
+- **AI**: `src-dist-guard.config.json` の1項目が削除済み `src/design-samples/` を指し黙って0件。確かめ方: `cat src-dist-guard.config.json` と `ls src/design-samples`
+
+### 10. まっさらな環境では、検査そのものが失敗する — 結果: 未
+- **人間**: この場所では緑でも、新しい環境に持っていくと赤くなる。手元でしか通らない。
+- **AI**: `dist/` は `.gitignore` で0ファイル。clean clone では build 前の `npm run check` が必ず EXIT 1。確かめ方: 別ディレクトリに clone し、build せずに `npm run check`。
+
+---
+
+## 水増しを避けて落とした候補
+
+- `build-dist.mjs` の対象一覧が固定 — 将来の話。いまの完了条件を崩さない
+- `manifest.json` が読み込まれていない — 完了条件を崩さない（`docs/deferred.md` へ）
+- 未参照の図版8件 — 掃除の話。#6 に集約した
+
+## 承認後にやること
+
+1. `承認: 未` を `承認: 済` に書き換える
+2. 10個を**実際に実行**し、各項の `結果: 未` を `該当せず` / `該当した` に書き換える
+3. 1つでも `該当した` が残る間は、F1 を閉じない（`node scripts/guard/gate.mjs --end` が止める）
