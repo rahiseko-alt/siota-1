@@ -1057,3 +1057,139 @@ $ node scripts/guard/verify-inventory.mjs; echo EXIT=$?
 ❌ 台帳が実体と食い違う: verify-portal.mjs（台帳=未復元 / 実体=在る）
 EXIT=1
 ```
+
+
+### 12. 保存されたカルテが、飼い主のブラウザで実行される（`verify:xss` が無い）
+種別: 解決
+
+**原因**: `6685df5` が `scripts/verify-xss.mjs` を消し、`AGENTS.md` D-11 の機械強制が
+ゼロになっていた。`/api` の無認証は意図された前提（D-3）なので、守るのは**出口**だけ
+——`renderMagazine()` が描画したものが飼い主のブラウザで実行されないこと。それを見る
+検査が1本も無かった。
+
+**戻すにあたって、合格条件を実際の仕組みに合わせて書き直した。** `6685df5^` の版は
+`!fired`——「実行されなければ合格」しか見ておらず、**細工が飼い主の画面に届いていなくても
+合格**した（ページが出ない・カルテが見えない・確定に失敗した、のどれでも
+`window.__XSS_FIRED` は undefined になる）。`F-20260825-35`/`-36` で2回やった
+「期待する成功の形を、実際の仕組みに合わせて書かずに検査を書いた」と同じ型である。
+いまは1件につき3つ、すべて「こうなっていれば合格」の形で書いてある:
+
+1. 細工した文字列が、**文字として**飼い主の画面に出ている（`<img` が `textContent` に在る）← 届いた証拠
+2. `window.__XSS_FIRED` が立っていない ← 実行されていない
+3. `img[src="x"]` が DOM に無い ← HTML として解釈されていない
+
+**仕掛ける場所も1つ直した。** 旧版は `data.pet` に入れていたが、飼い主の画面の見出しは
+`report.pet.name`（DB の値）を使い、`data.pet` は petName が空のときしか描画されない
+（`backend/js/supabase-auth.js` の `renderReport`）。つまりその項は**必ず合格する検査**
+だった。犬の名前そのものに仕掛ける形にした。
+
+**この検査が保証しないこと**: 入り口（保存時）の無害化は見ない。出口だけを見る。
+また `setText` を通らない描画経路（`skin[].loc` の行・体重グラフのラベル）は
+別々に `textContent` を使っており、下の③でもそこは緑のまま残る——**1か所を壊したら
+全部赤くなる、という作りではない**ことは自覚して書いている。
+
+#### 直す前（赤）
+
+`origin/master` の `package.json`。検査そのものが存在しない。
+
+```
+$ npm run verify:xss
+npm error Missing script: "verify:xss"
+npm error
+npm error To see a list of scripts, run:
+npm error   npm run
+EXIT=1
+```
+
+#### 直した後（緑）
+
+CI の `verify` ジョブ（c8437db・実 Supabase・実ログイン・実 RLS）。
+
+```
+> trimmer-system@0.1.0 verify:xss
+> node scripts/build-dist.mjs && node scripts/verify-xss.mjs
+
+PASS  犬の名前（見出しへ入る）: 細工が文字として飼い主の画面に出ている
+PASS  犬の名前（見出しへ入る）: 実行されない
+PASS  犬の名前（見出しへ入る）: 要素として注入されていない  img[src="x"]=0
+PASS  staffNote（担当からの一言）: 細工が文字として飼い主の画面に出ている
+PASS  staffNote（担当からの一言）: 実行されない
+PASS  staffNote（担当からの一言）: 要素として注入されていない  img[src="x"]=0
+PASS  skin[].loc（皮膚の部位）: 細工が文字として飼い主の画面に出ている
+PASS  skin[].loc（皮膚の部位）: 実行されない
+PASS  skin[].loc（皮膚の部位）: 要素として注入されていない  img[src="x"]=0
+PASS  ear.comment（耳のコメント）: 細工が文字として飼い主の画面に出ている
+PASS  ear.comment（耳のコメント）: 実行されない
+PASS  ear.comment（耳のコメント）: 要素として注入されていない  img[src="x"]=0
+PASS  nail.comment（爪のコメント）: 細工が文字として飼い主の画面に出ている
+PASS  nail.comment（爪のコメント）: 実行されない
+PASS  nail.comment（爪のコメント）: 要素として注入されていない  img[src="x"]=0
+PASS  teeth.status（歯の状態）: 細工が文字として飼い主の画面に出ている
+PASS  teeth.status（歯の状態）: 実行されない
+PASS  teeth.status（歯の状態）: 要素として注入されていない  img[src="x"]=0
+PASS  teeth.comment（歯のコメント）: 細工が文字として飼い主の画面に出ている
+PASS  teeth.comment（歯のコメント）: 実行されない
+PASS  teeth.comment（歯のコメント）: 要素として注入されていない  img[src="x"]=0
+PASS  weights[].ym（体重グラフのラベル）: 細工が文字として飼い主の画面に出ている
+PASS  weights[].ym（体重グラフのラベル）: 実行されない
+PASS  weights[].ym（体重グラフのラベル）: 要素として注入されていない  img[src="x"]=0
+
+24/24 PASS
+```
+
+#### 直しを戻した（また赤）
+
+**直したのは「検査が存在しないこと」**なので、戻すのは `package.json` の口である。
+`verify:xss` の行を消して実行した。**①と同じ症状の行が出る。**
+
+```
+$ npm run verify:xss
+npm error Missing script: "verify:xss"
+npm error
+npm error To see a list of scripts, run:
+npm error   npm run
+EXIT=1
+```
+
+#### 補足: この検査が空でないことの確認（別の壊し方）
+
+「口が在る」ことと「中身が効く」ことは別である（D-18 偽-5「別の緑で覆う」）。
+**出口の無害化そのものを壊して、この検査が本当に噛むかを見た。**
+`magazine-view.js` の `setText` を `textContent` → `innerHTML` に戻し、コミット
+32b861f で**意図的に壊して** CI にかけた（次のコミットで戻してある）。
+**`★ 実行された` が出る**——飼い主のブラウザで実際にコードが動いた。
+
+```
+FAIL  犬の名前（見出しへ入る）: 細工が文字として飼い主の画面に出ている  ★ 届いていない。この項は何も検査できていない
+FAIL  犬の名前（見出しへ入る）: 実行されない  ★ 実行された
+FAIL  犬の名前（見出しへ入る）: 要素として注入されていない  img[src="x"]=1
+FAIL  staffNote（担当からの一言）: 実行されない  ★ 実行された
+FAIL  ear.comment（耳のコメント）: 実行されない  ★ 実行された
+FAIL  nail.comment（爪のコメント）: 実行されない  ★ 実行された
+FAIL  teeth.status（歯の状態）: 実行されない  ★ 実行された
+FAIL  teeth.comment（歯のコメント）: 実行されない  ★ 実行された
+PASS  skin[].loc（皮膚の部位）: 実行されない
+PASS  weights[].ym（体重グラフのラベル）: 実行されない
+
+6/24 PASS
+
+保存されたデータが飼い主のブラウザで実行されている、または細工が届いていない。Critical。
+##[error]Process completed with exit code 1.
+```
+
+`skin[].loc` と `weights[].ym` が緑のまま残るのは、その2つが `setText` を通らず
+自前で `textContent` を使っているため。**1か所を壊したら全部赤くなる作りではない。**
+
+**この壊し方を、他の検査は1本も捕まえなかった**（手元で実測）:
+
+```
+$ npm run build ; echo $?
+0
+$ npm run check ; echo $?
+0
+$ npm test ; echo $?
+0
+```
+
+飼い主のブラウザでカルテが実行される状態を、いまの機械検査で捕まえられるのは
+`verify:xss` だけである。**この検査が要る理由そのもの**なので、ここに残す。
