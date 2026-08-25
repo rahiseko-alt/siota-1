@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build-dist.mjs",
-    "check": "node scripts/guard/run.mjs && node scripts/guard/isolation.mjs src && node scripts/guard/isolation.mjs dist && node scripts/src-dist-drift-guard.mjs . && node scripts/design-isolation-guard.mjs .",
+    "check": "node scripts/guard/run.mjs && node scripts/guard/isolation.mjs src && node scripts/guard/isolation.mjs dist && node scripts/src-dist-drift-guard.mjs . && node scripts/design-isolation-guard.mjs . && node scripts/guard/delete-order.mjs",
     "test": "npm run test:unit && npm run test:schema && npm run test:migration && npm run test:backend",
     "test:unit": "node --test test/worker-unit.test.mjs test/magazine-view.test.mjs",
     "test:backend": "node --test test/backend-import.test.mjs",

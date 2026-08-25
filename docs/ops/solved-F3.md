@@ -359,3 +359,123 @@ EXIT=1
 そこは **`#7`（⑥の器が `src/` に無い）と `#10`（古典スクリプトと ES モジュール）** の領分で、
 **どちらもまだ未解決**。両方が閉じるまで F3 は閉じられないので、この穴が素通りすることはない。
 既定文そのものの存廃は**マスター判断待ち**（`deferred` #13）。
+
+---
+
+### 2. 消したはずの写真が残り、しかも誰も回収できなくなる
+種別: 解決
+
+**原因**: 順序を守らせる仕組みが**1つも無かった**。片付けの関数
+（`purgePetAssets` / `purgeOwnerAssets`）は `backend/js/supabase-storage.js` に在って
+**実装は正しい**が、①**呼ぶ順序を守らせる検査が無い** ②**その関数自体のテストが 0件**
+③唯一の防波堤 `verify-delete.mjs` は `6685df5` で削除済み、の3点が重なっていた。
+`src/` に削除導線はまだ無く、**F3 でこれから書く**ので、書いた瞬間に踏める。
+
+犬を先に消すと FK カスケード（pets → reports → report_assets）で `reports` 行が消え、
+Storage ポリシー `private.storage_path_staff` の条件が偽になる。以後その写真は
+**スタッフからも飼い主からも列挙も削除もできない**。回収は service_role のみで、
+孤児の在処を示す `report_assets.storage_path` も道連れ。画面上は「消えました」と出る。
+
+**実行時に確かめる検査は作れない。** 消えた `verify-delete.mjs` の冒頭にこうある——
+「**RLS 越しに見てはいけない。削除後は『残っていても見えない』ので、RLS 越しの確認は
+必ず合格してしまう**」。だから**呼ぶ順序を静的に**見る検査にした。
+
+**直したこと**:
+1. `scripts/guard/delete-order.mjs` を新設。ブラウザ側（`src/` と `backend/js/`）で
+   犬・飼い主を `DELETE` する場所が、同じファイルで片付けを呼んでいるかを見る。
+   **`npm run check` に組み込んだ**ので、忘れても止まる
+2. `purgePetAssets` / `purgeOwnerAssets` のテストを **4件**追加（それまで 0件）。
+   **Storage だけを触り DB 行に一切触らない**ことを、DB を変える呼び出しが来たら
+   落ちる偽 `api` で固定した。失敗時に投げること（＝犬の削除自体を止めること）も
+3. サーバ側（`worker/`）は対象外。service_role を持たないので片付けられない——
+   **片付けはブラウザ側の責任**という既存の契約をそのまま機械化した
+
+#### 直す前（赤）
+`src/js/ui.js` に、F3 が書きそうな**片付けを忘れた削除**を置いて、既存の検査を全部通した。
+
+```
+$ cat >> src/js/ui.js
+async function deleteDog(petId) {
+  await fetch(`/api/pets/${petId}`, { method: 'DELETE' });
+}
+$ npm run build && ...
+  隔離 src        EXIT=0
+  隔離 dist       EXIT=0
+  src↔dist parity EXIT=0
+  design 隔離     EXIT=0
+  npm test        EXIT=0
+  purge のテスト件数: 0
+  → どれも止めない
+```
+
+`check` の中身に削除順序を見るものが在るかも数えた。
+
+```
+$ node -e "console.log(require('./package.json').scripts.check)" | tr '&' '\n' | grep -c delete-order
+0 本（削除順序を見る検査は無い）
+```
+
+#### 直した後（緑）
+同じ危ない削除を、新しい検査に通す。
+
+```
+$ REPO_ROOT=$SB node scripts/guard/delete-order.mjs
+[delete-order] ブラウザ側を走査: 9 ファイル
+
+❌ 写真を片付けずに削除している場所が 1 件あります
+
+    src/js/ui.js
+      犬を削除しているのに purgePetAssets() を呼んでいません
+
+  **Storage → DB の順**です（D-20260824-34）。逆にすると、写真は残るのに
+  スタッフからも飼い主からも見えず・消せなくなります（回収は service_role のみ）。
+  **実行して確かめようとしないこと**——削除後は「残っていても見えない」ので、
+  RLS 越しの確認は必ず合格します。
+EXIT=1
+```
+
+**正常系も確かめた**（誤検出で仕事を止めないこと・`F-20260825-30` の教訓）。
+片付けを1行足すと通る。飼い主側でも同じように効く。
+
+```
+$ # purgePetAssets({ client, api, petId }) を削除の前に足す
+$ REPO_ROOT=$SB node scripts/guard/delete-order.mjs
+✅ 削除の順序 OK（Storage を片付けずに DB を消す場所は 0 件）
+EXIT=0
+
+$ # 飼い主を purge 無しで消す行を足す
+❌ 写真を片付けずに削除している場所が 1 件あります
+    src/js/ui.js
+EXIT=1
+```
+
+片付け関数そのものにもテストが付いた（0件 → 4件）。`npm test` は 64件 → **72件**。
+
+```
+$ npm run check
+[delete-order] ブラウザ側を走査: 9 ファイル
+✅ 削除の順序 OK（Storage を片付けずに DB を消す場所は 0 件）
+check EXIT=0
+$ npm test
+EXIT=0
+```
+
+#### 直しを戻した（また赤）
+`npm run check` から `delete-order` を外すと、同じ危ない削除が**また素通りする**。
+
+```
+$ # package.json の check から delete-order を外す
+$ npm run check
+  隔離 src        EXIT=0
+  隔離 dist       EXIT=0
+  src↔dist parity EXIT=0
+  design 隔離     EXIT=0
+  npm test        EXIT=0
+  → どれも止めない
+```
+
+**この記録の限界**: 見ているのは**呼んでいるかどうか**だけで、
+**実際に順序どおり動くこと・写真が本当に消えること**は何も言っていない（`D-18` 偽-5）。
+同じファイルの中で片付けを**削除の後**に書いても、この検査は通ってしまう。
+実体を数える検査（`verify-delete.mjs` の作り直し）は **`#6`** の領分で、
+service_role が要るため**まだ作れていない**。`#6` はまだ未解決。

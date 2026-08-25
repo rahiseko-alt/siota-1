@@ -43,7 +43,7 @@ $ grep -c "今月もとってもお利口" src/index.html
 **2か所ある**のが効く。④で何も書かなくても入力欄が埋まって見え（`docs/deferred.md` #13）、
 ⑥は⑥で独立した固定文を出す。**どちらも人が書いたものではない。**
 
-### 2. 消したはずの写真が残り、しかも誰も回収できなくなる — 結果: 該当した
+### 2. 消したはずの写真が残り、しかも誰も回収できなくなる — 結果: 該当した ／ 解決済み
 - **人間**: 犬やお客さんを削除したとき、順番を間違えると**写真だけが残る**。しかも残った写真は、店の人にも本人にも**一覧に出ない・消せない**。画面上は「消えました」と出る。「削除したのに残っている」はお客さんの情報の扱いとして通らない。
 - **AI**: `pets` を先に消すと FK カスケードで `reports` 行が消え、Storage ポリシー `private.storage_path_staff` の条件（当該 `reports` 行の存在）が偽になる。以後 `list` も `remove` も通らず、孤児の在処を示す `report_assets.storage_path` も道連れ（`D-20260824-34`）。**Storage → DB の順**が絶対。
 
@@ -210,7 +210,7 @@ $ grep -rn "esbuild" scripts/
 | # | 段 | 結果 | 決め手になった出力 |
 |---|---|---|---|
 | 1 | I | **解決済み** | `renderMagazine(_, null)` が例外なく無変更で帰る → 器を空にして投げる（`solved-F3.md` #1） |
-| 2 | I | 該当した | 削除導線 **0件**・順序の検査 **0件**・`verify-delete.mjs` 削除済み |
+| 2 | I | **解決済み** | 順序の検査 **0件** → `delete-order.mjs` を新設し `check` に組込（`solved-F3.md` #2） |
 | 3 | II | 該当した | `toDataURL`/`toBlob`/`bodyMarkingImage` が `src/` に **0件**（受け手だけ在る） |
 | 4 | II | 該当した | `if (error || !blob) continue;`（報告なし） |
 | 5 | II | 該当した | 壊した SQL で `npm test` **EXIT 0** / `verify:migrations` **EXIT 1** |
