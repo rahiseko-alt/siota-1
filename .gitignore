@@ -55,3 +55,8 @@ yarn-debug.log*
 *.swo
 .screens/
 .human/
+
+# 特定の AI だけが読む設定は置かない（正は AGENTS.md ひとつ）
+.claude/
+.codex/
+*.claude.json

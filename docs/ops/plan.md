@@ -74,20 +74,20 @@ scripts/serve-ui.mjs      API も認証も無い静的配信（繋いでいた�
 
 ---
 
-## 監視の仕組み（サブエージェント3本 ＋ Hook）
+## 監視の仕組み（3本 ＋ 機械の関所）
 
-`.claude/agents/` に定義し、`.claude/settings.json` の Hook で発火させる。
-**Hook は「サブを呼んだ証拠が在るか」を見て、無ければ止める。** 呼び忘れを防ぐため。
+**ルールの正は `AGENTS.md` ひとつだけ**（D-15）。このリポジトリは Claude 以外の AI も共同で触るので、
+特定の AI だけが読む設定（`.claude/` `.codex/` `*.claude.json`）には**何も置かない**。
+3本の役割は `AGENTS.md` の「D-16 の中身」に書いてあり、機械強制は**どの AI でも叩ける1つの命令**にする。
 
-### ① 逸脱監視サブ `plan-guard` — 発火: **常時**
+### ① 逸脱監視 — 発火: **常時**
 
-- **役割**: いまの行動が `docs/ops/plan.md` の**現在のフェーズの範囲内か**だけを見る。
-- **Hook**: `PreToolUse`（`Edit` / `Write` / `Bash`）
-  → `scripts/hooks/plan-guard.mjs` が、`docs/ops/phase` に書かれた現在フェーズと、
-  そのフェーズで触ってよい場所を突き合わせ、**範囲外なら止めて理由を返す**。
-- 例: F2 中に `backend/` を触ろうとしたら止める。F2 中に新しい依存を足そうとしたら止める（ルール①）。
+- **役割**: いまの行動が、**現在のフェーズの範囲内か**だけを見る。良し悪しは見ない、場所だけを見る。
+- **機械**: `scripts/guard/scope.mjs`。`docs/ops/phase` の現在フェーズと、そのフェーズで触ってよい場所を
+  突き合わせ、**範囲外なら EXIT 1 で理由を返す**。新しい依存を足そうとしても止める（ルール①）。
+- 例: F2 中に `backend/` を触ろうとしたら止まる。`npm install` も止まる。
 
-### ② 提案サブ `bad-scenarios` — 発火: **フェーズ開始直後**
+### ② バッドシナリオ提案 — 発火: **フェーズ開始直後**
 
 - **役割**: そのフェーズの**バッドシナリオを10個**出し、マスターに提案する。
 - **制約（マスター指定・厳守）**
@@ -96,40 +96,45 @@ scripts/serve-ui.mjs      API も認証も無い静的配信（繋いでいた�
   - 「1つでも外すと、そのフェーズの完了条件が満たせなくなる」ものだけ
 - **承認後**: 10個を**実際に実行**し、それぞれ**該当しないこと**を確かめてからフェーズを進める。
 - **成果物**: `docs/ops/bad-scenarios-F{n}.md`（提案 → 承認印 → 実行結果）
-- **Hook**: `PreToolUse` が、そのフェーズの成果物に**承認印が無い間は編集を止める**。
 
-### ③ 再発防止サブ `failure-matcher` — 発火: **フェーズ開始直後 と 完了直後**
+### ③ 再発防止 — 発火: **フェーズ開始直後 と 完了直後**
 
-- **役割**: `docs/failures.md` と `docs/decisions.md` を照合し、
+- **役割**: `docs/failures.md` と `docs/decisions.md` を**全件**照合し、
   **同じ失敗が起こり得ないか／既に起こっていないか**を確認する。
 - **成果物**: `docs/ops/failure-check-F{n}-{start,end}.md`
-- **Hook**: 開始時のものが無ければ編集を止める。完了時のものが無ければフェーズを閉じさせない。
+
+### 関所（②③の呼び忘れを止める）
+
+`scripts/guard/gate.mjs` は、**呼んだ記憶ではなく成果物が在るかだけ**を見る。
+②に**マスターの承認印が無い間**、③の開始時のものが無い間は、そのフェーズの**作業場を開けない**。
+完了時のものが無ければ**フェーズを閉じさせない**（`node scripts/guard/gate.mjs --end`）。
+記録と仕組みの置き場（`docs/` `scripts/guard/` `.agents/`）は、いつでも書ける。
 
 ### 置き場所
 
 ```
-.claude/agents/plan-guard.md          逸脱監視
-.claude/agents/bad-scenarios.md       バッドシナリオ提案
-.claude/agents/failure-matcher.md     再発防止
-.claude/settings.json                 Hook の配線
-scripts/hooks/plan-guard.mjs          範囲外を止める
-scripts/hooks/phase-gate.mjs          ②③の成果物が揃うまで止める
-docs/ops/plan.md                      この計画（正）
-docs/ops/phase                        現在のフェーズ（F1 / F2 / F3 の1行）
-docs/deferred.md                      あと回しの記録
+AGENTS.md                 ルールの正（D-15 / D-16）。ここ以外にルールを書かない
+CLAUDE.md                 「AGENTS.md に従え」だけ。中身は持たない
+docs/ops/plan.md          この計画（正）
+docs/ops/phase            現在のフェーズ（F1 / F2 / F3 の1行）
+docs/deferred.md          あと回しの記録
+scripts/guard/scope.mjs   ①範囲外を止める
+scripts/guard/gate.mjs    ②③の成果物が揃うまで止める
+scripts/guard/run.mjs     `npm run guard`。変更した全ファイルに両方を掛ける
+package.json              `npm run check` が guard を含む（忘れても止まる）
 ```
 
 ---
 
 ## 実行順
 
-1. `docs/ops/` 一式と `.claude/` の3サブ・Hook を置く（**この作業自体は F1 の一部**）
-2. Hook が実際に止めることを、わざと範囲外を触って確かめる
+1. `docs/ops/` 一式と `AGENTS.md` の D-15/D-16、`scripts/guard/` を置く（**この作業自体は F1 の一部**）
+2. 関所が実際に止めることを、わざと範囲外を触って確かめる
 3. F1 を閉じる（②③のサブを回してから）
 4. F2 開始 → ②が10個提案 → 承認 → 実行 → 動線を通す
 5. F3
 
 ## 共通ゲート
 
-`npm run build` / `npm run check` / `npm test` が EXIT 0。
+`npm run build` / `npm run check`（`guard` を含む）/ `npm test` が EXIT 0。
 フェーズの終わりに `docs/ops/plan.md` の「現在地」を更新する。

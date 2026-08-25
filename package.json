@@ -5,14 +5,15 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build-dist.mjs",
-    "check": "node scripts/src-dist-drift-guard.mjs . && node scripts/design-isolation-guard.mjs .",
+    "check": "node scripts/guard/run.mjs && node scripts/src-dist-drift-guard.mjs . && node scripts/design-isolation-guard.mjs .",
     "test": "npm run test:unit && npm run test:schema && npm run test:migration",
     "test:unit": "node --test test/worker-unit.test.mjs",
     "verify:migrations": "node scripts/verify-migrations.mjs",
     "test:migration": "node --test test/kv-migration.test.mjs",
     "walk": "node scripts/build-dist.mjs && node scripts/walk-human.mjs",
     "test:schema": "node --test test/supabase-schema.test.mjs test/supabase-storage.test.mjs test/supabase-store.test.mjs",
-    "serve": "node scripts/serve-ui.mjs"
+    "serve": "node scripts/serve-ui.mjs",
+    "guard": "node scripts/guard/run.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.110.6",
