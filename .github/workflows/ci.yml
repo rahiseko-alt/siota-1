@@ -60,3 +60,38 @@ jobs:
       - name: guard が何を見たかを残す
         if: always()
         run: node scripts/guard/run.mjs || true
+
+  # 土台（実 Supabase）が要る検査。ランナーには Docker が在るので `supabase start` が動く
+  # ——マスターの Windows にもエージェントのコンテナにも Docker は要らない。
+  #
+  # 上の check とは別の job にしてある。こちらは分単位（イメージの取得）で、
+  # build/check/test の速さを巻き込みたくないため。
+  #
+  # いまは土台そのものの検査だけ。飼い主に届く中身を見る9本は 4-0-d で足す。
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # devDependency の supabase CLI を使う（新しく入れない・ルール①）。
+      - name: Supabase を起こす
+        run: npx supabase start
+
+      # 起きたこと・マイグレーションが当たったこと・seed で実ログインできること・
+      # 鍵なしでは読めないこと。ここが緑でなければ verify:* を書いても意味がない。
+      - name: 土台を確かめる
+        run: npm run verify:stack
+
+      - name: Supabase を止める
+        if: always()
+        run: npx supabase stop || true

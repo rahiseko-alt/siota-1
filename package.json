@@ -10,6 +10,7 @@
     "test:unit": "node --test test/worker-unit.test.mjs test/magazine-view.test.mjs test/ui-body-marking.test.mjs",
     "test:backend": "node --test test/backend-import.test.mjs test/supabase-auth.test.mjs test/local-stack-endpoint.test.mjs",
     "verify:migrations": "node scripts/verify-migrations.mjs",
+    "verify:stack": "node scripts/verify-stack.mjs",
     "test:migration": "node --test test/kv-migration.test.mjs",
     "test:sql": "node scripts/guard/sql-verified.mjs",
     "walk": "node scripts/build-dist.mjs && node scripts/walk-human.mjs",
