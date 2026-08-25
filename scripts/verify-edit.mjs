@@ -45,7 +45,15 @@ try {
 
   const seen = await page.evaluate(() => ({
     screens: document.querySelectorAll('[id^="screen-"]').length,
-    hasApp: typeof globalThis.App === 'object' && globalThis.App !== null,
+    /* **`globalThis.App` では見ない。** `src/js/ui.js` は古典スクリプトの
+       トップレベル `const App` で、これは**グローバル字句環境**に入る——
+       インライン `onclick` からは名前で届くが、`globalThis` にはぶら下がらない。
+       最初ここを `globalThis.App` で見て落ち、**製品ではなく検査のほうが
+       間違っていた**（`F-20260825-35` と同じ型）。裸の識別子で見る。 */
+    hasApp: (() => { try { return typeof App === 'object' && App !== null; } catch { return false; } })(),
+    /* 名前で届くだけでなく、**実際に呼べる**ことまで見る。 */
+    appCallable: (() => { try { return typeof App.goToStep === 'function'; } catch { return false; } })(),
+    onclicks: document.querySelectorAll('[onclick^="App."]').length,
     vendor: typeof globalThis.TrimmerSupabaseVendor?.createClient,
     staff: typeof globalThis.TrimmerSupabaseStaff?.boot,
     scripts: [...document.querySelectorAll('script[src]')].map((s) => s.getAttribute('src')),
@@ -56,7 +64,9 @@ try {
 
   /* 3. 古典スクリプトの App がグローバルに居るか（`#10` で固定した繋ぎ方）。
         ここが false なら onclick 63件が死んでいる。 */
-  check('3. グローバル App が居る（onclick が生きている）', seen.hasApp === true);
+  check('3. App が名前で届く（インライン onclick の解決先）', seen.hasApp === true);
+  check('3b. App のメソッドが実際に呼べる', seen.appCallable === true);
+  check('3c. onclick="App.…" が実在する', seen.onclicks > 0, `${seen.onclicks}件`);
 
   /* 4. backend が**モジュールとして**載っているか。置き場所の読み替えができていないと落ちる。 */
   check('4. Supabase vendor が載っている', seen.vendor === 'function');
