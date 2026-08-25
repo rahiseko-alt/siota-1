@@ -7,12 +7,6 @@
       "description": "Root HTML"
     },
     {
-      "srcDir": "src/design-samples",
-      "srcExt": ".html",
-      "distPattern": "dist/{name}{ext}",
-      "description": "Design samples → dist root"
-    },
-    {
       "srcDir": "src/js",
       "srcExt": ".js",
       "distPattern": "dist/js/{name}{ext}",

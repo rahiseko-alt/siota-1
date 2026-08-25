@@ -153,10 +153,11 @@ EXPLORE  -->  BUILD  -->  VERIFY
     | コマンド | 見るもの |
     |---|---|
     | `npm run build` | dist が生成でき、相対パスが残っていないこと |
-    | `npm run check` | src↔dist の対応と、`design/` が `src/` に流れ込んでいないこと |
-    | `npm test` | 全6スイート 66 件 |
+    | `npm run check` | 逸脱監視と関所（`npm run guard`）／**UI と backend の隔離**（`scripts/guard/isolation.mjs`）／src↔dist の対応／`design/` が `src/` に流れ込んでいないこと |
+    | `npm test` | 全4スイート 64 件（unit 5 / schema 47 / migration 6 / backend-import 6） |
 
   - **3本とも EXIT 0 になるまで VERIFY へ進まない。**
+  - `dist/` は git の管理外。**新しいクローンでは `npm ci` → `npm run build` → `npm run check` の順**に走らせる。
   - 機械判定できるものは先にすべて自動実行する。LLM Reviewerに機械判定を任せない。
 
 ---
@@ -178,20 +179,21 @@ EXPLORE  -->  BUILD  -->  VERIFY
 - **原則**: 自己申告の推論ではなく、外部事実 (Runtime Evidence) で完了を証明する。
 - **証拠の強さ**:
   `AI Reasoning < Code Review < Automated Test < Runtime Evidence`
-- **本リポジトリの Runtime Evidence**（`npm run preview` を別端末で起動してから実行）:
+- **本リポジトリの Runtime Evidence**:
 
   | コマンド | 証明するもの |
   |---|---|
-  | `npm run verify:m6` | 導線が通ること（ログイン→検索→肉球→カルテ→保存→公開） |
-  | `npm run verify:roundtrip` | **トリマーが書いた所見が、同じ値で飼い主に届くこと**（13項目） |
-  | `npm run verify:empty` | カルテ0件の犬に、存在しない履歴を見せていないこと |
-  | `npm run verify:xss` | 保存されたデータが飼い主のブラウザで実行されないこと |
-  | `npm run verify:portal` | `/my` が起動し、未ログインの飼い主にログイン導線が出ること（自分で Worker を立てるので `preview` 不要） |
-  | `npm run verify:all` | 上記5本 |
+  | `npm run walk` | **人が使えるか**。全画面の写真を撮る。合否は D-14 の2問に、絵だけで答える |
+  | `npm run serve` | 正UI を API 無しで配信する（F2 の作業用） |
 
-  **`verify:roundtrip` が本リポジトリで最も重要な検査。** 画面が出るか・押せるかではなく、
+  > **`verify:*` 7本（`preview` / `m6` / `roundtrip` / `empty` / `xss` / `portal` / `all`）は、いま**
+  > **存在しない。** F1 で UI とバックエンドを分けたとき、実行に Supabase と旧画面（`#screen-paw` 等）を
+  > 必要とするため一緒に削除された（`git show --stat 6685df5`）。**消したことを隠さないためにここに書く。**
+  > 作り直すのは **F3**（正UI とバックエンドを繋いだあと）。それまで、この行を「通せ」の意味に読まない。
+
+  **`verify:roundtrip` は本リポジトリで最も重要な検査だった。** 画面が出るか・押せるかではなく、
   書いたものが相手に届くかを見る。この2つは別物で、前者だけを見て「動く」と報告した失敗が
-  `F-20260821-11` に記録してある。**入力欄を足したら、必ずこの検査にも足すこと。**
+  `F-20260821-11` に記録してある。**F3 で作り直すとき、入力欄を足したら必ずこの検査にも足すこと。**
 
 - **対象別検証方法**:
   - **UI / Web**: 実ブラウザ / Playwright等での実操作と表示結果
@@ -283,19 +285,19 @@ EXPLORE  -->  BUILD  -->  VERIFY
 
 #### D-9 — 画面の目印に日本語を使わない
 - **人間**: 部品の目印に日本語を使うと、掴み損ねて画面が壊れる。
-- **AI**: `data-*` の値に非 ASCII を使わない。使うならセレクタに連結せず `pickByValue()` を使う（`F-12`・`F-17`）。機械: `npm run verify:xss`
+- **AI**: `data-*` の値に非 ASCII を使わない。使うならセレクタに連結せず `pickByValue()` を使う（`F-12`・`F-17`）。機械: `npm run verify:xss` — **F3 で作り直すまで存在しない**（削除の経緯は STEP 5 の注記）
 
 #### D-10 — 飼い主の画面に、見本を出さない
 - **人間**: 書いていないことは空で出す。例文やデモが出ると、お客さんはそれを本当のことだと読む。
-- **AI**: `window.__VIEW__` の画面に見本・デモ・既定文を出さない。未記入は空で出す（`F-14`・`F-15`）。機械: `npm run verify:empty`
+- **AI**: `window.__VIEW__` の画面に見本・デモ・既定文を出さない。未記入は空で出す（`F-14`・`F-15`）。機械: `npm run verify:empty` — **F3 で作り直すまで存在しない**（削除の経緯は STEP 5 の注記）
 
 #### D-11 — うちの画面が作らない形でも、データは入ってくる
 - **人間**: 「うちの画面ではこうしか作れない」は「こうしか来ない」ではない。
-- **AI**: 保存済み JSON は無認証 API からも入る。入力形を信用しない（`F-17`）。機械: `npm run verify:xss`
+- **AI**: 保存済み JSON は無認証 API からも入る。入力形を信用しない（`F-17`）。機械: `npm run verify:xss` — **F3 で作り直すまで存在しない**（削除の経緯は STEP 5 の注記）
 
 #### D-12 — 「押せた」ではなく「同じ値で届いた」で見る
 - **人間**: ボタンが押せたことは、伝わったことではない。書いた値が相手の画面に同じで出て、初めて合格。
-- **AI**: 検査は「入力した値が受け手に同一で届いたか」で書く（`F-11`）。機械: `npm run verify:roundtrip`
+- **AI**: 検査は「入力した値が受け手に同一で届いたか」で書く（`F-11`）。機械: `npm run verify:roundtrip` — **F3 で作り直すまで存在しない**（削除の経緯は STEP 5 の注記）
 
 #### D-13 — よそから持ってきた文書は、コードと同じ回数読み直す
 - **人間**: 持ち込んだ手順書が、いまのこの店の話とは限らない。

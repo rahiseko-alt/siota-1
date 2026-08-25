@@ -85,7 +85,11 @@ export function checkSolved(root, phase) {
   const problems = [];
 
   for (const { no, title } of hit) {
-    const re = new RegExp(`^###\\s*${no}[.\\s]([\\s\\S]*?)(?=\\n###\\s|\\n*$)`, 'm');
+    /* 次の `### ` まで、無ければ文字列の終わりまでを本文とする。
+       終わりを `$` で書くと、`m` フラグの下では**各行末**に当たる。
+       非貪欲と組み合わさって本文が1行目で切れ、`種別:` も3出力も読めないまま
+       「種別が無い」と報告していた（F1 の作業中に発見・`docs/failures.md` F-20260825-31）。 */
+    const re = new RegExp(`^###\\s*${no}[.\\s]([\\s\\S]*?)(?=\\n###\\s|(?![\\s\\S]))`, 'm');
     const m = solved.match(re);
     if (!m) { problems.push(`#${no}「${title}」が solved-${phase}.md に無い。`); continue; }
     const body = m[1];

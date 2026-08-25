@@ -36,7 +36,13 @@ let n = 0;
 const log = [];
 let browser;
 try {
-  browser = await chromium.launch();
+  /* playwright が同梱を期待するビルド番号と、環境に在るブラウザが食い違うことがある
+     （`Executable doesn't exist at .../chromium_headless_shell-1217/...`）。
+     そのときは実行ファイルを直接渡す: `WALK_CHROMIUM=/path/to/chrome npm run walk`
+     アプリの不具合と、ブラウザが無いだけの失敗を混同しないため。 */
+  browser = await chromium.launch(
+    process.env.WALK_CHROMIUM ? { executablePath: process.env.WALK_CHROMIUM } : {},
+  );
   const ctx = await browser.newContext({ ...devices['iPhone 13'] });
   const page = await ctx.newPage();
   page.on('dialog', async (d) => { await d.accept(); });
