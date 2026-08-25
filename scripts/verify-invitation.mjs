@@ -89,14 +89,21 @@ try {
   await guestPage.goto(`${BASE}/my`);
   /* どの犬にも紐付いていないアカウント。招待を消化するまでは何も見えない。 */
   await injectSession(guestPage, FIXTURE.uninvitedEmail);
-  await guestPage.goto(`${BASE}/my/pets/${pet.id}`, { waitUntil: 'networkidle' });
-  await guestPage.waitForTimeout(2_000);
+  await guestPage.goto(`${BASE}/my/pets/${pet.id}`, { waitUntil: 'domcontentloaded' });
+  await guestPage.waitForTimeout(3_000);
   const beforeClaim = await guestPage.evaluate(() => document.body.textContent);
   check('5. 招待を消化する前は、その犬を見られない', !beforeClaim.includes(`新犬`), '★ 見えている');
 
-  await guestPage.goto(`${BASE}${invitePath}`, { waitUntil: 'networkidle' });
-  await guestPage.waitForSelector('.pet-card, [data-portal-content]:not([hidden])', { timeout: 20_000 });
-  await guestPage.waitForTimeout(1_500);
+  /* **`networkidle` を待たない。** 招待を消化する経路には、認証が要ると分かった時点で
+     **1回だけページを読み直す**分岐が在る（`supabase-auth.js:294` の `auth_reload_once`）。
+     読み直しが起きると `goto` の `networkidle` は永久に落ち着かず、検査が
+     30秒で時間切れになる——実際それで一度落ちた。仕組みに合わせて、
+     **DOM が出来た時点で先へ進み、見たいものが出るまで待つ**。 */
+  await guestPage.goto(`${BASE}${invitePath}`, { waitUntil: 'domcontentloaded' });
+  await guestPage.waitForFunction(
+    (name) => document.body.textContent.includes(name),
+    `新犬${stamp}`, { timeout: 30_000 },
+  ).catch(() => { /* 出なければ下の check が落とす */ });
   const afterClaim = await guestPage.evaluate(() => ({
     text: document.body.textContent,
     pets: document.querySelectorAll('.pet-card').length,
@@ -110,7 +117,9 @@ try {
   const secondPage = await second.newPage();
   await secondPage.goto(`${BASE}/my`);
   await injectSession(secondPage, FIXTURE.ownerBEmail);
-  await secondPage.goto(`${BASE}${invitePath}`, { waitUntil: 'networkidle' });
+  await secondPage.goto(`${BASE}${invitePath}`, { waitUntil: 'domcontentloaded' });
+  await secondPage.waitForSelector('[data-portal-content]:not([hidden]), [data-login-panel]:not([hidden])', { timeout: 30_000 })
+    .catch(() => { /* 何も出ないのも「見えていない」なので、下の check で判定する */ });
   await secondPage.waitForTimeout(2_000);
   const reuse = await secondPage.evaluate(() => document.body.textContent);
   check('7. 使い終わった招待は、別の人が使えない', !reuse.includes(`新犬${stamp}`), '★ 別の人にも見えた');
