@@ -185,7 +185,9 @@ const App = {
     }
 
     if (stepNum === 3) {
-      setTimeout(() => this.drawCanvas(), 50);
+      /* **描く前に測り直す。** 隠れている間は器が 0 なので、ここで測らないと
+         描画面が 0×0 のままになる（上の `resizeCanvas` の注記）。 */
+      setTimeout(() => this.resizeCanvas(), 50);
     }
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -433,17 +435,37 @@ const App = {
     if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'center' });
   },
 
+  /* 犬体図の描画面を、いまの器の大きさに合わせる。
+
+     **画面が隠れているあいだは器の大きさが 0 になる。** `screen-3` は最初
+     `is-active` ではないので、読み込み直後に測ると `clientWidth === 0` になり、
+     描画面が 0×0 のまま固定される。そのまま印を付けると `toDataURL()` は
+     `data:,`（**中身の無い画像**）を返し、飼い主には空が届く。
+     実際 `verify:roundtrip` の 8 と 15 がこれで落ちた。
+     `#3`（トリマーが見つけた印がどこにも残らず消える）と同じ結末なので、
+     **画面に入るたびに測り直す**。 */
+  resizeCanvas() {
+    const canvas = document.getElementById('marking-canvas');
+    if (!canvas) return;
+    /* 器は測るためだけに要る。無くても**描くことはやめない**——
+       描画面の大きさが既に決まっていれば、印は描ける。 */
+    const wrapper = document.getElementById('canvas-wrapper');
+    if (wrapper) {
+      const width = wrapper.clientWidth;
+      const height = wrapper.clientHeight;
+      if (width > 0 && height > 0 && (canvas.width !== width || canvas.height !== height)) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+    }
+    this.drawCanvas();
+  },
+
   initCanvas() {
     const canvas = document.getElementById('marking-canvas');
     if (!canvas) return;
-    const wrapper = document.getElementById('canvas-wrapper');
 
-    const resize = () => {
-      canvas.width = wrapper.clientWidth;
-      canvas.height = wrapper.clientHeight;
-      this.drawCanvas();
-    };
-
+    const resize = () => this.resizeCanvas();
     window.addEventListener('resize', resize);
     setTimeout(resize, 100);
 
@@ -569,7 +591,13 @@ const App = {
     if (this.marks.length === 0) return null;
     const canvas = document.getElementById('marking-canvas');
     if (!canvas) throw new Error('犬体図が見つからないため、付けた印を保存できません');
-    this.drawCanvas();
+    /* 描画面が 0×0 のままだと `toDataURL()` は `data:,` を返す。**中身が無い。**
+       これを返すと「印を保存した」ことになってしまい、飼い主には空が届く
+       ——`#3` そのもの。測り直しても駄目なら、黙って空を返さずに投げる。 */
+    this.resizeCanvas();
+    if (!canvas.width || !canvas.height) {
+      throw new Error('犬体図の大きさを取れないため、付けた印を保存できません');
+    }
     return canvas.toDataURL('image/png');
   },
 
