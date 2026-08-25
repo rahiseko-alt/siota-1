@@ -117,6 +117,12 @@ jobs:
       - name: トリマーの画面を確かめる
         run: npm run verify:edit
 
+      # **保存されたカルテが飼い主のブラウザで実行されないこと**（D-11 の機械強制）。
+      # `bad-scenarios-F3` #12。細工はスタッフ API で直接入れ、見るのは飼い主の画面だけ
+      # なので、`/edit` の結線を待たずに走る。
+      - name: 細工したカルテが実行されないことを確かめる
+        run: npm run verify:xss
+
       - name: Supabase を止める
         if: always()
         run: npx supabase stop || true
