@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build-dist.mjs",
-    "check": "node scripts/guard/run.mjs && node scripts/guard/isolation.mjs src && node scripts/guard/isolation.mjs dist && node scripts/src-dist-drift-guard.mjs . && node scripts/design-isolation-guard.mjs . && node scripts/guard/delete-order.mjs && node scripts/guard/ui-script-format.mjs && node scripts/guard/verify-inventory.mjs",
+    "check": "node scripts/guard/run.mjs && node scripts/guard/isolation.mjs src && node scripts/guard/isolation.mjs dist && node scripts/src-dist-drift-guard.mjs . && node scripts/design-isolation-guard.mjs . && node scripts/guard/delete-order.mjs && node scripts/guard/ui-script-format.mjs && node scripts/guard/verify-inventory.mjs && node scripts/guard/key-parity.mjs",
     "test": "npm run test:unit && npm run test:schema && npm run test:migration && npm run test:backend && npm run test:sql",
-    "test:unit": "node --test test/worker-unit.test.mjs test/magazine-view.test.mjs test/ui-body-marking.test.mjs",
+    "test:unit": "node --test test/worker-unit.test.mjs test/magazine-view.test.mjs test/ui-body-marking.test.mjs test/ui-extract-report.test.mjs",
     "test:backend": "node --test test/backend-import.test.mjs test/supabase-auth.test.mjs test/local-stack-endpoint.test.mjs",
     "verify:migrations": "node scripts/verify-migrations.mjs",
     "verify:stack": "node scripts/verify-stack.mjs",

@@ -1833,7 +1833,7 @@ button, input, textarea, select {
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
               <div>
                 <div style="font-size: 11px; font-weight: 700; text-align: center; margin-bottom: 4px; background: var(--bg-paper); padding: 3px;">右耳 (R)</div>
-                <div class="segmented-stepper">
+                <div class="segmented-stepper" data-ear="right">
                   <button class="stepper-btn is-active" onclick="App.selectSubStepper(this)"><span class="val">1</span><span class="desc">良好</span></button>
                   <button class="stepper-btn" onclick="App.selectSubStepper(this)"><span class="val">2</span><span class="desc">赤み</span></button>
                   <button class="stepper-btn is-alert" onclick="App.selectSubStepper(this)"><span class="val">3</span><span class="desc">処置</span></button>
@@ -1841,7 +1841,7 @@ button, input, textarea, select {
               </div>
               <div>
                 <div style="font-size: 11px; font-weight: 700; text-align: center; margin-bottom: 4px; background: var(--bg-paper); padding: 3px;">左耳 (L)</div>
-                <div class="segmented-stepper">
+                <div class="segmented-stepper" data-ear="left">
                   <button class="stepper-btn is-active" onclick="App.selectSubStepper(this)"><span class="val">1</span><span class="desc">良好</span></button>
                   <button class="stepper-btn" onclick="App.selectSubStepper(this)"><span class="val">2</span><span class="desc">赤み</span></button>
                   <button class="stepper-btn is-alert" onclick="App.selectSubStepper(this)"><span class="val">3</span><span class="desc">処置</span></button>
@@ -1934,7 +1934,7 @@ button, input, textarea, select {
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
               <div style="border: 1px solid var(--border-subtle); padding: 10px; background: var(--bg-paper);">
                 <div style="font-size: 11px; font-weight: 700; margin-bottom: 4px;">ボディバリカン</div>
-                <select style="width: 100%; border: 1px solid var(--border-subtle); padding: 6px; background: #ffffff; font-weight: 700;">
+                <select data-field="trim-length" style="width: 100%; border: 1px solid var(--border-subtle); padding: 6px; background: #ffffff; font-weight: 700;">
                   <option>6mm (スッキリ)</option>
                   <option>8mm (標準ふんわり)</option>
                   <option>10mm (長め)</option>
@@ -1943,7 +1943,7 @@ button, input, textarea, select {
               </div>
               <div style="border: 1px solid var(--border-subtle); padding: 10px; background: var(--bg-paper);">
                 <div style="font-size: 11px; font-weight: 700; margin-bottom: 4px;">足回り・お顔</div>
-                <select style="width: 100%; border: 1px solid var(--border-subtle); padding: 6px; background: #ffffff; font-weight: 700;">
+                <select data-field="trim-style" style="width: 100%; border: 1px solid var(--border-subtle); padding: 6px; background: #ffffff; font-weight: 700;">
                   <option>テディベアカット</option>
                   <option>アフロ風マッシュ</option>
                   <option>足先すっきりブーツ</option>
@@ -1960,7 +1960,7 @@ button, input, textarea, select {
             </div>
 
             <div class="trimmer-textarea-wrap">
-              <textarea id="editor-trimmer-letter" class="trimmer-textarea" rows="4">今月もとってもお利口にトリミングさせてくれました。腰のマッサージ中はずっとウトウトして気持ちよさそうで、リラックスした様子にとても癒やされました。また来月お会いできるのを楽しみにしております。</textarea>
+              <textarea id="editor-trimmer-letter" data-field="staff-note" class="trimmer-textarea" rows="4">今月もとってもお利口にトリミングさせてくれました。腰のマッサージ中はずっとウトウトして気持ちよさそうで、リラックスした様子にとても癒やされました。また来月お会いできるのを楽しみにしております。</textarea>
               <button class="btn-inline-mic" id="editor-voice-btn" onclick="App.toggleEditorVoice()">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
               </button>

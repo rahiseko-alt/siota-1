@@ -16,6 +16,11 @@ const App = {
      backend が居ないとき——つまり静的配信の `/`（F2 の `npm run walk` の経路）だけ。 */
   dogs: null,
 
+  /* ④カルテ作成で押された値の控え。**押された時点で入る**（DOM から読み直さない）。
+     初期値は「まだ触っていない」を表す。触っていないものを 0 や既定値で埋めない
+     ——書いていないことが書いてあるように見える（`D-10`）。 */
+  form: { nail: 0, ear: { right: 0, left: 0 }, teeth: '', weight: 0 },
+
   init() {
     this.initCanvas();
 
@@ -335,6 +340,11 @@ const App = {
       btn.classList.add('is-active');
     }
     
+    /* 掴んだ値を控える。`is-active` から読み直す手もあるが、爪の表示は
+       「1. 適切」のように**日本語混じり**で、数字だけを取り出す規則が要る。
+       押された時点の値をそのまま持つほうが、規則を1つ減らせる。 */
+    this.form[type] = val;
+
     if (type === 'nail') {
       const dock = document.getElementById('editor-bottom-dock');
       const statusIcon = document.getElementById('dock-status-icon');
@@ -348,11 +358,18 @@ const App = {
     }
   },
 
+  /* 耳は左右で同じ形の段が2つ並ぶ。押されたボタンだけでは**どちらの耳か分からない**
+     ので、囲みに付けた `data-ear`（`right` / `left`・ASCII。`D-9`）で見分ける。 */
   selectSubStepper(btn) {
     const parent = btn.parentElement;
     if (parent) {
       parent.querySelectorAll('.stepper-btn').forEach(b => b.classList.remove('is-active'));
       btn.classList.add('is-active');
+      const side = parent.dataset && parent.dataset.ear;
+      if (side === 'right' || side === 'left') {
+        const val = btn.querySelector('.val');
+        this.form.ear[side] = Number((val && val.textContent) || '') || 0;
+      }
     }
   },
 
@@ -362,10 +379,12 @@ const App = {
       parent.querySelectorAll('.teeth-pill-btn').forEach(b => b.classList.remove('is-active'));
       btn.classList.add('is-active');
     }
+    this.form.teeth = label;
   },
 
   onWeightChange(val) {
     const w = parseFloat(val) || 0;
+    this.form.weight = w;
     const diff = Math.round((w - this.currentDog.prevWeight) * 1000);
     const badge = document.getElementById('weight-diff-badge');
     if (badge) {
@@ -458,6 +477,47 @@ const App = {
      印が1つも無いときは `null` を返す——白紙の絵を「所見あり」として残さない。
      印が在るのに描き先が無いときは**投げる**。黙って `null` を返すと、
      見つけた所見が消えたことに誰も気づけない（`#1` と同じ型）。 */
+  /* ④が出す側。⑥（`backend/js/magazine-view.js`）が読む形にそろえる。
+
+     **対応は `docs/ops/key-parity-F3.md` が正**で、`scripts/guard/key-parity.mjs` が
+     毎回突き合わせる。⑥に読む先を足したのにここが出していなければ**黙って消える**し、
+     ここが出していて⑥が読まなければ**届かない**——どちらも同じ事故なので両方向を見る
+     （`F-20260821-12`/`-13` の型）。
+
+     **入力欄が無いキーは、キーごと出さない。** 空の器を出すと⑥側で「記録なし」と
+     「入力欄が無い」を区別できなくなる。出どころが無い6キー（`date` `isoDate`
+     `bestWeight` `skin` `heroPhotos` `bodyLanguage`）は、いま正UI に入力が無い。 */
+  extractReport() {
+    const text = (selector) => {
+      const el = document.querySelector(selector);
+      return ((el && (el.value != null ? el.value : el.textContent)) || '').trim();
+    };
+    const report = {};
+    const context = globalThis.__REPORT_CONTEXT__;
+    if (context && context.petName) report.pet = context.petName;
+
+    const staffNote = text('[data-field="staff-note"]');
+    if (staffNote) report.staffNote = staffNote;
+
+    if (this.form.nail) report.nail = { level: this.form.nail };
+    if (this.form.ear.right || this.form.ear.left) {
+      report.ear = { right: this.form.ear.right, left: this.form.ear.left };
+    }
+    if (this.form.teeth) report.teeth = { status: this.form.teeth };
+    if (this.form.weight) report.weights = [{ kg: this.form.weight }];
+
+    const length = text('[data-field="trim-length"]');
+    const style = text('[data-field="trim-style"]');
+    if (length || style) report.trimming = { length, style };
+
+    /* 犬体図の印。**印が無ければキーごと出さない**（白紙の絵を「所見あり」にしない）。
+       印が在るのに描き先が無ければ `exportBodyMarking()` が投げる——握らない。 */
+    const marking = this.exportBodyMarking();
+    if (marking) report.bodyMarkingImage = marking;
+
+    return report;
+  },
+
   exportBodyMarking() {
     if (this.marks.length === 0) return null;
     const canvas = document.getElementById('marking-canvas');
