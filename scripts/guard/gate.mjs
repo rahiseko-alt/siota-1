@@ -9,6 +9,7 @@
  *   docs/ops/failure-check-F{n}-start.md   ③（開始）
  *   docs/ops/bad-scenarios-F{n}.md         ②（10個の提案・マスターの承認印・実行結果）
  *   docs/ops/failure-check-F{n}-end.md     ③（完了）※フェーズを閉じるときだけ
+ *   docs/ops/solved-F{n}.md                「解決した」の3出力（D-18）※閉じるときだけ
  *
  * 揃うまで、そのフェーズの**作業場**を書き換えない。
  * 記録と仕組みの置き場（docs/ scripts/guard/ .agents/）は、いつでも書ける——
@@ -21,6 +22,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { readPhase, rel, ALWAYS } from './scope.mjs';
+import { checkSolved } from './solved.mjs';
 
 /** 関所を通さずに書いてよい場所（＝成果物と仕組みの置き場）。 */
 const EXEMPT = ALWAYS;
@@ -43,12 +45,22 @@ export function missingArtifacts(root, phase, { end = false } = {}) {
     if (!/^承認:\s*済/m.test(text)) {
       missing.push(`② バッドシナリオに**マスターの承認印が無い** → docs/ops/bad-scenarios-${phase}.md\n`
         + `   10個を提案し、承認を受けてから「承認: 済」を書き、10個を実行すること。`);
-    } else if (/結果:\s*未/.test(text) || /\|\s*未\s*\|?\s*$/m.test(text)) {
+      /* 見出し行だけを見る。手順の説明文に出てくる「結果: 未」を数えない。 */
+    } else if (/^###.*結果:\s*未\s*$/m.test(text)) {
       missing.push(`② バッドシナリオが**まだ実行されていない** → docs/ops/bad-scenarios-${phase}.md\n`
         + `   結果が「未」の行が残っている。10個を実行し、該当しないことを確かめること。`);
-    } else if (/該当した/.test(text)) {
-      missing.push(`② バッドシナリオに**「該当した」が残っている** → docs/ops/bad-scenarios-${phase}.md\n`
-        + `   1つでも該当したら、そのフェーズは進めない。`);
+      /* 「該当した」のまま手つかずの項だけを止める。
+         「該当した ／ 解決済み」は solved.mjs が3出力で裏を取る。
+         書き換えて「該当せず」にする逃げ道は solved.mjs 側で塞いである。 */
+    } else if (/^###.*結果:\s*該当した\s*$/m.test(text)) {
+      missing.push(`② バッドシナリオに**手つかずの「該当した」が残っている** → docs/ops/bad-scenarios-${phase}.md\n`
+        + `   解決したら見出しを「結果: 該当した ／ 解決済み」にし、docs/ops/solved-${phase}.md に3出力を貼ること。`);
+    }
+  }
+  if (end) {
+    /* 「解決した」の主張が、赤 → 緑 → 戻して赤 の3出力で裏づけられているか（D-18）。 */
+    for (const why of checkSolved(root, phase)) {
+      missing.push(`D-18 解決の裏づけ: ${why}`);
     }
   }
   if (end && !fs.existsSync(at(`failure-check-${phase}-end.md`))) {
