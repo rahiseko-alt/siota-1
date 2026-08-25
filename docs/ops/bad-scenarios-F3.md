@@ -186,7 +186,7 @@ $ REPO_ROOT=$SB node scripts/guard/isolation.mjs src
 EXIT=1
 ```
 
-### 10. 画面側と裏側で、部品の作りが違って**そのままでは繋がらない** — 結果: 該当した
+### 10. 画面側と裏側で、部品の作りが違って**そのままでは繋がらない** — 結果: 該当した ／ 解決済み
 - **人間**: 画面の部品と裏側の部品は、**書き方の規格が違う**。片方をもう片方にそのまま差し込むと動かない。つなぐ前に、どちらに合わせるかを決めておかないと、後から全部書き直しになる。
 - **AI**: `src/index.html` は `<script src="/js/dummy.js">` `<script src="/js/ui.js">` の**古典スクリプト**（`type="module"` は **0件**）。`backend/js/*.js` は全ファイルが `export` の **ES モジュール**。古典スクリプトの中に `import` を書くと構文エラーで**ファイルごと実行されない**。`build-dist.mjs` は `node:fs` `node:path` `node:url` しか使わない**素のコピー**で、変換は入らない（`esbuild` は `package.json` に宣言だけあって `scripts/` から未使用）。
 
@@ -218,7 +218,7 @@ $ grep -rn "esbuild" scripts/
 | 7 | III | 該当した | `src/my.html` と `test/supabase-auth.test.mjs` が**同時に**消えている |
 | 8 | IV | **解決済み** | `walk` **EXIT 1** → 在るものを探して使う（`solved-F3.md` #8）。`checkout` が walk を見ない件は `deferred` #15 |
 | 9 | IV | **解決済み** | 結線2行で条件B **3件**・EXIT 1 → フェーズで切替（`solved-F3.md` #9） |
-| 10 | IV | 該当した | `type="module"` **0件** vs `export` **21件** |
+| 10 | IV | **解決済み** | `type="module"` **0件** vs `export` **21件** → 橋を固定（`solved-F3.md` #10） |
 | **11** | — | **解決済み** | **コミットすると関所が `変更なし` で EXIT 0** → 出発点から見る（`solved-F3.md` #11） |
 
 **10個とも該当した。** 前回（F2）は10個中3個が該当せずだったので、

@@ -742,3 +742,107 @@ EXIT=0                      # ← 緑。壊れているのに通る
 自身がそう書いている）。**RLS が実際に誰に何を見せるか**は含まない。
 記録は手で書き換えれば通せる——**手で書かないこと**をファイル自身に書いてあるが、
 機械で防いではいない。`#2` の限界と同じく、実体を確かめる検査は `#6` の領分。
+
+---
+
+### 10. 画面側と裏側で、部品の作りが違ってそのままでは繋がらない
+種別: 解決
+
+**原因**: `src/index.html` は古典スクリプトで `js/ui.js` を読み（`type="module"` は **0件**）、
+`backend/js/*.js` は全ファイルが `export` の ES モジュール（**21件**）。規格が違う。
+
+**素直な直し方（`ui.js` を `type="module"` にする）が、いちばん危ない。**
+モジュールのトップレベル宣言はモジュール内に閉じるので `const App` がグローバルから消え、
+`src/index.html` の**インライン `onclick="App.…"` が 63件すべて壊れる**。
+しかも**構文エラーにならない**ので、画面を開いてボタンを押すまで分からない。
+
+**実ブラウザで測った**（まっさらなページを1件ずつ使い、前の case の宣言が残らないようにした）:
+
+```
+① 古典スクリプト（いまの形） : title="App が呼べた" / エラー無し
+② type="module" にした場合   : title=""            / ReferenceError: App is not defined
+③ グローバル経由の橋         : title="backend から来た" / エラー無し
+```
+
+**橋は既に設計されていた。** `backend/js/*.js` は自分で
+`globalThis.TrimmerSupabaseStorage` / `TrimmerStaffApi` / `TrimmerSupabaseStaff` /
+`window.SaltyDogMagazine` を publish する。モジュールとして読み込めば自分で登録するので、
+**`ui.js` は古典スクリプトのまま、そのグローバルを使えばよい**。
+モジュールは defer なので `DOMContentLoaded` より先に走る（③が実測）。
+**自分で新しい仕組みを発明していない**（`plan.md` 第3章）。
+
+**直したこと**: `scripts/guard/ui-script-format.mjs` を新設し、`npm run check` に組み込んだ。
+壊れ方が画面を開くまで分からない類なので、機械で止める。見るのは3つ:
+
+1. `ui.js` を `type="module"` で読んでいないか（`onclick="App.…"` が在る限り）
+2. `backend/` を古典スクリプトで読んでいないか（`export` が構文エラーになる）
+3. `ui.js` にトップレベルの `import`/`export` を書いていないか（1と同じ壊れ方を招く）
+
+あわせて `#8` で `walk-human.mjs` に入れたブラウザの探し方を
+`scripts/lib/chromium.mjs` へ切り出した。作り直す `verify:*`（`#6`）が同じものを要るため。
+切り出しで `walk` を壊していないことは、実際に走らせて確認した（EXIT 0・5コマ）。
+
+#### 直す前（赤）
+```
+$ grep -c 'type="module"' src/index.html
+0
+$ grep -n "^export" backend/js/*.js | wc -l
+21
+$ grep -c 'onclick="App\.' src/index.html
+61                          # ← グローバル App に依存している数（属性全体では 63件）
+
+$ node scripts/guard/ui-script-format.mjs
+（この検査は存在しない）
+```
+
+危ない繋ぎ方を置いても、既存の `npm run check` は何も言わない。
+
+#### 直した後（緑）
+壊れる3通りを実際に作って、全部止まることを確かめた。
+
+```
+$ # A. ui.js を type="module" にする
+❌ src/index.html が /js/ui.js を type="module" で読んでいます。
+      インラインの onclick="App.…" が 63 件あり、モジュールにすると
+      const App がグローバルから消えて **全部が ReferenceError になります**。
+EXIT=1
+
+$ # B. backend を古典スクリプトで読む
+❌ src/index.html が /backend/js/supabase-storage.js を古典スクリプトで読んでいます。
+      backend/js/*.js は ES モジュール（export）なので、type="module" が要ります。
+EXIT=1
+
+$ # C. ui.js にトップレベル import を書く
+❌ src/js/ui.js:427 にトップレベルの import/export があります。
+      import { mapPet } from '/backend/js/supabase-staff.js';
+EXIT=1
+```
+
+**正常系も確かめた**（誤検出で仕事を止めないこと・`F-20260825-30` の教訓）。
+正しい繋ぎ方——backend を `type="module"` で読み、`ui.js` は古典のまま——なら通る。
+
+```
+$ REPO_ROOT=$SB node scripts/guard/ui-script-format.mjs
+[ui-script-format] グローバル App に依存する onclick: 63 件
+✅ 繋ぎ方 OK（UI は古典スクリプト / backend はモジュール）
+EXIT=0
+
+$ npm run check
+✅ 繋ぎ方 OK（UI は古典スクリプト / backend はモジュール）
+check EXIT=0
+```
+
+#### 直しを戻した（また赤）
+`npm run check` から `ui-script-format` を外すと、A・B・C のどれを置いても素通りする。
+
+```
+$ # package.json の check から `&& node scripts/guard/ui-script-format.mjs` を外す
+$ # ui.js を type="module" にする（onclick 63件が壊れる状態）
+$ npm run check
+check EXIT=0                # ← 緑。63件が壊れているのに通る
+```
+
+**この記録の限界**: 固定したのは**規格**だけで、**まだ1本も繋いでいない**。
+`src/index.html` に backend のモジュールを読む行は入れていない——それは `#7`（⑥の器）と
+④の保存の結線で、F3 の本体作業。この検査は、その作業が**間違った道に入ったときに止める**
+ためのもの。繋いだ結果が正しく動くことは何も言っていない（`D-18` 偽-5）。
