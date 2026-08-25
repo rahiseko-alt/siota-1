@@ -36,7 +36,13 @@ let n = 0;
 const log = [];
 let browser;
 try {
-  browser = await chromium.launch();
+  /* playwright が同梱を期待するビルド番号と、環境に在るブラウザが食い違うことがある
+     （`Executable doesn't exist at .../chromium_headless_shell-1217/...`）。
+     そのときは実行ファイルを直接渡す: `WALK_CHROMIUM=/path/to/chrome npm run walk`
+     アプリの不具合と、ブラウザが無いだけの失敗を混同しないため。 */
+  browser = await chromium.launch(
+    process.env.WALK_CHROMIUM ? { executablePath: process.env.WALK_CHROMIUM } : {},
+  );
   const ctx = await browser.newContext({ ...devices['iPhone 13'] });
   const page = await ctx.newPage();
   page.on('dialog', async (d) => { await d.accept(); });
@@ -49,6 +55,21 @@ try {
     await page.screenshot({ path: path.join(SHOTS, `${String(n).padStart(2, '0')}-${safe}.png`), fullPage: true });
     log.push(`${String(n).padStart(2, '0')}  ${what}`);
     process.stdout.write(`${String(n).padStart(2, '0')}  ${what}\n`);
+  }
+  /** カルテに実際に書く。**書けたことを確かめてから先へ進む。**
+      以前はここが `[contenteditable="true"]`（現 UI に 0 件）を探し、失敗を
+      `.catch(() => {})` で握りつぶしていた。そのため「カルテを書いた」の写真は
+      **何も書かれていない画面**だった（F1後のF2実測で発覚・`docs/failures.md` F-20260825-32）。
+      握りつぶさず、入った値を読み返して照合する——入らなければここで止める。 */
+  async function writeKarte(text) {
+    const note = page.locator('#editor-trimmer-letter');
+    await note.waitFor({ state: 'visible', timeout: 30000 });
+    await note.scrollIntoViewIfNeeded();
+    await note.fill(text);
+    const got = await note.inputValue();
+    if (got !== text) {
+      throw new Error(`カルテに書けていない: 入れた「${text}」/ 実際「${got}」`);
+    }
   }
   /** 見えている文字をタップする（人間と同じ探し方）。
       同じ文字のボタンが複数あるときは、見えているものを選ぶ。 */
@@ -78,14 +99,14 @@ try {
     await page.locator('.karte-card').first().tap();
     await shot('03 犬の名前を選んだ');
 
-    const note = page.locator('[contenteditable="true"]').first();
-    await note.scrollIntoViewIfNeeded().catch(() => {});
-    await note.tap().catch(() => {});
-    await page.keyboard.type('今日はおとなしくしていました。');
+    await writeKarte('今日はおとなしくしていました。');
     await shot('04 カルテを書いた');
 
     await tapText('確定してお客様カルテ');
-    await shot('05 確認・顧客ページ');
+    /* ⑤確認 と ⑥顧客ページ は**同じ screen-4**（画面は4枚しかない・意匠モックどおり）。
+       別々に着いたように見せないため、1コマで「同一画面」と明記する。
+       絵だけで合否を決めるので、終点の呼び方が曖昧だと判定できない（F2 バッドシナリオ #5）。 */
+    await shot('05-06 確認と顧客ページ（同一画面・screen-4）');
   } else {
     /* ── 間違えたとき、何タッチで戻れるか ── */
     await tapText('Google でログイン');
@@ -100,10 +121,7 @@ try {
     await shot('M1-2 タッチ2 正しい犬');
 
     /* 間違い2: 記入中に一覧へ戻ってしまった → 書きかけは残るか */
-    const note = page.locator('[contenteditable="true"]').first();
-    await note.scrollIntoViewIfNeeded().catch(() => {});
-    await note.tap().catch(() => {});
-    await page.keyboard.type('書きかけの所見です');
+    await writeKarte('書きかけの所見です');
     await shot('M2-0 記入中');
     await tapText('02 カルテ検索');
     await shot('M2-1 一覧へ戻ってしまった');

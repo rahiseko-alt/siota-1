@@ -22,6 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { readPhase } from './scope.mjs';
+import { pathToFileURL } from 'node:url';
 
 /** この記録の過去の版。書き換えて無かったことにする逃げ道を塞ぐ。 */
 function pastVersions(root, relPath) {
@@ -85,7 +86,11 @@ export function checkSolved(root, phase) {
   const problems = [];
 
   for (const { no, title } of hit) {
-    const re = new RegExp(`^###\\s*${no}[.\\s]([\\s\\S]*?)(?=\\n###\\s|\\n*$)`, 'm');
+    /* 次の `### ` まで、無ければ文字列の終わりまでを本文とする。
+       終わりを `$` で書くと、`m` フラグの下では**各行末**に当たる。
+       非貪欲と組み合わさって本文が1行目で切れ、`種別:` も3出力も読めないまま
+       「種別が無い」と報告していた（F1 の作業中に発見・`docs/failures.md` F-20260825-31）。 */
+    const re = new RegExp(`^###\\s*${no}[.\\s]([\\s\\S]*?)(?=\\n###\\s|(?![\\s\\S]))`, 'm');
     const m = solved.match(re);
     if (!m) { problems.push(`#${no}「${title}」が solved-${phase}.md に無い。`); continue; }
     const body = m[1];
@@ -130,7 +135,10 @@ export function checkSolved(root, phase) {
 }
 
 /* ── 直接叩かれたとき ── */
-if (import.meta.url === `file://${process.argv[1]}`) {
+/* Windows では `process.argv[1]` が `C:\...` 形式なので、`file://` を前置しても
+   `import.meta.url`（`file:///C:/...`）と一致しない＝直接実行しても何も起きない。
+   `pathToFileURL()` は Node 標準で、どの OS でも同じ形にそろえる。 */
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const root = process.env.REPO_ROOT || process.cwd();
   const phase = process.argv[2] || readPhase(root);
   if (!phase) process.exit(0);
