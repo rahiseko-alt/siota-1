@@ -1,0 +1,62 @@
+# ci.yml — 検査を「一台の机の上」から出す（docs/ops/plan.md 4-0-b / D-20260825-44）
+#
+# なぜ要るか:
+#   このリポジトリで一番大事な検査（飼い主に何が届くか）は、`supabase start` が必要で
+#   Docker を要求する。マスターの環境は Windows、エージェントはコンテナの中で、
+#   **どちらでも動かない**。結果、その種の検査は9本とも消えたまま放置されていた。
+#   GitHub のランナーには Docker が在るので、ここに置けば誰の PC にも要らなくなる。
+#
+#   もう1つの理由は、**渡した後に壊れたと分かること**（plan.md 第7章 7-1）。
+#   人が思い出して叩く検査は、納品後には走らない。
+#
+# いまはまだ骨組み（build / check / test）。`supabase start` と verify:* は 4-0-c / 4-0-d で足す。
+
+name: check
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+# 同じ枝で新しい push が来たら、古い実行は止める（待たせない・無駄に回さない）。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # **浅いクローンにしない。**
+          # `scripts/guard/run.mjs` は「origin/master から何を変えたか」を見る（#11 の修正）。
+          # 既定の fetch-depth: 1 だと origin/master が無く、比較相手を見失って
+          # 「変更なし」で素通りする——**関所がある顔をして何も見ていない**状態になる。
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # 手元と同じ条件にする。lockfile どおりに入れる（npm install ではない）。
+      - run: npm ci
+
+      - name: build
+        run: npm run build
+
+      # guard（逸脱監視・関所）/ 隔離 src+dist / src↔dist parity / design 隔離 /
+      # 削除の順序 / 画面と裏側の繋ぎ方
+      - name: check
+        run: npm run check
+
+      # 単体 / スキーマ / 移行 / backend / SQL を実際に流した記録との照合
+      - name: test
+        run: npm test
+
+      # 関所が本当に見ているかを、CI 自身が確かめる。
+      # ここが「変更なし」だけを出しているなら、上の check は素通りしている。
+      - name: guard が何を見たかを残す
+        if: always()
+        run: node scripts/guard/run.mjs || true
