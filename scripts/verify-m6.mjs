@@ -116,7 +116,11 @@ try {
   check('★c. 戻ってから、もう一度同じ犬に入れる', reentered === true);
   await page.waitForSelector('#screen-3.is-active', { timeout: 20_000 });
 
-  /* ── 書いて確定する ── */
+  /* ── 書いて確定する ──
+     書く前に、前回の続きの読み込み（`resumeDraft`）が落ち着くのを待つ。
+     読み込みは非同期で、終わると画面に**下書きの中身を書き戻す**。待たずに書くと、
+     こちらが入れた文字を後から上書きされることがある。 */
+  await page.waitForTimeout(2_000);
   await page.evaluate((note) => {
     const el = document.querySelector('[data-field="staff-note"]');
     el.value = note;
@@ -131,6 +135,15 @@ try {
   await page.waitForSelector('#screen-4 .magazine-container', { timeout: 20_000 });
   const reportId = new URL(page.url()).pathname.split('/').pop();
   check('⑤. 確定すると確認の画面に着く', /^[0-9a-f-]{36}$/.test(reportId), `id=${reportId}`);
+
+  /* **「保存できた」と「中身が入っている」を分ける。** 確定の画面はサーバから
+     読み直したものを描いているので、ここに出ていなければ**保存の段で落ちている**。
+     ここに出ていて⑥に出ていなければ**届ける段で落ちている**。
+     どちらかを言えない検査は、落ちたときに何も教えてくれない。 */
+  const staffNoteSeen = await page.evaluate(
+    () => ((document.querySelector('#screen-4 [data-view="staff-note"]') || {}).textContent || '').trim(),
+  );
+  check('⑤b. 確定した中身に、書いた一言が入っている', staffNoteSeen === NOTE, `"${staffNoteSeen.slice(0, 30)}"`);
 
   /* ── ⑥ 顧客ページ ── */
   const ownerContext = await browser.newContext();
