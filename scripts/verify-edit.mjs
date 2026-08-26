@@ -161,14 +161,12 @@ try {
     report.letterHidden === true && report.letterText === '',
     `hidden=${report.letterHidden} text=${JSON.stringify(report.letterText)}`);
 
-  /* **隠さない。** ④カルテ作成の入力欄には、まだ文例が最初から入っている。
-     結線とは別の欠陥で `docs/deferred.md` #13（マスター判断待ち）。
-     ④保存・確定を結線すると、この文が**そのまま飼い主に届く**——`F-20260821-14` の再来。 */
-  process.stdout.write(
-    `\n【残っているもの・${report.letterInput ? 1 : 0}件】④の入力欄 #editor-trimmer-letter の既定文: `
-    + `${report.letterInput ? '在る（docs/deferred.md #13・マスター判断待ち）' : '無い'}\n`
-    + '  ④保存・確定を結線する前に、マスターの判断が要る。\n',
-  );
+  /* **④の入力欄が空で始まること。** かつては「今月もとってもお利口に…」が最初から
+     入っており、消し忘れると**誰も書いていない手紙が担当トリマーの名前で飼い主に届いた**
+     （`F-20260821-14`・`docs/deferred.md` #13）。マスター指示で消したので、**合否で見る**。
+     出力するだけにしておくと、また静かに戻っても誰も止められない。 */
+  check('17. ④の入力欄が空で始まる（見本の文が入っていない）',
+    report.letterInput === false, '★ 既定文が入っている');
 } catch (error) {
   check('検査を最後まで実行できた', false, error.message);
 } finally {
@@ -178,5 +176,5 @@ try {
 
 const passed = results.filter((r) => r.pass).length;
 process.stdout.write(`\n${passed}/${results.length} PASS\n`);
-process.stdout.write('1〜7 は /edit が配れているか。8〜16 は結線（②一覧・⑤確認）。④保存・確定はまだ見ていない。\n');
+process.stdout.write('1〜7 は /edit が配れているか。8〜17 は結線（②一覧・⑤確認）と、見本の文が無いこと。④保存・確定はまだ見ていない。\n');
 process.exit(passed === results.length ? 0 : 1);
