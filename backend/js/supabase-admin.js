@@ -369,10 +369,13 @@ function formNewPet() {
       button.disabled = true;
       setMessage(result, '登録しています…');
       try {
-        /* `template` はサーバ側の既定に任せる。**画面に無い項目を勝手に決めない。** */
+        /* `template` は**必須**（`createPetSchema`・既定値は無い）。最初ここを省いて
+           CI が落ちた——「サーバ側の既定に任せる」と思い込んで確かめなかった
+           （`F-20260825-35`/`-36` の型）。いま在るテンプレートは `ponchi` の1つだけで、
+           画面で選ばせる意味が無いので固定する。増えたらここに選択欄が要る。 */
         const body = await api(`/api/owners/${encodeURIComponent(ownerId)}/pets`, {
           method: 'POST',
-          body: JSON.stringify({ ownerId, name }),
+          body: JSON.stringify({ ownerId, name, template: 'ponchi' }),
         });
         input.value = '';
         button.disabled = false;
