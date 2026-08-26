@@ -31,7 +31,7 @@ const INPUT = {
   nail: 2,          /* 爪レベル（1〜3） */
   earRight: 3,
   earLeft: 1,
-  teeth: 'ちょっと歯石💦',   /* 値が日本語。セレクタに連結しない（D-9） */
+  teeth: 'ちょっと付着💦',   /* 値が日本語。セレクタに連結しない（D-9） */
   weight: 3.42,
 };
 
@@ -99,13 +99,11 @@ try {
       if (!btn) missing.push(`ear ${side}=${value}`); else btn.click();
     }
 
-    /* 歯は**保存される値**で選ぶ。ボタンの表示（`ちょっと付着💦`）と
-       保存される値（`ちょっと歯石💦`）は**違う**ので、表示で選ぶと押せない。
-       最初これで落ちた——`F-20260825-35`/`-36` と同じ「実際の仕組みに合わせて
-       書かなかった」型。日本語は**セレクタに連結せず**、属性を読んで比べる（`D-9`）。
-       表示と値がずれていること自体は `docs/deferred.md` #24 に記録した。 */
+    /* 歯は**ボタンの表示**で選ぶ。表示と保存値は同じもの——もとは HTML 側で
+       保存値を第2引数に二重に書いており、6つのうち3つでずれていた（`#24`・直した）。
+       日本語は**セレクタに連結せず**、中身を読んで比べる（`D-9`）。 */
     const teethBtn = [...document.querySelectorAll('.teeth-pill-btn')]
-      .find((el) => (el.getAttribute('onclick') || '').includes(`'${input.teeth}'`));
+      .find((el) => ((el.querySelector('.name') || {}).textContent || '').trim() === input.teeth);
     if (!teethBtn) missing.push(`teeth=${input.teeth}`);
     else {
       teethLabel = (teethBtn.querySelector('.name') || {}).textContent || '';
@@ -129,15 +127,10 @@ try {
     filled.missing.length === 0 ? 'ok' : `欠落 ${JSON.stringify(filled.missing)}`, 'ok');
   if (filled.missing.length > 0) throw new Error('UI と保存契約が食い違っている');
 
-  /* **押した表示と、届く値がずれていないか。** ここは合否にしない——
-     ずれていること自体は既知（`docs/deferred.md` #24・マスター判断待ち）で、
-     この検査の担当は「書いた値が同じで届くか」だからである。**隠さずに出す。** */
-  if (filled.teethLabel && filled.teethLabel !== INPUT.teeth) {
-    process.stdout.write(
-      `\n【表示と値のずれ・1件】歯: トリマーが押したボタンの表示 "${filled.teethLabel}" / `
-      + `飼い主に届く値 "${INPUT.teeth}"（docs/deferred.md #24）\n\n`,
-    );
-  }
+  /* **押した表示と、届く値が同じであること。** かつては6つのうち3つでずれていた
+     （`docs/deferred.md` #24）。HTML 側の二重書きを廃して直したので、**合否で見る**。
+     ここを出力だけにしておくと、また静かにずれても誰も止められない。 */
+  check('1b. 押したボタンの表示が、そのまま保存される値になっている', filled.teethLabel, INPUT.teeth);
 
   /* ── ④確定 → ⑤確認へ。**保存されたものを開き直す**ので、ここに出ている値は
         既にサーバを往復している（`D-12`）。 ── */

@@ -196,9 +196,10 @@ const App = {
     }
     const teeth = (data.teeth || {}).status;
     if (teeth) {
-      /* 日本語はセレクタに連結しない。属性を読んで比べる（`D-9`）。 */
+      /* 日本語はセレクタに連結しない。中身を読んで比べる（`D-9`）。
+         表示＝保存値なので、表示で探せる。 */
       const btn = [...document.querySelectorAll('.teeth-pill-btn')]
-        .find((el) => (el.getAttribute('onclick') || '').includes(`'${teeth}'`));
+        .find((el) => ((el.querySelector('.name') || {}).textContent || '').trim() === teeth);
       if (btn) btn.click();
     }
     if (Array.isArray(data.__marks) && data.__marks.length > 0) {
@@ -533,13 +534,22 @@ const App = {
     }
   },
 
-  selectTeeth(btn, label) {
+  /* 歯の状態。**押されたボタンの表示そのものを保存値にする。**
+
+     もとは HTML 側で `App.selectTeeth(this, 'ちょっと歯石💦')` のように保存値を
+     第2引数で二重に書いていた。そのため6つのうち3つで**表示と保存値がずれていた**
+     ——トリマーが「ちょっと付着💦」を押すと、飼い主には「ちょっと歯石💦」が届く
+     （意匠モックの時点でずれており、`src/` で混入したものではない）。
+     悪意も事故も無いが、**押した表示と届く値が違うこと**は `D-12` が守ろうとしている型。
+     引数を廃して重複そのものを無くしたので、構造的に二度とずれない。 */
+  selectTeeth(btn) {
     const parent = btn.parentElement;
     if (parent) {
       parent.querySelectorAll('.teeth-pill-btn').forEach(b => b.classList.remove('is-active'));
       btn.classList.add('is-active');
     }
-    this.form.teeth = label;
+    const name = btn.querySelector('.name');
+    this.form.teeth = ((name && name.textContent) || '').trim();
   },
 
   onWeightChange(val) {
