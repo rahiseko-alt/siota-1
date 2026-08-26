@@ -495,12 +495,40 @@ async function saveReport(petId, reportData, reportDate, draftId) {
   return finalized.report;
 }
 
+/**
+ * reviseReport(petId, reportId, reportData) — 確定済みカルテの上書き（管理者画面「カルテ修正」）
+ *
+ * `saveReport` との違いは**作らないこと**。すでに飼い主に届いているカルテの
+ * 中身だけを差し替える。`reports_staff_update_draft` は draft しか許さないので、
+ * 直接 PATCH ではなく `revise`（`revise_report` RPC）を通す。
+ *
+ * 写真は `saveReport` と同じで、先に実体を上げてから中身を差し替える——
+ * 上げる前に `asset://` を書き込むと、参照先の無い印を飼い主に届けることになる。
+ */
+async function reviseReport(petId, reportId, reportData) {
+  const client = globalThis.TrimmerAuth && globalThis.TrimmerAuth.client;
+  const api = globalThis.TrimmerStaffApi && globalThis.TrimmerStaffApi.request;
+  if (!client || typeof api !== 'function') throw new Error('保存できません（ログインし直してください）');
+
+  const { data, assets } = await replaceDataUrlAssets(reportData);
+  if (assets.length > 0) {
+    await uploadReportAssets({ client, api, report: { id: reportId }, petId, assets });
+  }
+  const revised = await api(
+    `/api/pets/${encodeURIComponent(petId)}/reports/${encodeURIComponent(reportId)}/revise`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data }) },
+  );
+  if (!revised || !revised.report) throw new Error('カルテを直せませんでした');
+  return revised.report;
+}
+
 globalThis.TrimmerSupabaseStaff = {
   /* ⑤確認 と ⑥顧客ページ は同一のレンダラを使う（マスター指定）。
      `ui.js` は古典スクリプトで ES モジュールを import できないので、
      backend 側が globalThis に載せて渡す（`bad-scenarios-F3` #10 で固定した繋ぎ方）。 */
   renderMagazine,
   saveReport,
+  reviseReport,
   saveDraft,
   findDraft,
   isAdmin: () => activeMembership?.role === 'admin',

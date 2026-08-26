@@ -24,6 +24,9 @@ const App = {
   /* 下書きの居場所。`null` は「まだ1度も保存していない」。 */
   draftPetId: null,
   draftReportId: null,
+  /* 確定済みカルテを直しているときだけ、その id が入る（管理者画面「カルテ修正」）。
+     `null` は「新しく書いている」。ここが混ざると、直したつもりが2枚目になる。 */
+  reviseReportId: null,
   draftWatching: false,
   draftTimer: null,
   draftSaving: false,
@@ -255,6 +258,22 @@ const App = {
     const panel = document.getElementById('screen-4');
     if (!panel) throw new Error('screen-4 が見つかりません');
     const report = globalThis.__REPORT__;
+
+    /* **「カルテ修正」で来たときは、⑤確認ではなく④カルテ作成に入る。**
+       管理者画面が `?revise=1` を付けて開く。付いていなければ従来どおり
+       ⑤確認（読むだけ）に着く——`verify:*` も飼い主の導線もそちらを通る。
+       確定済みを上書きする道はここだけで、`commitReport()` が `reviseReport` を呼ぶ。 */
+    const reviseId = new URLSearchParams(location.search).get('revise') === '1'
+      ? pet.reportId
+      : null;
+    if (reviseId && report) {
+      this.selectKarte(pet.petName || '', pet.ownerName || '', '');
+      this.reviseReportId = reviseId;
+      this.applyReport(report);
+      this.goToStep(3);
+      return;
+    }
+
     /* **③の見出しも、この犬に合わせておく。** 確定すると保存したカルテの URL へ
        開き直すので、この経路は `selectKarte()` を通らない。そのままだと③の見出しが
        HTML の初期値のまま残り、確定後に「03 カルテ作成」へ戻った人に**別の犬の
@@ -781,9 +800,13 @@ const App = {
     if (button) button.disabled = true;
     try {
       clearTimeout(this.draftTimer);
-      const saved = await staff.saveReport(
-        context.petId, this.extractReport(), this.today(), this.draftReportId,
-      );
+      /* 直しているのか、新しく書いているのか。**ここを間違えると、直したつもりが
+         2枚目のカルテになって飼い主に2通届く。** */
+      const saved = this.reviseReportId
+        ? await staff.reviseReport(context.petId, this.reviseReportId, this.extractReport())
+        : await staff.saveReport(
+          context.petId, this.extractReport(), this.today(), this.draftReportId,
+        );
       location.href = `/edit/p/${encodeURIComponent(context.petId)}/${encodeURIComponent(saved.id)}`;
     } catch (error) {
       if (button) button.disabled = false;

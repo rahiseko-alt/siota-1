@@ -263,6 +263,18 @@ export class SupabaseDataStore {
     });
   }
 
+  /* 確定済みカルテの中身を差し替える（管理者画面の「カルテ修正」）。
+     `reports_staff_update_draft` は draft しか許さないので、直接 PATCH ではなく
+     `revise_report`（security definer）を通す。できるのは final の data 差し替えだけ。
+     先に `getReport` を通すのは archiveReport と同じ理由——その犬のカルテかを
+     RLS 越しに確かめてから RPC に渡す（reportId だけでは他の犬のカルテを指せる）。 */
+  async reviseReport(petId, reportId, data) {
+    await this.getReport(petId, reportId);
+    return this.request('/rest/v1/rpc/revise_report', {
+      method: 'POST', body: { target_report: reportId, new_data: data },
+    });
+  }
+
   async consumeRateLimit(scope, ipHash = null) {
     const result = await this.request('/rest/v1/rpc/consume_rate_limit', {
       method: 'POST',
