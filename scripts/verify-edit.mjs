@@ -135,12 +135,12 @@ try {
        2つの別物を同時に測っていた——⑤確認の器（screen-4）に文例が残っているか、と、
        ④カルテ作成の入力欄（screen-3 の `#editor-trimmer-letter`）に文例が
        最初から入っているか。落ちたのは**後者**で、これは結線とは別の欠陥として
-       `docs/deferred.md` #13 に登録済み・**マスター判断待ち**である
-       （`src/index.html:1953` と `:2076` の既定文2か所）。
-       範囲を狭めて緑にしたのではなく、**別々の主張に分けた**。残っているほうは
-       下の `letterInput` で件数を出し、隠さない。 */
+       `docs/deferred.md` #13 に登録した。範囲を狭めて緑にしたのではなく、
+       **別々の主張に分けた**。後者はマスター指示で既定文を消したので、いまは
+       17 が合否で見ている（判断待ちではない）。 */
     screen4: (document.getElementById('screen-4') || {}).textContent || '',
-    letterInput: ((document.getElementById('editor-trimmer-letter') || {}).value || '').includes(mock),
+    letterInputExists: !!document.getElementById('editor-trimmer-letter'),
+    letterInputValue: ((document.getElementById('editor-trimmer-letter') || {}).value || ''),
     /* カルテに担当メッセージが無いとき、⑤確認が**文例で埋まっていない**こと。
        `renderMagazine` は空なら手紙の節ごと隠す。 */
     letterHidden: !!(document.querySelector('#screen-4 [data-view="letter-section"]') || {}).hidden,
@@ -165,8 +165,13 @@ try {
      入っており、消し忘れると**誰も書いていない手紙が担当トリマーの名前で飼い主に届いた**
      （`F-20260821-14`・`docs/deferred.md` #13）。マスター指示で消したので、**合否で見る**。
      出力するだけにしておくと、また静かに戻っても誰も止められない。 */
+  /* **入力欄が在ることも一緒に見る。** `|| {}` で受けたまま中身だけ比べていると、
+     欄の名前が変わった日に「空だから合格」になる（偽-2）。 */
   check('17. ④の入力欄が空で始まる（見本の文が入っていない）',
-    report.letterInput === false, '★ 既定文が入っている');
+    report.letterInputExists === true && report.letterInputValue === '',
+    report.letterInputExists
+      ? `★ 既定文が入っている: ${JSON.stringify(report.letterInputValue.slice(0, 30))}`
+      : '★ #editor-trimmer-letter が無い（欄ごと消えた・名前が変わった）');
 } catch (error) {
   check('検査を最後まで実行できた', false, error.message);
 } finally {

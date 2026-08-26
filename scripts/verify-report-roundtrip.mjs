@@ -75,6 +75,7 @@ try {
   const filled = await page.evaluate((input) => {
     const missing = [];
     let teethLabel = '';
+    let teethSaved = null;
     const note = document.querySelector('[data-field="staff-note"]');
     if (!note) missing.push('[data-field="staff-note"]');
     else { note.value = input.staffNote; note.dispatchEvent(new Event('input', { bubbles: true })); }
@@ -106,8 +107,15 @@ try {
       .find((el) => ((el.querySelector('.name') || {}).textContent || '').trim() === input.teeth);
     if (!teethBtn) missing.push(`teeth=${input.teeth}`);
     else {
-      teethLabel = (teethBtn.querySelector('.name') || {}).textContent || '';
+      teethLabel = ((teethBtn.querySelector('.name') || {}).textContent || '').trim();
       teethBtn.click();
+      /* **押した直後に、保存されることになった値そのものを読む。** ここが
+         「表示と保存値が同じ」と言える唯一の地点で、実際に3つずれていたのも
+         ここだった（`#24`）。届いた先（6・13）だけを見ていると、たまたま
+         同じ文字を入れ直しても気づけない。 */
+      /* `ui.js` は `const App = {...}` の素のスクリプトなので、**`globalThis.App`
+         では取れない**（宣言的レキシカル環境にいる）。素の `App` なら解決する。 */
+      teethSaved = (typeof App !== 'undefined' && App.form || {}).teeth;
     }
 
     /* 犬体図に印を1つ付ける。押した所見が残る道はここしか無い（`#3`）。 */
@@ -121,16 +129,22 @@ try {
         clientY: rect.top + rect.height / 2,
       }));
     }
-    return { missing, teethLabel };
+    return { missing, teethLabel, teethSaved };
   }, INPUT);
   check('1. 記入先の要素がすべて実在する',
     filled.missing.length === 0 ? 'ok' : `欠落 ${JSON.stringify(filled.missing)}`, 'ok');
   if (filled.missing.length > 0) throw new Error('UI と保存契約が食い違っている');
 
-  /* **押した表示と、届く値が同じであること。** かつては6つのうち3つでずれていた
+  /* **押した表示と、保存される値が同じであること。** かつては6つのうち3つでずれていた
      （`docs/deferred.md` #24）。HTML 側の二重書きを廃して直したので、**合否で見る**。
-     ここを出力だけにしておくと、また静かにずれても誰も止められない。 */
-  check('1b. 押したボタンの表示が、そのまま保存される値になっている', filled.teethLabel, INPUT.teeth);
+     ここを出力だけにしておくと、また静かにずれても誰も止められない。
+
+     比べるのは「ボタンの表示」と「`App.form` に入った値」である。はじめは
+     `filled.teethLabel` を `INPUT.teeth` と比べていたが、**その表示で探した
+     ボタンの表示を読み返していただけ**で、何をどう壊しても緑になる検査だった
+     （偽-2）。読む先を `App.form.teeth` に変えて、ずれが出る地点に当てた。 */
+  check('1b. 押したボタンの表示が、そのまま保存される値になっている',
+    filled.teethSaved, filled.teethLabel);
 
   /* ── ④確定 → ⑤確認へ。**保存されたものを開き直す**ので、ここに出ている値は
         既にサーバを往復している（`D-12`）。 ── */
