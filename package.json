@@ -25,6 +25,7 @@
     "verify:prod": "node scripts/build-dist.mjs && node scripts/verify-production.mjs",
     "test:migration": "node --test test/kv-migration.test.mjs",
     "test:sql": "node scripts/guard/sql-verified.mjs",
+    "plan": "node scripts/plan.mjs",
     "walk": "node scripts/build-dist.mjs && node scripts/walk-human.mjs",
     "test:schema": "node --test test/supabase-schema.test.mjs test/supabase-storage.test.mjs test/supabase-store.test.mjs",
     "serve": "node scripts/serve-ui.mjs",
