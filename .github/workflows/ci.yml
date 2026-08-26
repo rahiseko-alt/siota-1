@@ -177,6 +177,9 @@ jobs:
         with:
           name: human-walk
           path: .human/
+          # `.human/` は**ドット始まり**。upload-artifact v4 は既定で隠しファイルを
+          # 除外するので、これが無いと「撮れているのに1枚も上がらない」。
+          include-hidden-files: true
           if-no-files-found: error
 
       - name: Supabase を止める

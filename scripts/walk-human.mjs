@@ -141,7 +141,15 @@ try {
       const el = cards.nth(i);
       if ((await el.textContent() || '').trim() !== name) continue;
       await el.scrollIntoViewIfNeeded().catch(() => {});
-      await el.tap();
+      /* **名札が描かれている座標を指で叩く。** `el.tap()` だと Playwright が
+         「その要素が最前面か」を確かめに行き、名札は行の中の `<span>` なので
+         親（`.karte-card__avatar` や grid）に阻まれて永久に再試行する。
+         人の指は要素の同一性など見ておらず、**見えている場所に落ちるだけ**で、
+         押されたことはカードへ伝わる。D-14 が見たいのはその挙動なので、
+         名札の中心へ実際のタッチを落とす。 */
+      const box = await el.boundingBox();
+      if (!box) throw new Error(`「${name}」の位置が取れない`);
+      await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
       return;
     }
     const seen = await cards.allTextContents();
@@ -178,9 +186,15 @@ try {
     await ownerPage.goto(`${BASE}/my`, { waitUntil: 'domcontentloaded' });
     await shot(ownerPage, '06 飼い主が自分の端末で開いた（一覧）');
 
-    const ownerDog = ownerPage.locator(`text="${DOG}"`).first();
-    await ownerDog.waitFor({ state: 'visible', timeout: 30000 });
-    await ownerDog.tap();
+    const ownerCards = ownerPage.locator('[data-testid="pet-card"]');
+    await ownerCards.first().waitFor({ state: 'visible', timeout: 30000 });
+    const ownerNames = (await ownerCards.allTextContents()).map((t) => t.trim());
+    const idx = ownerNames.indexOf(DOG);
+    if (idx < 0) throw new Error(`飼い主の一覧に「${DOG}」が居ない: ${JSON.stringify(ownerNames)}`);
+    const ownerBox = await ownerCards.nth(idx).boundingBox();
+    if (!ownerBox) throw new Error(`飼い主の一覧の「${DOG}」の位置が取れない`);
+    /* 名札と同じ理由で、見えている場所へ実際のタッチを落とす（上の `tapDog` 参照）。 */
+    await ownerPage.touchscreen.tap(ownerBox.x + ownerBox.width / 2, ownerBox.y + ownerBox.height / 2);
     await shot(ownerPage, '07 飼い主が、いま書かれたカルテを開いた');
   } else {
     /* ── 間違えたとき、何タッチで戻れるか ── */
