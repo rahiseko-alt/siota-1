@@ -54,6 +54,11 @@ try {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const pageErrors = [];
   page.on('pageerror', (e) => pageErrors.push(e.message));
+  /* **アプリが人に見せた理由を、検査も読む。** `commitReport()` は保存に失敗すると
+     `alert()` で理由を出して画面を移さない。listener を置かないと Playwright が
+     黙って閉じるので、**保存できなかったのに「押せた」だけが残る**。 */
+  const dialogs = [];
+  page.on('dialog', (d) => { dialogs.push(d.message()); d.dismiss().catch(() => {}); });
 
   /* ── ① 管理者は毎回この画面に入る ── */
   await page.goto(`${BASE}/my`, { waitUntil: 'domcontentloaded' });
@@ -148,21 +153,33 @@ try {
   check('8. 修正で開くと、前に書いた中身が入っている', carried === FIRST, `"${carried}"`);
 
   await page.fill('[data-field="staff-note"]', FIXED);
-  await Promise.all([
-    page.waitForURL(/\/edit\/p\/[0-9a-f-]+\/[0-9a-f-]+/, { timeout: 30_000 }),
+  /* **URL の形だけで待ってはいけない。** いま居るのは `/edit/p/{犬}/{カルテ}?revise=1` で、
+     `waitForURL(/\/edit\/p\/[0-9a-f-]+\/[0-9a-f-]+/)` は**押す前から合っている**。
+     だから押した瞬間に返り、保存を1ミリ秒も待たないまま次の行へ進んでいた
+     （CI の実測で 8→9 が 51ms。本当に保存した 7 は約3.6秒かかっている）。
+     結果、下の「2枚目を作らない」「1枚のまま」は**何も起きていなくても PASS** する
+     恒真になり、中身を見る1件だけが落ちていた——`F-20260825-40` と同じ型。
+     保存が終わって開き直したこと＝**`?revise=1` が落ちたこと**を待つ。 */
+  const [reopened] = await Promise.all([
+    page.waitForURL(
+      (u) => /^\/edit\/p\/[0-9a-f-]{36}\/[0-9a-f-]{36}$/.test(u.pathname) && u.search === '',
+      { timeout: 30_000 },
+    ).then(() => true, () => false),
     page.click('.dock-action-wrap .boxbutton'),
   ]);
+  check('9. 直す操作が最後まで進んだ（保存されて開き直した）', reopened,
+    dialogs.length ? `画面に出た理由="${dialogs[dialogs.length - 1]}"` : `url=${page.url()}`);
   const afterRevise = new URL(page.url()).pathname.split('/').pop();
   /* **2枚目を作っていないこと。** ここが増えると飼い主に2通届く。 */
-  check('9. 直しても同じカルテのまま（2枚目を作らない）', afterRevise === reportId,
+  check('10. 直しても同じカルテのまま（2枚目を作らない）', afterRevise === reportId,
     `直す前=${reportId} 直した後=${afterRevise}`);
 
   const reportsNow = await (await fetch(
     `${BASE}/api/pets/${createdPet.id}/reports`, { headers: authHeaders },
   )).json();
   const finals = (reportsNow.reports || []).filter((r) => r.status === 'final');
-  check('10. 確定済みのカルテは1枚のまま', finals.length === 1, `${finals.length}枚`);
-  check('11. 中身が直っている（確定済みが上書きされた）',
+  check('11. 確定済みのカルテは1枚のまま', finals.length === 1, `${finals.length}枚`);
+  check('12. 中身が直っている（確定済みが上書きされた）',
     finals[0] && finals[0].data && finals[0].data.staffNote === FIXED,
     `staffNote="${finals[0] && finals[0].data && finals[0].data.staffNote}"`);
 
@@ -172,7 +189,7 @@ try {
   await tapByText(page, '削除');
   await page.waitForSelector('.admin-menu__item', { timeout: 10_000 });
   const del = await menuTitles(page);
-  check('12. 削除に 顧客 / ペット / カルテ の3つが在る',
+  check('13. 削除に 顧客 / ペット / カルテ の3つが在る',
     del.length === 3
     && del[0].includes('顧客アカウント全データ削除')
     && del[1].includes('ペットアカウント全データ削除')
@@ -187,7 +204,7 @@ try {
   await page.waitForSelector('[data-admin-field="confirm-name"]', { timeout: 20_000 });
   /* **名前を打つまで押せない。** 取り返しがつかない操作なので確認を1枚挟んでいる。 */
   const disabledBefore = await page.isDisabled('[data-admin-action="confirm-delete"]');
-  check('13. 名前を打つまで削除ボタンは押せない', disabledBefore === true);
+  check('14. 名前を打つまで削除ボタンは押せない', disabledBefore === true);
   await page.fill('[data-admin-field="confirm-name"]', petName);
   await page.click('[data-admin-action="confirm-delete"]');
   await page.waitForFunction(
@@ -199,7 +216,7 @@ try {
     `${BASE}/api/pets/${createdPet.id}/reports`, { headers: authHeaders },
   )).json();
   const finalsLeft = (reportsAfterDelete.reports || []).filter((r) => r.status === 'final');
-  check('14. カルテ1枚が実際に消えた', finalsLeft.length === 0, `${finalsLeft.length}枚残っている`);
+  check('15. カルテ1枚が実際に消えた', finalsLeft.length === 0, `${finalsLeft.length}枚残っている`);
 
   /* ── ⑤ 削除: ペット全データ ── */
   await page.goto(`${BASE}/admin`, { waitUntil: 'domcontentloaded' });
@@ -218,7 +235,7 @@ try {
   ).catch(() => {});
 
   const petsLeft = await (await fetch(`${BASE}/api/pets`, { headers: authHeaders })).json();
-  check('15. ペットが実際に消えた',
+  check('16. ペットが実際に消えた',
     !(petsLeft.pets || []).some((p) => p.id === createdPet.id));
 
   /* ── ⑤ 削除: 顧客全データ ── */
@@ -238,7 +255,7 @@ try {
   ).catch(() => {});
 
   const ownersLeft = await (await fetch(`${BASE}/api/owners`, { headers: authHeaders })).json();
-  check('16. 顧客が実際に消えた',
+  check('17. 顧客が実際に消えた',
     !(ownersLeft.owners || []).some((o) => o.id === createdOwner.id));
 
   /* **写真の実体まで消えたか。** RLS 越しに見ると、行が消えた時点で「見えない」に
@@ -252,7 +269,7 @@ try {
     },
   );
   const objects = listed.ok ? await listed.json() : [];
-  check('17. 消した犬の写真が Storage に残っていない',
+  check('18. 消した犬の写真が Storage に残っていない',
     Array.isArray(objects) && objects.length === 0, `${(objects || []).length}件`);
 
   /* ── ⑦ 管理者でない人 ── */
@@ -266,14 +283,14 @@ try {
     menus: document.querySelectorAll('[data-admin-action="delete"]').length,
     status: (document.querySelector('[data-portal-status]') || {}).textContent || '',
   }));
-  check('18. 管理者でないスタッフに管理者の操作を出していない',
+  check('19. 管理者でないスタッフに管理者の操作を出していない',
     staffSees.denied === true && staffSees.menus === 0,
     `denied=${staffSees.denied} 削除メニュー=${staffSees.menus}`);
-  check('19. 行き止まりにせず、その人が使える画面への入口を出している',
+  check('20. 行き止まりにせず、その人が使える画面への入口を出している',
     staffSees.denied === true && staffSees.status.includes('管理者のアカウントではありません'),
     `status="${staffSees.status.trim()}"`);
 
-  check('20. アプリ由来のエラーが無い', pageErrors.length === 0, pageErrors.join(' | '));
+  check('21. アプリ由来のエラーが無い', pageErrors.length === 0, pageErrors.join(' | '));
 } catch (error) {
   check('検査を最後まで実行できた', false, error.message);
 } finally {
