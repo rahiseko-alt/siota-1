@@ -941,6 +941,19 @@ button, input, textarea, select {
 }
 .timeline-chips-tray::-webkit-scrollbar { display: none; }
 
+.past-reports { margin: 0 0 18px; }
+.past-reports__label {
+  font-size: 11px; font-weight: 700; letter-spacing: .08em;
+  color: var(--ink-muted); margin-bottom: 8px;
+}
+/* 横に流さない（`D-20260825-39`・マスター指定「横スクロール禁止」）。折り返す。 */
+.past-reports__list { display: flex; flex-wrap: wrap; gap: 6px; }
+.past-reports__item {
+  padding: 6px 12px; background: #fff; border: 1px solid var(--border-subtle);
+  font-family: var(--font-en); font-size: 12px; font-weight: 600;
+  color: var(--ink-body); cursor: pointer; text-decoration: none;
+}
+.past-reports__item:hover { background: var(--ink-primary); color: #fff; border-color: var(--ink-primary); }
 .timeline-date-chip {
   padding: 6px 14px;
   background: #ffffff;
@@ -1758,6 +1771,15 @@ button, input, textarea, select {
           <div class="editor-col-card__header">
             <h2 class="editor-col-card__title" id="editor-dog-header"></h2>
             <span class="editor-col-card__badge">1タップ判定</span>
+          </div>
+
+          <!-- 過去カルテ（`docs/deferred.md` #23・マスター指定 2026-08-26「③で犬を選んだら過去一覧を出す」）
+               その犬の**確定済み**カルテだけを、新しい順に並べる。
+               **1件も無ければ帯ごと出さない**——空の一覧を出すと「まだ無い」が
+               「読み込めていない」に見える（`D-10`）。中身は `ui.js` が入れる。 -->
+          <div class="past-reports" id="past-reports" hidden>
+            <div class="past-reports__label">この子の過去カルテ</div>
+            <div class="past-reports__list" id="past-reports-list"></div>
           </div>
 
           <!-- 1. Weight & BCS -->

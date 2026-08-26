@@ -1,0 +1,200 @@
+/**
+ * verify-production.mjs — デプロイ済みの実物が、いま手元でビルドしたものと同じかを見る
+ *
+ * `docs/handoff.md`「次に効いてくること」の1件目。**緑なのは手元と CI だけで、
+ * デプロイ済みの実物は一度も確認されていなかった。** 手元で `build`・`check`・`test`・
+ * `verify:*` が全部通っていても、それは**手元のバイト列の話**であって、
+ * お客さんが開く URL が何を返すかは別のことである（D-18 偽-5「別の緑で覆う」の型）。
+ *
+ * 一度だけ手で curl して確かめても、次のセッションでは同じ穴が開く。だから機械にする（D-7）。
+ *
+ * 見るのは4つ。**判定の右辺は全部 `dist/` と git から取る**——
+ * 「本番はこうであるはず」を人が書き写すと、書き写した側がズレる（`F-20260825-40` の型）:
+ *
+ *   1. 配信物のバイト一致  `dist/` の非 HTML を1本ずつ取り、sha256 が一致するか
+ *   2. 飼い主の画面        `/my` が `dist/my.html` とバイト一致するか
+ *   3. 旧UI の残骸         git で削除済みの `src/js/*.js` `ponchi-v2.html` が 404 か
+ *   4. 正UI が配られているか `/edit` の script 一覧が `dist/index.html` のそれと一致するか
+ *
+ * **この検査が保証しないこと**（D-18 偽-5 の潰し）:
+ *   - **人が使えるかは見ない。** ログインした先で何が見えるか、動線が最後まで行くかは
+ *     見ていない。それは `npm run walk` の絵と D-14 の2問の領分である。
+ *   - **本番のデータは一切見ない。** ログインもせず、お客さんの情報を取らない（A-2）。
+ *   - **正しさは見ない。** 手元と同じ版が配られているかだけを見る。
+ *     手元が間違っていれば、本番も同じように間違ったまま緑になる。
+ *
+ *   npm run verify:prod
+ *   PROD_URL=https://例.example npm run verify:prod   ← 接続先を差し替える
+ */
+
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { execSync } from 'node:child_process';
+
+const BASE = (process.env.PROD_URL || 'https://trimmer-system.kouheikosehira.com').replace(/\/+$/, '');
+const DIST = 'dist';
+const TIMEOUT_MS = 30_000;
+
+const results = [];
+function check(name, pass, detail = '') {
+  results.push(pass);
+  process.stdout.write(`${pass ? 'PASS' : 'FAIL'}  ${name}${detail ? `  ${detail}` : ''}\n`);
+}
+
+const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
+
+/** 取れなかったことを例外にしない——ネットワークの失敗も「本番がそう見えた」の一種として扱う。 */
+async function get(urlPath) {
+  const url = `${BASE}${urlPath}`;
+  try {
+    const res = await fetch(url, {
+      redirect: 'manual',
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    const body = Buffer.from(await res.arrayBuffer());
+    return { status: res.status, body, error: null };
+  } catch (e) {
+    return { status: 0, body: Buffer.alloc(0), error: String(e).split('\n')[0] };
+  }
+}
+
+/** dist の中身を、配信される URL のパスに直す。`dist/js/ui.js` → `/js/ui.js`。 */
+function distFiles() {
+  const out = [];
+  (function walk(dir) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else out.push(full);
+    }
+  })(DIST);
+  return out.sort();
+}
+
+const toUrlPath = (file) => `/${path.relative(DIST, file).split(path.sep).join('/')}`;
+
+/** HTML の `<script src="...">` を出てくる順に並べる。属性の書き方の違いに引きずられないよう src だけ取る。 */
+function scriptSources(html) {
+  return [...html.matchAll(/<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/gi)].map((m) => m[1]);
+}
+
+if (!fs.existsSync(DIST)) {
+  process.stdout.write(`[verify-production] ${DIST}/ が無い。先に npm run build を走らせること。\n`);
+  process.exit(1);
+}
+
+process.stdout.write(`[verify-production] 接続先: ${BASE}\n`);
+
+/* ------------------------------------------------------------------
+   1. 配信物のバイト一致
+   HTML は worker が状態を注入して配るので、ここでは見ない（2 と 4 で別に見る）。
+------------------------------------------------------------------ */
+const staticFiles = distFiles().filter((f) => !f.endsWith('.html'));
+let sameCount = 0;
+const mismatched = [];
+
+for (const file of staticFiles) {
+  const urlPath = toUrlPath(file);
+  const want = sha256(fs.readFileSync(file));
+  const res = await get(urlPath);
+  if (res.status === 200 && sha256(res.body) === want) {
+    sameCount += 1;
+  } else {
+    mismatched.push(
+      `${urlPath} → ${res.error ? res.error : res.status === 200 ? '中身が違う' : `HTTP ${res.status}`}`,
+    );
+  }
+}
+
+check(
+  `配信物が手元の dist と同じ（${sameCount}/${staticFiles.length} 本）`,
+  mismatched.length === 0,
+  mismatched.length ? `\n        ${mismatched.slice(0, 8).join('\n        ')}${mismatched.length > 8 ? `\n        ほか ${mismatched.length - 8} 件` : ''}` : '',
+);
+
+/* ------------------------------------------------------------------
+   2. 飼い主の画面（/my）が dist/my.html と同じか
+------------------------------------------------------------------ */
+const myLocal = path.join(DIST, 'my.html');
+if (fs.existsSync(myLocal)) {
+  const res = await get('/my');
+  const want = sha256(fs.readFileSync(myLocal));
+  const got = res.status === 200 ? sha256(res.body) : null;
+  check(
+    '/my が dist/my.html と同じ',
+    got === want,
+    res.error ? res.error : got === want ? '' : `HTTP ${res.status} / sha ${String(got).slice(0, 12)} ≠ ${want.slice(0, 12)}`,
+  );
+}
+
+/* ------------------------------------------------------------------
+   3. 旧UI の残骸が本番に残っていないか
+   名前を直書きしない。**git で消えた事実**を右辺にする。
+   移設（src/js → backend/js）で消えたものも含まれるが、それでよい——
+   移設後の版が配られているなら、古いパスは 404 になっているはずである。
+------------------------------------------------------------------ */
+const deletedUiPaths = [
+  ...new Set(
+    execSync(
+      "git log --diff-filter=D --name-only --format= -- 'src/js/*.js' 'src/design-samples/*.html' 'src/*.html'",
+      { stdio: ['ignore', 'pipe', 'ignore'] },
+    )
+      .toString()
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map((repoPath) => {
+        const base = path.basename(repoPath);
+        return repoPath.startsWith('src/js/') ? `/js/${base}` : `/${base}`;
+      }),
+  ),
+]
+  // いま dist に同じ URL で在るものは「残骸」ではない（消したあと同じ場所へ戻した）。
+  .filter((urlPath) => !fs.existsSync(path.join(DIST, urlPath.replace(/^\//, ''))))
+  .sort();
+
+const stillAlive = [];
+for (const urlPath of deletedUiPaths) {
+  const res = await get(urlPath);
+  if (res.status === 200) stillAlive.push(`${urlPath} → HTTP 200 (${res.body.length}B)`);
+}
+
+check(
+  `削除済みの旧UI が本番に残っていない（${deletedUiPaths.length} 本を確認）`,
+  stillAlive.length === 0,
+  stillAlive.length ? `\n        ${stillAlive.join('\n        ')}` : '',
+);
+
+/* ------------------------------------------------------------------
+   4. /edit が正UI を配っているか
+   テンプレートは worker が状態を注入するのでバイト一致しない。
+   代わりに「読み込む script の並び」を見る——**右辺は dist/index.html から取る**。
+------------------------------------------------------------------ */
+const indexLocal = path.join(DIST, 'index.html');
+if (fs.existsSync(indexLocal)) {
+  const want = scriptSources(fs.readFileSync(indexLocal, 'utf8'));
+  const res = await get('/edit');
+  const got = res.status === 200 ? scriptSources(res.body.toString('utf8')) : [];
+  const same = want.length > 0 && want.length === got.length && want.every((s, i) => s === got[i]);
+  check(
+    `/edit が正UI（dist/index.html）を配っている（script ${want.length} 本）`,
+    same,
+    res.error
+      ? res.error
+      : same
+        ? ''
+        : `HTTP ${res.status}\n        手元: ${want.join(' ') || '(無し)'}\n        本番: ${got.join(' ') || '(無し)'}`,
+  );
+}
+
+/* ------------------------------------------------------------------ */
+const failed = results.filter((r) => !r).length;
+process.stdout.write(`\n${results.length - failed}/${results.length} PASS\n`);
+if (failed > 0) {
+  process.stdout.write(
+    'デプロイ済みの実物が、手元でビルドしたものと違う。' +
+      'デプロイし直すか、違いを説明できるようにすること。\n',
+  );
+}
+process.exit(failed > 0 ? 1 : 0);
