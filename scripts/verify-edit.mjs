@@ -135,12 +135,12 @@ try {
        2つの別物を同時に測っていた——⑤確認の器（screen-4）に文例が残っているか、と、
        ④カルテ作成の入力欄（screen-3 の `#editor-trimmer-letter`）に文例が
        最初から入っているか。落ちたのは**後者**で、これは結線とは別の欠陥として
-       `docs/deferred.md` #13 に登録済み・**マスター判断待ち**である
-       （`src/index.html:1953` と `:2076` の既定文2か所）。
-       範囲を狭めて緑にしたのではなく、**別々の主張に分けた**。残っているほうは
-       下の `letterInput` で件数を出し、隠さない。 */
+       `docs/deferred.md` #13 に登録した。範囲を狭めて緑にしたのではなく、
+       **別々の主張に分けた**。後者はマスター指示で既定文を消したので、いまは
+       17 が合否で見ている（判断待ちではない）。 */
     screen4: (document.getElementById('screen-4') || {}).textContent || '',
-    letterInput: ((document.getElementById('editor-trimmer-letter') || {}).value || '').includes(mock),
+    letterInputExists: !!document.getElementById('editor-trimmer-letter'),
+    letterInputValue: ((document.getElementById('editor-trimmer-letter') || {}).value || ''),
     /* カルテに担当メッセージが無いとき、⑤確認が**文例で埋まっていない**こと。
        `renderMagazine` は空なら手紙の節ごと隠す。 */
     letterHidden: !!(document.querySelector('#screen-4 [data-view="letter-section"]') || {}).hidden,
@@ -161,14 +161,17 @@ try {
     report.letterHidden === true && report.letterText === '',
     `hidden=${report.letterHidden} text=${JSON.stringify(report.letterText)}`);
 
-  /* **隠さない。** ④カルテ作成の入力欄には、まだ文例が最初から入っている。
-     結線とは別の欠陥で `docs/deferred.md` #13（マスター判断待ち）。
-     ④保存・確定を結線すると、この文が**そのまま飼い主に届く**——`F-20260821-14` の再来。 */
-  process.stdout.write(
-    `\n【残っているもの・${report.letterInput ? 1 : 0}件】④の入力欄 #editor-trimmer-letter の既定文: `
-    + `${report.letterInput ? '在る（docs/deferred.md #13・マスター判断待ち）' : '無い'}\n`
-    + '  ④保存・確定を結線する前に、マスターの判断が要る。\n',
-  );
+  /* **④の入力欄が空で始まること。** かつては「今月もとってもお利口に…」が最初から
+     入っており、消し忘れると**誰も書いていない手紙が担当トリマーの名前で飼い主に届いた**
+     （`F-20260821-14`・`docs/deferred.md` #13）。マスター指示で消したので、**合否で見る**。
+     出力するだけにしておくと、また静かに戻っても誰も止められない。 */
+  /* **入力欄が在ることも一緒に見る。** `|| {}` で受けたまま中身だけ比べていると、
+     欄の名前が変わった日に「空だから合格」になる（偽-2）。 */
+  check('17. ④の入力欄が空で始まる（見本の文が入っていない）',
+    report.letterInputExists === true && report.letterInputValue === '',
+    report.letterInputExists
+      ? `★ 既定文が入っている: ${JSON.stringify(report.letterInputValue.slice(0, 30))}`
+      : '★ #editor-trimmer-letter が無い（欄ごと消えた・名前が変わった）');
 } catch (error) {
   check('検査を最後まで実行できた', false, error.message);
 } finally {
@@ -178,5 +181,5 @@ try {
 
 const passed = results.filter((r) => r.pass).length;
 process.stdout.write(`\n${passed}/${results.length} PASS\n`);
-process.stdout.write('1〜7 は /edit が配れているか。8〜16 は結線（②一覧・⑤確認）。④保存・確定はまだ見ていない。\n');
+process.stdout.write('1〜7 は /edit が配れているか。8〜17 は結線（②一覧・⑤確認）と、見本の文が無いこと。④保存・確定はまだ見ていない。\n');
 process.exit(passed === results.length ? 0 : 1);
