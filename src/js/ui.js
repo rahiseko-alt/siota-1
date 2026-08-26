@@ -85,11 +85,46 @@ const App = {
   },
 
   /* ③選択のあと — その犬のカルテ画面へ。
-     いまは最新1件を開く導線が無いので、カルテ作成（screen-3）に入る。
-     過去カルテを開く導線は ④保存・確定 と一緒に作る（`docs/deferred.md` #23）。 */
+     カルテ作成（screen-3）に入り、その犬の**過去カルテを同じ画面に並べる**
+     （`docs/deferred.md` #23・マスター指定 2026-08-26）。 */
   showPetKarte(pet) {
     this.selectKarte(pet.petName || '', pet.ownerName || '', '');
+    this.renderPastReports(pet);
     this.resumeDraft(pet.id);
+  },
+
+  /* その犬の過去カルテを、新しい順に並べる。
+     **確定済み（`final`）だけを出す。** 下書きは飼い主に届いていないし、
+     archived は畳んだものなので、ここに混ぜると「在る」ことになってしまう。
+     **1件も無ければ帯ごと出さない**——空の一覧は「まだ無い」と
+     「読み込めていない」の区別を消す（`D-10`）。
+
+     文字は `textContent` で入れる。日付は DB の `date` 列から来るので
+     スクリプトにはならないが、**入力形を信用しない**（`D-11`）。 */
+  renderPastReports(pet) {
+    const wrap = document.getElementById('past-reports');
+    const list = document.getElementById('past-reports-list');
+    if (!wrap || !list) return;
+
+    const petId = pet && pet.id;
+    const months = ((pet && pet.months) || [])
+      .filter((m) => m && m.reportId && m.status === 'final')
+      .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+
+    list.textContent = '';
+    if (!petId || months.length === 0) {
+      wrap.hidden = true;
+      return;
+    }
+
+    for (const month of months) {
+      const item = document.createElement('a');
+      item.className = 'past-reports__item';
+      item.href = `/edit/p/${encodeURIComponent(petId)}/${encodeURIComponent(month.reportId)}`;
+      item.textContent = String(month.date || '').replace(/-/g, '.');
+      list.append(item);
+    }
+    wrap.hidden = false;
   },
 
   /* ── ④の記入を、黙って失わないための下書き ──────────────────────
