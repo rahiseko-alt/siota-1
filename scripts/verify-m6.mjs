@@ -145,6 +145,33 @@ try {
   );
   check('⑤b. 確定した中身に、書いた一言が入っている', staffNoteSeen === NOTE, `"${staffNoteSeen.slice(0, 30)}"`);
 
+  /* **確定したあと、直したくなって④へ戻ったとき、どの子の画面かが分かること。**
+     `D-14` の問2（間違えても2タッチ以内にやりたかった操作を完了できるか）を
+     実データの絵で見たとき、ここだけが ✕ だった——見出しが「ポンチ カルテ入力」、
+     つまり**意匠モックの犬の名前**になっていた（`docs/ops/walk-D14-F3.md` の
+     `mistakes/08`・`docs/deferred.md` #28）。犬を選び直して入ったときは正しく出るので、
+     **確定を経由したときだけ**起きる。確定すると保存したカルテの URL へ開き直すため、
+     `selectKarte()` を通らず、見出しが HTML の初期値のまま残っていた。
+
+     人は見出しで「いまどの子を開いているか」を確かめる。預かっていない犬の名前が
+     出ていると、書き始めてよいのか判断できない。**保存先は URL の petId なので
+     書けば正しい子に入る**（`commitReport` は `__REPORT_CONTEXT__.petId` を使う）が、
+     **絵からはそれが分からない**ことが問題である。 */
+  const backToEditor = await page.evaluate((name) => {
+    const tab = [...document.querySelectorAll('button, a')]
+      .find((el) => (el.textContent || '').includes('03 カルテ作成'));
+    if (!tab) return { tapped: false, header: '' };
+    tab.click();
+    return {
+      tapped: true,
+      header: ((document.getElementById('editor-dog-header') || {}).textContent || '').trim(),
+      name,
+    };
+  }, `動線${stamp}`);
+  check('⑤c. 確定後に④へ戻ると、その犬の名前が見出しに出ている',
+    backToEditor.tapped && backToEditor.header === `動線${stamp} カルテ入力`,
+    `見出し="${backToEditor.header}" 期待="動線${stamp} カルテ入力"`);
+
   /* ── ⑥ 顧客ページ ── */
   const ownerContext = await browser.newContext();
   const ownerPage = await ownerContext.newPage();
