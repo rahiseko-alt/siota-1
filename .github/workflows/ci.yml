@@ -162,3 +162,57 @@ jobs:
       - name: Supabase を止める
         if: always()
         run: npx supabase stop || true
+
+  # D-14 の判定材料そのもの。**機械はここで合否を出さない**——絵を撮るだけで、
+  # 「最後まで行けるか」「間違えても2タッチで戻れるか」はマスターが絵を見て決める。
+  # 手元に Docker が無い環境では撮れないので、撮る場所は CI しか無い。
+  #
+  # **verify とは別の job にしてある。** はじめ verify の最後に足したところ、
+  # 一覧に `XSS7h2kj` `RTxoqqx` `<img src=x onerror=...>` といった**検査の残骸が
+  # 19頭並んだ絵**が撮れた。verify:* が同じ土台に作った犬をそのまま撮っていたためで、
+  # あの絵では「人が使えるか」を判断できない。土台ごと分けて、seed 直後の
+  # Q/X/Y/Z だけが居る状態を撮る。
+  walk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: ブラウザを入れる
+        run: npx playwright install --with-deps chromium
+
+      - name: Supabase を起こす
+        run: npx supabase start
+
+      - name: 人が使えるかの写真を撮る（正解の手順）
+        run: npm run walk
+
+      # 撮影中に落ちたら、その時点までの絵を上げて**落ちたことも見せる**
+      # （撮れなかったことを「撮れた」と見せない）。
+      - name: 人が使えるかの写真を撮る（間違えたとき）
+        if: always()
+        run: npm run walk mistakes
+
+      - name: 写真を成果物として上げる
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: human-walk
+          path: .human/
+          # `.human/` は**ドット始まり**。upload-artifact v4 は既定で隠しファイルを
+          # 除外するので、これが無いと「撮れているのに1枚も上がらない」。
+          include-hidden-files: true
+          if-no-files-found: error
+
+      - name: Supabase を止める
+        if: always()
+        run: npx supabase stop || true
