@@ -25,11 +25,11 @@ const SOURCE = fs.readFileSync(path.join(ROOT, 'src/js/ui.js'), 'utf8');
 const DATA_URL = 'data:image/png;base64,iVBORw0KGgo=';
 
 /** 画面の最小限の替え玉。`marking-canvas` だけが本物らしく振る舞う。 */
-function loadApp({ withCanvas = true } = {}) {
+function loadApp({ withCanvas = true, width = 300, height = 200 } = {}) {
   const drawn = [];
   const canvas = {
-    width: 300,
-    height: 200,
+    width,
+    height,
     getContext: () => new Proxy({}, {
       get: (_, key) => (key === 'canvas' ? canvas : (...args) => drawn.push([key, ...args])),
     }),
@@ -95,4 +95,22 @@ test('⑥の受け手が読むキーは bodyMarkingImage である（出す側�
     view.includes('data.bodyMarkingImage'),
     '受け手が data.bodyMarkingImage を読まなくなった。出す側（exportBodyMarking）の行き先が消えている',
   );
+});
+
+/* `verify:roundtrip` の 8 と 15 が実際に落ちて見つかった欠陥の再発防止。
+
+   `screen-3` は読み込み直後 `is-active` ではないので、そのときに器を測ると
+   `clientWidth === 0` になり、描画面が 0×0 のまま固定される。その状態で
+   `toDataURL()` を呼ぶと `data:,`——**中身の無い画像**が返る。
+   それを保存すると「印を残した」ことになり、飼い主には空が届く（`#3` そのもの）。 */
+test('描画面の大きさが取れないときは、空の画像を返さずに投げる', () => {
+  const { App } = loadApp({ width: 0, height: 0 });
+  App.marks = [{ x: 0.5, y: 0.5, type: '赤み' }];
+  assert.throws(() => App.exportBodyMarking(), /大きさを取れない/);
+});
+
+test('印が無ければ、大きさが取れなくても null（投げない）', () => {
+  const { App } = loadApp({ width: 0, height: 0 });
+  App.marks = [];
+  assert.equal(App.exportBodyMarking(), null);
 });

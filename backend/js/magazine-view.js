@@ -319,7 +319,15 @@ function setImage(root, frameView, imgView, src, hideFrame) {
   const frame = frameView ? root.querySelector(`[data-view="${frameView}"]`) : null;
   const img = root.querySelector(`[data-view="${imgView}"]`);
   const has = typeof src === 'string' && src.trim() !== '';
-  if (img) img.src = has ? src : '';
+  /* 写真が無いときは **属性ごと出さない**。`img.src = ''` は空文字を入れたつもりでも
+     ブラウザが**現在のページURL**に解決するため、空のスロット全部が
+     `https://…/edit/p/{petId}` を指す（`docs/deferred.md` #16 ／ `D-20260824-30` #3）。
+     枠を `hidden` にしているので目には見えないが、**飼い主の画面に読めない画像の
+     取得要求が並ぶ**ことに変わりはなく、⑥を結線した瞬間に表に出る。 */
+  if (img) {
+    if (has) img.src = src;
+    else img.removeAttribute('src');
+  }
   if (frame) frame.hidden = hideFrame != null ? hideFrame : !has;
   return has;
 }

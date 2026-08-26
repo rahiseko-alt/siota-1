@@ -34,7 +34,11 @@ import { launchChromium } from './lib/chromium.mjs';
 const results = [];
 function check(name, pass, detail) {
   results.push({ name, pass });
-  process.stdout.write(`${pass ? 'PASS' : 'FAIL'}  ${name}${detail ? `  ${detail}` : ''}\n`);
+  /* `★` で始まる detail は**落ちたときに何が起きたか**を書いたもの。合格した行に
+     出すと「PASS なのに ★ 文例が出ている」のように読めてしまい、緑と赤が見分け
+     られなくなる。出力を読んで判断する運用なので、ここは正確に出す。 */
+  const note = detail && !(pass && String(detail).startsWith('★')) ? detail : '';
+  process.stdout.write(`${pass ? 'PASS' : 'FAIL'}  ${name}${note ? `  ${note}` : ''}\n`);
 }
 
 const { base: BASE, stop } = await startLocalWorker({ port: Number(process.env.PORTAL_PORT || 8788) });

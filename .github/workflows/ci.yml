@@ -117,6 +117,48 @@ jobs:
       - name: トリマーの画面を確かめる
         run: npm run verify:edit
 
+      # **保存されたカルテが飼い主のブラウザで実行されないこと**（D-11 の機械強制）。
+      # `bad-scenarios-F3` #12。細工はスタッフ API で直接入れ、見るのは飼い主の画面だけ
+      # なので、`/edit` の結線を待たずに走る。
+      - name: 細工したカルテが実行されないことを確かめる
+        run: npm run verify:xss
+
+      # **このアプリが在る理由そのもの**（D-12）。トリマーが正UI で記入 → 確定 →
+      # 飼い主が /my で開く、の往復で1項目でも値が変わったら落ちる。
+      # `bad-scenarios-F3` #13。入力欄を足したら必ずこの検査にも足すこと。
+      - name: 書いたものが飼い主に同じ値で届くか確かめる
+        run: npm run verify:roundtrip
+
+      # カルテ0件の犬に、存在しない履歴を見せていないこと（D-10）。
+      # 確定していない下書きが飼い主に見えないことも見る。`bad-scenarios-F3` #16。
+      - name: 空のカルテが空として出ることを確かめる
+        run: npm run verify:empty
+
+      # 決め打ちの手順の**外**を見る唯一の検査。各画面に在るべきボタンが在るか。
+      # 過去2回「押すべきボタンが画面から消えた」事故を、5本の検査が揃って
+      # 見逃している（D-20260824-29 / D-20260823-06）。`bad-scenarios-F3` #19。
+      - name: 各画面に在るべきものが在るか確かめる
+        run: npm run verify:screens
+
+      # 削除したら写真も**本当に**消えること（`#2` の唯一の防波堤）。
+      # RLS 越しでは必ず合格するので service_role で実体を数える。
+      # `bad-scenarios-F3` #14。
+      - name: 削除したら写真も消えることを確かめる
+        run: npm run verify:delete
+
+      # 記入が黙って消えないこと（誤タップ1回で数十分が失われない）。#15。
+      - name: 記入が下書きとして残ることを確かめる
+        run: npm run verify:draft
+
+      # 新規のお客様が自分のカルテを見られるまで。招待は飾りではなく必須経路。#17。
+      - name: 招待から閲覧まで通ることを確かめる
+        run: npm run verify:invitation
+
+      # マスター指定の動線①〜⑥を実データで一気通貫。F3 の完了条件そのもの。#18。
+      # **人が使えるかの判定ではない**（それは D-14・npm run walk の絵で決める）。
+      - name: 動線が一気通貫で通ることを確かめる
+        run: npm run verify:m6
+
       - name: Supabase を止める
         if: always()
         run: npx supabase stop || true
