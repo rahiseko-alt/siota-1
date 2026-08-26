@@ -150,6 +150,10 @@ try {
       const box = await el.boundingBox();
       if (!box) throw new Error(`「${name}」の位置が取れない`);
       await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+      /* **押した結果、本当に移ったことを確かめる。** 移っていない画面を
+         「選んだ」の写真として残すと、絵だけで判定する D-14 が嘘を掴む
+         （`F-20260825-32` と同じ型）。 */
+      await page.waitForSelector('#screen-3.is-active', { timeout: 15000 });
       return;
     }
     const seen = await cards.allTextContents();
@@ -191,11 +195,27 @@ try {
     const ownerNames = (await ownerCards.allTextContents()).map((t) => t.trim());
     const idx = ownerNames.indexOf(DOG);
     if (idx < 0) throw new Error(`飼い主の一覧に「${DOG}」が居ない: ${JSON.stringify(ownerNames)}`);
+    /* **先に画面内へ送ってから座標を取る。** 送らずに取ると、一覧が長いときに
+       箱の座標が画面の外を指し、指はどこか別の場所に落ちる。最初これを忘れて、
+       **一覧のままの絵を「カルテを開いた」として残していた**。 */
+    await ownerCards.nth(idx).scrollIntoViewIfNeeded().catch(() => {});
     const ownerBox = await ownerCards.nth(idx).boundingBox();
     if (!ownerBox) throw new Error(`飼い主の一覧の「${DOG}」の位置が取れない`);
     /* 名札と同じ理由で、見えている場所へ実際のタッチを落とす（上の `tapDog` 参照）。 */
     await ownerPage.touchscreen.tap(ownerBox.x + ownerBox.width / 2, ownerBox.y + ownerBox.height / 2);
-    await shot(ownerPage, '07 飼い主が、いま書かれたカルテを開いた');
+    await ownerPage.waitForURL(/\/my\/pets\/[^/]+$/, { timeout: 15000 });
+    await shot(ownerPage, `07 飼い主が自分の犬（${DOG}）を開いた`);
+
+    /* 犬の頁はカルテの**一覧**。届いたカルテそのものは、もう1タッチ先に在る。
+       ここまで撮らないと「届いたか」を絵で見たことにならない（`D-12`）。 */
+    const reportLinks = ownerPage.locator('.report-list a');
+    await reportLinks.first().waitFor({ state: 'visible', timeout: 15000 });
+    await reportLinks.first().scrollIntoViewIfNeeded().catch(() => {});
+    const repBox = await reportLinks.first().boundingBox();
+    if (!repBox) throw new Error('カルテの行の位置が取れない');
+    await ownerPage.touchscreen.tap(repBox.x + repBox.width / 2, repBox.y + repBox.height / 2);
+    await ownerPage.waitForURL(/\/my\/pets\/[^/]+\/reports\/[^/]+$/, { timeout: 15000 });
+    await shot(ownerPage, '08 飼い主に届いたカルテ');
   } else {
     /* ── 間違えたとき、何タッチで戻れるか ── */
     await page.goto(`${BASE}/my`, { waitUntil: 'domcontentloaded' });
