@@ -9,7 +9,24 @@
  * 1タッチごとにスクリーンショットを撮って番号を振るだけ。合否は絵を見て人間が決める。
  * コードを読んで判定してはいけない（D-14）。
  *
- * 対象は **UI だけ**。バックエンドは呼ばない（配る器は `serve-ui.mjs`＝静的配信のみ）。
+ * ── 2026-08-26 の変更（`plan.md` 4-2）─────────────────────────────
+ * **以前ここは仮データを撮っていた。** 配る器が `serve-ui.mjs`（静的配信のみ）で、
+ * バックエンドを呼ばなかったため、写っていた犬は `window.DUMMY` の4頭だった。
+ * つまり **D-14 の2問に「実データで」答えた絵は、いままで1枚も無かった**
+ * ——結線（4-1）が終わったあとも、絵だけは F2 のままだった。
+ *
+ * いまは `startLocalWorker()` で**実際の Worker + ローカル Supabase**に向ける。
+ * **仮データへ黙って落ちない**: Supabase が起動していなければ
+ * `ensureLocalSupabaseRunning()` がその場で投げて止まる。撮れなかったことを
+ * 「撮れた」と見せないためで、これは `#6`（見る検査が1本も無い）と同じ型の穴を塞ぐもの。
+ *
+ * **ログインだけは注入する。** Google OAuth は自動化できないので、実データの
+ * セッションを入れて「ログインした直後」の状態を作る。ログインを省いたのではなく、
+ * **人の指では押せない1枚だけを機械が代わりに押している**。写真の見出しにもそう書く。
+ *
+ * 対象は結線後の実データ。ローカル Supabase（`npx supabase start`）が要る。
+ * **手元に Docker が無い環境では撮れない**ので、CI が撮って成果物として上げる
+ * （`.github/workflows/ci.yml` の「人が使えるかの写真を撮る」）。
  *
  * 使い方:
  *   npm run walk            正解の手順
@@ -20,10 +37,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium, devices } from 'playwright';
-import { startUiServer } from './serve-ui.mjs';
+import { devices } from 'playwright';
+import { startLocalWorker, injectSession, FIXTURE } from './lib/local-stack.mjs';
 import { launchChromium } from './lib/chromium.mjs';
-
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MODE = process.argv[2] === 'mistakes' ? 'mistakes' : 'correct';
@@ -31,8 +47,13 @@ const SHOTS = path.join(ROOT, '.human', MODE);
 fs.rmSync(SHOTS, { recursive: true, force: true });
 fs.mkdirSync(SHOTS, { recursive: true });
 
-const PORT = Number(process.env.UI_PORT || (MODE === 'mistakes' ? 8802 : 8801));
-const { base: BASE, stop } = await startUiServer(PORT);
+/* 撮るのは `FIXTURE.petX`（owner-a の犬・一覧での表示名は `X`）。**どの犬を撮ったか
+   決まっていないと、⑥で「その犬の飼い主」を開けない**——飼い主が違えば、届いた
+   ものを見ているのか他人のカルテを見ているのか、絵からは区別がつかない。 */
+const DOG = 'X';
+
+const PORT = Number(process.env.WALK_PORT || (MODE === 'mistakes' ? 8802 : 8801));
+const { base: BASE, stop } = await startLocalWorker({ port: PORT });
 
 let n = 0;
 const log = [];
@@ -53,14 +74,15 @@ try {
   page.on('dialog', async (d) => { await d.accept(); });
 
   /** 1コマ撮る。what = 直前にした操作を人間の言葉で。 */
-  async function shot(what) {
+  async function shot(target, what) {
     n += 1;
-    await page.waitForTimeout(900);
+    await target.waitForTimeout(900);
     const safe = what.replace(/[^\wぁ-んァ-ヶ一-龠ー]/g, '_').slice(0, 44);
-    await page.screenshot({ path: path.join(SHOTS, `${String(n).padStart(2, '0')}-${safe}.png`), fullPage: true });
+    await target.screenshot({ path: path.join(SHOTS, `${String(n).padStart(2, '0')}-${safe}.png`), fullPage: true });
     log.push(`${String(n).padStart(2, '0')}  ${what}`);
     process.stdout.write(`${String(n).padStart(2, '0')}  ${what}\n`);
   }
+
   /** カルテに実際に書く。**書けたことを確かめてから先へ進む。**
       以前はここが `[contenteditable="true"]`（現 UI に 0 件）を探し、失敗を
       `.catch(() => {})` で握りつぶしていた。そのため「カルテを書いた」の写真は
@@ -76,6 +98,7 @@ try {
       throw new Error(`カルテに書けていない: 入れた「${text}」/ 実際「${got}」`);
     }
   }
+
   /** 見えている文字をタップする（人間と同じ探し方）。
       同じ文字のボタンが複数あるときは、見えているものを選ぶ。 */
   async function tapText(text) {
@@ -92,52 +115,103 @@ try {
     throw new Error(`「${text}」が見えていない（${count}個ある）`);
   }
 
-  await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+  /** 一覧に**仮データが混ざっていない**ことを、撮る前に確かめる。
+      ここが `plan.md` 4-2 の要そのもの——絵が実データでなければ、D-14 の2問に
+      答えたことにならない。器を静的配信に戻せばこの検査が落ちるので、
+      「いつのまにか仮データを撮っていた」に戻れない。 */
+  async function assertRealData() {
+    const cards = page.locator('.karte-card__dog-name');
+    await cards.first().waitFor({ state: 'visible', timeout: 30000 });
+    const names = (await cards.allTextContents()).map((t) => t.trim());
+    const dummies = ['ポンチ', 'レオ', 'モカ', 'モモ'].filter((d) => names.includes(d));
+    if (dummies.length > 0) {
+      throw new Error(`仮データを撮ろうとしている: ${JSON.stringify(dummies)} が一覧に居る`);
+    }
+    process.stdout.write(`実データの犬 ${names.length}頭を確認: ${JSON.stringify(names)}\n`);
+  }
+
+  /** 一覧から犬を名前で選ぶ。**日本語をセレクタに連結しない**（D-9）ので、
+      名札を全部読んで中身で選ぶ。見つからなければ止める——一覧に居ない犬を
+      選んだつもりで先へ進むと、以降の絵が全部別の犬のものになる。 */
+  async function tapDog(name) {
+    const cards = page.locator('.karte-card__dog-name');
+    await cards.first().waitFor({ state: 'visible', timeout: 30000 });
+    const count = await cards.count();
+    for (let i = 0; i < count; i += 1) {
+      const el = cards.nth(i);
+      if ((await el.textContent() || '').trim() !== name) continue;
+      await el.scrollIntoViewIfNeeded().catch(() => {});
+      await el.tap();
+      return;
+    }
+    const seen = await cards.allTextContents();
+    throw new Error(`一覧に「${name}」が居ない: ${JSON.stringify(seen)}`);
+  }
 
   if (MODE === 'correct') {
     /* ── ①〜⑥ を、指定の順に ── */
-    await shot('01 URLを開いた');
+    await page.goto(`${BASE}/my`, { waitUntil: 'domcontentloaded' });
+    await shot(page, '01 URLを開いた（まだログインしていない）');
 
-    await tapText('Google でログイン');
-    await shot('02 ログインした');
+    await injectSession(page, FIXTURE.staffEmail);
+    await page.goto(`${BASE}/edit`, { waitUntil: 'domcontentloaded' });
+    await assertRealData();
+    await shot(page, '02 ログインした（Google の画面だけは機械が代行）');
 
-    await page.locator('.karte-card').first().tap();
-    await shot('03 犬の名前を選んだ');
+    await tapDog(DOG);
+    await shot(page, `03 犬の名前を選んだ（${DOG}）`);
 
     await writeKarte('今日はおとなしくしていました。');
-    await shot('04 カルテを書いた');
+    await shot(page, '04 カルテを書いた');
 
     await tapText('確定してお客様カルテ');
-    /* ⑤確認 と ⑥顧客ページ は**同じ screen-4**（画面は4枚しかない・意匠モックどおり）。
-       別々に着いたように見せないため、1コマで「同一画面」と明記する。
-       絵だけで合否を決めるので、終点の呼び方が曖昧だと判定できない（F2 バッドシナリオ #5）。 */
-    await shot('05-06 確認と顧客ページ（同一画面・screen-4）');
+    await shot(page, '05 確定した（トリマーの確認）');
+
+    /* ⑥は**飼い主が自分の端末で開いたもの**。以前は⑤と同じ画面を1枚で兼ねていたが、
+       結線後は別物である——⑤はトリマーの画面、⑥は飼い主に**実際に届いたもの**。
+       ここが同じ絵で済むなら `D-12` を絵で確かめる意味が無い。 */
+    const ownerCtx = await browser.newContext({ ...devices['iPhone 13'] });
+    const ownerPage = await ownerCtx.newPage();
+    ownerPage.on('dialog', async (d) => { await d.accept(); });
+    await ownerPage.goto(`${BASE}/my`, { waitUntil: 'domcontentloaded' });
+    await injectSession(ownerPage, FIXTURE.ownerAEmail);
+    await ownerPage.goto(`${BASE}/my`, { waitUntil: 'domcontentloaded' });
+    await shot(ownerPage, '06 飼い主が自分の端末で開いた（一覧）');
+
+    const ownerDog = ownerPage.locator(`text="${DOG}"`).first();
+    await ownerDog.waitFor({ state: 'visible', timeout: 30000 });
+    await ownerDog.tap();
+    await shot(ownerPage, '07 飼い主が、いま書かれたカルテを開いた');
   } else {
     /* ── 間違えたとき、何タッチで戻れるか ── */
-    await tapText('Google でログイン');
+    await page.goto(`${BASE}/my`, { waitUntil: 'domcontentloaded' });
+    await injectSession(page, FIXTURE.staffEmail);
+    await page.goto(`${BASE}/edit`, { waitUntil: 'domcontentloaded' });
+
+    await assertRealData();
 
     /* 間違い1: 違う犬を選んでしまった → 正しい犬に着くまで */
-    await page.locator('.karte-card').nth(1).tap();
-    await shot('M1-0 違う犬を選んでしまった');
+    await tapDog('Y');
+    await shot(page, 'M1-0 違う犬（Y）を選んでしまった');
     /* 画面の中に一覧へ戻るボタンが無いので、上のタブを使う。 */
     await tapText('02 カルテ検索');
-    await shot('M1-1 タッチ1 一覧へ');
-    await page.locator('.karte-card').first().tap();
-    await shot('M1-2 タッチ2 正しい犬');
+    await shot(page, 'M1-1 タッチ1 一覧へ');
+    await tapDog(DOG);
+    await shot(page, `M1-2 タッチ2 正しい犬（${DOG}）`);
 
     /* 間違い2: 記入中に一覧へ戻ってしまった → 書きかけは残るか */
     await writeKarte('書きかけの所見です');
-    await shot('M2-0 記入中');
+    await shot(page, 'M2-0 記入中');
     await tapText('02 カルテ検索');
-    await shot('M2-1 一覧へ戻ってしまった');
-    await page.locator('.karte-card').first().tap();
-    await shot('M2-2 タッチ1 同じ犬に戻った 書きかけは残っているか');
+    await shot(page, 'M2-1 一覧へ戻ってしまった');
+    await tapDog(DOG);
+    await shot(page, 'M2-2 タッチ1 同じ犬に戻った 書きかけは残っているか');
 
     /* 間違い3: 顧客ページまで進んだが直したい → 記入に戻るまで */
     await tapText('確定してお客様カルテ');
-    await shot('M3-0 顧客ページまで進んだ');
+    await shot(page, 'M3-0 顧客ページまで進んだ');
     await tapText('03 カルテ作成');
-    await shot('M3-1 タッチ1 カルテ作成へ戻った');
+    await shot(page, 'M3-1 タッチ1 カルテ作成へ戻った');
   }
 } finally {
   fs.writeFileSync(path.join(SHOTS, '_操作ログ.txt'), log.join('\n'));

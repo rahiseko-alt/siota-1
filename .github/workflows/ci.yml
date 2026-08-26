@@ -159,6 +159,26 @@ jobs:
       - name: 動線が一気通貫で通ることを確かめる
         run: npm run verify:m6
 
+      # D-14 の判定材料そのもの。**機械はここで合否を出さない**——絵を撮るだけで、
+      # 「最後まで行けるか」「間違えても2タッチで戻れるか」はマスターが絵を見て決める。
+      # 手元に Docker が無い環境では撮れないので、撮る場所は CI しか無い。
+      # 撮影中に落ちたら、その時点までの絵を上げて**落ちたことも見せる**
+      # （撮れなかったことを「撮れた」と見せない）。
+      - name: 人が使えるかの写真を撮る（正解の手順）
+        run: npm run walk
+
+      - name: 人が使えるかの写真を撮る（間違えたとき）
+        if: always()
+        run: npm run walk mistakes
+
+      - name: 写真を成果物として上げる
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: human-walk
+          path: .human/
+          if-no-files-found: error
+
       - name: Supabase を止める
         if: always()
         run: npx supabase stop || true
