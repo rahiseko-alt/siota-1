@@ -121,7 +121,25 @@ try {
       「いつのまにか仮データを撮っていた」に戻れない。 */
   async function assertRealData() {
     const cards = page.locator('.karte-card__dog-name');
-    await cards.first().waitFor({ state: 'visible', timeout: 30000 });
+    try {
+      await cards.first().waitFor({ state: 'visible', timeout: 30000 });
+    } catch (error) {
+      /* **待ちきれなかったときに、何が起きたかを言う。** ここは1度落ちている
+         （run `32937484313`）。そのときの出力は「`.karte-card__dog-name` が
+         見えない」だけで、**ログイン画面に跳ね返されたのか、単に遅かったのか**が
+         分からなかった。同じジョブの `mistakes` は同じ手順で成功していたので
+         一過性だが、原因を言えない出力のままにすると次に同じことが起きたときも
+         また分からない。いま居る URL と画面の見出しを出す。 */
+      const where = page.url();
+      const heading = await page.evaluate(
+        () => ((document.querySelector('h1, h2') || {}).textContent || '').trim(),
+      ).catch(() => '(読めない)');
+      throw new Error(
+        `②一覧が出なかった。いま居るのは ${where}（見出し: "${heading}"）。`
+        + 'ログイン画面へ跳ね返されているなら、セッションの注入が効いていない。'
+        + `\n${error.message}`,
+      );
+    }
     const names = (await cards.allTextContents()).map((t) => t.trim());
     const dummies = ['ポンチ', 'レオ', 'モカ', 'モモ'].filter((d) => names.includes(d));
     if (dummies.length > 0) {

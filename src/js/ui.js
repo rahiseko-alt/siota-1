@@ -220,6 +220,14 @@ const App = {
     const panel = document.getElementById('screen-4');
     if (!panel) throw new Error('screen-4 が見つかりません');
     const report = globalThis.__REPORT__;
+    /* **③の見出しも、この犬に合わせておく。** 確定すると保存したカルテの URL へ
+       開き直すので、この経路は `selectKarte()` を通らない。そのままだと③の見出しが
+       HTML の初期値のまま残り、確定後に「03 カルテ作成」へ戻った人に**別の犬の
+       名前**が見える。`D-14` の問2 が ✕ になった唯一の原因で、絵で見つけた
+       （`docs/ops/walk-D14-F3.md` / `docs/deferred.md` #28）。
+       保存先は URL の petId なので書けば正しい子に入るが、**人はそれを見出しで
+       確かめる**ので、見えているものが違えば手が止まる。 */
+    this.selectKarte(pet.petName || '', pet.ownerName || '', '');
     /* **描いてから移る。** 先に移ると、描画に失敗したときに空の器へ人を運ぶ。 */
     render(panel, report && {
       petName: pet.petName || '',
