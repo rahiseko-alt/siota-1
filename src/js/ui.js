@@ -26,6 +26,7 @@ const App = {
   draftReportId: null,
   draftWatching: false,
   draftTimer: null,
+  draftSaving: false,
 
   init() {
     this.initCanvas();
@@ -122,23 +123,41 @@ const App = {
     if (!panel || this.draftWatching) return;
     this.draftWatching = true;
     const queue = () => {
+      /* **最初の1回はすぐ残す。** まとめて1秒待つだけだと、書いた直後に誤タップで
+         画面を移った人の記入が**そのまま消える**——それが `#15` の防ぎたいことそのもの
+         （`D-20260824-30` の 1）。`verify:m6` が実際にこれで落ちた: 一言を書いて
+         すぐ段のタブを押すと、下書きが出来る前にページが移っていた。
+         2回目以降は1秒まとめる（毎打鍵で送らない）。 */
+      if (this.draftReportId === null && !this.draftSaving) {
+        this.saveDraft();
+        return;
+      }
       clearTimeout(this.draftTimer);
       this.draftTimer = setTimeout(() => this.saveDraft(), 1000);
     };
     panel.addEventListener('input', queue);
     panel.addEventListener('click', queue);
     panel.addEventListener('pointerdown', queue);
+    /* 画面を離れるときに、まとめ待ちの分を出しておく。 */
+    globalThis.addEventListener('pagehide', () => {
+      clearTimeout(this.draftTimer);
+      this.saveDraft();
+    });
   },
 
   saveDraft() {
     const staff = globalThis.TrimmerSupabaseStaff;
     if (!staff || !staff.saveDraft || !this.draftPetId) return;
+    /* 1件目を作っている最中にもう1回入ると、下書きが2件出来る。 */
+    if (this.draftSaving) return;
+    this.draftSaving = true;
     /* 印は PNG から戻せないので、**印そのもの**も一緒に置く（`__marks`）。
        ⑥ は読まないキーなので、確定のときに落とす。 */
     const data = { ...this.extractReport(), __marks: this.marks };
     staff.saveDraft(this.draftPetId, this.draftReportId, data, this.today())
-      .then((id) => { this.draftReportId = id; })
+      .then((id) => { this.draftReportId = id; this.draftSaving = false; })
       .catch(() => {
+        this.draftSaving = false;
         /* **黙って捨てない。** 保存できていないことを画面に出す（`D-2` の型）。 */
         const status = document.getElementById('dock-status-text');
         if (status) status.textContent = '⚠️ 下書きを保存できていません';

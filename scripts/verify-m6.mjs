@@ -23,6 +23,9 @@
 import { startLocalWorker, injectSession, passwordLogin, FIXTURE, LOCAL_PASSWORD } from './lib/local-stack.mjs';
 import { launchChromium } from './lib/chromium.mjs';
 
+/** ④で書く一言。**戻ってから書く**——書いてすぐ戻ると `#15` の担当と混ざる。 */
+const NOTE = '一気通貫の検査で書いた一言。';
+
 const results = [];
 function check(name, pass, detail) {
   results.push({ name, pass });
@@ -73,12 +76,10 @@ try {
   check('③. 名前で犬を選べる', picked === true);
   await page.waitForSelector('#screen-3.is-active', { timeout: 20_000 });
 
-  /* ── ④ カルテ作成 ── */
-  await page.evaluate(() => {
-    const note = document.querySelector('[data-field="staff-note"]');
-    note.value = '一気通貫の検査で書いた一言。';
-    note.dispatchEvent(new Event('input', { bubbles: true }));
-  });
+  /* ── ④ カルテ作成 ──
+     **ここではまだ書かない。** 先に「戻れるか」を見て、戻ってから書いて確定する。
+     書いてすぐ戻ると、書いたものが下書きに残るかどうか（`#15` の担当）に
+     この検査の結果が左右されてしまう。担当を混ぜない。 */
   const editable = await page.evaluate(() => ({
     canvas: !!document.getElementById('marking-canvas'),
     commit: !!document.querySelector('.dock-action-wrap .boxbutton'),
@@ -115,6 +116,13 @@ try {
   check('★c. 戻ってから、もう一度同じ犬に入れる', reentered === true);
   await page.waitForSelector('#screen-3.is-active', { timeout: 20_000 });
 
+  /* ── 書いて確定する ── */
+  await page.evaluate((note) => {
+    const el = document.querySelector('[data-field="staff-note"]');
+    el.value = note;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }, NOTE);
+
   /* ── ⑤ 確認 ── */
   await Promise.all([
     page.waitForURL(/\/edit\/p\/[0-9a-f-]+\/[0-9a-f-]+/, { timeout: 30_000 }),
@@ -144,7 +152,7 @@ try {
   await ownerPage.click('.report-list a');
   await ownerPage.waitForSelector('.magazine-container', { timeout: 20_000 });
   const ownerSees = await ownerPage.evaluate(() => document.body.textContent);
-  check('⑥b. 飼い主はカルテを開ける', ownerSees.includes('一気通貫の検査で書いた一言。'), '★ 中身が出ていない');
+  check('⑥b. 飼い主はカルテを開ける', ownerSees.includes(NOTE), '★ 中身が出ていない');
   await ownerContext.close();
 } catch (error) {
   check('検査を最後まで実行できた', false, error.message);
