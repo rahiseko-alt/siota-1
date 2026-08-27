@@ -1,0 +1,68 @@
+# deploy.yml — 本番へ出す（手で押したときだけ）
+#
+# なぜ要るか:
+#   マスターの PC にこのリポジトリは無い（GitHub とリモート開発だけ）。
+#   一方 `wrangler deploy` には Cloudflare の資格情報が要り、**私はそれを受け取らない**（`A-1`）。
+#   両方を満たす道はこれだけ——**鍵は GitHub の Secrets に入れ、実行はランナーが行う。**
+#   人が値を触るのは、Secrets に貼る1回だけになる。
+#
+# **自動では走らない。** `workflow_dispatch` だけ＝GitHub の画面で押したときのみ。
+# デプロイは戻しにくい外向きの操作で、実行前にマスターの承認が要る（`worker/wrangler.toml` の注記）。
+#
+# 出す先: **Supabase 版 Worker `shiota0823`**（`worker/wrangler.supabase.toml`）。
+#   独自ドメイン `trimmer-system.kouheikosehira.com` を配信しているのはこちら。
+#   `worker/wrangler.toml`（KV 版）を出しても本番は変わらない——`docs/runbook.md` の訂正を参照。
+#
+# 必要な Secrets（Settings → Secrets and variables → Actions）:
+#   CLOUDFLARE_API_TOKEN   … 権限「Edit Cloudflare Workers」
+#   CLOUDFLARE_ACCOUNT_ID  … Cloudflare のアカウント ID（秘密ではないが、ここに置く）
+
+name: deploy
+
+on:
+  workflow_dispatch:
+
+# 同時に2つ走らせない。**古いほうを途中で止めない**（デプロイの最中に殺すと中途半端になる）。
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # **赤いものを本番に出さない。** ここで落ちたらデプロイまで進まない。
+      - run: npm run check
+      - run: npm test
+
+      # 配るのは dist の中身。**先に作らないと古いものが出る。**
+      - run: npm run build
+
+      - name: wrangler deploy（Supabase 版・独自ドメイン）
+        run: npx wrangler deploy --config wrangler.supabase.toml
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # **合格の判定はここ。** deploy が「成功」と出ても、
+      # 実際に配られているものが手元の dist と違えば落ちる（`D-12`）。
+      # 反映に数秒かかることがあるので、1回だけ待って撮り直す。
+      - name: 本番に届いたかを見る（verify:prod）
+        run: |
+          npm run verify:prod || {
+            echo "1回目は落ちた。20秒待って、もう一度だけ見る（反映待ちの可能性）"
+            sleep 20
+            npm run verify:prod
+          }
