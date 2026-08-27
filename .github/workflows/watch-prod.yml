@@ -1,0 +1,36 @@
+# watch-prod.yml — 本番と master がズレていないかを、毎日見る
+#
+# なぜ要るか（納品前診断 #99）:
+#   `verify:prod` はデプロイ直後の関所としては `deploy.yml` に入っているが、
+#   **その後**を誰も見ていない。本番は外の世界にあり、こちらが何もしなくても
+#   変わりうる（誰かが別の版を出す・設定が変わる・配信が止まる）。
+#   人が思い出して叩く検査は、渡した後には走らない（`plan.md` 7-1 の考え方）。
+#
+# 落ちたら Actions が赤くなる。**赤の意味は「本番が master と違う」**であって、
+# 必ずしも障害ではない——`deploy.yml` を押していないだけのこともある。
+
+name: watch-prod
+
+on:
+  schedule:
+    # 毎日 00:10 UTC（日本時間 09:10）。開店前に見える。
+    - cron: '10 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  verify-prod:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # `verify:prod` は中で build する。**master の中身と本番を突き合わせる。**
+      - run: npm run verify:prod

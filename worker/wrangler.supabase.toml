@@ -10,6 +10,14 @@
 # 発行された鍵で、実際のアクセス制御は DB 側の RLS が行う。
 # service_role key と secret key は別物であり、絶対にここへ書かない。
 name = "shiota0823"
+
+# ██ workers.dev のサブドメインを明示的に閉じる（納品前診断 #94）。██
+#
+#   実測では既に 404（"There is nothing here yet"）だが、**設定に書いていなかった**。
+#   wrangler の既定は true で、route を足しても自動では閉じない（公式ドキュメント）。
+#   つまり「いまたまたま閉じている」状態だった。独自ドメイン以外の入口を持たない、
+#   と設定に書いておく——次に誰かがデプロイしても開かない。
+workers_dev = false
 main = "src/index.js"
 compatibility_date = "2025-01-01"
 
