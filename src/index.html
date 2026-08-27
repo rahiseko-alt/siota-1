@@ -1826,10 +1826,13 @@ button, input, textarea, select {
               <span class="clinical-group__hint">※血管位置と接地状態</span>
             </div>
             
-            <div class="guide-diagram-box">
-              <img alt="爪の解剖図">
-              <span class="guide-diagram-box__caption">爪の基準図</span>
-            </div>
+            <!-- **爪の基準図は、まだ繋がない**（`docs/deferred.md` #1）。
+                 `nail-diagram.png` は **6.2MB** で、カルテを書くたびに携帯へ落ちる。
+                 台帳が「圧縮を検討する。ただし状態判断に使う図なので、画質を落とすかは
+                 **用途の確認が先**」と書いており（`docs/ASSET-PROVENANCE.md:149`）、
+                 縮めるかどうかはマスターの判断。
+                 **空の枠は外す**——`src` の無い `<img>` は「爪の解剖図」という文字が
+                 並ぶだけで、基準図の役に立たない。繋ぐときはここに1行戻す。 -->
 
             <div class="segmented-stepper" id="nail-stepper-wrap">
               <button class="stepper-btn" onclick="App.selectStepper(this, 'nail', 1)">
@@ -1888,8 +1891,12 @@ button, input, textarea, select {
               <span class="clinical-group__hint">頭骨歯列基準</span>
             </div>
 
+            <!-- **実物を繋いだ**（`docs/deferred.md` #1/#14）。`src` が無い `<img>` は
+                 絵ではなく `alt` の文字が並ぶだけで、基準図として役に立たない。
+                 `teeth-diagram.jpg` は 92KB・台帳が「使用中（トリマー側の画面）」と
+                 書いている当のもの（`docs/ASSET-PROVENANCE.md:115`）。 -->
             <div class="guide-diagram-box">
-              <img alt="歯の頭骨解剖図">
+              <img src="/assets/teeth-diagram.jpg" alt="歯の頭骨解剖図">
               <span class="guide-diagram-box__caption">頭骨解剖図</span>
             </div>
 
@@ -2105,7 +2112,10 @@ button, input, textarea, select {
             <div>
               <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.16em; color: var(--ink-muted); text-transform: uppercase; margin-bottom: 6px;">Trimming & Spa Report</div>
               <h2 class="magazine-dog-title" id="mag-dog-name">ポンチ くん</h2>
-              <div class="magazine-dog-sub" id="mag-dog-sub">トイプードル / 4歳 / 2.79kg</div>
+              <!-- **見本の数字を置かない**（`docs/deferred.md` #35）。中身は
+                   `ui.js` が犬種だけ入れる。ここに数字を残すと、段のタブ「04」で
+                   直接来たとき**どの犬にも同じ体重が出る**。 -->
+              <div class="magazine-dog-sub" id="mag-dog-sub"></div>
             </div>
 
             <div>
@@ -2282,7 +2292,7 @@ button, input, textarea, select {
               <span class="wave-card-title">体重・体型スコア（BCS / MCS）</span>
             </div>
             <div style="display: flex; align-items: center; gap: 10px;">
-              <span class="wave-card-status-pill">2.79 kg (適正)</span>
+              <span class="wave-card-status-pill">—</span>
               <div class="wave-card-toggle-icon">▼</div>
             </div>
           </div>
@@ -2297,7 +2307,7 @@ button, input, textarea, select {
                   <polyline fill="none" stroke="#deded9" stroke-width="1.5" stroke-dasharray="3,3" points="0,80 300,80" />
                   <polyline fill="none" stroke="#121212" stroke-width="2.5" points="20,70 80,65 150,75 220,55 280,40" />
                   <circle cx="280" cy="40" r="5" fill="#c85a32" />
-                  <text x="225" y="30" font-size="12" font-family="Inter" font-weight="700" fill="#c85a32">2.79 kg</text>
+                  <text x="225" y="30" font-size="12" font-family="Inter" font-weight="700" fill="#c85a32"></text>
                 </svg>
               </div>
               <div>
@@ -2306,7 +2316,7 @@ button, input, textarea, select {
                   体重は単なる数値だけでなく、BCS（体型）とMCS（筋肉量）で総合評価します。肋骨に適度な脂肪の被覆があり、上から見て綺麗なウエストのくびれが確認できます（BCS 3: 理想体型）。
                 </p>
                 <div style="font-size: 12px; background: var(--bg-paper); padding: 10px; border: 1px solid var(--border-subtle);">
-                  前回（2.67kg）比: <strong>+120g</strong>（成長・筋肉量の適正増加）
+                  前回の記録なし
                 </div>
               </div>
             </div>

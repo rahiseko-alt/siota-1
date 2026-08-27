@@ -151,10 +151,33 @@ const App = {
     const staff = globalThis.TrimmerSupabaseStaff;
     if (!staff || !staff.findDraft || !petId) return;
     this.draftPetId = petId;
+
+    /* **読み込みを待つ間に人が打ったら、書き戻さない**（`docs/deferred.md` #27）。
+       `findDraft` はサーバとの往復で、その間 ④ の入力欄は打てる。戻ってきた
+       中身を無条件に `applyReport` すると、**打った文字が下書きの内容で上書きされる**
+       ——しかも消えたことに気づけない（`D-20260824-30` の 1 と同じ型）。
+       印を付けるのは**往復を始める前**でなければならない。後から付けると、
+       往復中に打たれた分を見落とす。 */
+    this.draftTouched = false;
+    const panel = document.getElementById('screen-3');
+    const mark = () => { this.draftTouched = true; };
+    if (panel) {
+      panel.addEventListener('input', mark, { once: true });
+      panel.addEventListener('change', mark, { once: true });
+    }
+
     staff.findDraft(petId).then((draft) => {
       if (draft) {
+        /* **id は必ず引き継ぐ。** 引き継がないと、続きを書いたつもりが新しい
+           下書きになって、同じ犬の下書きが2枚残る。 */
         this.draftReportId = draft.id;
-        this.applyReport(draft.data || {});
+        if (this.draftTouched) {
+          /* **黙って捨てない。**「読み込まなかった」と言う（`D-12`）。 */
+          const status = document.getElementById('dock-status-text');
+          if (status) status.textContent = '入力中のため、前回の続きは読み込みませんでした';
+        } else {
+          this.applyReport(draft.data || {});
+        }
       }
       this.watchDraft();
     }).catch(() => {
@@ -212,6 +235,25 @@ const App = {
       });
   },
 
+  /**
+   * `trimming.comment` から、カットの長さとスタイルの選択を戻す。
+   *
+   * **文字を `' / '` で割って入れるだけにはしない。** それだと選択肢に無い言葉まで
+   * `select.value` に代入しようとして、静かに空になる（`select` は無い値を拒む）。
+   * **選択肢そのものと突き合わせて、一致したものだけ選ぶ。**
+   * 一致しなければ触らない——戻せないものを推測で埋めない。
+   */
+  restoreTrimSelects(comment) {
+    const parts = String(comment || '').split(' / ').map((part) => part.trim()).filter(Boolean);
+    if (parts.length === 0) return;
+    for (const selector of ['[data-field="trim-length"]', '[data-field="trim-style"]']) {
+      const el = document.querySelector(selector);
+      if (!el || !el.options) continue;
+      const hit = Array.from(el.options).find((opt) => opt.value && parts.includes(opt.value));
+      if (hit) el.value = hit.value;
+    }
+  },
+
   /** 下書きを画面に戻す。`extractReport()` の逆。 */
   applyReport(data) {
     const set = (selector, value) => {
@@ -219,9 +261,13 @@ const App = {
       if (el && value != null) el.value = value;
     };
     set('[data-field="staff-note"]', data.staffNote || '');
-    /* カットの長さ・スタイルは、⑥が読む形（`trimming.comment`）に**まとめて**入れて
-       いるので、そこから2つの選択に戻す規則が無い。戻さない
-       （`docs/deferred.md` #26）。戻せないものを推測で埋めない。 */
+    /* **カットの長さ・スタイルを戻す**（`docs/deferred.md` #26）。
+       出すときは `[length, style].join(' / ')` で `trimming.comment` に**まとめて**
+       入れている（`extractReport`）。戻さないままにしていたが、それだと
+       「カルテ修正」（`?revise=1`・`showReport`）で選び直さなかったとき、
+       `extractReport` が `trimming.comment` を出さず、**すでに飼い主に届いていた
+       カット内容が黙って消える**。下書き再開だけの話ではなかった。 */
+    this.restoreTrimSelects((data.trimming || {}).comment);
     const weight = (data.weights || [])[0];
     if (weight && weight.kg) {
       set('#input-weight', weight.kg);
@@ -447,7 +493,7 @@ const App = {
     const magName = document.getElementById('mag-dog-name');
     if (magName) magName.textContent = `${dogName} くん`;
     const magSub = document.getElementById('mag-dog-sub');
-    /* **犬種だけ。** 以前は `4歳 / 2.79kg` を全頭に付けていた。 */
+    /* **犬種だけ。** 以前は見本の年齢と体重を全頭に付けていた（`#35`）。 */
     if (magSub) magSub.textContent = breed || '';
 
     // 爪の未選択リセット & フッターを赤（未記入あり）にセット
@@ -639,7 +685,7 @@ const App = {
     const w = parseFloat(val) || 0;
     this.form.weight = w;
     const badge = document.getElementById('weight-diff-badge');
-    /* **前回の記録が無ければ、前回比は出さない。** 以前は見本の 2.67kg と
+    /* **前回の記録が無ければ、前回比は出さない。** 以前は見本の体重と
        引き算していたので、初めての犬にも「+120g ▲」が出ていた。 */
     if (badge && !this.currentDog.prevWeight) {
       badge.className = 'weight-diff-badge';
