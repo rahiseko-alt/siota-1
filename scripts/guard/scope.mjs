@@ -47,6 +47,20 @@ export const SCOPE = {
       '.github/',
     ],
   },
+  F4: {
+    label: '棚卸しと納品の仕上げ',
+    /* F3 の範囲に **2ファイルだけ**足した（マスター判断 2026-08-27「進める」）。
+       広げたのは、F3 の範囲外で2回止められた実物だけ:
+         `.gitignore`     鍵3種を塞ぐ（`docs/deferred.md` #32。機械強制は済んでいる二重化）
+         `.env.example`   変数名を1行（`#18`。次の人が探せなかった）
+       **「もう終わりだから全部触ってよい」にはしない**——範囲を広げる理由は
+       いつでも実物で言えること（`D-18` 偽-3「無条件の免罪符を作らない」）。 */
+    allow: [
+      'src/', 'backend/', 'scripts/', 'test/', 'supabase/', 'worker/',
+      'package.json', 'package-lock.json', '.github/',
+      '.gitignore', '.env.example',
+    ],
+  },
 };
 
 /* ルール①「現状あるものだけで完成させる」——新しい依存を足させない。 */
