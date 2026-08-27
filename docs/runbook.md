@@ -83,13 +83,40 @@ npx wrangler dev --local
 
 ### A. Worker をデプロイ
 
+> **⚠️ 2026-08-27 訂正。** 下の旧手順（`worker/` で `npx wrangler deploy`）は
+> **`wrangler.toml`＝KV 版（`saltydog-report-worker`）を配ってしまう。**
+> F6（2026-08-23）で独自ドメインは **Supabase 版（`shiota0823`）** に移っており、
+> KV 版はルートを外して残してあるだけ。旧手順を流しても**本番は変わらない**
+> （実測: 本番の `/api/config` は `backend:"supabase"` を返す）。
+
+**いまの正しい順序**（リポジトリの一番上で）:
+
+```powershell
+git pull
+npm ci
+npm run build
+cd worker
+npx wrangler deploy --config wrangler.supabase.toml
+cd ..
+npm run verify:prod
+```
+
+- 認証は `npx wrangler login`（ブラウザが開く）。**API トークンを人に渡さない**（`A-1`）。
+- `npm run build` を先に流すこと。配られるのは `dist/` の中身で、**古いままだと古いものが出る**。
+- **合格の判定は `npm run verify:prod` が 4/4 PASS**。deploy が「成功」と出ても、
+  配信物が手元と違えばここで落ちる（`D-12`「押せた ではなく 届いた で見る」）。
+- 切り戻しは、Cloudflare の画面でその Worker の1つ前の版に戻す（Deployments → Rollback）。
+
+<details><summary>旧手順（KV 版・参考）</summary>
+
 ```powershell
 cd worker
 npx wrangler deploy
 ```
 
-- `wrangler.toml`（`main = src/index.js`）が参照される。
-- deploy 完了後、`https://trimmer-system.kouheikosehira.com/api/ping` が `{"ok":true}` を返すことを確認。
+`wrangler.toml`（`saltydog-report-worker`）が参照される。**独自ドメインには出ない。**
+
+</details>
 
 ### B. Pages をデプロイ（dist の絶対パス指定）
 
