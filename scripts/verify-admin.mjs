@@ -207,16 +207,28 @@ try {
   check('14. 名前を打つまで削除ボタンは押せない', disabledBefore === true);
   await page.fill('[data-admin-field="confirm-name"]', petName);
   await page.click('[data-admin-action="confirm-delete"]');
-  await page.waitForFunction(
-    () => (document.querySelector('.admin-result') || {}).textContent?.includes('削除しました'),
-    { timeout: 30_000 },
-  ).catch(() => {});
 
-  const reportsAfterDelete = await (await fetch(
-    `${BASE}/api/pets/${createdPet.id}/reports`, { headers: authHeaders },
-  )).json();
-  const finalsLeft = (reportsAfterDelete.reports || []).filter((r) => r.status === 'final');
-  check('15. カルテ1枚が実際に消えた', finalsLeft.length === 0, `${finalsLeft.length}枚残っている`);
+  /* **消えるのを待つ。理由を握り潰さない。**
+     以前はここで「削除しました」の表示を待ち、待てなくても `.catch(() => {})` で
+     素通りして数えていた。**消し終わる前に数えれば「1枚残っている」になる**——
+     しかも画面が何と言っていたかは出力に残らないので、落ちた人は原因を追えない
+     （`F-20260826-41` と同じ「待っていない検査」の型）。
+     カルテ1枚の削除は Storage の片付けを挟むので、他の2つより時間がかかる。
+     **サーバに数え直させて 0 になるまで待つ**——0 になれば即座に進む。 */
+  const countFinals = async () => {
+    const body = await (await fetch(
+      `${BASE}/api/pets/${createdPet.id}/reports`, { headers: authHeaders },
+    )).json();
+    return (body.reports || []).filter((r) => r.status === 'final').length;
+  };
+  let finalsLeft = await countFinals();
+  for (let i = 0; i < 30 && finalsLeft > 0; i += 1) {
+    await page.waitForTimeout(1000);
+    finalsLeft = await countFinals();
+  }
+  const said = (await page.locator('.admin-result').first().textContent().catch(() => '') || '').trim();
+  check('15. カルテ1枚が実際に消えた', finalsLeft === 0,
+    finalsLeft === 0 ? '' : `${finalsLeft}枚残っている　画面の表示="${said}"`);
 
   /* ── ⑤ 削除: ペット全データ ── */
   await page.goto(`${BASE}/admin`, { waitUntil: 'domcontentloaded' });
