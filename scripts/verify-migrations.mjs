@@ -30,6 +30,7 @@ import { writeLedger, LEDGER } from './guard/sql-verified.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MIGRATIONS = path.join(ROOT, 'supabase', 'migrations');
+const RLS_TEST = path.join(ROOT, 'supabase', 'tests', 'rls.sql');
 const STUB = path.join(ROOT, 'scripts', 'lib', 'supabase-stub.sql');
 const PORT = Number(process.env.MIGRATION_PG_PORT || 5440);
 
@@ -145,9 +146,20 @@ for (const file of files) {
   if (!apply(path.join(MIGRATIONS, file), file)) failed += 1;
 }
 
+/* **RLS を実際に測る**（2026-08-27 に追加）。
+   `supabase/tests/rls.sql` は pgTAP で書かれていたが、**走らせる仕組みがどこにも
+   無く、一度も実行されていなかった**（納品前診断 #5 は「cross-shop が未検証」と
+   書いていたが、実際にはその1本すら動いていなかった）。素の SQL に書き直し、
+   ここで流す。中で `rollback` するので、検査用の行は残らない。 */
+let rlsOk = true;
+if (failed === 0) {
+  rlsOk = apply(RLS_TEST, 'tests/rls.sql（誰に何が見える・書けるか）');
+  if (!rlsOk) failed += 1;
+}
+
 stop();
-process.stdout.write(`\n${files.length - failed}/${files.length} PASS\n`);
-process.stdout.write('構文とスキーマ内の参照までを見る検査。RLS が実際に誰に何を見せるかは含まない。\n');
+process.stdout.write(`\n${files.length + 1 - failed}/${files.length + 1} PASS\n`);
+process.stdout.write('構文・スキーマ内の参照に加えて、RLS が誰に何を見せるかも見る。\n');
 
 /* 通ったときだけ記録を更新する。`npm test` の `sql-verified` がこれを見て、
    **SQL を触ったら実際に流すまで緑にしない**（bad-scenarios-F3 #5）。 */
