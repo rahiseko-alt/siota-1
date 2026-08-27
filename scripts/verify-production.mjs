@@ -176,15 +176,47 @@ if (fs.existsSync(indexLocal)) {
   const want = scriptSources(fs.readFileSync(indexLocal, 'utf8'));
   const res = await get('/edit');
   const got = res.status === 200 ? scriptSources(res.body.toString('utf8')) : [];
-  const same = want.length > 0 && want.length === got.length && want.every((s, i) => s === got[i]);
+
+  /* **本番の並びは、手元の HTML と同じにはならない。**
+     Supabase モードの worker は `</head>` の前に backend の3本を**注入して**配る
+     （`worker/src/index.js` の `supabaseScripts`）。これは F3 の結線そのもので、
+     正しい動作である。**一致**を求めると、正しく配れているときに必ず落ちる
+     ——実際 2026-08-27 の初回デプロイで落ちた（`F-20260827-43`）。
+
+     だから見るのは「同じ並びか」ではなく **「在るべきものが、順序を保って在るか」**:
+       (a) 手元の `dist/index.html` の script が、本番の並びの中に同じ順で全部在る
+       (b) 注入される3本も、同じ順で在る
+     (b) の右辺は **worker のソースから抜く**。ここに書き写すと、
+     写した側がズレたときに気づけない（`F-20260825-40` の型）。 */
+  const workerSource = fs.readFileSync(path.join('worker', 'src', 'index.js'), 'utf8');
+  const injected = [...workerSource.matchAll(/<script[^>]*src="(\/backend\/js\/[^"]+)"/g)]
+    .map((m) => m[1]);
+
+  /** 順序を保った部分列か（間に別のものが挟まってよい）。 */
+  const inOrder = (needles, haystack) => {
+    let at = 0;
+    for (const needle of needles) {
+      const found = haystack.indexOf(needle, at);
+      if (found === -1) return false;
+      at = found + 1;
+    }
+    return true;
+  };
+
+  /* **0本を「合格」にしない。** 抜き出しに失敗したときに空配列が返ると、
+     (b) は何も見ないまま緑になる——実際この検査を書いた直後に一度そうなった。
+     worker が注入する以上、ここは必ず3本取れる。取れなければ検査のほうが壊れている。 */
+  const ok = want.length > 0 && injected.length > 0 && inOrder(want, got) && inOrder(injected, got);
   check(
-    `/edit が正UI（dist/index.html）を配っている（script ${want.length} 本）`,
-    same,
+    `/edit が正UI を配っている（手元 ${want.length} 本 ＋ 注入 ${injected.length} 本）`,
+    ok,
     res.error
       ? res.error
-      : same
+      : ok
         ? ''
-        : `HTTP ${res.status}\n        手元: ${want.join(' ') || '(無し)'}\n        本番: ${got.join(' ') || '(無し)'}`,
+        : `HTTP ${res.status}\n        手元: ${want.join(' ') || '(無し)'}`
+          + `\n        注入（worker から）: ${injected.join(' ') || '(無し)'}`
+          + `\n        本番: ${got.join(' ') || '(無し)'}`,
   );
 }
 
