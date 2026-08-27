@@ -42,12 +42,14 @@ jobs:
 
       - run: npm ci
 
+      # **build が先。** `npm run check` は `dist/` を走査する（`isolation.mjs dist` /
+      # `src-dist-drift-guard`）ので、作る前に掛けると「dist/index.html が無い」で落ちる。
+      # `ci.yml` も build → check → test の順（初回の実行で踏んだ・下の記録参照）。
+      - run: npm run build
+
       # **赤いものを本番に出さない。** ここで落ちたらデプロイまで進まない。
       - run: npm run check
       - run: npm test
-
-      # 配るのは dist の中身。**先に作らないと古いものが出る。**
-      - run: npm run build
 
       - name: wrangler deploy（Supabase 版・独自ドメイン）
         run: npx wrangler deploy --config wrangler.supabase.toml
