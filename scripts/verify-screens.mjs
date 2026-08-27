@@ -150,9 +150,19 @@ try {
   check('18. 招待の入口を押すと、その場で出る',
     (await staff.locator('dialog.supabase-dialog[open]').count()) === 1);
 
+  /* 19: **飼い主の画面で拡大を禁止していないこと。**
+     見るのは皮膚の所見・歯・犬体図で、二本指で寄れないと読めない（WCAG 1.4.4）。
+     以前 `my.html` に `user-scalable=no, maximum-scale=1.0` が付いていた。
+     **配られている実物**の HTML を読む（手元のソースではなく、器が返したもの）。 */
+  const myHtml = await (await fetch(`${BASE}/my`)).text();
+  const viewport = (myHtml.match(/<meta\s+name="viewport"[^>]*content="([^"]*)"/i) || [])[1] || '';
+  check('19. 飼い主の画面で拡大を禁止していない',
+    viewport !== '' && !/user-scalable\s*=\s*no/i.test(viewport) && !/maximum-scale/i.test(viewport),
+    `viewport="${viewport}"`);
+
   process.stdout.write(
     `\n【画面に在る入口】犬の選択・新規カルテ・初回登録QR（${listView.invites}件）・`
-    + '確定 ／ **削除の入口はまだ無い**（docs/deferred.md #25）\n',
+    + '確定 ／ **削除は管理者画面（③削除）に在る**（正UI 側の導線は docs/deferred.md #25）\n',
   );
   await staff.close();
 } catch (error) {

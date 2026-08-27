@@ -643,6 +643,19 @@ button, input, textarea, select {
 
 .clinical-group__hint { font-size: 11px; font-weight: 400; color: var(--ink-muted); }
 
+/* 写真入力（`F-20260827-44`）。**裏側は元から在ったのに、入口だけが無かった。**
+   ⑥（`backend/js/magazine-view.js`）が読むのは `trimming.photos` / `ear.photo` /
+   `teeth.photo` の3か所なので、入口もその3か所に置く。 */
+.photo-pick { margin-top: 10px; border: 1px dashed var(--border-subtle); padding: 8px; background: var(--bg-paper); }
+.photo-pick__label { font-size: 11px; font-weight: 700; margin-bottom: 6px; display: block; }
+.photo-pick__input { width: 100%; font-size: 12px; }
+.photo-pick__thumbs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.photo-pick__thumb { position: relative; width: 64px; height: 64px; border: 1px solid var(--border-subtle); background: #ffffff; }
+.photo-pick__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-pick__kept { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; font-size: 10px; font-weight: 700; color: var(--ink-muted); text-align: center; }
+.photo-pick__drop { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border: 1px solid var(--border-subtle); background: #ffffff; font-size: 12px; line-height: 1; font-weight: 700; cursor: pointer; }
+.photo-pick__note { font-size: 10px; color: var(--ink-muted); margin-top: 6px; }
+
 .segmented-stepper { display: flex; gap: 6px; width: 100%; }
 
 .stepper-btn {
@@ -1786,35 +1799,23 @@ button, input, textarea, select {
           <div class="clinical-group">
             <div class="clinical-group__label">
               <span>① 体重・コンディション (BCS / MCS)</span>
-              <span class="clinical-group__hint">前回 2.67kg</span>
             </div>
             <div class="weight-input-container">
               <div class="weight-stat-box">
                 <div class="weight-stat-box__title">本日の体重</div>
                 <div class="weight-stat-box__val-wrap">
-                  <input type="number" step="0.01" class="weight-input" id="input-weight" value="2.79" oninput="App.onWeightChange(this.value)">
+                  <!-- **既定値を入れない。** 以前は 2.79 が入っていて、量らずに確定すると
+                       どの犬にもその数字が届いた。空＝未記録。 -->
+                  <input type="number" step="0.01" class="weight-input" id="input-weight" placeholder="—" oninput="App.onWeightChange(this.value)">
                   <span style="font-size: 13px; font-weight: 700;">kg</span>
                 </div>
               </div>
               <div class="weight-stat-box">
                 <div class="weight-stat-box__title">前回比</div>
                 <div class="weight-stat-box__val-wrap" style="margin-top: 4px;">
-                  <span class="weight-diff-badge is-up" id="weight-diff-badge">+120g ▲</span>
+                  <span class="weight-diff-badge" id="weight-diff-badge">前回の記録なし</span>
                 </div>
               </div>
-            </div>
-
-            <div class="weight-chart-box">
-              <svg viewBox="0 0 400 68" width="100%" height="100%" preserveAspectRatio="none">
-                <polyline fill="none" stroke="#e0e0dc" stroke-width="1.5" stroke-dasharray="3,3" points="0,50 400,50" />
-                <polyline fill="none" stroke="#121212" stroke-width="2.5" points="30,45 100,42 180,48 260,35 340,25" />
-                <circle cx="30" cy="45" r="3" fill="#121212" />
-                <circle cx="100" cy="42" r="3" fill="#121212" />
-                <circle cx="180" cy="48" r="3" fill="#121212" />
-                <circle cx="260" cy="35" r="3" fill="#121212" />
-                <circle cx="340" cy="25" r="4.5" fill="#c85a32" />
-                <text x="330" y="16" font-size="10" font-family="Inter" font-weight="700" fill="#c85a32">2.79kg</text>
-              </svg>
             </div>
           </div>
 
@@ -1870,6 +1871,14 @@ button, input, textarea, select {
                 </div>
               </div>
             </div>
+
+            <div class="photo-pick">
+              <span class="photo-pick__label">耳の写真（1枚）</span>
+              <input type="file" class="photo-pick__input" accept="image/*"
+                     data-field="photo-ear" onchange="App.onPhotoPick('ear', this)">
+              <div class="photo-pick__thumbs" data-photo-thumbs="ear"></div>
+              <div class="photo-pick__note">飼い主のカルテの「耳」の欄に出ます。</div>
+            </div>
           </div>
 
           <!-- 4. Teeth & Oral Examination -->
@@ -1909,6 +1918,14 @@ button, input, textarea, select {
                 <span class="name">歯石取り推奨😷</span>
                 <span class="sub">除去が必要</span>
               </button>
+            </div>
+
+            <div class="photo-pick">
+              <span class="photo-pick__label">歯の写真（1枚）</span>
+              <input type="file" class="photo-pick__input" accept="image/*"
+                     data-field="photo-teeth" onchange="App.onPhotoPick('teeth', this)">
+              <div class="photo-pick__thumbs" data-photo-thumbs="teeth"></div>
+              <div class="photo-pick__note">飼い主のカルテの「歯」の欄に出ます。</div>
             </div>
           </div>
 
@@ -1971,6 +1988,14 @@ button, input, textarea, select {
                   <option>足先すっきりブーツ</option>
                 </select>
               </div>
+            </div>
+
+            <div class="photo-pick">
+              <span class="photo-pick__label">仕上がりの写真（何枚でも）</span>
+              <input type="file" class="photo-pick__input" accept="image/*" multiple
+                     data-field="photo-trimming" onchange="App.onPhotoPick('trimming', this)">
+              <div class="photo-pick__thumbs" data-photo-thumbs="trimming"></div>
+              <div class="photo-pick__note">1枚目がカルテの表紙になります。残りはギャラリーに並びます。</div>
             </div>
           </div>
 

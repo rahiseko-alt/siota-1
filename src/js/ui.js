@@ -4,8 +4,12 @@ const App = {
     name: 'ポンチ',
     owner: '塩田 様',
     breed: 'トイプードル',
-    weight: 2.79,
-    prevWeight: 2.67
+    /* **見本の数字を置かない。** ここに 2.79 / 2.67 が入っていたため、
+       どの犬を開いても同じ体重と「前回比」が出ていた（書いていないことが
+       書いてあるように見える・`D-10`）。前回の記録は、実データから
+       入るまで `null`＝「記録なし」。 */
+    weight: null,
+    prevWeight: null
   },
   currentStamp: '赤み',
   marks: [],
@@ -20,6 +24,12 @@ const App = {
      初期値は「まだ触っていない」を表す。触っていないものを 0 や既定値で埋めない
      ——書いていないことが書いてあるように見える（`D-10`）。 */
   form: { nail: 0, ear: { right: 0, left: 0 }, teeth: '', weight: 0 },
+
+  /* 選ばれた写真。**中身は `data:image/jpeg` か、既に上がっている `asset://{id}`。**
+     前者は `saveReport`/`reviseReport` が実体化し（`replaceDataUrlAssets`）、
+     後者は**そのまま出し直す**——直しのときに落とすと、飼い主に届いていた写真が消える。
+     `trimming` は配列（1枚目が表紙・残りはギャラリー）、耳と歯は1枚。 */
+  photos: { trimming: [], ear: '', teeth: '' },
 
   /* 下書きの居場所。`null` は「まだ1度も保存していない」。 */
   draftPetId: null,
@@ -240,6 +250,16 @@ const App = {
         .find((el) => ((el.querySelector('.name') || {}).textContent || '').trim() === teeth);
       if (btn) btn.click();
     }
+    /* **写真を戻す。** 下書きの再開でも「カルテ修正」でも、ここで戻さなければ
+       次の確定で**落ちる**——飼い主に届いていた写真が消える。中身は
+       `asset://{id}`（保存済み）のことが多く、絵にはできないが**そのまま出し直せる**。 */
+    this.photos = { trimming: [], ear: '', teeth: '' };
+    const keep = (value) => (typeof value === 'string' && value.trim() !== '' ? value : '');
+    this.photos.trimming = ((data.trimming || {}).photos || []).filter((v) => keep(v));
+    this.photos.ear = keep((data.ear || {}).photo);
+    this.photos.teeth = keep((data.teeth || {}).photo);
+    for (const kind of ['trimming', 'ear', 'teeth']) this.renderPhotoThumbs(kind);
+
     if (Array.isArray(data.__marks) && data.__marks.length > 0) {
       this.marks = data.__marks;
       this.resizeCanvas();
@@ -427,7 +447,8 @@ const App = {
     const magName = document.getElementById('mag-dog-name');
     if (magName) magName.textContent = `${dogName} くん`;
     const magSub = document.getElementById('mag-dog-sub');
-    if (magSub) magSub.textContent = `${breed} / 4歳 / 2.79kg`;
+    /* **犬種だけ。** 以前は `4歳 / 2.79kg` を全頭に付けていた。 */
+    if (magSub) magSub.textContent = breed || '';
 
     // 爪の未選択リセット & フッターを赤（未記入あり）にセット
     const nailWrap = document.getElementById('nail-stepper-wrap');
@@ -617,8 +638,15 @@ const App = {
   onWeightChange(val) {
     const w = parseFloat(val) || 0;
     this.form.weight = w;
-    const diff = Math.round((w - this.currentDog.prevWeight) * 1000);
     const badge = document.getElementById('weight-diff-badge');
+    /* **前回の記録が無ければ、前回比は出さない。** 以前は見本の 2.67kg と
+       引き算していたので、初めての犬にも「+120g ▲」が出ていた。 */
+    if (badge && !this.currentDog.prevWeight) {
+      badge.className = 'weight-diff-badge';
+      badge.textContent = '前回の記録なし';
+      return;
+    }
+    const diff = Math.round((w - this.currentDog.prevWeight) * 1000);
     if (badge) {
       if (diff >= 0) {
         badge.className = 'weight-diff-badge is-up';
@@ -752,10 +780,17 @@ const App = {
     if (staffNote) report.staffNote = staffNote;
 
     if (this.form.nail) report.nail = { level: this.form.nail };
-    if (this.form.ear.right || this.form.ear.left) {
+    /* **写真だけでもキーを出す。** レベルが未選択でも、撮った写真は届けたい。
+       逆に、どちらも無ければキーごと出さない（空の器を出さない）。 */
+    if (this.form.ear.right || this.form.ear.left || this.photos.ear) {
       report.ear = { right: this.form.ear.right, left: this.form.ear.left };
+      if (this.photos.ear) report.ear.photo = this.photos.ear;
     }
-    if (this.form.teeth) report.teeth = { status: this.form.teeth };
+    if (this.form.teeth || this.photos.teeth) {
+      report.teeth = {};
+      if (this.form.teeth) report.teeth.status = this.form.teeth;
+      if (this.photos.teeth) report.teeth.photo = this.photos.teeth;
+    }
     /* **`ym` を必ず添える。** ⑥は `weights` を `w.ym` が在るものだけに絞ってから描く
        （`magazine-view.js:575`）ので、`kg` だけ出すと**体重は「未記録」になる**——
        書いたのに届かない（`F-20260821-12`/`-13` の型）。月は施術日から作る。 */
@@ -768,7 +803,14 @@ const App = {
     const length = text('[data-field="trim-length"]');
     const style = text('[data-field="trim-style"]');
     const trimming = [length, style].filter(Boolean).join(' / ');
-    if (trimming) report.trimming = { comment: trimming };
+    /* **写真は `trimming.photos` へ。** ⑥はここの1枚目を表紙（hero）にし、
+       残りをギャラリーに並べる（`magazine-view.js:549,580`）。
+       だから hero 用の入力を別に作らない——1つの入口が2か所に効く。 */
+    if (trimming || this.photos.trimming.length > 0) {
+      report.trimming = {};
+      if (trimming) report.trimming.comment = trimming;
+      if (this.photos.trimming.length > 0) report.trimming.photos = [...this.photos.trimming];
+    }
 
     /* 犬体図の印。**印が無ければキーごと出さない**（白紙の絵を「所見あり」にしない）。
        印が在るのに描き先が無ければ `exportBodyMarking()` が投げる——握らない。 */
@@ -822,6 +864,93 @@ const App = {
     const now = new Date();
     const pad = (n) => String(n).padStart(2, '0');
     return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  },
+
+  /* 写真を1枚、送れる大きさの `data:image/jpeg` にする。
+
+     **そのまま送らない。** いまのスマホは1枚 4〜8MP で、上限（10MB）に当たるか、
+     当たらなくても飼い主の回線で開けない。長辺 1600px・q0.8 まで落とす。
+
+     **iPhone の HEIC もここで JPEG になる。** サーバが受け取るのは canvas が出した
+     JPEG なので、`mimeType` の enum（jpeg/png/webp）を広げる必要が無い。
+     ただし **HEIC を復号できるのは、その形式を読めるブラウザだけ**（iPhone/iPad は読める）。
+     読めない環境では下の `createImageBitmap` が投げるので、**黙って捨てずに理由を出す**。 */
+  async shrinkImage(file) {
+    let bitmap;
+    try {
+      bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    } catch {
+      throw new Error(`「${file.name}」を読めませんでした。この端末が対応していない形式かもしれません。`);
+    }
+    const long = Math.max(bitmap.width, bitmap.height);
+    const scale = long > 1600 ? 1600 / long : 1;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    if (!canvas.width || !canvas.height) throw new Error(`「${file.name}」の大きさを取れませんでした。`);
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close?.();
+    return canvas.toDataURL('image/jpeg', 0.8);
+  },
+
+  /* ファイルが選ばれたとき。**1枚でも失敗したら理由を出す**——黙って減ると、
+     トリマーは「入れたつもり」で確定してしまう（`D-2`）。 */
+  async onPhotoPick(kind, input) {
+    const files = [...(input.files || [])];
+    input.value = '';
+    if (files.length === 0) return;
+    for (const file of files) {
+      try {
+        const dataUrl = await this.shrinkImage(file);
+        if (kind === 'trimming') this.photos.trimming.push(dataUrl);
+        else this.photos[kind] = dataUrl;
+      } catch (error) {
+        globalThis.alert(error.message);
+      }
+    }
+    this.renderPhotoThumbs(kind);
+    /* **その場で下書きに残す。** 画面の入力を見張っている `queue` は、
+       ファイルを選んだ瞬間に走る——縮小が終わる前なので、待たずに送ると
+       写真の無い下書きが残る。処理が終わったここで、明示的に残す。 */
+    this.saveDraft();
+  },
+
+  removePhoto(kind, index) {
+    if (kind === 'trimming') this.photos.trimming.splice(index, 1);
+    else this.photos[kind] = '';
+    this.renderPhotoThumbs(kind);
+    this.saveDraft();
+  },
+
+  /* 選んだものを見せる。**`asset://` は絵にできない**（実体は認証つきでしか取れない）ので、
+     「保存済み」と字で出す。消せることは同じ——押せば次の確定で落ちる。 */
+  renderPhotoThumbs(kind) {
+    const box = document.querySelector(`[data-photo-thumbs="${kind}"]`);
+    if (!box) return;
+    const list = kind === 'trimming' ? this.photos.trimming : [this.photos[kind]].filter(Boolean);
+    box.textContent = '';
+    list.forEach((src, index) => {
+      const cell = document.createElement('div');
+      cell.className = 'photo-pick__thumb';
+      if (src.startsWith('data:')) {
+        const img = document.createElement('img');
+        img.src = src;
+        img.alt = '';
+        cell.appendChild(img);
+      } else {
+        const kept = document.createElement('span');
+        kept.className = 'photo-pick__kept';
+        kept.textContent = '保存済み';
+        cell.appendChild(kept);
+      }
+      const drop = document.createElement('button');
+      drop.className = 'photo-pick__drop';
+      drop.type = 'button';
+      drop.textContent = '×';
+      drop.onclick = () => this.removePhoto(kind, index);
+      cell.appendChild(drop);
+      box.appendChild(cell);
+    });
   },
 
   exportBodyMarking() {

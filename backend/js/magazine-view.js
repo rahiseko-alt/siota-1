@@ -188,7 +188,12 @@ const TEMPLATE = `
 
 <div class="lightbox-modal" data-view="lightbox">
   <div class="lightbox-close-btn" style="position:absolute;top:16px;right:24px;color:#fff;font-size:32px;cursor:pointer">&times;</div>
-  <img data-view="lightbox-img" src="" alt="拡大画像">
+  <!-- 空の src を書かない。空文字はブラウザが現在のページURLに解決するので、
+       飼い主の画面を開くだけで「ページを画像として取りに行く」要求が1件出る
+       （deferred #16 ／ D-20260824-30 #3 と同じ穴。拡大用のここだけ残っていた）。
+       絵は openLightbox() が入れる。ここは JS のテンプレート文字列の中なので、
+       コメントでも逆引用符を使わない——文字列がそこで終わる。 -->
+  <img data-view="lightbox-img" alt="拡大画像">
 </div>
 `;
 

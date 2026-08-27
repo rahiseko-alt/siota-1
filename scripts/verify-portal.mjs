@@ -133,6 +133,35 @@ try {
     path: location.pathname,
   }));
   check('14. サインアウトでログイン画面に戻る', signedOutState.loginVisible === true && signedOutState.path === '/my', JSON.stringify(signedOutState));
+
+  /* ── 15: **詰まないこと。**
+     セッションは残っているのに `/api/session` が 401 を返す状況
+     （スタッフが飼い主リンクを外した直後／トークン失効）を作る。
+     1回目は自動で signOut → 再読込して回復するので、**2回目**を再現するために
+     `auth_reload_once` を立てておく。以前はこの分岐でログインパネルを**隠して**
+     「Googleでログインしてください」だけ出していた——**押すものが無い**。 */
+  await page.goto(`${BASE}/my`, { waitUntil: 'networkidle' });
+  await injectSession(page, FIXTURE.ownerAEmail);
+  await page.route('**/api/session', (route) => route.fulfill({
+    status: 401, contentType: 'application/json', body: '{"error":"unauthorized"}',
+  }));
+  await page.evaluate(() => sessionStorage.setItem('auth_reload_once', '1'));
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForTimeout(1500);
+  const stuck = await page.evaluate(() => {
+    const panel = document.querySelector('[data-login-panel]');
+    const button = document.querySelector('[data-google-login]');
+    return {
+      panelVisible: !!panel && !panel.hidden,
+      buttonVisible: !!button && !button.hidden && button.offsetParent !== null,
+      buttonEnabled: !!button && !button.disabled,
+      status: (document.querySelector('[data-portal-status]') || {}).textContent?.trim() || '',
+    };
+  });
+  await page.unroute('**/api/session');
+  check('15. 失効・リンク解除のあとでも、ログインボタンが出て押せる（詰まない）',
+    stuck.panelVisible && stuck.buttonVisible && stuck.buttonEnabled,
+    JSON.stringify(stuck));
 } catch (error) {
   check('検査を最後まで実行できた', false, error.message);
 } finally {

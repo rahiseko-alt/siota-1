@@ -164,6 +164,9 @@ jobs:
       - name: 管理者画面の作成・修正・削除を確かめる
         run: npm run verify:admin
 
+      - name: 写真の往復（撮った写真が飼い主に同じものとして届く）
+        run: npm run verify:photo
+
       - name: Supabase を止める
         if: always()
         run: npx supabase stop || true

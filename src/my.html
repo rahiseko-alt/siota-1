@@ -2,7 +2,10 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <!-- **拡大を禁止しない。** 飼い主が見るのは皮膚の所見・歯・犬体図で、
+       二本指で寄れないと読めない（WCAG 1.4.4）。以前は
+       `maximum-scale=1.0, user-scalable=no` が付いていて拡大できなかった。 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>マイカルテ | SALTY DOG</title>
   <link rel="icon" href="/assets/app-icon.png" type="image/png">
   <link rel="manifest" href="/manifest.json">

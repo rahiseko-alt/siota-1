@@ -209,6 +209,28 @@ export async function bootProtectedPortal() {
   const signOutButton = document.querySelector('[data-sign-out]');
   captureInvitationToken(location.search);
   let supabase;
+
+  /* **ログインパネルを出して、押せる状態にする。**
+     signed-out の分岐と、セッションが失効した／飼い主リンクを外された後に
+     catch へ落ちたときの**両方**から呼ぶ。以前は結線が signed-out 分岐にしか無く、
+     「Googleでログインしてください」と出るのに**押すものが画面に無かった**
+     （飼い主はほぼ空白の画面で手が無くなる）。 */
+  const openLoginPanel = (message, returnPath) => {
+    show(loginPanel, true);
+    show(content, false);
+    setMessage(status, message);
+    if (!loginButton) return;
+    loginButton.disabled = false;
+    loginButton.onclick = async () => {
+      loginButton.disabled = true;
+      const { error } = await signInWithGoogle(supabase, returnPath);
+      if (error) {
+        loginButton.disabled = false;
+        setMessage(status, 'ログインを完了できませんでした。もう一度お試しください');
+      }
+    };
+  };
+
   try {
     supabase = await createAuthClient();
     globalThis.TrimmerAuth = {
@@ -218,17 +240,7 @@ export async function bootProtectedPortal() {
     const restored = await restoreProtectedRoute(supabase);
     if (restored.state === 'signed-out') {
       sessionStorage.removeItem('auth_reload_once');
-      show(loginPanel, true);
-      show(content, false);
-      setMessage(status, 'Googleでログインしてください');
-      loginButton.onclick = async () => {
-        loginButton.disabled = true;
-        const { error } = await signInWithGoogle(supabase, restored.returnPath);
-        if (error) {
-          loginButton.disabled = false;
-          setMessage(status, 'ログインを完了できませんでした。もう一度お試しください');
-        }
-      };
+      openLoginPanel('Googleでログインしてください', restored.returnPath);
       return;
     }
     if (restored.state === 'error') throw new Error(restored.message);
@@ -305,9 +317,16 @@ export async function bootProtectedPortal() {
       return;
     }
     sessionStorage.removeItem('auth_reload_once');
+    /* **2回目以降と、認証以外の失敗。** 前者は再読み込みでは抜けられないので、
+       ここでログインパネルを出して押せるようにする（出さないと詰む）。
+       後者は押しても直らないので、パネルは出さずに次の一手だけ伝える。 */
+    if (error.message === 'authentication required') {
+      openLoginPanel('Googleでログインしてください', `${location.pathname}${location.search}`);
+      return;
+    }
     show(loginPanel, false);
     show(content, false);
-    setMessage(status, error.message === 'authentication required' ? 'Googleでログインしてください' : '表示できません');
+    setMessage(status, '表示できません。少し時間をおいて、このページを開き直してください');
   }
 }
 
