@@ -383,7 +383,12 @@ async function handleSupabaseMode(request, env, url, cors) {
     return new Response('Not Found', { status: 404 });
   }
   if (path === '/edit' || path === '/edit/' || SUPABASE_EDIT_PATH_PATTERN.test(path)) {
-    return renderAppPage(env, { screen: 'owner', backend: 'supabase' });
+    /* `backend` は**捨ててはいけない**——`window.__BACKEND__` のほうは読む側が無くて
+       外したが（`deferred` #21）、この値は `renderAppPage` が
+       **Supabase 用のスクリプトを載せるかどうか**を決めるのに使う。
+       いちど一緒に落として `/edit` が素の HTML になり、
+       `test/supabase-store.test.mjs` が止めた。 */
+    return renderAppPage(env, { backend: 'supabase' });
   }
   /* 管理者画面（マスター指示 2026-08-26）。器は `my.html` と同じく静的配信で、
      中身は `backend/js/supabase-admin.js` が実データから描く。
@@ -731,18 +736,25 @@ async function fetchAssetHtml(env, htmlPath) {
   return assetRes.text();
 }
 
-function createAppStateScript({ screen, view = false, backend = null, owner = null, ownerList = null, pet = null, report = null }) {
-  return (
-    '<script>' +
-    (view ? 'window.__VIEW__=true;' : '') +
-    (backend ? `window.__BACKEND__='${backend}';` : '') +
-    `window.__SCREEN__='${screen}';` +
-    `window.__OWNER__=${safeJsonStr(owner)};` +
-    `window.__OWNER_LIST__=${safeJsonStr(ownerList)};` +
-    `window.__PET__=${safeJsonStr(pet)};` +
-    `window.__REPORT__=${safeJsonStr(report)};` +
-    '</script>'
-  );
+/**
+ * 画面に渡す状態を注入する。**いま渡すのは `__REPORT__` の1つだけ。**
+ *
+ * かつては `__VIEW__` `__BACKEND__` `__SCREEN__` `__OWNER__` `__OWNER_LIST__` `__PET__`
+ * も出していたが、**読む側は1つも無かった**（`docs/deferred.md` #21・`A-5`）。
+ * 読んでいたのは `6685df5`「古いUIをはがし…」で消えた `ponchi-app.js` /
+ * `ponchi-engine.js` で、注入だけが残っていた。外す条件は「正UI の結線が固まってから」
+ * で、F3 の結線が終わったので外した。
+ *
+ * **`__REPORT__` だけは生きている**——`src/js/ui.js` の `showReport()` が読み、
+ * `backend/js/supabase-staff.js` が確定後に書き直す。ここを一緒に消すと
+ * 「カルテ修正」が中身の無い画面になる。
+ *
+ * KV モードの経路は `owner` / `pet` を渡していたが、**それを読む画面はもう無い**
+ * （KV は閉鎖のうえ残置・`D-20260823-09`）。切り戻しが要るときは `6685df5^` から
+ * UI ごと戻すので、そのときこの注入も一緒に戻ることになる（`docs/deferred.md` #22）。
+ */
+function createAppStateScript({ report = null }) {
+  return `<script>window.__REPORT__=${safeJsonStr(report)};</script>`;
 }
 
 async function renderAppPage(env, state) {
@@ -820,7 +832,7 @@ async function handleOwnerPage(_request, env, ownerSlug) {
     pets: ownerDoc.pets || [],
   };
 
-  return renderAppPage(env, { screen: 'owner', view: true, owner: ownerData });
+  return renderAppPage(env, {});
 }
 
 // GET /p/{slug}、/p/{slug}/all、/p/{slug}/{reportId} — 閲覧ページ群（全て ponchi-v2.html 使用）
@@ -838,7 +850,7 @@ async function handlePublicPage(_request, env, slug, subPath) {
   if (subPath === 'all') {
     const months = buildMonthsMeta(doc);
     const petData = buildPetData(doc, months);
-    return renderAppPage(env, { screen: 'archive', view: true, pet: petData });
+    return renderAppPage(env, {});
   }
 
   // /p/{slug}/{reportId} — H3 月別カルテ
@@ -852,13 +864,13 @@ async function handlePublicPage(_request, env, slug, subPath) {
     const reportData = entry.report;
     const months = buildMonthsMeta(doc);
     const petData = buildPetData(doc, months);
-    return renderAppPage(env, { screen: 'report', view: true, pet: petData, report: reportData });
+    return renderAppPage(env, { report: reportData });
   }
 
   // /p/{slug} — 全月一覧（月別メタ注入）。肉球画面は撤去済みなので archive を直接使う。
   const months = buildMonthsMeta(doc);
   const petData = buildPetData(doc, months);
-  return renderAppPage(env, { screen: 'archive', view: true, pet: petData });
+  return renderAppPage(env, {});
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -870,7 +882,7 @@ async function handlePublicPage(_request, env, slug, subPath) {
 async function handleEditIndex(_request, env) {
   const ownersIndex = (await readJSON(env, 'index/owners.json')) || { version: 1, owners: [] };
   const ownerList = ownersIndex.owners || [];
-  return renderAppPage(env, { screen: 'owner', ownerList });
+  return renderAppPage(env, {});
 }
 
 // GET /edit/o/{ownerSlug} — 編集モード: 飼い主の犬一覧（__SCREEN__='owner' + __OWNER__ 注入）
@@ -886,7 +898,7 @@ async function handleEditOwner(_request, env, ownerSlug) {
     pets: ownerDoc.pets || [],
   };
 
-  return renderAppPage(env, { screen: 'owner', owner: ownerData });
+  return renderAppPage(env, {});
 }
 
 // GET /edit/p/{slug} — 編集モード: 月一覧/新規作成導線（__SCREEN__='archive' + __PET__ 注入）
@@ -898,7 +910,7 @@ async function handleEditArchive(_request, env, slug) {
 
   const months = buildMonthsMeta(doc);
   const petData = buildPetData(doc, months);
-  return renderAppPage(env, { screen: 'archive', pet: petData });
+  return renderAppPage(env, {});
 }
 
 // GET /edit/p/{slug}/{reportId} — 編集モード: 既存レポート編集（__SCREEN__='report' + __REPORT__ 注入、__VIEW__ なし）
@@ -916,7 +928,7 @@ async function handleEditReport(_request, env, slug, reportId) {
   const months = buildMonthsMeta(doc);
   const petData = buildPetData(doc, months);
   // 編集モード: view=false（既定値）で __VIEW__ を付けない。
-  return renderAppPage(env, { screen: 'report', pet: petData, report: entry.report });
+  return renderAppPage(env, { report: entry.report });
 }
 
 export default {

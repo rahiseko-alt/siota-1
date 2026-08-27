@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>SALTY DOG | ドッグトリマー・エディトリアルカルテシステム</title>
+<!-- **ホーム画面に追加できるようにする**（`docs/deferred.md` #4）。
+     飼い主画面（`my.html`）と管理者画面（`admin.html`）は結線済みで、
+     **トリマー画面だけが外れていた**——追加しても名前もアイコンも出ない。
+     毎日いちばん使うのがこの画面なので、外れている理由が無い。 -->
+<link rel="icon" href="/assets/app-icon.png">
+<link rel="manifest" href="/manifest.json">
 <link rel="stylesheet" href="/assets/fonts/fonts.css">
 <style>
 /* ==========================================================================
@@ -2378,8 +2384,12 @@ button, input, textarea, select {
       <section class="magazine-revisit-box">
         <div class="magazine-revisit-tag">Next Schedule</div>
         <h4 class="magazine-revisit-title">次回のおすすめご来店時期</h4>
+        <!-- **犬の名前と具体的な日付は書かない**（`docs/deferred.md` #3）。
+             ここは意匠モックの文で、`ポンチくん` と `2026年9月10日前後` がベタ書き
+             だった。誰のカルテを開いても同じ名前と同じ日付が出るうえ、**その日付は
+             誰も計算していない**。節そのものはマスター指定で残す（`D-20260825-38`）
+             が、**持っていない値は出さない**（`D-10`）。 -->
         <p class="magazine-revisit-desc">
-          ポンチくんの毛質と爪の伸び具合から、理想の周期は<strong>約3〜4週間後（2026年9月10日前後）</strong>です。<br>
           被毛の毛玉防止と皮膚の健康維持のため、定期的なケアをおすすめいたします。
         </p>
         <button class="boxbutton boxbutton--white" style="min-height: 52px;" onclick="alert('LINE公式アカウントまたは予約システムと連携します')">

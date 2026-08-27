@@ -558,3 +558,15 @@
 - **How it was found**: 「本当に問題なのか」を確かめるために、行が名指ししている `src/js/ui.js` を開いて `applyReport` を `grep` したとき。**行の主張を信じずに数えた**ので気づけた
 - **Fix**: `restoreTrimSelects()` を足し、`trimming.comment` を `' / '` で割った断片を **`<select>` の選択肢そのものと突き合わせて**戻す（一致しないものは入れない＝推測で埋めない・`D-10`）。機械: `test/ui-revise-keeps-trimming.test.mjs` 6件。**落ちる形になっていることを実際に確かめた**——`restoreTrimSelects` の呼び出しを外すと3件が赤になる
 - **How to prevent**: **先送りの記録を根拠に軽重を決めるときは、その行が名指しする関数の呼び出し元を数え直す。** 記録は書いた日の理解で固まり、呼び出し元は後から増える。`docs/watch.md` W-8 に登録した
+
+## F-20260827-47: 死んだ注入を掃除するとき、同じ名前の**生きている値**を一緒に落とした（`/edit` が素の HTML になった）
+
+- **Date**: 2026-08-27
+- **Status**: 解決済み（コミット前に検査が止めた）
+- **Category**: implementation
+- **Trigger/Context**: `docs/deferred.md` #21 の掃除。`worker/src/index.js` の `createAppStateScript` が出す `__VIEW__` / `__BACKEND__` / `__SCREEN__` / `__OWNER__` / `__OWNER_LIST__` / `__PET__` を、読む側が無いので外した（`A-5`）
+- **What happened**: 注入を外すついでに、`renderAppPage` の呼び出し10か所から引数も落とした。そのうち **Supabase モードの `/edit`** だけは `backend: 'supabase'` が**注入用ではなく分岐用**で、`renderAppPage` がこの値で「Supabase 用のスクリプト3本を載せるかどうか」を決めていた。落とした結果、`/edit` は `<script>` が1本も載らない**素の HTML** を返すようになった——本番のトリマー画面が丸ごと動かなくなる変更
+- **Root Cause**: **同じ名前が2つの役割を持っていたのに、名前だけで判断した。** `window.__BACKEND__`（注入・読む側なし）と、引数の `backend`（分岐・生きている）。「`__BACKEND__` は誰も読んでいない」を確かめた `grep` は正しかったが、**確かめたのは注入された側だけ**で、引数のほうの使われ方を見ていない
+- **How it was found**: `npm test` の `test/supabase-store.test.mjs`「Supabase staff routes inject auth scripts…」が `/js/supabase-staff.js` を見つけられずに落ちた。**コミット前**に止まった
+- **Fix**: `backend` は引数として残し、注入だけをやめた。呼び出し側にも「**捨ててはいけない・これは分岐用**」と理由を書いた。`worker-unit` と `supabase-store` の検査は**向きを反対**にした——以前は「死んだ注入が在ること」を見ていた（＝死んだものを守る検査だった）ので、「**戻っていないこと**」を見る形に置き換えた
+- **How to prevent**: **掃除で何かを外すときは、同じ名前の使われ方を「出す側」と「受ける側」の両方で数える。** 片側が 0 件でも、もう片側が生きていることがある。`A-5` の掃除は消す作業なので、消す前に**残す理由が無いことを2方向から**言えるようにする

@@ -137,8 +137,14 @@ test('valid public report route still injects read-only report state', async () 
   const html = await response.text();
 
   assert.equal(response.status, 200);
-  assert.match(html, /window\.__VIEW__=true/);
-  assert.match(html, /window\.__SCREEN__='report'/);
   assert.match(html, /window\.__REPORT__=/);
   assert.match(html, /<\/head>/);
+  /* **読む側の無い注入を戻さない**（`docs/deferred.md` #21・`A-5`）。
+     `__VIEW__` `__SCREEN__` `__OWNER__` `__OWNER_LIST__` `__PET__` `__BACKEND__` は
+     `6685df5` で消えた `ponchi-app.js` が読んでいたもので、注入だけが残っていた。
+     ここは以前「注入されていること」を見ていた——**死んだものが在ることを守る検査**
+     だったので、向きを反対にした。 */
+  for (const dead of ['__VIEW__', '__SCREEN__', '__OWNER__', '__OWNER_LIST__', '__PET__', '__BACKEND__']) {
+    assert.ok(!html.includes(dead), `読む側の無い ${dead} が注入されている`);
+  }
 });
