@@ -159,6 +159,11 @@ jobs:
       - name: 動線が一気通貫で通ることを確かめる
         run: npm run verify:m6
 
+      # 管理者画面（マスター指示 2026-08-26）。削除3種は**取り返しがつかない**ので、
+      # 「押せた」ではなく写真の実体が service_role で 0 になるところまで見る。
+      - name: 管理者画面の作成・修正・削除を確かめる
+        run: npm run verify:admin
+
       - name: Supabase を止める
         if: always()
         run: npx supabase stop || true

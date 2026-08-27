@@ -116,9 +116,10 @@ const root = path.join(repoRoot, uiDir);
    「どこからも繋がっていない」と出る**（`my.html` を戻したときに実際に出た）。
      index.html … トリマーの画面
      my.html    … 飼い主のマイページ（`bootProtectedPortal` が起動する器）
+     admin.html … 管理者ページ（`bootAdminPortal` が起動する器・2026-08-26）
    `my.html` は無い時期があるので、在るものだけを起点にする。
    起点を勝手に増やせば条件Aは通しやすくなるので、**使った起点は必ず出力する**（D-18 偽-2）。 */
-const ENTRIES = ['index.html', 'my.html'];
+const ENTRIES = ['index.html', 'my.html', 'admin.html'];
 const entries = ENTRIES.filter((e) => fs.existsSync(path.join(root, e)));
 const entry = entries[0];
 

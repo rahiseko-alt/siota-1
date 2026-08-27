@@ -262,6 +262,13 @@ export async function bootProtectedPortal() {
       show(loginPanel, false);
       return;
     }
+    /* **管理者は毎回ここに入る**（マスター指示 2026-08-26）。飼い主にも紐付いて
+       いるかどうかを見ない——`D-20260823-06` のマスター自身がまさにその形で、
+       スタッフ判定より先に見ないと `/my` に留まってしまう。 */
+    if ((session.memberships || []).some((m) => m.role === 'admin')) {
+      location.replace('/admin');
+      return;
+    }
     if ((session.memberships || []).length > 0 && (session.ownerLinks || []).length === 0) {
       location.replace('/edit');
       return;

@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>管理者ページ | SALTY DOG</title>
+  <link rel="icon" href="/assets/app-icon.png" type="image/png">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/assets/fonts/fonts.css">
+  <style>
+    :root {
+      --bg-page: #f8f8f7;
+      --bg-surface: #ffffff;
+      --bg-subtle: #f2f2ef;
+      --bg-muted: #e9e9e5;
+      --bg-paper: #faf9f6;
+
+      --ink-primary: #121212;
+      --ink-body: #2c2c2c;
+      --ink-secondary: #585858;
+      --ink-muted: #8c8c88;
+      --ink-inverse: #ffffff;
+
+      --border-subtle: #e6e6e2;
+      --border-divider: #deded9;
+      --border-strong: #121212;
+
+      --accent-gold: #c59b27;
+      --accent-terracotta: #c85a32;
+      --accent-sage: #4a7c59;
+      --accent-alert: #d32f2f;
+
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic Medium", "Yu Gothic", Meiryo, sans-serif;
+      --font-en: "Inter", -apple-system, sans-serif;
+      --font-serif: "Hiragino Mincho ProN", "Yu Mincho", YuMincho, "Times New Roman", serif;
+
+      --ease-editorial: cubic-bezier(0.16, 1, 0.3, 1);
+      --header-height: 54px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      min-height: 100vh;
+      background-color: var(--bg-page);
+      color: var(--ink-body);
+      font-family: var(--font-sans);
+      line-height: 1.8;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Top Nav Glass */
+    .top-nav {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      width: 100%;
+      height: var(--header-height);
+      background: rgba(12, 12, 12, 0.76);
+      backdrop-filter: blur(28px) saturate(200%) brightness(105%);
+      -webkit-backdrop-filter: blur(28px) saturate(200%) brightness(105%);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+      box-shadow: none;
+      color: var(--ink-inverse);
+    }
+    .top-nav__container {
+      max-width: 1040px;
+      height: 100%;
+      margin: 0 auto;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .top-brand {
+      font-family: var(--font-serif);
+      font-size: 14px;
+      letter-spacing: 0.12em;
+      color: #ffffff;
+    }
+    .top-nav__actions { display: flex; align-items: center; gap: 8px; }
+    .top-nav-btn {
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      color: #ffffff;
+      padding: 5px 12px;
+      font-family: var(--font-en);
+      font-size: 11px;
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .top-nav-btn[hidden] { display: none; }
+
+    .portal-container {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 32px 16px 100px;
+      background: #ffffff;
+      box-shadow: 0 4px 32px rgba(0,0,0,0.04);
+      min-height: calc(100vh - var(--header-height));
+    }
+
+    .portal-head {
+      border-bottom: 2px solid var(--ink-primary);
+      padding-bottom: 12px;
+      margin-bottom: 20px;
+    }
+    .portal-head__brand {
+      font-family: var(--font-en);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      color: var(--ink-muted);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .portal-head__title {
+      font-family: var(--font-serif);
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      color: var(--ink-primary);
+    }
+
+    /* ログイン状態・エラー・招待結果の通知欄。文面は supabase-auth.js が入れる。 */
+    .portal-status {
+      font-size: 13.5px;
+      color: var(--ink-secondary);
+      margin-bottom: 24px;
+      min-height: 1.8em;
+    }
+    .portal-status:empty { margin-bottom: 0; }
+
+    .login-panel {
+      background: var(--bg-paper);
+      border: 1px solid var(--border-subtle);
+      border-left: 3px solid var(--ink-primary);
+      padding: 28px 24px;
+      margin-bottom: 32px;
+    }
+    .login-panel[hidden] { display: none; }
+    .login-panel__title {
+      font-family: var(--font-serif);
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      margin-bottom: 10px;
+    }
+    .login-panel__lead {
+      font-size: 13.5px;
+      line-height: 2;
+      color: var(--ink-body);
+      margin-bottom: 20px;
+    }
+
+    .portal-content[hidden] { display: none; }
+
+    /* 以下は supabase-auth.js の renderPets / renderPet / renderReport が生成する DOM に当たる。
+       クラス名を変えるときは向こうも一緒に変えること。 */
+    .pet-card {
+      display: block;
+      padding: 18px 20px;
+      margin-bottom: 12px;
+      background: var(--bg-paper);
+      border: 1px solid var(--border-subtle);
+      font-family: var(--font-serif);
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: var(--ink-primary);
+      text-decoration: none;
+    }
+    .pet-card:hover {
+      border-color: var(--ink-primary);
+      box-shadow: 0 12px 36px rgba(0,0,0,0.06);
+    }
+
+    .portal-content h2 {
+      font-family: var(--font-serif);
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: var(--ink-primary);
+      margin-bottom: 16px;
+    }
+    .portal-content p {
+      font-size: 14px;
+      line-height: 2;
+      color: var(--ink-body);
+      margin-bottom: 16px;
+    }
+
+    .report-list { display: flex; flex-direction: column; gap: 10px; }
+    .report-list a {
+      padding: 12px 16px;
+      background: #ffffff;
+      border: 1px solid var(--border-subtle);
+      font-family: var(--font-en);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink-body);
+      text-decoration: none;
+    }
+    .report-list a:hover { background: var(--bg-subtle); }
+
+    .portal-content img {
+      display: block;
+      width: 100%;
+      height: auto;
+      margin-bottom: 12px;
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-muted);
+    }
+
+    /* ReBITA Boxbutton */
+    .boxbutton {
+      align-items: center;
+      background-color: #000000;
+      border: 1px solid #000000;
+      color: #ffffff;
+      display: inline-flex;
+      font-family: var(--font-sans);
+      font-size: 13.5px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      min-height: 48px;
+      padding: 12px 54px 12px 20px;
+      position: relative;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .boxbutton:disabled { opacity: 0.5; cursor: default; }
+    .boxbutton:before {
+      background-color: rgba(255, 255, 255, 0.28);
+      content: "";
+      display: block;
+      height: 100%;
+      position: absolute;
+      right: 44px;
+      top: 0;
+      width: 1px;
+    }
+    .boxbutton:after {
+      background-color: #ffffff;
+      clip-path: polygon(0 0, 100% 50%, 0 100%);
+      content: "";
+      display: block;
+      height: 9px;
+      position: absolute;
+      right: 18px;
+      top: calc(50% - 4.5px);
+      width: 8px;
+    }
+  
+    /* ── 管理者画面だけの追加。意匠は my.html のものをそのまま使い、
+          ここでは「区画」と「消す操作」の見え方だけを足す。 ── */
+    .admin-menu { display: flex; flex-direction: column; gap: 12px; margin-bottom: 28px; }
+    .admin-menu__item {
+      display: block;
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-surface);
+      padding: 16px 18px;
+      text-decoration: none;
+      color: var(--ink-body);
+      cursor: pointer;
+      text-align: left;
+      font-family: var(--font-sans);
+      font-size: 15px;
+      width: 100%;
+    }
+    .admin-menu__item:hover { background: var(--bg-subtle); }
+    .admin-menu__item strong { display: block; font-size: 16px; color: var(--ink-primary); }
+    .admin-menu__item span { display: block; font-size: 12px; color: var(--ink-secondary); margin-top: 4px; }
+
+    /* **消す操作は、進む操作と同じ見た目にしない。** 押し間違いが取り返しの
+       つかない結果になる唯一の場所なので、色で区別する（D-20260824-30 の 3）。 */
+    .admin-menu__item--danger { border-color: var(--accent-alert); }
+    .admin-menu__item--danger strong { color: var(--accent-alert); }
+
+    .admin-back {
+      display: inline-block;
+      margin-bottom: 16px;
+      font-size: 12px;
+      color: var(--ink-secondary);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      font-family: var(--font-sans);
+    }
+    .admin-field { display: block; margin-bottom: 14px; }
+    .admin-field span { display: block; font-size: 12px; color: var(--ink-secondary); margin-bottom: 4px; }
+    .admin-field input, .admin-field select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border-divider);
+      background: var(--bg-surface);
+      font-family: var(--font-sans);
+      font-size: 15px;
+      color: var(--ink-body);
+    }
+    .admin-note {
+      font-size: 12px;
+      color: var(--ink-secondary);
+      border-left: 3px solid var(--border-divider);
+      padding-left: 10px;
+      margin-bottom: 16px;
+    }
+    .admin-note--danger { border-left-color: var(--accent-alert); color: var(--accent-alert); }
+    .admin-result { font-size: 13px; margin-top: 12px; }
+    [hidden] { display: none !important; }
+  </style>
+  <script src="/backend/js/supabase-vendor.js"></script>
+  <script type="module" src="/backend/js/supabase-admin.js"></script>
+</head>
+<body data-portal="admin">
+
+  <nav class="top-nav">
+    <div class="top-nav__container">
+      <div class="top-brand">SALTY DOG カルテ — 管理</div>
+      <div class="top-nav__actions">
+        <a href="/edit" class="top-nav-btn">カルテを書く</a>
+        <button type="button" class="top-nav-btn" data-sign-out hidden>ログアウト</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="portal-container">
+    <header class="portal-head">
+      <div class="portal-head__brand">Admin</div>
+      <h1 class="portal-head__title">管理者ページ</h1>
+    </header>
+
+    <p class="portal-status" data-portal-status>読み込んでいます…</p>
+
+    <noscript>
+      <p class="portal-status">このページの表示にはJavaScriptが必要です。</p>
+    </noscript>
+
+    <!-- 管理者の登録機能はこの画面に置かない（マスター指示 2026-08-26）。
+         納品時に開発者が行うため、アプリからは作れない。 -->
+    <section class="login-panel" data-login-panel hidden>
+      <h2 class="login-panel__title">管理者ログイン</h2>
+      <p class="login-panel__lead">
+        管理者として登録されたGoogleアカウントでログインしてください。
+      </p>
+      <button type="button" class="boxbutton" data-google-login>
+        <span>Googleでログイン</span>
+      </button>
+    </section>
+
+    <!-- 中身は backend/js/supabase-admin.js が実データから描く。
+         見本・デモの文字を器に埋めない（D-10）。 -->
+    <section class="portal-content" data-portal-content hidden></section>
+  </main>
+
+</body>
+</html>

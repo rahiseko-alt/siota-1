@@ -323,6 +323,14 @@ async function handleSupabaseApi(request, store, path, cors, env) {
             await enforceRateLimit(store, 'report_write', request, env);
             return json({ report: await store.finalizeReport(petId, reportId) }, 200, cors);
           }
+          /* 確定済みカルテを直す（管理者画面の「カルテ修正」）。
+             中身の形は新規作成と同じなので `updateReportSchema` を使い回す。 */
+          if (parts[5] === 'revise') {
+            const parsed = await parseJson(request, updateReportSchema);
+            if (!parsed.ok) return invalidJsonResult(parsed, cors);
+            await enforceRateLimit(store, 'report_write', request, env);
+            return json({ report: await store.reviseReport(petId, reportId, parsed.data.data) }, 200, cors);
+          }
           if (parts[5] === 'archive') {
             await enforceRateLimit(store, 'report_write', request, env);
             return json({ report: await store.archiveReport(petId, reportId) }, 200, cors);
@@ -376,6 +384,14 @@ async function handleSupabaseMode(request, env, url, cors) {
   }
   if (path === '/edit' || path === '/edit/' || SUPABASE_EDIT_PATH_PATTERN.test(path)) {
     return renderAppPage(env, { screen: 'owner', backend: 'supabase' });
+  }
+  /* 管理者画面（マスター指示 2026-08-26）。器は `my.html` と同じく静的配信で、
+     中身は `backend/js/supabase-admin.js` が実データから描く。
+     **誰が入れるかはここでは見ない**——ログインしていない人・管理者でない人を
+     弾くのは画面側（`role` は `/api/session` が返す）。器を配るだけの経路に
+     認可を書くと、二重に判定する場所ができて食い違う。 */
+  if (path === '/admin' || path === '/admin/' || path.startsWith('/admin/')) {
+    return env.ASSETS.fetch(new Request('http://assets/admin.html'));
   }
   if (path === '/my' || path === '/my/' || path.startsWith('/my/')) {
     return env.ASSETS.fetch(new Request('http://assets/my.html'));
