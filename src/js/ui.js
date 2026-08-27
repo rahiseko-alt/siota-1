@@ -354,6 +354,10 @@ const App = {
       reportDate: report.isoDate || report.date || '',
       data: report,
     });
+    /* **描けたことを覚えておく。** 段のタブ「04」は本番の動線として使う
+       （マスター回答 2026-08-27・`docs/deferred.md` #2）ので、まだ描いていない
+       ときに押されたら**空の器へ運ばない**ための印（`goToStep` が見る）。 */
+    this.magazineReady = true;
     this.goToStep(4);
   },
 
@@ -451,6 +455,27 @@ const App = {
       location.href = '/edit';
       return;
     }
+
+    /* **「04 顧客カルテ」を、中身が無いまま開かない。**
+       段のタブは本番の動線として使う（マスター回答 2026-08-27・`#2`）。
+       `screen-4` の中身は `renderMagazine` が丸ごと差し替えるまで**意匠の器**なので、
+       確定前に押すと「その犬の顧客カルテ」の見出しのまま**空の雑誌**が出る
+       ——`D-12`「押せた ではなく 届いた」で見れば、これは届いていない。
+       ②の穴（`verify:m6` が見つけたもの）とまったく同じ形。
+       **黙って何もしないのは同じ罪**なので、何をすれば見られるかを器に出す。 */
+    if (stepNum === 4 && !this.magazineReady && globalThis.TrimmerSupabaseStaff) {
+      const panel = document.getElementById('screen-4');
+      if (panel) {
+        panel.textContent = '';
+        const note = document.createElement('p');
+        note.className = 'magazine-empty-note';
+        note.dataset.view = 'not-ready';
+        note.textContent = 'このカルテはまだ確定していません。'
+          + '「03 カルテ作成」で書いて、確認へ進むとここに出ます。';
+        panel.append(note);
+      }
+    }
+
     this.currentStep = stepNum;
 
     document.querySelectorAll('.btn-step').forEach(btn => {
