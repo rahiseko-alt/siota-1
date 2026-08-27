@@ -223,6 +223,42 @@ try {
   await ownerContext.close();
   await strangerContext.close();
 
+  /* ── 19: **量らなかった体重が、勝手に届かないこと。**
+     入力欄に `value="2.79"` が入っていたため、体重に触れずに確定しても
+     **どの犬にも 2.79kg が届いていた**（診断 #75/#76）。書いていないことが
+     書いてあるように見える形で、`D-10` の型。 */
+  const NO_WEIGHT_PET = `NW${Math.random().toString(36).slice(2, 7)}`;
+  const nwRes = await fetch(`${BASE}/api/owners/${FIXTURE.ownerAOwnerId}/pets`, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ ownerId: FIXTURE.ownerAOwnerId, name: NO_WEIGHT_PET, template: 'ponchi' }),
+  });
+  const nwPet = (await nwRes.json()).pet;
+  await page.goto(`${BASE}/edit/p/${nwPet.id}`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('#screen-3.is-active', { timeout: 20_000 });
+  await page.waitForTimeout(1_500);
+  /* **体重には触らない。** 一言だけ書いて確定する。 */
+  const startedEmpty = await page.inputValue('#input-weight');
+  check('19. 体重の欄が空で始まる（見本値が入っていない）', startedEmpty === '' ? 'ok' : startedEmpty, 'ok');
+  await page.fill('[data-field="staff-note"]', '体重は量っていない回。');
+  await Promise.all([
+    page.waitForURL(/\/edit\/p\/[0-9a-f-]{36}\/[0-9a-f-]{36}$/, { timeout: 30_000 }),
+    page.click('.dock-action-wrap .boxbutton'),
+  ]);
+  const nwReportId = new URL(page.url()).pathname.split('/').pop();
+  const nwOwnerContext = await browser.newContext();
+  const nwOwnerPage = await nwOwnerContext.newPage();
+  await nwOwnerPage.goto(`${BASE}/my`);
+  await injectSession(nwOwnerPage, FIXTURE.ownerAEmail);
+  await nwOwnerPage.goto(`${BASE}/my/pets/${nwPet.id}/reports/${nwReportId}`, { waitUntil: 'networkidle' });
+  await nwOwnerPage.waitForSelector('.magazine-container', { timeout: 20_000 });
+  const nwOwnerView = await view(nwOwnerPage);
+  await nwOwnerContext.close();
+  /* 器が無い／空／数字を含まない、のいずれでも合格。**落ちるのは数字が出たときだけ**。
+     「空文字と比べる」だけにすると、器ごと消えた日にも緑になる（`F-20260825-40` の型）。 */
+  const nwWeightText = nwOwnerView.weightPill;
+  check('20. 飼い主の画面に、量っていない体重が出ない',
+    /\d/.test(nwWeightText) ? `出た: "${nwWeightText}"` : 'ok', 'ok');
+
   check('18. アプリ由来のエラーが無い', pageErrors.length === 0 ? 'ok' : pageErrors.join(' | '), 'ok');
 } catch (error) {
   check('検査を最後まで実行できた', error.message, 'ok');

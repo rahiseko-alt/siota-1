@@ -4,8 +4,12 @@ const App = {
     name: 'ポンチ',
     owner: '塩田 様',
     breed: 'トイプードル',
-    weight: 2.79,
-    prevWeight: 2.67
+    /* **見本の数字を置かない。** ここに 2.79 / 2.67 が入っていたため、
+       どの犬を開いても同じ体重と「前回比」が出ていた（書いていないことが
+       書いてあるように見える・`D-10`）。前回の記録は、実データから
+       入るまで `null`＝「記録なし」。 */
+    weight: null,
+    prevWeight: null
   },
   currentStamp: '赤み',
   marks: [],
@@ -427,7 +431,8 @@ const App = {
     const magName = document.getElementById('mag-dog-name');
     if (magName) magName.textContent = `${dogName} くん`;
     const magSub = document.getElementById('mag-dog-sub');
-    if (magSub) magSub.textContent = `${breed} / 4歳 / 2.79kg`;
+    /* **犬種だけ。** 以前は `4歳 / 2.79kg` を全頭に付けていた。 */
+    if (magSub) magSub.textContent = breed || '';
 
     // 爪の未選択リセット & フッターを赤（未記入あり）にセット
     const nailWrap = document.getElementById('nail-stepper-wrap');
@@ -617,8 +622,15 @@ const App = {
   onWeightChange(val) {
     const w = parseFloat(val) || 0;
     this.form.weight = w;
-    const diff = Math.round((w - this.currentDog.prevWeight) * 1000);
     const badge = document.getElementById('weight-diff-badge');
+    /* **前回の記録が無ければ、前回比は出さない。** 以前は見本の 2.67kg と
+       引き算していたので、初めての犬にも「+120g ▲」が出ていた。 */
+    if (badge && !this.currentDog.prevWeight) {
+      badge.className = 'weight-diff-badge';
+      badge.textContent = '前回の記録なし';
+      return;
+    }
+    const diff = Math.round((w - this.currentDog.prevWeight) * 1000);
     if (badge) {
       if (diff >= 0) {
         badge.className = 'weight-diff-badge is-up';
