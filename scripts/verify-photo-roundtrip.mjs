@@ -213,10 +213,17 @@ try {
   const teeth = await pixelOf(ownerPage, 'teeth-image');
   check('9. 飼い主: 歯の写真が、歯の欄に', near(teeth, COLOR.teeth), `色=${JSON.stringify(teeth)}`);
 
+  /* **`src=""` の img を数える。** 空文字はブラウザが**いま開いているページのURL**に
+     解決するので、`img.src === location.href` で見分けられる。右辺を `/my/pets/` の
+     ような文字列で書かず、**ブラウザ自身が解決した値**と突き合わせる。
+     初回の実行でこれが 1件出た——拡大表示用の img に `src=""` が残っていた。 */
   const broken = await ownerPage.evaluate(
-    () => [...document.querySelectorAll('img')].filter((i) => (i.src || '').includes('/my/pets/')).length,
+    () => [...document.querySelectorAll('img')]
+      .filter((i) => i.src === location.href)
+      .map((i) => i.getAttribute('data-view') || i.className || '(名前なし)'),
   );
-  check('10. 飼い主: 壊れた画像（ページURL を指す img）が無い', broken === 0, `${broken}件`);
+  check('10. 飼い主: 壊れた画像（ページURL を指す img）が無い',
+    broken.length === 0, broken.length ? `${broken.length}件 ${JSON.stringify(broken)}` : '');
 
   /* ── ⑪⑫ 直しても写真が落ちない ──
      `applyReport` が戻さなければ、次の確定で **届いていた写真が消える**。 */
