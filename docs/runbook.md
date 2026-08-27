@@ -89,6 +89,27 @@ npx wrangler dev --local
 > KV 版はルートを外して残してあるだけ。旧手順を流しても**本番は変わらない**
 > （実測: 本番の `/api/config` は `backend:"supabase"` を返す）。
 
+**出し方は2つある。** 手元にリポジトリが無いなら **A-1（GitHub の画面）**を使う。
+
+### A-1. GitHub の画面から出す（推奨・PC に環境が要らない）
+
+`.github/workflows/deploy.yml`（**手で押したときだけ走る**）。
+
+1. GitHub → **Actions** → 左の **deploy** → **Run workflow**
+2. 走るのは `check` → `test` → `build` → `wrangler deploy`（Supabase 版）→ **`verify:prod`**
+3. **緑になったら成功。** 赤なら本番に届いていない（`verify:prod` が判定する）
+
+事前に一度だけ、**Settings → Secrets and variables → Actions** に2つ登録する:
+
+| 名前 | 中身 |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | 権限「Edit Cloudflare Workers」のトークン |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare のアカウント ID |
+
+**値はマスターが自分で貼る。** AI は受け取らない（`A-1`）。
+
+### A-2. 手元から出す（PC に環境があるとき）
+
 **いまの正しい順序**（リポジトリの一番上で）:
 
 ```powershell
