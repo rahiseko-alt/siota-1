@@ -37,6 +37,14 @@ env/
 .env.*.local
 *.pem
 *.key
+
+# 鍵をこの名前で手元に降ろす手順が runbook に在る（docs/deferred.md #32）。
+# `*.key` は **`.srkey` に当たらない**——glob の `*.key` は「`.key` で終わる」なので、
+# `.srkey` は一致しない。実測: `git check-ignore -v .srkey` が 0 件を返していた。
+# **機械強制は別に在る**（`npm run check` の no-secrets が毎回止める）。ここは二重化。
+.cftoken
+.sbtoken
+.srkey
 *.cert
 
 # Logs

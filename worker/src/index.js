@@ -1,4 +1,5 @@
-﻿// Trimmer System（ponchi-v2.html 専用）公開 Worker
+﻿// Trimmer System 公開 Worker
+// **配るのは正UI `/index.html`**（旧 `ponchi-v2.html` は 6685df5 で削除済み・`deferred` #20）。
 // ルーティング: /api/ping, /api/customers, /api/owners, /api/reports（無認証）,
 //              /p/{slug}（閲覧 H2 肉球画面）, /p/{slug}/all（アーカイブ）,
 //              /p/{slug}/{reportId}（閲覧 H3）, /o/{ownerSlug}（飼い主 H1）
@@ -12,7 +13,8 @@
 //   owners/{ownerSlug}.json           — 飼い主メタ {ownerSlug,ownerName,pets:[{slug,petName}]}
 //   reports/{slug}/{reportId}.json    — レポート 1 件の実体（写真込み）
 
-// 全閲覧ページは ponchi-v2.html を注入配信する（A テンプレート分岐なし）。
+// 全閲覧ページは正UI `/index.html` を配る（テンプレート分岐なし）。
+// 注入するのは `__REPORT__` の1つだけ（読む側の無い5つは 2026-08-27 に外した・`#21`）。
 
 import { AuthError, resolveAuthContext } from './auth-context.js';
 import {
@@ -819,7 +821,9 @@ function buildPetData(doc, months) {
   };
 }
 
-// GET /o/{ownerSlug} — 飼い主 H1 ページ（ponchi-v2.html + __SCREEN__='owner' + __OWNER__ 注入）
+// GET /o/{ownerSlug} — 飼い主 H1 ページ（KV モード）。**注入するのは `__REPORT__` だけ**
+//   （`__SCREEN__`/`__OWNER__` は読む側が無く 2026-08-27 に外した・`deferred` #21）。
+//   配るのは `ponchi-v2.html` ではなく正UI `/index.html`（`#20` で向け直した）。
 async function handleOwnerPage(_request, env, ownerSlug) {
   const ownerDoc = await readJSON(env, `owners/${ownerSlug}.json`);
   if (!ownerDoc) {
@@ -878,14 +882,14 @@ async function handlePublicPage(_request, env, slug, subPath) {
 // 閲覧(/p/*・/o/*)との違い: window.__VIEW__ を注入しない → ponchi-app.js が編集モードで起動
 // ─────────────────────────────────────────────────────────────────────────────
 
-// GET /edit — 編集モード: 飼い主一覧画面（__SCREEN__='owner' + __OWNER_LIST__ 注入）
+// GET /edit — 編集モード: 飼い主一覧画面（KV モード）。注入は無し（`deferred` #21）
 async function handleEditIndex(_request, env) {
   const ownersIndex = (await readJSON(env, 'index/owners.json')) || { version: 1, owners: [] };
   const ownerList = ownersIndex.owners || [];
   return renderAppPage(env, {});
 }
 
-// GET /edit/o/{ownerSlug} — 編集モード: 飼い主の犬一覧（__SCREEN__='owner' + __OWNER__ 注入）
+// GET /edit/o/{ownerSlug} — 編集モード: 飼い主の犬一覧（KV モード）。注入は無し（`deferred` #21）
 async function handleEditOwner(_request, env, ownerSlug) {
   const ownerDoc = await readJSON(env, `owners/${ownerSlug}.json`);
   if (!ownerDoc) {
@@ -901,7 +905,7 @@ async function handleEditOwner(_request, env, ownerSlug) {
   return renderAppPage(env, {});
 }
 
-// GET /edit/p/{slug} — 編集モード: 月一覧/新規作成導線（__SCREEN__='archive' + __PET__ 注入）
+// GET /edit/p/{slug} — 編集モード: 月一覧/新規作成導線（KV モード）。注入は無し（`deferred` #21）
 async function handleEditArchive(_request, env, slug) {
   const doc = await readJSON(env, `customers/${slug}.json`);
   if (!doc) {
@@ -913,7 +917,7 @@ async function handleEditArchive(_request, env, slug) {
   return renderAppPage(env, {});
 }
 
-// GET /edit/p/{slug}/{reportId} — 編集モード: 既存レポート編集（__SCREEN__='report' + __REPORT__ 注入、__VIEW__ なし）
+// GET /edit/p/{slug}/{reportId} — 編集モード: 既存レポート編集（KV モード）。**`__REPORT__` だけ注入する**
 async function handleEditReport(_request, env, slug, reportId) {
   const doc = await readJSON(env, `customers/${slug}.json`);
   if (!doc) {
