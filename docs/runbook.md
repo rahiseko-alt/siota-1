@@ -72,6 +72,28 @@ npx wrangler dev --local
 
 ---
 
+## 2-B. 中身を CSV で取り出す（**製品の機能ではない**）
+
+> **画面にボタンは無い。** 書き出し／バックアップは見積もりに入っていないので機能にしていない
+> （`D-20260827-46`・マスター指示）。**あとで必要になったときに、ゼロから作らずに済むよう
+> 用意だけしてある。** クライアントの意向は「納品後、使いながら考える」。
+
+```powershell
+# 実行する人が鍵を渡す。AI は鍵を受け取らない（A-1）
+$env:SUPABASE_URL="https://xxxx.supabase.co"
+$env:SUPABASE_SECRET_KEY="sb_secret_xxx"     # Settings → API Keys で作る
+node scripts/export-csv.mjs owners  > owners.csv
+node scripts/export-csv.mjs pets    > pets.csv
+node scripts/export-csv.mjs reports > reports.csv
+```
+
+- **標準出力に出す。** ファイルを勝手に作らない——実顧客の情報をリポジトリの中に落とさない（`A-2`）。置き場所は実行する人が決める
+- **Excel で開ける**（先頭に BOM を付けている。無いと日本語が化ける）
+- **写真は出ない。** カルテの中身は `asset://{id}` の参照で、実体は Storage に在る。写真ごと持ち出すのは別の手順（`deferred` #35）
+- 機械: `test/export-csv.test.mjs`（引用符・カンマ・改行・BOM・列の順）。DB には触れない
+
+---
+
 ## 3. デプロイ手順（順序固定）
 
 > ⛔ **移設・統合フェーズのあいだ、本節の手順を実行するな。**
