@@ -164,7 +164,7 @@
 
 ### Supabase 有効化（2026-08-23・マスター立ち会いで実施）
 
-**動いている**: https://shiota0823.rahiseko.workers.dev
+~~**動いている**: https://shiota0823.rahiseko.workers.dev~~ → **2026-08-27 現在、この配信は存在しない**（`deferred` #34）
 
 - **Supabase プロジェクト `shiota1`（`bcodloqwnrhcuvevfguy`）を有効化した。** マイグレーション5本を適用し、テーブル12個・RLS 全11テーブル有効・`report-assets` バケット（非公開/10MB/jpeg,png,webp）を確認。Google OAuth を有効化（Client ID/Secret はマスターが直接 Supabase へ入力。私は経由していない）。
 - **Worker `shiota0823` を `workers.dev` へデプロイした。** 独自ドメインには紐付けていない。**現行本番（`wrangler.toml` / `trimmer-system.kouheikosehira.com` / KV モード）には一切触れていない**——別物として並走している。`RATE_LIMIT_IP_PEPPER` は 48文字を生成して `wrangler secret` へ投入。
