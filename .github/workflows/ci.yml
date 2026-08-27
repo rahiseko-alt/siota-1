@@ -27,7 +27,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # **浅いクローンにしない。**
           # `scripts/guard/run.mjs` は「origin/master から何を変えたか」を見る（#11 の修正）。
@@ -35,7 +35,7 @@ jobs:
           # 「変更なし」で素通りする——**関所がある顔をして何も見ていない**状態になる。
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -72,11 +72,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -184,11 +184,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -212,11 +212,11 @@ jobs:
 
       - name: 写真を成果物として上げる
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: human-walk
           path: .human/
-          # `.human/` は**ドット始まり**。upload-artifact v4 は既定で隠しファイルを
+          # `.human/` は**ドット始まり**。upload-artifact は v4 以降、既定で隠しファイルを
           # 除外するので、これが無いと「撮れているのに1枚も上がらない」。
           include-hidden-files: true
           if-no-files-found: error

@@ -110,7 +110,58 @@ async function listPets() {
 
 async function listOwners() {
   const body = await api('/api/owners');
-  return (body.owners || []).map((owner) => ({ id: owner.id, name: owner.name || '' }));
+  return (body.owners || []).map((owner) => ({
+    id: owner.id,
+    name: owner.name || '',
+    createdAt: owner.created_at || '',
+  }));
+}
+
+/* ── 同姓同名を取り違えないための見分け ────────────────────────────
+   **名前だけでは足りない**（`docs/deferred.md` #36・マスター指摘）。
+   田中さんが2人いると、削除の一覧も新規ペットの飼い主選びも**同じ文字列の行**に
+   なる。DB は UUID なので中身は混ざらないが、**人がどちらを選んだか分からない**。
+   取り違えの結果は、削除なら顧客の全データ消失、新規ペットなら**その子のカルテが
+   別の飼い主のポータルに出る**（`/my` は `owner_id` で引く）。後者は誰も気づかない。
+
+   **名前の重複を禁止にはしない。** 親子・別世帯の同姓は実在する。禁止ではなく区別。
+
+   出すもの: **飼っている子の名前**（サロンは犬で顧客を覚えている）と**登録日**。
+   それでも同じになる場合だけ、**ID の先頭6文字**を足す——ふだんは意味の無い
+   文字列を人に読ませない。 */
+
+/** 日付だけにする。`2026-08-27T12:34:56Z` → `2026-08-27`。取れなければ空。 */
+function ymd(value) {
+  const text = String(value || '');
+  return /^\d{4}-\d{2}-\d{2}/.test(text) ? text.slice(0, 10) : '';
+}
+
+/**
+ * 飼い主の行に出す見分け。`pets` はその店の子すべて（`listPets` の戻り）。
+ *
+ * **外に出しているのは検査から呼ぶため。** 取り違えは実ブラウザまで行かないと
+ * 起きないが、「どこまでを見分けとして出すか」はここだけで決まる。
+ */
+export function ownerNote(owner, pets, owners) {
+  const dogs = pets.filter((pet) => pet.ownerId === owner.id).map((pet) => pet.name).filter(Boolean);
+  const parts = [];
+  parts.push(dogs.length > 0 ? `子: ${dogs.join('・')}` : '子はまだ登録なし');
+  const day = ymd(owner.createdAt);
+  if (day) parts.push(`登録 ${day}`);
+  /* ここまでで**まだ同じになる**同名の相手がいるときだけ、ID を足す。 */
+  const sameName = owners.filter((other) => other.name === owner.name);
+  if (sameName.length > 1) {
+    const twin = sameName.some((other) => other.id !== owner.id
+      && ymd(other.createdAt) === day
+      && pets.filter((pet) => pet.ownerId === other.id).map((pet) => pet.name).join('・') === dogs.join('・'));
+    if (twin) parts.push(`ID ${String(owner.id).slice(0, 6)}`);
+  }
+  return parts.join(' ・ ');
+}
+
+/** 飼い主一覧と子一覧をまとめて取る。**見分けを出すには両方要る。** */
+function loadOwnersWithPets() {
+  return Promise.all([listOwners(), listPets()]);
 }
 
 /** その犬の**確定済み**カルテだけ。下書きは飼い主に届いていないので直す対象にしない。 */
@@ -142,11 +193,17 @@ function picker({ items, label, empty, onPick, onBack, testid }) {
    1タッチで顧客の全データが消えるのは、`D-20260824-30` の 3（写真の置き去り）
    より重い。意匠モックに削除が無いためここは前例が無く、**この確認は私の判断で
    足したもの**である（`docs/deferred.md` #25 の置き場所はマスターが決めた）。 */
-function confirmDestructive({ title, what, name, onConfirm, onBack }) {
+function confirmDestructive({ title, what, detail, name, onConfirm, onBack }) {
   clear();
   contentEl.append(backButton(onBack));
   contentEl.append(heading(title));
   contentEl.append(note(what, true));
+  /* **どれを選んだのかを、消す直前にもう一度見せる**（`#36`）。 */
+  if (detail) {
+    const line = el('p', 'admin-note', detail);
+    line.dataset.adminField = 'confirm-detail';
+    contentEl.append(line);
+  }
 
   const field = el('label', 'admin-field');
   field.append(el('span', null, `確認のため「${name}」と入力してください`));
@@ -232,11 +289,24 @@ async function withList(loader, render) {
 }
 
 function petItems(pets) {
-  return pets.map((pet) => ({
+  const items = pets.map((pet) => ({
     title: pet.name,
     note: pet.ownerName ? `飼い主: ${pet.ownerName}` : '',
     pet,
   }));
+  /* 犬の名前と飼い主の名前が**両方とも同じ**行があれば、そこだけ ID を足す
+     （`#36`）。ふだんは意味の無い文字列を人に読ませない。 */
+  const seen = new Map();
+  for (const item of items) {
+    const key = `${item.title} ${item.note}`;
+    seen.set(key, (seen.get(key) || 0) + 1);
+  }
+  for (const item of items) {
+    if (seen.get(`${item.title} ${item.note}`) > 1) {
+      item.note = `${item.note} ・ ID ${String(item.pet.id).slice(0, 6)}`.trim();
+    }
+  }
+  return items;
 }
 
 function pickPetForCreate() {
@@ -336,8 +406,11 @@ function formNewOwner() {
   contentEl.append(result);
 }
 
+/* **ここが一番危ない**（`#36`）。削除には確認の画面があるが、こちらは選んで登録して
+   終わりで、間違えても誰にも見えない。そして間違えると、その子のカルテが**別の
+   飼い主のポータルに出る**。だから選択肢にも見分けを出す。 */
 function formNewPet() {
-  return withList(listOwners, (owners) => {
+  return withList(loadOwnersWithPets, ([owners, pets]) => {
     clear();
     contentEl.append(backButton(screenNew));
     contentEl.append(heading('ペットアカウントの新規作成'));
@@ -352,7 +425,8 @@ function formNewPet() {
     for (const owner of owners) {
       const option = document.createElement('option');
       option.value = owner.id;
-      option.textContent = owner.name;
+      const mark = ownerNote(owner, pets, owners);
+      option.textContent = mark ? `${owner.name}（${mark}）` : owner.name;
       select.append(option);
     }
     ownerField.append(select);
@@ -421,8 +495,15 @@ function screenDelete() {
 }
 
 function pickOwnerForDelete() {
-  return withList(listOwners, (owners) => picker({
-    items: owners.map((owner) => ({ title: owner.name, note: '', danger: true, owner })),
+  return withList(loadOwnersWithPets, ([owners, pets]) => picker({
+    items: owners.map((owner) => ({
+      title: owner.name,
+      /* **空にしない**（`#36`）。同姓同名だと行が完全に同じ文字列になり、
+         どちらを消すのか選べない。 */
+      note: ownerNote(owner, pets, owners),
+      danger: true,
+      owner,
+    })),
     label: '全データを消す飼い主さまを選ぶ',
     empty: '登録されている飼い主さまがいません。',
     testid: 'pick-owner',
@@ -430,6 +511,9 @@ function pickOwnerForDelete() {
     onPick: (item) => confirmDestructive({
       title: '顧客アカウント全データ削除',
       what: `${item.owner.name} さまと、ひもづく子・カルテ・写真をすべて消します。元に戻せません。`,
+      /* 確認の画面にも**同じ見分けを出す**。名前を打たせるだけでは、同姓同名の
+         どちらにも通ってしまい、押し間違いの歯止めにならない（`#36`）。 */
+      detail: ownerNote(item.owner, pets, owners),
       name: item.owner.name,
       onBack: pickOwnerForDelete,
       /* **写真 → DB の順**（`D-20260824-34`）。逆にすると RLS の条件が崩れ、
@@ -452,6 +536,7 @@ function pickPetForDelete() {
     onPick: (item) => confirmDestructive({
       title: 'ペットアカウント全データ削除',
       what: `${item.pet.name} と、その子のカルテ・写真をすべて消します。元に戻せません。`,
+      detail: item.note,
       name: item.pet.name,
       onBack: pickPetForDelete,
       onConfirm: async () => {

@@ -165,7 +165,10 @@ test('Supabase staff routes inject auth scripts without changing the KV template
   ), env);
   const html = await response.text();
   assert.equal(response.status, 200);
-  assert.match(html, /window\.__BACKEND__='supabase'/);
+  /* Supabase モードかどうかは、**注入した文字列ではなく配る部品で**見る。
+     `window.__BACKEND__` は読む側が1つも無かったので外した（`deferred` #21・`A-5`）。
+     見るべきは「Supabase 用のスクリプトが載っていること」のほう。 */
+  assert.ok(!html.includes('__BACKEND__'), '読む側の無い __BACKEND__ が戻っている');
   assert.match(html, /\/js\/supabase-staff\.js/);
   assert.equal((html.match(/supabase-staff\.js/g) || []).length, 1);
 });
