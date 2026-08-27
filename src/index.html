@@ -1826,13 +1826,22 @@ button, input, textarea, select {
               <span class="clinical-group__hint">※血管位置と接地状態</span>
             </div>
             
-            <!-- **爪の基準図は、まだ繋がない**（`docs/deferred.md` #1）。
-                 `nail-diagram.png` は **6.2MB** で、カルテを書くたびに携帯へ落ちる。
-                 台帳が「圧縮を検討する。ただし状態判断に使う図なので、画質を落とすかは
-                 **用途の確認が先**」と書いており（`docs/ASSET-PROVENANCE.md:149`）、
-                 縮めるかどうかはマスターの判断。
-                 **空の枠は外す**——`src` の無い `<img>` は「爪の解剖図」という文字が
-                 並ぶだけで、基準図の役に立たない。繋ぐときはここに1行戻す。 -->
+            <!-- **繋いだ**（`docs/deferred.md` #1・マスター判断 `D-20260827-47` の 1
+                 「そのまま繋ぐ」）。血管の位置を見て3段階を判定する図なので、
+                 **画質を落とさない**——縮めて血管が見えなくなれば、図が在る意味が無い。
+                 `nail-diagram.png` は **6.2MB** ある。`loading="lazy"` を付けるのは、
+                 **配るものを変えずに、要るときまで落とさない**ため（画質は同じ）。
+                 ②爪のチェックまで画面を送ってから読み込まれる。
+
+                 **この絵は後日マスターが差し替える**（同日・マスター発言）。
+                 差し替えるのは**ファイルだけ**で、この行は触らない——
+                 `src/assets/nail-diagram.png` を置き換えれば済む形にしてある。
+                 差し替えたら `docs/ASSET-PROVENANCE.md` の出どころも書き換えること
+                 （いまの1枚は AI 生成・`UNVERIFIED`・`A-3`）。 -->
+            <div class="guide-diagram-box">
+              <img src="/assets/nail-diagram.png" alt="爪の解剖図" loading="lazy">
+              <span class="guide-diagram-box__caption">爪の基準図</span>
+            </div>
 
             <div class="segmented-stepper" id="nail-stepper-wrap">
               <button class="stepper-btn" onclick="App.selectStepper(this, 'nail', 1)">
