@@ -21,6 +21,7 @@
     "verify:draft": "node scripts/build-dist.mjs && node scripts/verify-draft.mjs",
     "verify:invitation": "node scripts/build-dist.mjs && node scripts/verify-invitation.mjs",
     "verify:admin": "node scripts/build-dist.mjs && node scripts/verify-admin.mjs",
+    "verify:photo": "node scripts/build-dist.mjs && node scripts/verify-photo-roundtrip.mjs",
     "verify:m6": "node scripts/build-dist.mjs && node scripts/verify-m6.mjs",
     "verify:prod": "node scripts/build-dist.mjs && node scripts/verify-production.mjs",
     "test:migration": "node --test test/kv-migration.test.mjs",
