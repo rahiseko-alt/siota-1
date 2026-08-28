@@ -242,6 +242,7 @@ noauth : 赤 4 / 緑のまま 1
 - verify-photo-roundtrip.mjs :: 7. 飼い主: ギャラリーに2枚並ぶ
 - verify-photo-roundtrip.mjs :: 8. 飼い主: 耳の写真が、耳の欄に
 - verify-photo-roundtrip.mjs :: 9. 飼い主: 歯の写真が、歯の欄に
+
 ## ⛔ 毒見の天井（2026-08-28 に判明）
 
 **毒を3種類まで作って、埋まったのは 182件中 21件。ここで止まる。**

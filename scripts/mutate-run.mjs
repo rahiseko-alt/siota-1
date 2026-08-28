@@ -72,6 +72,37 @@ export const MUTATIONS = [
     extra: 'export async function uploadReportAssets() { return { assets: [] }; }\n',
     scripts: ['verify-photo-roundtrip.mjs', 'verify-delete.mjs'],
   },
+  {
+    id: 'text-as-html',
+    why: '**細工したカルテが飼い主のブラウザで実行される**（`F-20260821-17` の stored XSS そのもの）',
+    file: 'backend/js/magazine-view.js',
+    find: 'function setText(root, view, text) {',
+    replace: 'function setText_MUTATED(root, view, text) {',
+    extra: 'function setText(root, view, text) {\n'
+      + '  const el = root.querySelector(\'[data-view="\' + view + \'"]\');\n'
+      + '  if (el) el.innerHTML = text;\n'
+      + '  return el;\n}\n',
+    scripts: ['verify-xss.mjs'],
+  },
+  {
+    id: 'settext-off',
+    why: '飼い主の画面に、書いた文字が1つも出ない（枠だけが並ぶ）',
+    file: 'backend/js/magazine-view.js',
+    find: 'function setText(root, view, text) {',
+    replace: 'function setText_MUTATED(root, view, text) {',
+    extra: 'function setText(root, view) {\n'
+      + '  return root.querySelector(\'[data-view="\' + view + \'"]\');\n}\n',
+    scripts: ['verify-report-roundtrip.mjs'],
+  },
+  {
+    id: 'weight-graph-off',
+    why: '体重の推移が飼い主に出ない（グラフが描かれない）',
+    file: 'backend/js/magazine-view.js',
+    find: 'function renderWeightGraph(root, weights, bestWeight) {',
+    replace: 'function renderWeightGraph_MUTATED(root, weights, bestWeight) {',
+    extra: 'function renderWeightGraph() {}\n',
+    scripts: ['verify-report-roundtrip.mjs'],
+  },
 ];
 
 /** ファイルの中身の指紋。戻せたことを**実際に確かめる**ために使う。 */
