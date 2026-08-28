@@ -514,6 +514,25 @@ export const MUTATIONS = [
     extra: null,
     scripts: ['verify-portal.mjs'],
   },
+
+  /* 8回目: verify-empty-pet の残りを狙う。 */
+  {
+    id: 'empty-pet-fake-history-entry',
+    why: '**カルテ0件の犬なのに、履歴の行が1つ出る**——無いはずの記録が見える',
+    file: 'backend/js/supabase-auth.js',
+    find: '  const reports = pet.reports || [];',
+    replace: "  const reports = pet.reports || [];\n"
+      + "  if (reports.length === 0) {\n"
+      + "    const ghost = document.createElement('div');\n"
+      + "    ghost.className = 'report-list';\n"
+      + "    const a = document.createElement('a');\n"
+      + "    a.href = '#'; a.textContent = 'ghost';\n"
+      + "    ghost.append(a);\n"
+      + "    container.append(ghost);\n"
+      + "  }",
+    extra: null,
+    scripts: ['verify-empty-pet.mjs'],
+  },
 ];
 
 /** ファイルの中身の指紋。戻せたことを**実際に確かめる**ために使う。 */
