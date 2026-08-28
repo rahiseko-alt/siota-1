@@ -302,7 +302,10 @@ export const MUTATIONS = [
     find: "    else img.removeAttribute('src');",
     replace: "    else img.src = '';",
     extra: null,
-    scripts: ['verify-edit.mjs'],
+    /* `setImage` は `renderMagazine` が確認画面・飼い主画面の両方で使う共通部品なので、
+       同じ再発が verify-photo-roundtrip の 10. と verify-report-roundtrip の 16. にも
+       当たる（5回目のラウンドで追加）。 */
+    scripts: ['verify-edit.mjs', 'verify-photo-roundtrip.mjs', 'verify-report-roundtrip.mjs'],
   },
   {
     id: 'edit-trimmer-letter-prefilled',
@@ -418,6 +421,47 @@ export const MUTATIONS = [
     replace: '    and candidate.revoked_at is null\n',
     extra: null,
     scripts: ['verify-invitation.mjs'],
+  },
+
+  /* 5回目: verify-report-roundtrip / verify-photo-roundtrip / verify-delete /
+     verify-draft / verify-xss を狙う。残りは 0/1/2 のような**土台の設営**そのものや
+     「アプリ由来のエラーが無い」のような一般項目で、個別に狙うと壊れる範囲が
+     広すぎるため見送る。 */
+  {
+    id: 'delete-throws',
+    why: '**製品の削除の道が、呼んでも通らない**——押しても消えたかどうか分からない',
+    file: 'backend/js/supabase-storage.js',
+    find: 'export async function deleteReportAssets({ client, api, petId',
+    replace: 'export async function deleteReportAssets_THROWS({ client, api, petId',
+    extra: "export async function deleteReportAssets() { throw new Error('deleteReportAssets is broken'); }\n",
+    scripts: ['verify-delete.mjs'],
+  },
+  {
+    id: 'draft-becomes-new-report',
+    why: '**「確定」が下書きを確定させず、2枚目を作る**——次に開くと古い記入が蘇る（`#15` の3）',
+    file: 'backend/js/supabase-staff.js',
+    find: '  const saved = draftId',
+    replace: '  const saved = false && draftId',
+    extra: null,
+    scripts: ['verify-draft.mjs'],
+  },
+  {
+    id: 'report-roundtrip-teeth-value-mismatch',
+    why: '**押したボタンの表示と、保存される値が違う**（`docs/deferred.md` #24 の再発——見た目と違う値が飼い主に届く）',
+    file: 'src/js/ui.js',
+    find: "    this.form.teeth = ((name && name.textContent) || '').trim();",
+    replace: "    this.form.teeth = ((name && name.textContent) || '').trim() + '（旧仕様）';",
+    extra: null,
+    scripts: ['verify-report-roundtrip.mjs'],
+  },
+  {
+    id: 'report-roundtrip-finalize-broken',
+    why: '**確定の保存が届かない**——押しても「押せた」だけで何も確定しない',
+    file: 'worker/src/index.js',
+    find: "          if (parts[5] === 'finalize') {",
+    replace: "          if (parts[5] === 'finalize_MUTATED') {",
+    extra: null,
+    scripts: ['verify-report-roundtrip.mjs'],
   },
 ];
 
