@@ -23,9 +23,9 @@
 
 | | |
 |---|---|
-| 機械が数えた検査 | **182件**（`scripts/verify-*.mjs`） |
-| 壊して赤になったところを見た | **30件**（毒見 21 ＋ 1件ずつ壊す 9・2026-08-28） |
-| まだ見ていない | **152件** |
+| 機械が数えた検査 | **183件**（`scripts/verify-*.mjs`） |
+| 壊して赤になったところを見た | **41件**（毒見 21 ＋ 1件ずつ壊す 20・2026-08-28） |
+| まだ見ていない | **142件** |
 
 **出発点は182件すべてが未確認だった。** 毒見で **21件**が赤になり、証明済みへ移った
 （`empty` 17 ＋ `noauth` 2 ＋ `nodist` 2）。
@@ -243,6 +243,36 @@ noauth : 赤 4 / 緑のまま 1
 - verify-photo-roundtrip.mjs :: 8. 飼い主: 耳の写真が、耳の欄に
 - verify-photo-roundtrip.mjs :: 9. 飼い主: 歯の写真が、歯の欄に
 
+### 1件ずつ壊して赤になった 11件（2026-08-28・CI run #113・2回目）
+
+壊し方を3つ足した回。`settext-off`（`setText` が何も書かない＝飼い主の画面に文字が1つも出ない）。
+
+```
+  ✅ text-as-html       verify-xss.mjs                 赤  18件
+  ✅ settext-off        verify-report-roundtrip.mjs    赤  11件
+  ⚠️  weight-graph-off   verify-report-roundtrip.mjs    赤   0件   ← 穴が出た
+  赤になった: **39件**
+```
+
+- verify-report-roundtrip.mjs :: 3. 確認: 担当からの一言
+- verify-report-roundtrip.mjs :: 4. 確認: 爪
+- verify-report-roundtrip.mjs :: 5. 確認: 耳
+- verify-report-roundtrip.mjs :: 6. 確認: 歯
+- verify-report-roundtrip.mjs :: 7. 確認: 体重
+- verify-report-roundtrip.mjs :: 9. 飼い主: 犬の名前
+- verify-report-roundtrip.mjs :: 10. 飼い主: 担当からの一言
+- verify-report-roundtrip.mjs :: 11. 飼い主: 爪
+- verify-report-roundtrip.mjs :: 12. 飼い主: 耳
+- verify-report-roundtrip.mjs :: 13. 飼い主: 歯
+- verify-report-roundtrip.mjs :: 14. 飼い主: 体重
+
+**`verify-xss` の18件は移せない。** `text-as-html`（`setText` が `innerHTML` を使う＝
+`F-20260821-17` の stored XSS そのもの）で **8つの細工すべて・3つの観点すべてが赤**になり、
+**XSS の検査が本物であることは実測できた**。しかし出力の名前は
+`ear.comment（耳のコメント）: 実行されない` のような実行時の値で、台帳の鍵
+（ソース上の `` `${label}: 実行されない` ``）と文字が一致しないため紐付けられない。
+**確かめられたのに数に入れられない**——これは台帳の鍵の付け方の問題である（上記）。
+
 ## ⛔ 毒見の天井（2026-08-28 に判明）
 
 **毒を3種類まで作って、埋まったのは 182件中 21件。ここで止まる。**
@@ -275,6 +305,7 @@ noauth : 赤 4 / 緑のまま 1
 
 ## 未証明（**壊して赤になるところを、まだ見ていない**）
 
+- verify-report-roundtrip.mjs :: 14b. 飼い主: 体重のグラフが描かれている（数字だけでなく）
 - verify-stack.mjs :: seed のアカウントで実ログインできる #2
 - verify-stack.mjs :: マイグレーションと seed が当たっている（seed の犬 X を id で引ける） #2
 - verify-xss.mjs :: label #2
@@ -383,18 +414,7 @@ noauth : 赤 4 / 緑のまま 1
 - verify-report-roundtrip.mjs :: 1. 記入先の要素がすべて実在する
 - verify-report-roundtrip.mjs :: 1b. 押したボタンの表示が、そのまま保存される値になっている
 - verify-report-roundtrip.mjs :: 2. 確定してカルテが1件できた
-- verify-report-roundtrip.mjs :: 3. 確認: 担当からの一言
-- verify-report-roundtrip.mjs :: 4. 確認: 爪
-- verify-report-roundtrip.mjs :: 5. 確認: 耳
-- verify-report-roundtrip.mjs :: 6. 確認: 歯
-- verify-report-roundtrip.mjs :: 7. 確認: 体重
 - verify-report-roundtrip.mjs :: 8. 確認: 犬体図の印が画像として出ている
-- verify-report-roundtrip.mjs :: 9. 飼い主: 犬の名前
-- verify-report-roundtrip.mjs :: 10. 飼い主: 担当からの一言
-- verify-report-roundtrip.mjs :: 11. 飼い主: 爪
-- verify-report-roundtrip.mjs :: 12. 飼い主: 耳
-- verify-report-roundtrip.mjs :: 13. 飼い主: 歯
-- verify-report-roundtrip.mjs :: 14. 飼い主: 体重
 - verify-report-roundtrip.mjs :: 15. 飼い主: 犬体図の印が画像として届く
 - verify-report-roundtrip.mjs :: 16. 飼い主: 壊れた画像（ページURL）が出ていない
 - verify-report-roundtrip.mjs :: 17. 他人には見えない（RLS）
