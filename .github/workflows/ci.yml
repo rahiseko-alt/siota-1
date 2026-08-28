@@ -192,6 +192,11 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 70
+    # 結果を枝へコミットして戻すので、書ける権限が要る。
+    # 既定は読み取りだけで、push が `403 Write access to repository not granted` で落ちた
+    # （run 122）。**結果が10分かけて出たのに、記録が残らなかった。**
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v5
         with:

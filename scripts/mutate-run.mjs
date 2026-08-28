@@ -131,7 +131,22 @@ export const MUTATIONS = [
     find: '  for select to authenticated using (active and private.is_owner_user(owner_id));',
     replace: '  for select to authenticated using (active);',
     extra: null,
-    scripts: ['verify-portal.mjs', 'verify-report-roundtrip.mjs'],
+    /* `verify-report-roundtrip.mjs` は**外してある**。犬の RLS を開いても
+       あの検査は緑のままだった（run 122）——あそこの 17番が見ているのは
+       カルテの RLS だけで、犬の一覧の RLS ではない。**気づかない検査を
+       「気づくはず」の欄に置いたままにすると、次に本当に気づかなくなったとき
+       区別がつかない。** カルテ側は下の `rls-reports-open-to-strangers` で見る。 */
+    scripts: ['verify-portal.mjs'],
+  },
+  {
+    id: 'rls-reports-open-to-strangers',
+    sql: true,
+    why: '**確定したカルテが、他人にも読める**——URL さえ知れば誰のカルテでも開ける',
+    file: 'supabase/migrations/202607160001_supabase_base.sql',
+    find: "  for select to authenticated using (status = 'final' and private.can_read_pet(pet_id));",
+    replace: "  for select to authenticated using (status = 'final');",
+    extra: null,
+    scripts: ['verify-report-roundtrip.mjs'],
   },
   {
     id: 'rls-drafts-leak',

@@ -228,7 +228,13 @@ try {
   const strangerSees = await strangerPage.evaluate(
     (note) => document.body.textContent.includes(note), INPUT.staffNote,
   );
-  check('17. 他人には見えない（RLS）', strangerSees ? '見えた' : 'ok', 'ok');
+  /* **名前を実態に合わせてある。** ここが見ているのは `reports_customer_select`
+     （このカルテが他人に読めるか）だけで、`pets_customer_select`（他人の犬が一覧に
+     出るか）は見ていない。実際、犬の方の RLS を `using (active)` まで開いても
+     この項は緑のままだった（run 122）。**「他人には見えない」という広い名前のまま
+     置くと、犬が丸見えでもここが緑なので「RLS は見ている」と読めてしまう。**
+     犬の方は `verify-portal.mjs` の 11/13 が見ている（同じ run で赤になった）。 */
+  check('17. 他人にはこのカルテが見えない（RLS）', strangerSees ? '見えた' : 'ok', 'ok');
   await ownerContext.close();
   await strangerContext.close();
 

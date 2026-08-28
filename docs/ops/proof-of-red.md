@@ -24,8 +24,8 @@
 | | |
 |---|---|
 | 機械が数えた検査 | **183件**（`scripts/verify-*.mjs`） |
-| 壊して赤になったところを見た | **46件**（毒見 21 ＋ 1件ずつ壊す 25・2026-08-28） |
-| まだ見ていない | **137件** |
+| 壊して赤になったところを見た | **53件**（毒見 21 ＋ 1件ずつ壊す 32・2026-08-28） |
+| まだ見ていない | **130件** |
 
 **出発点は全件が未確認だった。** 毒見で埋め、天井に当たったあと（下の「⛔ 毒見の天井」）、
 **1件ずつ壊す**（マスター判断 A）で続けている。**数は上の表だけが正**——
@@ -318,6 +318,60 @@ run #116（14b を足した後） ✅  weight-graph-off  verify-report-roundtrip
 いまの `mutate-run.mjs` には無い仕組み。**残り141件のうち、RLS が守っている分は
 この方法を作らないかぎり永久に埋まらない**。
 
+→ **この仕組みを作った**（下の run #122）。上の「永久に埋まらない」は解消している。
+
+### DB（RLS）を壊して赤になった 4件（2026-08-28・CI run #122・5回目）
+
+`mutate-run.mjs` に `sql: true` の壊し方を足した。マイグレーションの SQL を書き換えたあと
+**`npx supabase db reset` を掛ける**——ファイルを書き換えただけでは動いている DB は
+古いポリシーのままで、**壊したつもりで何も壊れておらず「検査が気づかなかった」という
+逆の結論が出る**。
+
+```
+  ✅ rls-any-owner-sees-any-dog verify-portal.mjs              赤   2件
+  ⚠️  rls-any-owner-sees-any-dog verify-report-roundtrip.mjs    赤   0件   ← 穴が出た
+  ✅ rls-drafts-leak    verify-draft.mjs               赤   1件
+  ✅ rls-drafts-leak    verify-empty-pet.mjs           赤   1件
+  赤になった: **48件**
+```
+
+`rls-any-owner-sees-any-dog` は `pets_customer_select` を
+`using (active and private.is_owner_user(owner_id))` → `using (active)` に開く。
+**ログインさえすれば全店の全頭が一覧に出る**状態である。
+`rls-drafts-leak` は `reports_customer_select` から `status = 'final'` を落とす。
+**確定前の下書きが飼い主にそのまま届く**状態である。
+
+- verify-portal.mjs :: 11. ログイン後、自分の犬（X/Y/Z）が一覧に出て、他人の犬（Q）は出ない
+- verify-portal.mjs :: 13. 他人の犬（Q）は見えない（RLS）
+- verify-draft.mjs :: 3. 下書きは飼い主に見えない
+- verify-empty-pet.mjs :: 6. 確定していないカルテは飼い主に見えない
+
+**出た穴**: `verify-report-roundtrip :: 17. 他人には見えない（RLS）` は、
+犬の RLS を全開にしても**緑のままだった**。あそこが見ているのは
+`reports_customer_select`（このカルテが他人に読めるか）だけで、
+`pets_customer_select`（他人の犬が一覧に出るか）ではない。名前だけが広かった。
+→ 名前を `17. 他人にはこのカルテが見えない（RLS）` に直し、
+`rls-any-owner-sees-any-dog` の期待先から外した（`F-20260828-52`）。
+カルテ側は新しい壊し方 `rls-reports-open-to-strangers` で見る。
+
+### `verify-xss` の18件を、3件として台帳に移した（同・run #122）
+
+`text-as-html`（`setText` が `innerHTML` を使う＝`F-20260821-17` の stored XSS そのもの）で
+**実行時の名前18件がすべて赤**になった。この18件は
+`ear.comment` `nail.comment` `staffNote` `teeth.comment` `teeth.status` `犬の名前` の
+**6つの細工 × 3つの観点**であり、`<細工の名前>: …` という形の名前を出す
+`check()` は `verify-xss.mjs` に**この3か所しか無い**（`scripts/verify-xss.mjs:131,133,134`）。
+18件すべてが赤なら、**3か所とも赤になったことが確定する**。
+実行時の文字列と台帳の鍵が一致しないのは変わらないが、**証明としては成立している**ので移す。
+
+（`check(label, false, …)` の3か所＝`label` `label #2` `label #3` は、
+犬を作れない・カルテを作れない・確定できないときの早期脱出で、**この壊しでは通っていない**。
+未証明のまま残る。）
+
+- verify-xss.mjs :: `${label}: 細工が文字として飼い主の画面に出ている`
+- verify-xss.mjs :: `${label}: 実行されない`
+- verify-xss.mjs :: `${label}: 要素として注入されていない`
+
 ## ⛔ 毒見の天井（2026-08-28 に判明）
 
 **毒を3種類まで作って、埋まったのは 182件中 21件。ここで止まる。**
@@ -378,7 +432,6 @@ run #116（14b を足した後） ✅  weight-graph-off  verify-report-roundtrip
 - verify-delete.mjs :: 1. 写真つきのカルテを確定できた
 - verify-delete.mjs :: 2. 写真の実体が Storage に在る（service_role で数える）
 - verify-delete.mjs :: 3. 製品の削除の道が最後まで通った
-- verify-draft.mjs :: 3. 下書きは飼い主に見えない
 - verify-draft.mjs :: 4. 下書きの中身が漏れていない
 - verify-draft.mjs :: 5. 確定すると下書きは残らない
 - verify-draft.mjs :: 6. 次に開くと、確定済みの記入は蘇らない
@@ -407,7 +460,6 @@ run #116（14b を足した後） ✅  weight-graph-off  verify-report-roundtrip
 - verify-empty-pet.mjs :: 3. 写真が1枚も出ていない
 - verify-empty-pet.mjs :: 4. 履歴の行が1つも出ていない
 - verify-empty-pet.mjs :: 5. 見本の文章が出ていない
-- verify-empty-pet.mjs :: 6. 確定していないカルテは飼い主に見えない
 - verify-empty-pet.mjs :: 7. 下書きの中身が漏れていない
 - verify-empty-pet.mjs :: 8. トリマーは1件目を作る画面に入れる
 - verify-empty-pet.mjs :: 9. 確定のボタンが在る（行き止まりでない）
@@ -442,9 +494,7 @@ run #116（14b を足した後） ✅  weight-graph-off  verify-report-roundtrip
 - verify-portal.mjs :: 8. 見本画像を出していない
 - verify-portal.mjs :: 9. 犬を直接指す URL でもログイン導線が出る
 - verify-portal.mjs :: 10. アプリ由来のコンソールエラーが無い（ログイン前）
-- verify-portal.mjs :: 11. ログイン後、自分の犬（X/Y/Z）が一覧に出て、他人の犬（Q）は出ない
 - verify-portal.mjs :: 12. ログイン後はログアウトボタンが出る
-- verify-portal.mjs :: 13. 他人の犬（Q）は見えない（RLS）
 - verify-portal.mjs :: 14. サインアウトでログイン画面に戻る
 - verify-portal.mjs :: 15. 失効・リンク解除のあとでも、ログインボタンが出て押せる（詰まない）
 - verify-production.mjs :: `配信物が手元の dist と同じ（${sameCount}/${staticFiles.length} 本）`
@@ -457,7 +507,7 @@ run #116（14b を足した後） ✅  weight-graph-off  verify-report-roundtrip
 - verify-report-roundtrip.mjs :: 8. 確認: 犬体図の印が画像として出ている
 - verify-report-roundtrip.mjs :: 15. 飼い主: 犬体図の印が画像として届く
 - verify-report-roundtrip.mjs :: 16. 飼い主: 壊れた画像（ページURL）が出ていない
-- verify-report-roundtrip.mjs :: 17. 他人には見えない（RLS）
+- verify-report-roundtrip.mjs :: 17. 他人にはこのカルテが見えない（RLS）
 - verify-report-roundtrip.mjs :: 19. 体重の欄が空で始まる（見本値が入っていない）
 - verify-report-roundtrip.mjs :: 20. 飼い主の画面に、量っていない体重が出ない
 - verify-report-roundtrip.mjs :: 18. アプリ由来のエラーが無い
@@ -485,8 +535,3 @@ run #116（14b を足した後） ✅  weight-graph-off  verify-report-roundtrip
 - verify-stack.mjs :: Supabase が起きている
 - verify-stack.mjs :: seed のアカウントで実ログインできる
 - verify-xss.mjs :: label
-- verify-xss.mjs :: label
-- verify-xss.mjs :: label
-- verify-xss.mjs :: `${label}: 細工が文字として飼い主の画面に出ている`
-- verify-xss.mjs :: `${label}: 実行されない`
-- verify-xss.mjs :: `${label}: 要素として注入されていない`

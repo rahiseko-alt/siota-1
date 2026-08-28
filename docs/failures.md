@@ -652,3 +652,22 @@
 - **How it was found**: **壊して初めて出た。** 人が読んでも「体重の検査は在る」としか見えない——実際、`verify-report-roundtrip` には体重の項が `7.` と `14.` の2つ在る。`docs/ops/proof-of-red.md` の定義（壊して赤にならない検査は壊れているとみなす）が無ければ、この穴は**永久に見つからなかった**
 - **Fix**: `14b. 飼い主: 体重のグラフが描かれている（数字だけでなく）` を足した。`[data-view="weight-graph"]` の**子要素を数える**（枠が在るだけでは通さない・`childElementCount > 0`）。**この検査自身も、`weight-graph-off` で赤になることを確かめてから証明済みへ移す**——新しい検査は証拠と一緒でないと足せない（`proof-of-red` が止める）
 - **How to prevent**: **1つの値に複数の描き方があるときは、描き方ごとに項を立てる。** 「体重が届く」は数字とグラフの2つで、片方の緑はもう片方を保証しない。加えて、**この型は読んでも見つからない**——`mutate-run.mjs` の壊し方を増やすことでしか出ない。客に当たる経路から順に壊し方を足していく（`docs/handoff.md`）
+
+### [F-20260828-52] 「他人には見えない（RLS）」という名前の検査が、他人の犬が丸見えでも緑だった
+
+- **Date**: 2026-08-28
+- **Status**: 対応中（新しい壊し方で証明するのは次の回）
+- **Category**: test
+- **Trigger/Context**: `mutate-run.mjs` に `sql: true`（マイグレーションを壊して `supabase db reset`）を足し、`pets_customer_select` を `using (active and private.is_owner_user(owner_id))` → `using (active)` に開いて CI で走らせた（run #122）。**ログインさえすれば全店の全頭が一覧に出る**状態である
+- **What happened**: `verify-portal` は2件が赤になった（`11.` と `13.`）。しかし **`verify-report-roundtrip` は1件も赤にならなかった**
+
+  ```
+  ✅ rls-any-owner-sees-any-dog verify-portal.mjs              赤   2件
+  ⚠️  rls-any-owner-sees-any-dog verify-report-roundtrip.mjs    赤   0件
+  ```
+
+  あそこには `17. 他人には見えない（RLS）` という項が在る。**名前だけ読めば、これが赤になるはずの検査である**
+- **Root Cause**: **項の名前が、実際に測っている範囲より広かった。** `17.` がやっているのは「他人（owner B）で**このカルテの URL** を開いて、担当の一言が見えないこと」だけで、見ているのは `reports_customer_select` である。犬の一覧の RLS（`pets_customer_select`）には触れていない。犬を全開にしてもカルテは `private.can_read_pet(pet_id)` が守るので、**この項は正しく緑のまま**だった——**壊れていたのは検査ではなく名前**である。`docs/watch.md` W-1 の「名前が中身より広い」型
+- **How it was found**: **期待先の欄に書いておいたから出た。** `mutate-run.mjs` は「この壊しに気づくはず」の検査を壊し方ごとに並べ、**そのうち1本でも赤が0件なら EXIT 1 で止まる**。読んでいたら「RLS の検査は在る」で終わっていた
+- **Fix**: ①名前を `17. 他人にはこのカルテが見えない（RLS）` に直した（範囲を名前に出した）。②`rls-any-owner-sees-any-dog` の期待先から `verify-report-roundtrip.mjs` を外した——**気づかない検査を「気づくはず」の欄に置いたままにすると、次に本当に気づかなくなったとき区別がつかない**。犬の一覧側は `verify-portal` の `11./13.` が見ている（同じ回で赤）。③カルテ側を証明するため、新しい壊し方 `rls-reports-open-to-strangers`（`reports_customer_select` から `private.can_read_pet(pet_id)` を落とす＝**URL を知れば誰のカルテでも読める**）を足した
+- **How to prevent**: **項の名前は、測っている範囲ちょうどに付ける。** 「他人には見えない」のような広い名前は、隣の穴を隠す蓋になる。加えて、**壊し方ごとに「気づくはずの検査」を書き出して、赤が0件なら止める造りを維持する**——名前と中身のずれは、この形でしか出てこない
