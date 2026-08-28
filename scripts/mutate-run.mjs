@@ -45,6 +45,27 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
  * 証明の役に立たない（何を検出したのか言えないため）。
  */
 export const MUTATIONS = [
+  /* ── 11回目: 未ログインの /my（2026-08-28・手元で実測） ── */
+  {
+    id: 'portal-content-shown-logged-out',
+    why: '**ログインしていない人に、中身の器が開いたまま出る**（守りの前提が崩れている）',
+    file: 'backend/js/supabase-auth.js',
+    find: '    show(loginPanel, true);\n    show(content, false);',
+    replace: '    show(loginPanel, true);\n    show(content, true);',
+    scripts: ['verify-portal.mjs'],
+  },
+  {
+    /* `D-10`／`D-4` の型。見本の写真が飼い主の入口に出ると、客はそれを
+       自分の犬の写真だと読む。出どころ不明の素材でもある。 */
+    id: 'portal-sample-image',
+    why: '飼い主の入口に、誰のものでもない見本の写真が出る（D-10・D-4）',
+    file: 'src/my.html',
+    find: '<section class="portal-content" data-portal-content hidden></section>',
+    replace: '<section class="portal-content" data-portal-content hidden>'
+      + '<img alt="" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">'
+      + '</section>',
+    scripts: ['verify-portal.mjs'],
+  },
   /* ── 10回目: 犬体図の印と、体重の見本値（2026-08-28・手元で実測） ── */
   {
     id: 'skin-image-blank',

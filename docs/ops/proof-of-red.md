@@ -771,6 +771,21 @@ node scripts/mutate-run.mjs skin-image-blank weight-prefilled-sample
 - verify-report-roundtrip.mjs :: 15. 飼い主: 犬体図の印が画像として届く
 - verify-report-roundtrip.mjs :: 19. 体重の欄が空で始まる（見本値が入っていない）
 
+### 12回目: 未ログインの `/my` 2件（2026-08-28・**手元で実測**）
+
+```
+node scripts/mutate-run.mjs portal-content-shown-logged-out portal-sample-image
+
+  ✅ portal-content-shown-logged-out  verify-portal.mjs   赤   1件
+  ✅ portal-sample-image              verify-portal.mjs   赤   1件
+
+    7. 未ログインで中身とログアウトは隠れている  ← portal-content-shown-logged-out
+    8. 見本画像を出していない                    ← portal-sample-image
+```
+
+- verify-portal.mjs :: 7. 未ログインで中身とログアウトは隠れている
+- verify-portal.mjs :: 8. 見本画像を出していない
+
 ## F4 を閉じる範囲（マスター判断・2026-08-28）
 
 台帳を129件すべて埋めるのではなく、**客に当たる経路まで**で F4 を閉じる。
@@ -864,8 +879,6 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 - verify-photo-roundtrip.mjs :: 5. 保存された写真4枚が実体になっている（asset://）
 - verify-portal.mjs :: 1. /my が配信される
 - verify-portal.mjs :: 3. Supabase vendor が読めている
-- verify-portal.mjs :: 7. 未ログインで中身とログアウトは隠れている
-- verify-portal.mjs :: 8. 見本画像を出していない
 - verify-production.mjs :: `配信物が手元の dist と同じ（${sameCount}/${staticFiles.length} 本）`
 - verify-production.mjs :: /my が dist/my.html と同じ
 - verify-production.mjs :: `削除済みの旧UI が本番に残っていない（${deletedUiPaths.length} 本を確認）`
