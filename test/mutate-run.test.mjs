@@ -86,10 +86,16 @@ test('壊したあとのファイルが、構文として正しい', async () =>
           + `「検査が気づかなかった」と読み違える\n${r.stderr}`);
       } else if (/\.sql$/.test(m.file)) {
         /* SQL は `node --check` に掛けられない。**壊れ方が乱暴すぎないか**だけ見る——
-           ポリシーの定義そのものが消えていたら、それは「弱めた」ではなく「壊した」で、
-           db reset が落ちて判定にならない。 */
+           定義そのものが消えていたら、それは「弱めた」ではなく「壊した」で、
+           db reset が落ちて判定にならない。**RLS のポリシーとは限らない**（`claim_invitation`
+           のような関数の壊し方も足したので）。壊す前にその文字列が在ったときだけ求める——
+           無条件に `create policy` を要求すると、関数だけのファイルは必ず落ちる形だった。 */
         const after = fs.readFileSync(target, 'utf8');
-        assert.ok(after.includes('create policy'), `${m.id}: ポリシーの定義ごと消えている`);
+        for (const anchor of ['create policy', 'create or replace function']) {
+          if (before.includes(anchor)) {
+            assert.ok(after.includes(anchor), `${m.id}: ${anchor} の定義ごと消えている`);
+          }
+        }
         assert.notEqual(after, before, `${m.id}: 何も変わっていない`);
       } else {
         /* HTML など、構文検査のしようが無いファイル。**中身が実際に変わったか**だけ見る——

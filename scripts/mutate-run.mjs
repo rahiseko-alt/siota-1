@@ -135,8 +135,10 @@ export const MUTATIONS = [
        あの検査は緑のままだった（run 122）——あそこの 17番が見ているのは
        カルテの RLS だけで、犬の一覧の RLS ではない。**気づかない検査を
        「気づくはず」の欄に置いたままにすると、次に本当に気づかなくなったとき
-       区別がつかない。** カルテ側は下の `rls-reports-open-to-strangers` で見る。 */
-    scripts: ['verify-portal.mjs'],
+       区別がつかない。** カルテ側は下の `rls-reports-open-to-strangers` で見る。
+       `verify-invitation.mjs` は足した——招待未消化の飼い主が他人の犬を見られない
+       ことも同じ `is_owner_user(owner_id)` が守っているため（4回目のラウンド）。 */
+    scripts: ['verify-portal.mjs', 'verify-invitation.mjs'],
   },
   {
     id: 'rls-both-layers-open',
@@ -354,6 +356,68 @@ export const MUTATIONS = [
       + '    /* **描いてから移る。**',
     extra: null,
     scripts: ['verify-m6.mjs'],
+  },
+
+  /* 4回目: verify-empty-pet.mjs + verify-invitation.mjs（合わせて16件のうち
+     8件を狙う。5. は上の rls-any-owner-sees-any-dog の scripts に足した）。 */
+  {
+    id: 'empty-pet-shows-sample',
+    why: '**カルテ0件の犬に、見本の写真と文例を出す**——正直な空の知らせの代わりに嘘の中身が届く（`D-10`）',
+    file: 'backend/js/supabase-auth.js',
+    find: "  if (reports.length === 0) {\n"
+      + "    const empty = document.createElement('p');\n"
+      + "    empty.textContent = 'まだカルテがありません。';\n"
+      + '    container.append(empty);\n'
+      + '    return;\n'
+      + '  }',
+    replace: "  if (reports.length === 0) {\n"
+      + "    const sample = document.createElement('img');\n"
+      + "    sample.src = 'https://example.com/sample.png';\n"
+      + '    container.append(sample);\n'
+      + "    const note = document.createElement('p');\n"
+      + "    note.textContent = '今月もとってもお利口にしていました。';\n"
+      + '    container.append(note);\n'
+      + '    return;\n'
+      + '  }',
+    extra: null,
+    scripts: ['verify-empty-pet.mjs'],
+  },
+  {
+    id: 'invite-button-off',
+    why: '**一覧から招待を発行する入口が消える**（`D-20260824-29` の再発）',
+    file: 'src/js/ui.js',
+    find: '        invite.hidden = false;',
+    replace: '        invite.hidden = true;',
+    extra: null,
+    scripts: ['verify-invitation.mjs'],
+  },
+  {
+    id: 'invite-url-broken',
+    why: '**発行した QR / URL が初回登録として機能しない**——渡した紙から登録できない',
+    file: 'backend/js/supabase-staff.js',
+    find: 'return `${new URL(origin).origin}/my?invite=${encodeURIComponent(token.toLowerCase())}`;',
+    replace: 'return `${new URL(origin).origin}/my?token=${encodeURIComponent(token.toLowerCase())}`;',
+    extra: null,
+    scripts: ['verify-invitation.mjs'],
+  },
+  {
+    id: 'invite-qr-not-image',
+    why: '**QR が画像として出ない**——紙に印刷して渡せない',
+    file: 'backend/js/supabase-staff.js',
+    find: 'qr.src = artifact.qrDataUrl;',
+    replace: "qr.src = '/assets/app-icon.png';",
+    extra: null,
+    scripts: ['verify-invitation.mjs'],
+  },
+  {
+    id: 'invite-reusable',
+    sql: true,
+    why: '**使い終わった招待を、別の人がもう一度使える**——1枚のQRで他人が他人のカルテに入る',
+    file: 'supabase/migrations/202607160003_invitation_management.sql',
+    find: '    and candidate.claimed_at is null\n    and candidate.revoked_at is null\n',
+    replace: '    and candidate.revoked_at is null\n',
+    extra: null,
+    scripts: ['verify-invitation.mjs'],
   },
 ];
 
