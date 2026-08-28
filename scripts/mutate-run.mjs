@@ -463,6 +463,32 @@ export const MUTATIONS = [
     extra: null,
     scripts: ['verify-report-roundtrip.mjs'],
   },
+
+  /* 6回目: 「アプリ由来のエラーが無い」系。どのファイルも `page.on('pageerror', …)` で
+     捕まえる同じ仕組みを見ているので、**未捕捉の例外を1つ投げるだけ**で複数の
+     検査に同時に当たる。他の動作は止めない（`setTimeout` は独立したマクロタスク）。 */
+  {
+    id: 'app-throws-runtime-error',
+    why: '**トリマー画面のどこかで、捕まえていない例外が飛ぶ**——実害は無くても放置サインを見逃す',
+    file: 'src/js/ui.js',
+    find: '  init() {\n',
+    replace: '  init() {\n',
+    extra: null,
+    injectAfter: '  init() {\n',
+    inject: "    setTimeout(() => { throw new Error('mutation: app-throws-runtime-error'); }, 50);\n",
+    scripts: ['verify-admin.mjs', 'verify-edit.mjs', 'verify-photo-roundtrip.mjs', 'verify-report-roundtrip.mjs'],
+  },
+  {
+    id: 'portal-throws-runtime-error',
+    why: '**飼い主のログイン前の画面で、捕まえていない例外が飛ぶ**',
+    file: 'backend/js/supabase-auth.js',
+    find: 'export async function bootProtectedPortal() {\n',
+    replace: 'export async function bootProtectedPortal() {\n',
+    extra: null,
+    injectAfter: 'export async function bootProtectedPortal() {\n',
+    inject: "  setTimeout(() => { throw new Error('mutation: portal-throws-runtime-error'); }, 50);\n",
+    scripts: ['verify-portal.mjs'],
+  },
 ];
 
 /** ファイルの中身の指紋。戻せたことを**実際に確かめる**ために使う。 */
