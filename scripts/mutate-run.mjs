@@ -45,6 +45,18 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
  * 証明の役に立たない（何を検出したのか言えないため）。
  */
 export const MUTATIONS = [
+  /* ── 15回目: 犬の登録が「できた」と返さない（2026-08-28・手元で実測）
+     201（作った）ではなく 200 を返す。**犬そのものは作られる**ので土台は壊れず、
+     「作れたかどうか」を状態コードで見ている検査だけが赤になる。呼ぶ側は
+     成功を判定できないので、画面は「登録できませんでした」に落ちる。 */
+  {
+    id: 'pet-create-wrong-status',
+    why: '**犬を登録しても「登録できた」と返らない**（画面は失敗と出て、同じ子が二重に作られる）',
+    file: 'worker/src/index.js',
+    find: 'return json({ pet: await store.createPet(ownerId, parsed.data) }, 201, cors);',
+    replace: 'return json({ pet: await store.createPet(ownerId, parsed.data) }, 200, cors);',
+    scripts: ['verify-delete.mjs', 'verify-invitation.mjs'],
+  },
   /* ── 14回目: カルテ0件の犬（2026-08-28・手元で実測） ── */
   {
     /* **空にしない。** はじめ `''` にしたら、見出しが不可視になって

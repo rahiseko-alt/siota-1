@@ -874,6 +874,33 @@ node scripts/mutate-run.mjs admin-pet-delete-not-persisted
 - verify-empty-pet.mjs :: 8. トリマーは1件目を作る画面に入れる
 - verify-empty-pet.mjs :: 9. 確定のボタンが在る（行き止まりでない）
 
+### 16回目: 犬の登録が「できた」と返さない 2件（2026-08-28・**手元で実測**）
+
+**「土台の設営そのもの（`0.`/`1.` の用意できた系）は狙えない」は、思い込みだった。**
+`0-I` 以来ずっと「個別に狙うと壊れる範囲が広すぎる」として後回しにしてきたが、
+**状態コードだけを変えれば、実体は作られたまま「作れたと返さない」状態を作れる**。
+
+```
+node scripts/mutate-run.mjs pet-create-wrong-status
+
+  ✅ pet-create-wrong-status  verify-delete.mjs      赤 2件
+  ✅ pet-create-wrong-status  verify-invitation.mjs  赤 1件
+
+    0. 検査用の犬を登録できた      ← verify-delete.mjs
+    1. その飼い主の犬を登録できた  ← verify-invitation.mjs
+```
+
+壊し方は `worker/src/index.js` の `201` を `200` にするだけ。**犬そのものは
+作られる**ので土台は壊れず、「作れたかどうかを状態コードで見ている」検査だけが
+赤になる。実際の欠陥としても本物で、呼ぶ側は成功を判定できず、画面は
+「登録できませんでした」に落ちて**同じ子が二重に作られる**。
+
+> **「用意できた」系を狙うときは、実体ではなく“できたという知らせ”を壊す。**
+> 実体を壊すと検査が最初の一歩で死んで何も証明できない（`⛔ 毒見の天井`）。
+
+- verify-delete.mjs :: 0. 検査用の犬を登録できた
+- verify-invitation.mjs :: 1. その飼い主の犬を登録できた
+
 ## F4 を閉じる範囲（マスター判断・2026-08-28）
 
 台帳を129件すべて埋めるのではなく、**客に当たる経路まで**で F4 を閉じる。
@@ -941,13 +968,11 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 - verify-xss.mjs :: label #2
 - verify-xss.mjs :: label #3
 - verify-admin.mjs :: 7. 直す対象のカルテを1枚確定できた
-- verify-delete.mjs :: 0. 検査用の犬を登録できた
 - verify-delete.mjs :: 1. 写真つきのカルテを確定できた
 - verify-delete.mjs :: 2. 写真の実体が Storage に在る（service_role で数える）
 - verify-draft.mjs :: 4. 下書きの中身が漏れていない
 - verify-empty-pet.mjs :: 0b. 下書きのカルテを用意できた
 - verify-empty-pet.mjs :: 7. 下書きの中身が漏れていない
-- verify-invitation.mjs :: 1. その飼い主の犬を登録できた
 - verify-invitation.mjs :: 5. 招待を消化する前は、その犬を見られない
 - verify-m6.mjs :: ②b. ログインすると作業画面に入れる
 - verify-m6.mjs :: ③. 名前で犬を選べる
