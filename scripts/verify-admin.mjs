@@ -289,6 +289,28 @@ try {
   check('15. カルテ1枚が実際に消えた', finalsLeft === 0,
     finalsLeft === 0 ? '' : `${finalsLeft}枚残っている　画面の表示="${await resultText(page)}"`);
 
+  /* **`18.`（ペット丸ごと削除で写真の実体が消えるか）が測る対象を、ここでもう一度作る。**
+     直前の「カルテ1枚単位削除」（15.）が、この犬の唯一の写真を**すでに Storage から
+     消している**——`purgePetAssets` がこのあと何を壊されようと、対象が0件のままで
+     常に合格してしまう構造欠陥だった（`F-20260828-56` の続き・`pet-purge-broken` が
+     CI で2回連続で気づかれなかった原因）。ここで別のカルテを1枚確定させ、
+     写真を残したまま「⑤ 削除: ペット全データ」へ進む。 */
+  await page.goto(`${BASE}/edit/p/${createdPet.id}`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('#screen-3.is-active', { timeout: 20_000 });
+  await page.waitForTimeout(2000);
+  await page.locator('[data-field="photo-ear"]').setInputFiles(
+    { name: 'ear2.png', mimeType: 'image/png', buffer: solidPng([90, 30, 150]) },
+  );
+  await page.waitForFunction(
+    () => document.querySelectorAll('[data-photo-thumbs="ear"] .photo-pick__thumb').length === 1,
+    { timeout: 20_000 },
+  ).catch(() => {});
+  await page.fill('[data-field="staff-note"]', '2枚目の一言。');
+  await Promise.all([
+    page.waitForURL(/\/edit\/p\/[0-9a-f-]+\/[0-9a-f-]+/, { timeout: 30_000 }),
+    page.click('.dock-action-wrap .boxbutton'),
+  ]);
+
   /* ── ⑤ 削除: ペット全データ ── */
   await page.goto(`${BASE}/admin`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('.admin-menu__item', { timeout: 20_000 });
