@@ -103,6 +103,26 @@ export const MUTATIONS = [
     extra: 'function renderWeightGraph() {}\n',
     scripts: ['verify-report-roundtrip.mjs'],
   },
+  {
+    id: 'resume-draft-off',
+    why: '書きかけのカルテが戻ってこない（離れて戻ると、書いた分が消えている）',
+    file: 'src/js/ui.js',
+    find: '  resumeDraft(petId) {\n',
+    replace: '  resumeDraft_MUTATED(petId) {\n',
+    extra: null,
+    injectAfter: '  resumeDraft_MUTATED(petId) {\n',
+    inject: '    if (petId) return;\n',
+    scripts: ['verify-draft.mjs'],
+  },
+  {
+    id: 'empty-back-off',
+    why: '**空の一覧に置き去りにされる**——間違えて戻っても犬が1頭も並ばず、先へ進めない（`F-20260825-39`）',
+    file: 'src/js/ui.js',
+    find: "    if (stepNum === 2 && this.dogs === null && globalThis.TrimmerSupabaseStaff) {\n      location.href = '/edit';\n      return;",
+    replace: "    if (false && stepNum === 2 && this.dogs === null && globalThis.TrimmerSupabaseStaff) {\n      location.href = '/edit';\n      return;",
+    extra: null,
+    scripts: ['verify-m6.mjs'],
+  },
 ];
 
 /** ファイルの中身の指紋。戻せたことを**実際に確かめる**ために使う。 */
@@ -121,7 +141,13 @@ export function applyMutation(root, m) {
       + `「赤にならなかった＝検査が壊れている」と逆の結論を出す。`,
     );
   }
-  const after = before.replace(m.find, m.replace) + `\n${m.extra}`;
+  /* **置換だけで壊れる壊し方もある。** `extra` は「元の名前で空の実装を足す」形の
+     ためのもので、条件を `false &&` にするような壊しには要らない。
+     無いのに `undefined` を足すと、**壊した跡が文字列として残って build が通らなくなり**、
+     「検査が気づかなかった」ではなく「壊し方が下手だった」で赤になる。 */
+  let after = before.replace(m.find, m.replace);
+  if (m.inject) after = after.replace(m.injectAfter, m.injectAfter + m.inject);
+  if (m.extra) after += `\n${m.extra}`;
   fs.writeFileSync(target, after);
   return () => {
     fs.writeFileSync(target, before);

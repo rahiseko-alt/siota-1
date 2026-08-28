@@ -65,3 +65,23 @@ test('壊し方には、客に何が起きるかが書いてある', () => {
     assert.ok(m.scripts.length > 0, `${m.id}: どの検査に掛けるか書いていない`);
   }
 });
+
+test('壊したあとのファイルが、構文として正しい', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const root = path.resolve(import.meta.dirname, '..');
+  for (const m of MUTATIONS) {
+    const target = path.join(root, m.file);
+    const before = fs.readFileSync(target, 'utf8');
+    let restore = null;
+    try {
+      restore = applyMutation(root, m);
+      const r = spawnSync(process.execPath, ['--check', target], { encoding: 'utf8' });
+      assert.equal(r.status, 0,
+        `${m.id}: 壊したあとが構文エラー。**壊し方が下手なだけ**で CI が赤になり、`
+        + `「検査が気づかなかった」と読み違える\n${r.stderr}`);
+    } finally {
+      if (restore) restore();
+      assert.equal(fs.readFileSync(target, 'utf8'), before, `${m.id}: 戻せていない`);
+    }
+  }
+});
