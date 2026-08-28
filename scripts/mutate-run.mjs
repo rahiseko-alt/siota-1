@@ -45,6 +45,17 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
  * 証明の役に立たない（何を検出したのか言えないため）。
  */
 export const MUTATIONS = [
+  /* ── 19回目: カルテ作成が「できた」と返さない（2026-08-28・手元で実測）
+     `pet-create-wrong-status` と同じ型。**実体は作られる**ので土台は壊れず、
+     「作れたかどうかを状態コードで見ている」検査だけが赤になる。 */
+  {
+    id: 'report-create-wrong-status',
+    why: '**カルテを作っても「作れた」と返らない**（画面は失敗と出て、同じカルテが二重に作られる）',
+    file: 'worker/src/index.js',
+    find: 'return json({ report: await store.createReport(petId, parsed.data) }, 201, cors);',
+    replace: 'return json({ report: await store.createReport(petId, parsed.data) }, 200, cors);',
+    scripts: ['verify-empty-pet.mjs', 'verify-xss.mjs'],
+  },
   /* ── 18回目: 記入欄がひとつ消える（2026-08-28・手元で実測）
      `1. 記入先の要素がすべて実在する` は、記入に使う要素が**画面に在るか**を
      まとめて見ている。1つでも消えれば、トリマーはその項目を記録できない——

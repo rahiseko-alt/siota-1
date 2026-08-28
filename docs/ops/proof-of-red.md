@@ -1041,6 +1041,32 @@ node scripts/mutate-run.mjs ear-right-input-missing
 
 - verify-report-roundtrip.mjs :: 1. 記入先の要素がすべて実在する
 
+### 21回目: カルテ作成が「できた」と返さない 2件（2026-08-28・**手元で実測**）
+
+`pet-create-wrong-status` と同じ型を、カルテ作成の状態コードに当てた（`201`→`200`）。
+**実体は作られる**ので土台は壊れず、「作れたかどうかを状態コードで見ている」検査
+だけが赤になる。
+
+```
+node scripts/mutate-run.mjs report-create-wrong-status
+
+  ✅ verify-empty-pet.mjs  → 0b. 下書きのカルテを用意できた
+  ✅ verify-xss.mjs        → 赤 8件（8つの細工それぞれで分岐が発火）
+```
+
+xss 側は前回（19回目）と同じく**名前だけでは分岐を特定できない**ので、
+壊し方を手で当てて `npm run verify:xss` を直接走らせ、詳細で確かめた:
+
+```
+FAIL  犬の名前（見出しへ入る）  カルテを作れず、細工を届けられなかった (200)
+```
+
+「**カルテを作れず**」＝ 101行目 ＝ `label #2`。残るのは `label #3`（112行目・
+確定に失敗）だけで、これは**確定だけを失敗させる**壊し方が要る。
+
+- verify-empty-pet.mjs :: 0b. 下書きのカルテを用意できた
+- verify-xss.mjs :: label #2
+
 ## F4 を閉じる範囲（マスター判断・2026-08-28）
 
 台帳を129件すべて埋めるのではなく、**客に当たる経路まで**で F4 を閉じる。
@@ -1105,13 +1131,11 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 
 - verify-stack.mjs :: seed のアカウントで実ログインできる #2
 - verify-stack.mjs :: マイグレーションと seed が当たっている（seed の犬 X を id で引ける） #2
-- verify-xss.mjs :: label #2
 - verify-xss.mjs :: label #3
 - verify-admin.mjs :: 7. 直す対象のカルテを1枚確定できた
 - verify-delete.mjs :: 1. 写真つきのカルテを確定できた
 - verify-delete.mjs :: 2. 写真の実体が Storage に在る（service_role で数える）
 - verify-draft.mjs :: 4. 下書きの中身が漏れていない
-- verify-empty-pet.mjs :: 0b. 下書きのカルテを用意できた
 - verify-empty-pet.mjs :: 7. 下書きの中身が漏れていない
 - verify-invitation.mjs :: 5. 招待を消化する前は、その犬を見られない
 - verify-m6.mjs :: ⑤. 確定すると確認の画面に着く
