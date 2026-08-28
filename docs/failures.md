@@ -763,3 +763,34 @@
 - **Fix**: 構文検査を**使い捨てのコピーの上**で行うようにした。同じファイルに既に在った `sandbox(rel, body)`（`os.tmpdir()` に作る）へ本物の中身をコピーし、`applyMutation(sandboxRoot, m)` を当てる。**本物は一度も触らない**ので、戻す処理も不要になった。あわせて「本物のファイルを触っていないこと」を assert として置いた——次に誰かが本物を触る書き方に戻したら、そこで止まる
 - **How to prevent**: **テストの中で実リポジトリのファイルを書き換えない。** `node --test` はファイル単位で並行に走るので、「壊して → 戻す」を実ツリーでやると、他のテストから見える窓が必ず開く。壊す機械を検査したいときは、対象をコピーしてからにする。
   もう1つ。**「作業ツリーは clean・単体では通る・全体では落ちる」は、並行実行の競合を疑う合図**。製品側を探しても見つからない
+
+### [F-20260828-59] 確定が「id の無いカルテ」を返したとき、**画面はそのまま進んで `/null` に着く**
+
+- **Date**: 2026-08-28
+- **Status**: OPEN（**直していない**。製品コードの変更はマスター判断・下記）
+- **Category**: logic
+- **Trigger/Context**: PR #32 の CI（run #163 系・`verify` ジョブ）で `verify:photo` が落ちた。手元の作業ツリーでは同じコミットで3回とも通る。落ち方は `page.waitForURL: Timeout 60000ms exceeded` で、ログに `navigated to "http://localhost:8798/edit/p/9e05dc32-…/null"` と出ていた——**遷移先のカルテIDが文字列 `null`**
+- **What happened**: 確定（`App.commitReport()`）が、**保存できたかどうかを確かめないまま**次の画面へ移っていた。`src/js/ui.js`:
+
+  ```js
+  const saved = this.reviseReportId ? await staff.reviseReport(…) : await staff.saveReport(…);
+  location.href = `/edit/p/${encodeURIComponent(context.petId)}/${encodeURIComponent(saved.id)}`;
+  ```
+
+  `saved.id` が `null` だと `encodeURIComponent(null)` は文字列 `"null"` になるので、**例外も出ず、警告も出ず、`/edit/p/{petId}/null` へ進む**。この関数の直前のコメントは「失敗したら**画面を移さず、理由を出す**。黙って進むと『保存しました』と出たのに残っていない、が起きる（`D-2`）」と書いてあるが、**`saved` が返ってきさえすれば中身を見ていない**
+- **Root Cause**: `backend/js/supabase-staff.js` の `saveReport()` は、**作る段では id を検査しているのに、確定段では検査していない**——非対称になっている。
+
+  ```js
+  const report = saved.report;
+  if (!report || !report.id) throw new Error('カルテを作れませんでした');   // ← 作る段は id を見る
+  …
+  const finalized = await api(`…/finalize`, { method: 'POST' });
+  if (!finalized || !finalized.report) throw new Error('カルテを確定できませんでした'); // ← 確定段は器しか見ない
+  return finalized.report;                                                  // ← id が無くても返る
+  ```
+
+  したがって「確定は応答を返したが、その中に id が無い」ときだけ、**`D-2` の防波堤をすり抜ける**。呼ぶ側（`commitReport`）も `saved.id` をそのまま信じているので、二重に素通りする
+- **How it was found**: CI の失敗を「製品コードを1行も触っていない diff なのに落ちた」として調べた。手元で `verify:photo` を3回走らせて再現しなかったため、CI ログの遷移先 URL（`/null`）だけを手がかりに、その文字列を作り得る場所をコードから逆に辿って見つけた。**壊して確かめたのではなく、読んで見つけた**
+- **Fix**: **まだ直していない。** 直すなら2箇所。①`saveReport`／`reviseReport` の確定段を `if (!finalized || !finalized.report || !finalized.report.id) throw` にする（作る段と揃える）。②`commitReport` で `saved && saved.id` を確かめ、無ければ画面を移さず理由を出す（`catch` と同じ扱い）。
+  **いま直していない理由**は2つ。(1) 現在フェーズは **F4**（`D-16`・整理整頓の期間で、見つけた不具合は原則あと回し／範囲外を触らない）で、`src/js` と `backend/js` は今回の PR の範囲外。(2) `D-18` が解決の主張に**赤 → 緑 → 戻して赤**の3出力を求めるが、**この現象をまだ再現できていない**ので「戻して赤」を出せない。直す前に、`finalize` が id 無しを返す状況を作れる壊し方（`mutate-run.mjs`）を1つ書くのが順序として正しい
+- **How to prevent**: **「返ってきた」と「使える値が入っている」は別物。** `throw` しない API の返り値は、**呼ぶ側が使うフィールドまで**確かめる。とくに `encodeURIComponent()` は `null`／`undefined` を**文字列に変えてしまう**ので、URL を組むところでは値の欠落が例外にならず、**そのまま遷移してしまう**。同じ型が `D-2`（`finalize_report` の `null` 返却）で既に一度起きている——**そのとき塞いだのは「`null` が返る」場合だけで、「器は返るが中身が欠けている」場合は塞がっていなかった**
