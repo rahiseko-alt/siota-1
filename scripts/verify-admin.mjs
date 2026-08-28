@@ -41,6 +41,11 @@ const tapByText = (page, text) => page.evaluate((needle) => {
   return true;
 }, text);
 
+/** 画面が何と言ったか。**落ちたときに理由を出すため**だけに使う（合否には使わない）。 */
+const resultText = async (page) => (
+  (await page.locator('.admin-result').first().textContent().catch(() => '') || '').trim()
+);
+
 const menuTitles = (page) => page.evaluate(
   () => [...document.querySelectorAll('.admin-menu__item strong')].map((el) => el.textContent.trim()),
 );
@@ -226,9 +231,8 @@ try {
     await page.waitForTimeout(1000);
     finalsLeft = await countFinals();
   }
-  const said = (await page.locator('.admin-result').first().textContent().catch(() => '') || '').trim();
   check('15. カルテ1枚が実際に消えた', finalsLeft === 0,
-    finalsLeft === 0 ? '' : `${finalsLeft}枚残っている　画面の表示="${said}"`);
+    finalsLeft === 0 ? '' : `${finalsLeft}枚残っている　画面の表示="${await resultText(page)}"`);
 
   /* ── ⑤ 削除: ペット全データ ── */
   await page.goto(`${BASE}/admin`, { waitUntil: 'domcontentloaded' });
@@ -246,9 +250,32 @@ try {
     { timeout: 30_000 },
   ).catch(() => {});
 
-  const petsLeft = await (await fetch(`${BASE}/api/pets`, { headers: authHeaders })).json();
-  check('16. ペットが実際に消えた',
-    !(petsLeft.pets || []).some((p) => p.id === createdPet.id));
+  /* **「無いこと」は、空だと必ず真になる。** 以前ここは
+     `!(petsLeft.pets || []).some(…)` だった。`petsLeft.pets` が `undefined`
+     （API が落ちた・鍵が切れた・形が変わった）でも `|| []` が空配列にし、
+     `.some()` は false、`!false` で **PASS** になる——**何も消えていなくても、
+     そもそも一覧を引けていなくても緑**（`F-20260825-40` の型・`docs/watch.md` W-1）。
+     直したのは2つ:
+       1. **一覧が実際に引けたこと**（配列であること）を、同じ条件の中に置く
+       2. **サーバに数え直させて消えるまで待つ**——上の待ちは `.catch(() => {})` で
+          握り潰しており、待てなくても素通りして数えていた（15 と同じ `F-20260826-41` の型）。
+          犬の削除はカルテと Storage の片付けを挟むので、表示より遅れて終わる
+     機械: `scripts/guard/empty-pass.mjs` が 1 の形を止める */
+  const petsRemaining = async () => {
+    const body = await (await fetch(`${BASE}/api/pets`, { headers: authHeaders })).json();
+    return Array.isArray(body.pets)
+      ? { ok: true, hit: body.pets.some((p) => p.id === createdPet.id), left: body.pets.length }
+      : { ok: false, raw: JSON.stringify(body).slice(0, 80) };
+  };
+  let petsLeft = await petsRemaining();
+  for (let i = 0; i < 30 && petsLeft.ok && petsLeft.hit; i += 1) {
+    await page.waitForTimeout(1000);
+    petsLeft = await petsRemaining();
+  }
+  check('16. ペットが実際に消えた', petsLeft.ok && !petsLeft.hit,
+    petsLeft.ok
+      ? (petsLeft.hit ? `まだ居る（残り${petsLeft.left}頭）　画面の表示="${await resultText(page)}"` : '')
+      : `一覧が引けなかった: ${petsLeft.raw}`);
 
   /* ── ⑤ 削除: 顧客全データ ── */
   await page.goto(`${BASE}/admin`, { waitUntil: 'domcontentloaded' });
@@ -266,9 +293,22 @@ try {
     { timeout: 30_000 },
   ).catch(() => {});
 
-  const ownersLeft = await (await fetch(`${BASE}/api/owners`, { headers: authHeaders })).json();
-  check('17. 顧客が実際に消えた',
-    !(ownersLeft.owners || []).some((o) => o.id === createdOwner.id));
+  /* 16 と同じ2つ（空で受けて合格にしない／数え直して待つ）。 */
+  const ownersRemaining = async () => {
+    const body = await (await fetch(`${BASE}/api/owners`, { headers: authHeaders })).json();
+    return Array.isArray(body.owners)
+      ? { ok: true, hit: body.owners.some((o) => o.id === createdOwner.id), left: body.owners.length }
+      : { ok: false, raw: JSON.stringify(body).slice(0, 80) };
+  };
+  let ownersLeft = await ownersRemaining();
+  for (let i = 0; i < 30 && ownersLeft.ok && ownersLeft.hit; i += 1) {
+    await page.waitForTimeout(1000);
+    ownersLeft = await ownersRemaining();
+  }
+  check('17. 顧客が実際に消えた', ownersLeft.ok && !ownersLeft.hit,
+    ownersLeft.ok
+      ? (ownersLeft.hit ? `まだ居る（残り${ownersLeft.left}件）　画面の表示="${await resultText(page)}"` : '')
+      : `一覧が引けなかった: ${ownersLeft.raw}`);
 
   /* **写真の実体まで消えたか。** RLS 越しに見ると、行が消えた時点で「見えない」に
      なるので必ず合格してしまう。`service_role` で数える（`verify:delete` と同じ理由）。 */
