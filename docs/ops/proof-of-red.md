@@ -679,6 +679,27 @@ run #154: 赤 → 3回中2回赤）。`rls-drafts-leak` が今回**新たに** 0
 - verify-report-roundtrip.mjs :: 18. アプリ由来のエラーが無い
 - verify-portal.mjs :: 10. アプリ由来のコンソールエラーが無い（ログイン前）
 
+### 9回目: `pet-purge-broken` の2つ目の直しが効いた 1件（2026-08-28・**手元で実測**）
+
+`F-20260828-56` の2つ目の直し（`15.` の直後にもう1枚カルテを確定させ、
+`purgePetAssets` に実際に消す対象を渡す）の効果を、**CI ではなく手元で**確かめた。
+CI は run #156 以降ずっと即死しているが、**この作業場では Docker が動いた**ので
+`npx supabase start` から先が全部走る（経緯は `docs/handoff.md` `0-K`）。
+
+```
+node scripts/mutate-run.mjs pet-purge-broken
+
+  ✅ pet-purge-broken   verify-admin.mjs               赤   1件
+
+    18. 消した犬の写真が Storage に残っていない   ← pet-purge-broken / verify-admin.mjs
+```
+
+**3戦3敗（run #149・rerun・#154）だったものが、直して初めて赤になった。**
+`purgePetAssets` を壊すと `18.` が気づく——これで `F-20260828-56` は
+「直したが未検証」ではなくなった。
+
+- verify-admin.mjs :: 18. 消した犬の写真が Storage に残っていない
+
 ## F4 を閉じる範囲（マスター判断・2026-08-28）
 
 台帳を129件すべて埋めるのではなく、**客に当たる経路まで**で F4 を閉じる。
@@ -748,7 +769,6 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 - verify-admin.mjs :: 7. 直す対象のカルテを1枚確定できた
 - verify-admin.mjs :: 16. ペットが実際に消えた
 - verify-admin.mjs :: 17. 顧客が実際に消えた
-- verify-admin.mjs :: 18. 消した犬の写真が Storage に残っていない
 - verify-delete.mjs :: 0. 検査用の犬を登録できた
 - verify-delete.mjs :: 1. 写真つきのカルテを確定できた
 - verify-delete.mjs :: 2. 写真の実体が Storage に在る（service_role で数える）
