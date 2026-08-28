@@ -817,6 +817,32 @@ node scripts/mutate-run.mjs screen-stale-panels-stay-active
 - verify-edit.mjs :: 12. 一覧の画面（screen-2）が開いている
 - verify-edit.mjs :: 13. ⑤確認の画面（screen-4）が開いている
 
+### 14回目: 管理者の削除が DB に届いていない 2件（2026-08-28・**手元で実測**）
+
+削除は「写真 → DB」の2段（`D-20260824-34`）。**DB を消す段だけ**を落とすと、
+画面は成功したように見えるのに実体が残る——`16./17.` はそこを見ている。
+写真の段は残すので、検査は最後まで動く。
+
+```
+node scripts/mutate-run.mjs admin-owner-delete-not-persisted
+  ✅ 赤 1件   17. 顧客が実際に消えた
+
+node scripts/mutate-run.mjs admin-pet-delete-not-persisted
+  ✅ 赤 1件   16. ペットが実際に消えた
+```
+
+**2つを同時に走らせた1回目は、`admin-pet-delete-not-persisted` が
+`1.` と `検査を最後まで実行できた` を赤にして `16.` に届かなかった。**
+単体で走らせ直したら `16.` だけが赤になった——**一過性の不安定さ**。
+このセッションで3回目（`skin-image-blank`・`screen-switch-stuck` の1回目・これ）。
+
+> **狙った項に届かず `検査を最後まで実行できた` が赤になったときは、
+> まず単体で走らせ直す。** 壊し方が悪いのか、その回限りの不安定さなのかは、
+> 2回目を見るまで区別がつかない。
+
+- verify-admin.mjs :: 16. ペットが実際に消えた
+- verify-admin.mjs :: 17. 顧客が実際に消えた
+
 ## F4 を閉じる範囲（マスター判断・2026-08-28）
 
 台帳を129件すべて埋めるのではなく、**客に当たる経路まで**で F4 を閉じる。
@@ -884,8 +910,6 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 - verify-xss.mjs :: label #2
 - verify-xss.mjs :: label #3
 - verify-admin.mjs :: 7. 直す対象のカルテを1枚確定できた
-- verify-admin.mjs :: 16. ペットが実際に消えた
-- verify-admin.mjs :: 17. 顧客が実際に消えた
 - verify-delete.mjs :: 0. 検査用の犬を登録できた
 - verify-delete.mjs :: 1. 写真つきのカルテを確定できた
 - verify-delete.mjs :: 2. 写真の実体が Storage に在る（service_role で数える）

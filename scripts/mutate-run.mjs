@@ -45,6 +45,26 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
  * 証明の役に立たない（何を検出したのか言えないため）。
  */
 export const MUTATIONS = [
+  /* ── 13回目: 管理者の削除が、画面では成功して DB に残る（2026-08-28・手元で実測）
+     削除は「写真 → DB」の2段（`D-20260824-34`）。**DB を消す段だけ**を落とすと、
+     画面は成功したように見えるのに実体が残る——`16./17.` はそこを見ている。
+     写真の段は残すので、検査は最後まで動く。 */
+  {
+    id: 'admin-pet-delete-not-persisted',
+    why: '**「削除しました」と出るのに、その子のデータが残り続ける**（消えたと思って渡せない）',
+    file: 'backend/js/supabase-admin.js',
+    find: "await api(`/api/pets/${encodeURIComponent(item.pet.id)}`, { method: 'DELETE' });",
+    replace: 'await Promise.resolve();',
+    scripts: ['verify-admin.mjs'],
+  },
+  {
+    id: 'admin-owner-delete-not-persisted',
+    why: '**「削除しました」と出るのに、その顧客のデータが残り続ける**（消したつもりが消えていない）',
+    file: 'backend/js/supabase-admin.js',
+    find: "await api(`/api/owners/${encodeURIComponent(item.owner.id)}`, { method: 'DELETE' });",
+    replace: 'await Promise.resolve();',
+    scripts: ['verify-admin.mjs'],
+  },
   /* ── 12回目: 前の画面が開いたまま残る（2026-08-28・手元で実測）
      はじめ「切り替え先を screen-1 に固定する」壊し方にしたが、狙った 12./13. には
      届かず `検査を最後まで実行できた` だけが赤になった——**画面が隠れたままなので
