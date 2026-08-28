@@ -967,6 +967,28 @@ npm run verify:delete   （壊し方を手で当てた状態）
 - verify-m6.mjs :: ⑤b. 確定した中身に、書いた一言が入っている
 - verify-m6.mjs :: ⑥b. 飼い主はカルテを開ける
 
+### 18回目: 一覧に犬が並ばない 2件（2026-08-28・**手元で実測**）
+
+```
+node scripts/mutate-run.mjs edit-dog-list-empty
+
+  ✅ edit-dog-list-empty  verify-m6.mjs  赤 2件（＋「検査を最後まで実行できた」）
+
+    ②b. ログインすると作業画面に入れる
+    ③. 名前で犬を選べる
+```
+
+**`②b` は `F-20260828-55` で `true` の直書きから直した行。** あのとき
+「壊し方はまだ作っていない（未証明のまま）」と書き残してあったものを、ここで
+実証した。直したあと**本当に測れる行になっている**ことが、これで確かめられた
+——直しただけでは、また `true` に戻っていても誰も気づかない。
+
+壊し方は `renderDogs()` の `data.forEach` を `[].forEach` にするだけ。
+**画面には入れるがカードが0枚**という、この検査がまさに守っている状態を作る。
+
+- verify-m6.mjs :: ②b. ログインすると作業画面に入れる
+- verify-m6.mjs :: ③. 名前で犬を選べる
+
 ## F4 を閉じる範囲（マスター判断・2026-08-28）
 
 台帳を129件すべて埋めるのではなく、**客に当たる経路まで**で F4 を閉じる。
@@ -1040,8 +1062,6 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 - verify-empty-pet.mjs :: 0b. 下書きのカルテを用意できた
 - verify-empty-pet.mjs :: 7. 下書きの中身が漏れていない
 - verify-invitation.mjs :: 5. 招待を消化する前は、その犬を見られない
-- verify-m6.mjs :: ②b. ログインすると作業画面に入れる
-- verify-m6.mjs :: ③. 名前で犬を選べる
 - verify-m6.mjs :: ⑤. 確定すると確認の画面に着く
 - verify-photo-roundtrip.mjs :: `${kind === 'trimming' ? '1' : kind === 'ear' ? '2' : '3'}. ${kind} の写真を付けられた`
 - verify-photo-roundtrip.mjs :: 4. 写真つきで確定できた

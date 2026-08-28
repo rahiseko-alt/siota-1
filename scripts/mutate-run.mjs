@@ -45,6 +45,19 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
  * 証明の役に立たない（何を検出したのか言えないため）。
  */
 export const MUTATIONS = [
+  /* ── 17回目: 一覧に犬が1頭も並ばない（2026-08-28・手元で実測）
+     `②b. ログインすると作業画面に入れる` は「`/edit` に居て、かつカードが
+     1枚以上ある」を見ている（`F-20260828-55` で `true` の直書きから直したもの）。
+     **カードが0枚**になれば、画面には入れているのに仕事は始められない——
+     まさにこの検査が守っている状態。 */
+  {
+    id: 'edit-dog-list-empty',
+    why: '**作業画面に入れても、犬が1頭も並ばない**（入れたのに仕事を始められない）',
+    file: 'src/js/ui.js',
+    find: '    data.forEach((dog) => {',
+    replace: '    [].forEach((dog) => {',
+    scripts: ['verify-m6.mjs'],
+  },
   /* ── 15回目: 犬の登録が「できた」と返さない（2026-08-28・手元で実測）
      201（作った）ではなく 200 を返す。**犬そのものは作られる**ので土台は壊れず、
      「作れたかどうか」を状態コードで見ている検査だけが赤になる。呼ぶ側は
@@ -171,7 +184,7 @@ export const MUTATIONS = [
     file: 'src/js/ui.js',
     find: 'const data = this.dogs || (window.DUMMY && window.DUMMY.dogs) || [];',
     replace: 'const data = (window.DUMMY && window.DUMMY.dogs) || this.dogs || [];',
-    scripts: ['verify-edit.mjs'],
+    scripts: ['verify-edit.mjs', 'verify-m6.mjs'],
   },
   {
     id: 'edit-breed-mock-refill',
