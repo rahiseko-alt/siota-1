@@ -24,8 +24,8 @@
 | | |
 |---|---|
 | 機械が数えた検査 | **183件**（`scripts/verify-*.mjs`） |
-| 壊して赤になったところを見た | **106件**（毒見 21 ＋ 1件ずつ壊す 85・2026-08-28） |
-| まだ見ていない | **77件** |
+| 壊して赤になったところを見た | **108件**（毒見 21 ＋ 1件ずつ壊す 87・2026-08-28） |
+| まだ見ていない | **75件** |
 
 **出発点は全件が未確認だった。** 毒見で埋め、天井に当たったあと（下の「⛔ 毒見の天井」）、
 **1件ずつ壊す**（マスター判断 A）で続けている。**数は上の表だけが正**——
@@ -510,6 +510,55 @@ run 124  カルテの RLS だけ開ける  → 画面が犬を引けず、そこ
 へ戻す**。上の仮説1を切り分けるため、`ids` を絞らない**フル実行**（CI run #149）を
 別途走らせている——結果はこのファイルへ追記する。
 
+#### 追記（CI run #149・`ids` を絞らないフル実行）: 赤になった。ただし別の4件が今度は0件になった
+
+`ids` を空にして（`MUTATIONS` 全44個・約30分）走らせた。結果:
+
+```
+- 11. ログイン後、自分の犬（X/Y/Z）が一覧に出て、他人の犬（Q）は出ない   ← rls-any-owner-sees-any-dog / verify-portal.mjs
+- 13. 他人の犬（Q）は見えない（RLS）   ← rls-any-owner-sees-any-dog / verify-portal.mjs
+- 7. 使い終わった招待は、別の人が使えない   ← rls-any-owner-sees-any-dog / verify-invitation.mjs
+```
+
+**`rls-any-owner-sees-any-dog` は3回赤になった**（run #122・#126・#149）。**2回赤にならなかった**
+（run #139・#144、どちらも `ids` で絞った実行）。フル実行はこれで3戦3勝、`ids` を絞った実行は
+2戦2敗——きれいに割れている。
+
+そこで**仮説1（`ids` を絞った実行に固有の何か）が濃厚と見て**、`verify-portal.mjs :: 11.` /
+`13.` を「証明済み」へ戻す。判断の根拠は「過去の成功を信じる」ではなく、**今日・この
+コードで、フル実行が確かに赤にした**という直近の実測（run #149）が主体。
+
+- verify-portal.mjs :: 11. ログイン後、自分の犬（X/Y/Z）が一覧に出て、他人の犬（Q）は出ない
+- verify-portal.mjs :: 13. 他人の犬（Q）は見えない（RLS）
+
+ただし**この run で新しい割れ方が出た**。今度は逆方向——**過去に `ids` を絞った実行
+（run #139）で赤になったはずの4件が、このフル実行では0件（⚠️）だった**:
+
+```
+⚠️  delete-throws                       verify-delete.mjs             赤   0件
+⚠️  draft-becomes-new-report             verify-draft.mjs               赤   0件
+⚠️  report-roundtrip-teeth-value-mismatch verify-report-roundtrip.mjs   赤   0件
+⚠️  report-roundtrip-finalize-broken     verify-report-roundtrip.mjs   赤   0件
+```
+
+これで見えてきたのは「`ids` を絞ると壊れる／絞らないと直る」という単純な話ではなく、
+**この壊し方の機械（`mutate-run.mjs` ＋ Playwright ＋ ローカル Supabase）が、run ごとに
+違う個別の壊し方をたまたま検出し損ねる、一般的な不安定さを持っている**可能性——
+`rls-any-owner-sees-any-dog` はフル実行側で安定、この4件は絞った実行側で安定、という
+非対称ではなく、**両方向で「特定の1回だけ検出漏れ」が起きている**。
+
+このほかに今回新しく ⚠️ になった9件（`app-throws-runtime-error` 4件・
+`portal-throws-runtime-error` 1件・`portal-flavor-broken`・
+`portal-signout-hidden-after-login`・`empty-pet-fake-history-entry`、
+`pet-purge-broken`）は**今回が初めての実行**なので、run #144（一部）で赤だった
+`app-throws-runtime-error` / `portal-throws-runtime-error` の分と合わせて、
+再現するかを次の実行で確かめる。
+
+**再現性を確かめるため、失敗した2ジョブ（`mutate` / `walk`。`walk` は別件、下記）を
+再実行した（CI run #149 の rerun_failed_jobs）。** 結果が出たらここに追記する。
+「1回だけ0件」を根拠に恒久的な欠陥と決めつけない——CI babysit のルールどおり、
+**flake の可能性は1回の再実行で確かめてから**判断する。
+
 - verify-admin.mjs :: 2. 管理者ページに リピーター / 新規 / 削除 が在る
 - verify-admin.mjs :: 3. リピーターに カルテ作成 / カルテ修正 が在る
 - verify-admin.mjs :: 4. 新規に 顧客アカウント作成 / ペットアカウント作成 が在る
@@ -667,9 +716,7 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 - verify-portal.mjs :: 4. ポータルが起動している
 - verify-portal.mjs :: 7. 未ログインで中身とログアウトは隠れている
 - verify-portal.mjs :: 8. 見本画像を出していない
-- verify-portal.mjs :: 11. ログイン後、自分の犬（X/Y/Z）が一覧に出て、他人の犬（Q）は出ない
 - verify-portal.mjs :: 12. ログイン後はログアウトボタンが出る
-- verify-portal.mjs :: 13. 他人の犬（Q）は見えない（RLS）
 - verify-production.mjs :: `配信物が手元の dist と同じ（${sameCount}/${staticFiles.length} 本）`
 - verify-production.mjs :: /my が dist/my.html と同じ
 - verify-production.mjs :: `削除済みの旧UI が本番に残っていない（${deletedUiPaths.length} 本を確認）`
