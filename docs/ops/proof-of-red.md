@@ -24,13 +24,15 @@
 | | |
 |---|---|
 | 機械が数えた検査 | **182件**（`scripts/verify-*.mjs`） |
-| 壊して赤になったところを見た | **21件**（毒見 empty 17 ＋ noauth 2 ＋ nodist 2・2026-08-28） |
-| まだ見ていない | **161件** |
+| 壊して赤になったところを見た | **30件**（毒見 21 ＋ 1件ずつ壊す 9・2026-08-28） |
+| まだ見ていない | **152件** |
 
 **出発点は182件すべてが未確認だった。** 毒見で **21件**が赤になり、証明済みへ移った
 （`empty` 17 ＋ `noauth` 2 ＋ `nodist` 2）。
-**残り161件は、まだ「壊したら赤になるか」を見ていない。**
-**毒見はここで天井に当たった**（下の「⛔ 毒見の天井」）。
+そのあと**1件ずつ壊す**（マスター判断 A）で **9件**が加わり、いま **30件**。
+**残り152件は、まだ「壊したら赤になるか」を見ていない。**
+毒見は 21件で天井に当たった（下の「⛔ 毒見の天井」）ので、
+ここから先は**1件ずつ壊す**しかない。
 `verify:*` が全部緑であることは、いまのところ**それ自体が何も保証していない**——
 その緑が嘘でないことを、まだ一度も確かめていないため。
 
@@ -207,6 +209,39 @@ noauth : 赤 4 / 緑のまま 1
 - verify-m6.mjs :: ①. URL を開ける
 - verify-m6.mjs :: ②a. 未ログインならログインの画面に導かれる
 
+### 1件ずつ壊して赤になった 9件（2026-08-28・CI run #111）
+
+壊し方: `node scripts/mutate-run.mjs`（`.github/workflows/ci.yml` の `mutate` ジョブ）。
+**土台は本物のまま**、製品を1か所だけ壊す。検査は最後まで走り、気づいた項だけが赤になる。
+
+出力（`docs/ops/mutate-run-result.md` は成果物として CI に上がる）:
+
+```
+  ✅ delete-assets      verify-delete.mjs              赤   2件
+  ✅ delete-assets      verify-admin.mjs               赤   1件
+  ✅ hydrate-assets     verify-photo-roundtrip.mjs     赤   6件
+  ✅ upload-assets      verify-photo-roundtrip.mjs     赤   1件
+  ✅ upload-assets      verify-delete.mjs              赤   1件
+  赤になった（＝その壊しを検出できた）: **10件**
+  製品のファイルに差分なし。すべて戻せている
+```
+
+**どの壊しがどれを赤にしたか**: `delete-assets` → `verify-delete` 4/5 と `verify-admin` 15。
+`hydrate-assets` → `verify-photo-roundtrip` 6/7/8/9/11/12。`upload-assets` → 同「検査を最後まで実行できた」。
+
+**3つの壊し全部に、検査が気づいた。新しい欠陥は出なかった。**
+客に当たる経路（写真が届く・消したものが消える）について、
+**検査が仕事をしていることが実測で確かめられた**——これがこの工程の目的である。
+
+- verify-photo-roundtrip.mjs :: 11. 直しで開くと、付けた写真が控えに残っている
+- verify-photo-roundtrip.mjs :: 12. 直したあとも写真4枚が残っている
+- verify-admin.mjs :: 15. カルテ1枚が実際に消えた
+- verify-delete.mjs :: 4. 写真の実体が Storage から消えた（service_role で数える）
+- verify-delete.mjs :: 5. 飼い主のページからカルテが消えている
+- verify-photo-roundtrip.mjs :: 6. 飼い主: 表紙が、1枚目に入れた写真
+- verify-photo-roundtrip.mjs :: 7. 飼い主: ギャラリーに2枚並ぶ
+- verify-photo-roundtrip.mjs :: 8. 飼い主: 耳の写真が、耳の欄に
+- verify-photo-roundtrip.mjs :: 9. 飼い主: 歯の写真が、歯の欄に
 ## ⛔ 毒見の天井（2026-08-28 に判明）
 
 **毒を3種類まで作って、埋まったのは 182件中 21件。ここで止まる。**
@@ -257,7 +292,6 @@ noauth : 赤 4 / 緑のまま 1
 - verify-admin.mjs :: 12. 中身が直っている（確定済みが上書きされた）
 - verify-admin.mjs :: 13. 削除に 顧客 / ペット / カルテ の3つが在る
 - verify-admin.mjs :: 14. 名前を打つまで削除ボタンは押せない
-- verify-admin.mjs :: 15. カルテ1枚が実際に消えた
 - verify-admin.mjs :: 16. ペットが実際に消えた
 - verify-admin.mjs :: 17. 顧客が実際に消えた
 - verify-admin.mjs :: 18. 消した犬の写真が Storage に残っていない
@@ -268,8 +302,6 @@ noauth : 赤 4 / 緑のまま 1
 - verify-delete.mjs :: 1. 写真つきのカルテを確定できた
 - verify-delete.mjs :: 2. 写真の実体が Storage に在る（service_role で数える）
 - verify-delete.mjs :: 3. 製品の削除の道が最後まで通った
-- verify-delete.mjs :: 4. 写真の実体が Storage から消えた（service_role で数える）
-- verify-delete.mjs :: 5. 飼い主のページからカルテが消えている
 - verify-draft.mjs :: 1. 記入が下書きとしてサーバに残った
 - verify-draft.mjs :: 2. 離れて戻ると、続きから書ける
 - verify-draft.mjs :: 3. 下書きは飼い主に見えない
@@ -326,13 +358,7 @@ noauth : 赤 4 / 緑のまま 1
 - verify-photo-roundtrip.mjs :: `${kind === 'trimming' ? '1' : kind === 'ear' ? '2' : '3'}. ${kind} の写真を付けられた`
 - verify-photo-roundtrip.mjs :: 4. 写真つきで確定できた
 - verify-photo-roundtrip.mjs :: 5. 保存された写真4枚が実体になっている（asset://）
-- verify-photo-roundtrip.mjs :: 6. 飼い主: 表紙が、1枚目に入れた写真
-- verify-photo-roundtrip.mjs :: 7. 飼い主: ギャラリーに2枚並ぶ
-- verify-photo-roundtrip.mjs :: 8. 飼い主: 耳の写真が、耳の欄に
-- verify-photo-roundtrip.mjs :: 9. 飼い主: 歯の写真が、歯の欄に
 - verify-photo-roundtrip.mjs :: 10. 飼い主: 壊れた画像（ページURL を指す img）が無い
-- verify-photo-roundtrip.mjs :: 11. 直しで開くと、付けた写真が控えに残っている
-- verify-photo-roundtrip.mjs :: 12. 直したあとも写真4枚が残っている
 - verify-photo-roundtrip.mjs :: 13. アプリ由来のエラーが無い
 - verify-portal.mjs :: 1. /my が配信される
 - verify-portal.mjs :: 2. 起動分岐が立っている
