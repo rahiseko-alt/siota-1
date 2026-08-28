@@ -494,6 +494,26 @@ export const MUTATIONS = [
     inject: "  setTimeout(() => { throw new Error('mutation: portal-throws-runtime-error'); }, 50);\n",
     scripts: ['verify-portal.mjs'],
   },
+
+  /* 7回目: verify-portal の残りを狙う。 */
+  {
+    id: 'portal-flavor-broken',
+    why: '**飼い主の画面が、飼い主向けの起動をしない**——`data-portal` の分岐そのものが外れる',
+    file: 'src/my.html',
+    find: 'data-portal="customer"',
+    replace: 'data-portal="customer-broken"',
+    extra: null,
+    scripts: ['verify-portal.mjs'],
+  },
+  {
+    id: 'portal-signout-hidden-after-login',
+    why: '**ログインしても、サインアウトの入口が出ない**——ログアウトできない',
+    file: 'backend/js/supabase-auth.js',
+    find: '    show(signOutButton, true);',
+    replace: '    show(signOutButton, false);',
+    extra: null,
+    scripts: ['verify-portal.mjs'],
+  },
 ];
 
 /** ファイルの中身の指紋。戻せたことを**実際に確かめる**ために使う。 */
