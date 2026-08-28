@@ -2,7 +2,7 @@
 
 実行: `node scripts/mutate-run.mjs`（**本物の土台が要る**——CI で走らせる）
 
-- 赤になった（その壊しを検出できた）: **48件**
+- 赤になった（その壊しを検出できた）: **46件**
 
 ## 赤になった（`- <検査の名前>` ← どの壊しで）
 
@@ -10,12 +10,10 @@
 - ★c. 戻ってから、もう一度同じ犬に入れる   ← empty-back-off / verify-m6.mjs
 - 1. 記入が下書きとしてサーバに残った   ← resume-draft-off / verify-draft.mjs
 - 10. 飼い主: 担当からの一言   ← settext-off / verify-report-roundtrip.mjs
-- 11. ログイン後、自分の犬（X/Y/Z）が一覧に出て、他人の犬（Q）は出ない   ← rls-any-owner-sees-any-dog / verify-portal.mjs
 - 11. 直しで開くと、付けた写真が控えに残っている   ← hydrate-assets / verify-photo-roundtrip.mjs
 - 11. 飼い主: 爪   ← settext-off / verify-report-roundtrip.mjs
 - 12. 直したあとも写真4枚が残っている   ← hydrate-assets / verify-photo-roundtrip.mjs
 - 12. 飼い主: 耳   ← settext-off / verify-report-roundtrip.mjs
-- 13. 他人の犬（Q）は見えない（RLS）   ← rls-any-owner-sees-any-dog / verify-portal.mjs
 - 13. 飼い主: 歯   ← settext-off / verify-report-roundtrip.mjs
 - 14. 飼い主: 体重   ← settext-off / verify-report-roundtrip.mjs
 - 14b. 飼い主: 体重のグラフが描かれている（数字だけでなく）   ← weight-graph-off / verify-report-roundtrip.mjs
