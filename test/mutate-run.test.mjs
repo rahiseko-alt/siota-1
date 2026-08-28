@@ -84,12 +84,18 @@ test('壊したあとのファイルが、構文として正しい', async () =>
         assert.equal(r.status, 0,
           `${m.id}: 壊したあとが構文エラー。**壊し方が下手なだけ**で CI が赤になり、`
           + `「検査が気づかなかった」と読み違える\n${r.stderr}`);
-      } else {
+      } else if (/\.sql$/.test(m.file)) {
         /* SQL は `node --check` に掛けられない。**壊れ方が乱暴すぎないか**だけ見る——
            ポリシーの定義そのものが消えていたら、それは「弱めた」ではなく「壊した」で、
            db reset が落ちて判定にならない。 */
         const after = fs.readFileSync(target, 'utf8');
         assert.ok(after.includes('create policy'), `${m.id}: ポリシーの定義ごと消えている`);
+        assert.notEqual(after, before, `${m.id}: 何も変わっていない`);
+      } else {
+        /* HTML など、構文検査のしようが無いファイル。**中身が実際に変わったか**だけ見る——
+           `find`/`replace` を間違えて何も置き換わらなかった（0回でも投げない形の壊し方）を
+           ここで捕まえる。 */
+        const after = fs.readFileSync(target, 'utf8');
         assert.notEqual(after, before, `${m.id}: 何も変わっていない`);
       }
     } finally {

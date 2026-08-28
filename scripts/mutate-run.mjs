@@ -262,6 +262,55 @@ export const MUTATIONS = [
     extra: 'export async function purgePetAssets() { return { removed: 0 }; }\n',
     scripts: ['verify-admin.mjs'],
   },
+
+  /* 2回目: verify-edit.mjs（19件のうち17件を狙う。7「アプリ由来のエラーが無い」と
+     13「⑤確認の画面が開いている」は、確定フローそのものを壊す必要があり
+     verify-report-roundtrip の 2. と共通なので、その回に回す）。 */
+  {
+    id: 'edit-template-broken',
+    why: '**/edit がテンプレートを見失って 502 になる**——トリマーが画面を一切開けない',
+    file: 'src/index.html',
+    find: '</head>',
+    replace: '</hea d>',
+    extra: null,
+    scripts: ['verify-edit.mjs'],
+  },
+  {
+    id: 'edit-backend-scripts-off',
+    why: '**/edit が Supabase 用のスクリプトを注入しない**——実データの代わりに仮データ（window.DUMMY）の犬が並ぶ',
+    file: 'worker/src/index.js',
+    find: "    return renderAppPage(env, { backend: 'supabase' });",
+    replace: "    return renderAppPage(env, { backend: 'none' });",
+    extra: null,
+    scripts: ['verify-edit.mjs'],
+  },
+  {
+    id: 'edit-mock-letter-reappears',
+    why: '**⑤確認の器に、意匠モックの既定文が戻る**——`renderMagazine` が器を差し替えていないのと同じ状態',
+    file: 'backend/js/magazine-view.js',
+    find: '<h3 class="magazine-letter-title">担当トリマーからのメッセージ</h3>',
+    replace: '<h3 class="magazine-letter-title">担当トリマーからのメッセージ：今月もとってもお利口に</h3>',
+    extra: null,
+    scripts: ['verify-edit.mjs'],
+  },
+  {
+    id: 'edit-empty-photo-src-regress',
+    why: '**空の写真スロットが、現在のページURLを指す**（`docs/deferred.md` #16 の再発）',
+    file: 'backend/js/magazine-view.js',
+    find: "    else img.removeAttribute('src');",
+    replace: "    else img.src = '';",
+    extra: null,
+    scripts: ['verify-edit.mjs'],
+  },
+  {
+    id: 'edit-trimmer-letter-prefilled',
+    why: '**④の入力欄に、見本の文が最初から入っている**（`F-20260821-14` の再発——書いていない手紙が届く）',
+    file: 'src/index.html',
+    find: '<textarea id="editor-trimmer-letter" data-field="staff-note" class="trimmer-textarea" rows="4" placeholder="今日の様子を、飼い主さんへ一言。"></textarea>',
+    replace: '<textarea id="editor-trimmer-letter" data-field="staff-note" class="trimmer-textarea" rows="4" placeholder="今日の様子を、飼い主さんへ一言。">今月もとってもお利口にしていました。</textarea>',
+    extra: null,
+    scripts: ['verify-edit.mjs'],
+  },
 ];
 
 /** ファイルの中身の指紋。戻せたことを**実際に確かめる**ために使う。 */
