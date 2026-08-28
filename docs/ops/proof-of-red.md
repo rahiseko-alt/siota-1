@@ -1067,6 +1067,35 @@ FAIL  犬の名前（見出しへ入る）  カルテを作れず、細工を届
 - verify-empty-pet.mjs :: 0b. 下書きのカルテを用意できた
 - verify-xss.mjs :: label #2
 
+### 22回目: 確定の要求がエラーになる 1件（2026-08-28・**手元で実測**）
+
+`verify-xss` の3つ目の分岐（112行目）を実証し、**`label` 3件がすべて揃った**。
+
+```
+node scripts/mutate-run.mjs finalize-returns-error
+  ✅ verify-xss.mjs  赤 8件（8つの細工それぞれで分岐が発火）
+
+npm run verify:xss （壊し方を手で当てて詳細を確認）
+  FAIL  犬の名前（見出しへ入る）  確定に失敗 (500)。細工を飼い主の画面まで届けられなかった
+```
+
+「**確定に失敗**」＝ 112行目 ＝ `label #3`。
+
+**この行が守っているもの**は他の検査と性質が違う。**細工が飼い主の画面まで
+届かなかったことを報告する行**で、これが無いと「土台の都合で細工が届かなかった」
+のに `verify-xss` が緑になる——**検査が実際には走っていないのに『XSS は安全』
+という偽の安心を出す**。その意味で、これは客を守っている。
+
+3つの分岐は、それぞれ別の壊し方でしか到達できない（前の段で `continue` するため）:
+
+| 分岐 | 到達させる壊し方 |
+|---|---|
+| `label`（89行目・犬を登録できず） | `pet-create-wrong-status` |
+| `label #2`（101行目・カルテを作れず） | `report-create-wrong-status` |
+| `label #3`（112行目・確定に失敗） | `finalize-returns-error` |
+
+- verify-xss.mjs :: label #3
+
 ## F4 を閉じる範囲（マスター判断・2026-08-28）
 
 台帳を129件すべて埋めるのではなく、**客に当たる経路まで**で F4 を閉じる。
@@ -1131,7 +1160,6 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 
 - verify-stack.mjs :: seed のアカウントで実ログインできる #2
 - verify-stack.mjs :: マイグレーションと seed が当たっている（seed の犬 X を id で引ける） #2
-- verify-xss.mjs :: label #3
 - verify-admin.mjs :: 7. 直す対象のカルテを1枚確定できた
 - verify-delete.mjs :: 1. 写真つきのカルテを確定できた
 - verify-delete.mjs :: 2. 写真の実体が Storage に在る（service_role で数える）

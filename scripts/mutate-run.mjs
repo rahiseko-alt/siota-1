@@ -45,6 +45,19 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
  * 証明の役に立たない（何を検出したのか言えないため）。
  */
 export const MUTATIONS = [
+  /* ── 20回目: 確定の要求がエラーになる（2026-08-28・手元で実測）
+     `verify-xss` の3つ目の分岐（112行目）は「細工を飼い主の画面まで届けられ
+     なかった」ことを報告する行。**これが無いと、検査が実際には走っていないのに
+     緑になる**——`XSS の検査が緑だから安全` という偽の安心を止めるための行なので、
+     赤にできることを確かめておく価値がある。 */
+  {
+    id: 'finalize-returns-error',
+    why: '**確定の要求がサーバでエラーになる**（書いたカルテが飼い主に届かない）',
+    file: 'worker/src/index.js',
+    find: 'return json({ report: await store.finalizeReport(petId, reportId) }, 200, cors);',
+    replace: 'return json({ report: await store.finalizeReport(petId, reportId) }, 500, cors);',
+    scripts: ['verify-xss.mjs'],
+  },
   /* ── 19回目: カルテ作成が「できた」と返さない（2026-08-28・手元で実測）
      `pet-create-wrong-status` と同じ型。**実体は作られる**ので土台は壊れず、
      「作れたかどうかを状態コードで見ている」検査だけが赤になる。 */
