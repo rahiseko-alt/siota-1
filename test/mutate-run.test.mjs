@@ -54,8 +54,12 @@ test('台帳の壊し方は、いまのリポジトリに1回ずつ現れる', (
   const root = path.resolve(import.meta.dirname, '..');
   for (const m of MUTATIONS) {
     const src = fs.readFileSync(path.join(root, m.file), 'utf8');
-    const hits = src.split(m.find).length - 1;
-    assert.equal(hits, 1, `${m.id}: ${m.file} に目印が ${hits}回（1回でなければ壊せない）`);
+    /* 2か所を同時に開ける壊し方（`edits`）は、**そのどれもが**1回でなければならない。
+       1つでも 0回なら、その1枚は剥がれないまま「両方開けた」と記録される。 */
+    for (const e of (m.edits || [{ find: m.find }])) {
+      const hits = src.split(e.find).length - 1;
+      assert.equal(hits, 1, `${m.id}: ${m.file} に目印が ${hits}回（1回でなければ壊せない）\n  ${e.find}`);
+    }
   }
 });
 

@@ -139,12 +139,21 @@ export const MUTATIONS = [
     scripts: ['verify-portal.mjs'],
   },
   {
-    id: 'rls-reports-open-to-strangers',
+    id: 'rls-both-layers-open',
     sql: true,
     why: '**確定したカルテが、他人にも読める**——URL さえ知れば誰のカルテでも開ける',
     file: 'supabase/migrations/202607160001_supabase_base.sql',
-    find: "  for select to authenticated using (status = 'final' and private.can_read_pet(pet_id));",
-    replace: "  for select to authenticated using (status = 'final');",
+    /* **1枚ずつでは漏れない。** 実測（どちらも `verify-report-roundtrip` は緑）:
+         run 122  犬の RLS だけ開ける  → カルテは `can_read_pet` が止める
+         run 124  カルテの RLS だけ開ける → 画面が犬を引けず、そこで止まる
+       他人にカルテが届くのは**両方が開いたときだけ**なので、
+       `17.` を判定するには2枚同時に剥がすしかない（`F-20260828-52`）。 */
+    edits: [
+      { find: '  for select to authenticated using (active and private.is_owner_user(owner_id));',
+        replace: '  for select to authenticated using (active);' },
+      { find: "  for select to authenticated using (status = 'final' and private.can_read_pet(pet_id));",
+        replace: "  for select to authenticated using (status = 'final');" },
+    ],
     extra: null,
     scripts: ['verify-report-roundtrip.mjs'],
   },
@@ -167,20 +176,30 @@ const fingerprint = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)
 export function applyMutation(root, m) {
   const target = path.join(root, m.file);
   const before = fs.readFileSync(target, 'utf8');
-  const hits = before.split(m.find).length - 1;
-  if (hits !== 1) {
-    throw new Error(
-      `[${m.id}] 壊せない: ${m.file} に目印が ${hits}回（ちょうど1回でなければならない）\n`
-      + `  目印: ${m.find}\n`
-      + `  0回なら**壊したつもりで何も壊れていない**——そのまま走らせると`
-      + `「赤にならなかった＝検査が壊れている」と逆の結論を出す。`,
-    );
+  /* **守りが二重のときは、1枚ずつ剥がしても何も漏れない。**
+     `verify-report-roundtrip :: 17.` は、犬の RLS だけ開けても（run 122）
+     カルテの RLS だけ開けても（run 124）緑のままだった——**どちらも正しい**。
+     片方が残っているかぎり他人には届かないからである。
+     つまりこの項を判定するには**両方を同時に開ける**しかない。
+     `edits` はそのための形で、単発の `find`/`replace` はその1件版として扱う。 */
+  const edits = m.edits || [{ find: m.find, replace: m.replace }];
+  for (const e of edits) {
+    const hits = before.split(e.find).length - 1;
+    if (hits !== 1) {
+      throw new Error(
+        `[${m.id}] 壊せない: ${m.file} に目印が ${hits}回（ちょうど1回でなければならない）\n`
+        + `  目印: ${e.find}\n`
+        + `  0回なら**壊したつもりで何も壊れていない**——そのまま走らせると`
+        + `「赤にならなかった＝検査が壊れている」と逆の結論を出す。`,
+      );
+    }
   }
   /* **置換だけで壊れる壊し方もある。** `extra` は「元の名前で空の実装を足す」形の
      ためのもので、条件を `false &&` にするような壊しには要らない。
      無いのに `undefined` を足すと、**壊した跡が文字列として残って build が通らなくなり**、
      「検査が気づかなかった」ではなく「壊し方が下手だった」で赤になる。 */
-  let after = before.replace(m.find, m.replace);
+  let after = before;
+  for (const e of edits) after = after.replace(e.find, e.replace);
   if (m.inject) after = after.replace(m.injectAfter, m.injectAfter + m.inject);
   if (m.extra) after += `\n${m.extra}`;
   fs.writeFileSync(target, after);
