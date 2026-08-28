@@ -767,7 +767,7 @@
 ### [F-20260828-59] 確定が「id の無いカルテ」を返したとき、**画面はそのまま進んで `/null` に着く**
 
 - **Date**: 2026-08-28
-- **Status**: OPEN（**直していない**。製品コードの変更はマスター判断・下記）
+- **Status**: 解決済み（マスター指示「直せ」・2026-08-28。赤 → 緑 → 戻して赤の3出力あり）
 - **Category**: logic
 - **Trigger/Context**: PR #32 の CI（run #163 系・`verify` ジョブ）で `verify:photo` が落ちた。手元の作業ツリーでは同じコミットで3回とも通る。落ち方は `page.waitForURL: Timeout 60000ms exceeded` で、ログに `navigated to "http://localhost:8798/edit/p/9e05dc32-…/null"` と出ていた——**遷移先のカルテIDが文字列 `null`**
 - **What happened**: 確定（`App.commitReport()`）が、**保存できたかどうかを確かめないまま**次の画面へ移っていた。`src/js/ui.js`:
@@ -791,6 +791,25 @@
 
   したがって「確定は応答を返したが、その中に id が無い」ときだけ、**`D-2` の防波堤をすり抜ける**。呼ぶ側（`commitReport`）も `saved.id` をそのまま信じているので、二重に素通りする
 - **How it was found**: CI の失敗を「製品コードを1行も触っていない diff なのに落ちた」として調べた。手元で `verify:photo` を3回走らせて再現しなかったため、CI ログの遷移先 URL（`/null`）だけを手がかりに、その文字列を作り得る場所をコードから逆に辿って見つけた。**壊して確かめたのではなく、読んで見つけた**
-- **Fix**: **まだ直していない。** 直すなら2箇所。①`saveReport`／`reviseReport` の確定段を `if (!finalized || !finalized.report || !finalized.report.id) throw` にする（作る段と揃える）。②`commitReport` で `saved && saved.id` を確かめ、無ければ画面を移さず理由を出す（`catch` と同じ扱い）。
-  **いま直していない理由**は2つ。(1) 現在フェーズは **F4**（`D-16`・整理整頓の期間で、見つけた不具合は原則あと回し／範囲外を触らない）で、`src/js` と `backend/js` は今回の PR の範囲外。(2) `D-18` が解決の主張に**赤 → 緑 → 戻して赤**の3出力を求めるが、**この現象をまだ再現できていない**ので「戻して赤」を出せない。直す前に、`finalize` が id 無しを返す状況を作れる壊し方（`mutate-run.mjs`）を1つ書くのが順序として正しい
+- **Fix**: **マスター指示（2026-08-28「直せ」）で直した。** 2箇所、どちらも「番号が入っているか」を足しただけ。
+  1. `backend/js/supabase-staff.js` — `saveReport` の確定段と `reviseReport` の直し段に `|| !….report.id` を足し、**作る段（もともと `!report.id` を見ていた）と揃えた**
+  2. `src/js/ui.js` `commitReport()` — `location.href` を組む**前**に `if (!saved || !saved.id) throw` を置き、既存の `catch` に落とす。理由が出て、ボタンも押せる状態に戻る（行き止まりにしない）
+
+  **二重にしてある。** 片方だけだと、片方が壊れた日に誰も気づかない——`F-20260828-52` で同じことを学んだ（結果だけを見る項が1本だと、守りが1枚剥がれても緑のままになる）。
+
+  検査は `test/report-commit-guard.test.mjs`（7件・`npm run test:unit` に組み込み済み）。
+  **実測（`D-18` の3出力）**:
+
+  ```
+  直す前     node --test test/report-commit-guard.test.mjs  → 7件中 6件が赤
+  直したあと                                                 → 7件すべて緑
+  直しを戻す                                                 → 再び 6件が赤
+  ```
+
+  7件目「番号が在るときは、これまでどおり進む」は**直す前から緑**。これが赤に
+  ならないことで、**直しが機能そのものを殺していない**ことを示している。
+
+  実データでも確かめた（`commitReport` を通る3本）: `verify:photo` 13/13 ／
+  `verify:roundtrip` 23/23 ／ `verify:m6` 13/13、すべて EXIT 0。
+
 - **How to prevent**: **「返ってきた」と「使える値が入っている」は別物。** `throw` しない API の返り値は、**呼ぶ側が使うフィールドまで**確かめる。とくに `encodeURIComponent()` は `null`／`undefined` を**文字列に変えてしまう**ので、URL を組むところでは値の欠落が例外にならず、**そのまま遷移してしまう**。同じ型が `D-2`（`finalize_report` の `null` 返却）で既に一度起きている——**そのとき塞いだのは「`null` が返る」場合だけで、「器は返るが中身が欠けている」場合は塞がっていなかった**

@@ -491,7 +491,11 @@ async function saveReport(petId, reportData, reportDate, draftId) {
     `/api/pets/${encodeURIComponent(petId)}/reports/${encodeURIComponent(report.id)}/finalize`,
     { method: 'POST' },
   );
-  if (!finalized || !finalized.report) throw new Error('カルテを確定できませんでした');
+  /* **器だけでなく番号まで見る。** 作る段（上の `!report.id`）と揃えた。
+     番号が欠けたまま返すと、呼ぶ側が URL に `encodeURIComponent(null)` を
+     埋めて**文字列 `"null"`** を作り、例外も出ないまま `/edit/p/{id}/null` へ
+     進む（`F-20260828-59`）。`D-2` を塞いだのは「空が返る」場合だけだった。 */
+  if (!finalized || !finalized.report || !finalized.report.id) throw new Error('カルテを確定できませんでした');
   return finalized.report;
 }
 
@@ -518,7 +522,7 @@ async function reviseReport(petId, reportId, reportData) {
     `/api/pets/${encodeURIComponent(petId)}/reports/${encodeURIComponent(reportId)}/revise`,
     { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data }) },
   );
-  if (!revised || !revised.report) throw new Error('カルテを直せませんでした');
+  if (!revised || !revised.report || !revised.report.id) throw new Error('カルテを直せませんでした');
   return revised.report;
 }
 
