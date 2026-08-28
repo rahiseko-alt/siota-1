@@ -260,7 +260,22 @@ jobs:
             exit 0
           fi
           git commit -m "mutate の結果を記録する（run ${{ github.run_number }}）"
-          git push origin HEAD:${{ github.ref_name }}
+          # **他から同じ枝に push が挟まると、素の push は拒否される**
+          # （run 139・セッション側が手元の作業を push した直後に起きた）。
+          # 拒否されたら中身は手元に残ったまま消える——成果物 zip から手で
+          # 復元する羽目になった。fetch して rebase してから retry する。
+          for i in 1 2 3; do
+            if git push origin HEAD:${{ github.ref_name }}; then
+              break
+            fi
+            echo "push が拒否された。fetch して rebase してから ${i}回目のやり直し"
+            git fetch origin ${{ github.ref_name }}
+            git rebase origin/${{ github.ref_name }}
+            if [ "$i" = 3 ]; then
+              echo "::error::3回試しても push できなかった。docs/ops/mutate-run-partial.md を成果物から復元すること"
+              exit 1
+            fi
+          done
 
       - name: 壊した跡が残っていないことを確かめる
         if: always()

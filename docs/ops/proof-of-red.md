@@ -24,8 +24,8 @@
 | | |
 |---|---|
 | 機械が数えた検査 | **183件**（`scripts/verify-*.mjs`） |
-| 壊して赤になったところを見た | **65件**（毒見 21 ＋ 1件ずつ壊す 44・2026-08-28） |
-| まだ見ていない | **118件** |
+| 壊して赤になったところを見た | **103件**（毒見 21 ＋ 1件ずつ壊す 82・2026-08-28） |
+| まだ見ていない | **80件** |
 
 **出発点は全件が未確認だった。** 毒見で埋め、天井に当たったあと（下の「⛔ 毒見の天井」）、
 **1件ずつ壊す**（マスター判断 A）で続けている。**数は上の表だけが正**——
@@ -254,13 +254,11 @@ noauth : 赤 4 / 緑のまま 1
 - verify-report-roundtrip.mjs :: 3. 確認: 担当からの一言
 - verify-report-roundtrip.mjs :: 4. 確認: 爪
 - verify-report-roundtrip.mjs :: 5. 確認: 耳
-- verify-report-roundtrip.mjs :: 6. 確認: 歯
 - verify-report-roundtrip.mjs :: 7. 確認: 体重
 - verify-report-roundtrip.mjs :: 9. 飼い主: 犬の名前
 - verify-report-roundtrip.mjs :: 10. 飼い主: 担当からの一言
 - verify-report-roundtrip.mjs :: 11. 飼い主: 爪
 - verify-report-roundtrip.mjs :: 12. 飼い主: 耳
-- verify-report-roundtrip.mjs :: 13. 飼い主: 歯
 - verify-report-roundtrip.mjs :: 14. 飼い主: 体重
 
 **`verify-xss` の18件は移せない。** `text-as-html`（`setText` が `innerHTML` を使う＝
@@ -344,7 +342,6 @@ run #116（14b を足した後） ✅  weight-graph-off  verify-report-roundtrip
 - verify-portal.mjs :: 11. ログイン後、自分の犬（X/Y/Z）が一覧に出て、他人の犬（Q）は出ない
 - verify-portal.mjs :: 13. 他人の犬（Q）は見えない（RLS）
 - verify-draft.mjs :: 3. 下書きは飼い主に見えない
-- verify-empty-pet.mjs :: 6. 確定していないカルテは飼い主に見えない
 
 **出た穴**: `verify-report-roundtrip :: 17. 他人には見えない（RLS）` は、
 犬の RLS を全開にしても**緑のままだった**。
@@ -443,6 +440,84 @@ run 124  カルテの RLS だけ開ける  → 画面が犬を引けず、そこ
 ところだった。`git diff --cached`（無視設定と無関係に本当の差分を返す）へ
 直した。上の内容は成果物から復元して手で移した。
 
+### 2〜6回目分・`admin-menu-title-lost` の再実行 41件（2026-08-28・CI run #139）
+
+`ids` に20個（`admin-menu-title-lost` の単体再実行 + 2〜5回目ぶん全部）を渡して走らせた。
+
+**`admin-menu-title-lost` の謎が解けた。** run #133 で「狙いは4件なのに2件しか
+赤にならない」と見えていたのは、**謎ではなく取り違い**だった——単体で走らせたら
+`2./3./4./13.` の**4件とも**赤になった。run #133 の集計表示（`proven` を検査の
+**名前**で `Map` に入れて重複を弾く仕組み）を読み違えていただけで、機械側の欠陥では
+なかった。
+
+**この run もまた `git status --porcelain` の無視ファイル問題を踏んだ**——
+直前に別のコミット（`d9c93ce`）を push していたため、CI 側の push が
+`rejected (fetch first)` で落ちた。**中身は正しく `docs/ops/mutate-run-partial.md`
+に書けていた**ので、成果物 zip から復元して手で移した（`F-20260828-53` の続き）。
+
+新たに ⚠️ が2種、4件出た:
+
+```
+⚠️  rls-any-owner-sees-any-dog verify-portal.mjs              赤   0件
+⚠️  rls-any-owner-sees-any-dog verify-invitation.mjs          赤   0件
+⚠️  edit-empty-photo-src-regress verify-edit.mjs                赤   0件
+⚠️  edit-empty-photo-src-regress verify-report-roundtrip.mjs    赤   0件
+```
+
+`edit-empty-photo-src-regress` は原因が判明・修正済み（`F-20260828-54`。
+`img.src=''` は**プロパティ**の代入で、`getAttribute('src')` で読む2つの検査には
+そもそも見えない）。`scripts` から `verify-edit.mjs` と `verify-report-roundtrip.mjs`
+を外し、狙いどおり動く `verify-photo-roundtrip.mjs` だけに絞った。
+
+`rls-any-owner-sees-any-dog` は**未解決**。この壊し方は run #122・#126 で
+**同じコードのまま** `verify-portal.mjs` を2回赤にしている。今回だけ0件になった
+理由が、CI環境の一時的なもの（`db reset` 後 PostgREST がまだ古いポリシーの
+キャッシュを見ていた、等）か、それとも本当に何かが変わったのかを、**まだ判別
+できていない**。次の回で**この壊し方だけを単体で**再実行し、切り分ける。
+`verify-invitation.mjs`（今回追加した分）の期待もその結果を見てから判断する。
+
+- verify-admin.mjs :: 2. 管理者ページに リピーター / 新規 / 削除 が在る
+- verify-admin.mjs :: 3. リピーターに カルテ作成 / カルテ修正 が在る
+- verify-admin.mjs :: 4. 新規に 顧客アカウント作成 / ペットアカウント作成 が在る
+- verify-admin.mjs :: 13. 削除に 顧客 / ペット / カルテ の3つが在る
+- verify-edit.mjs :: 1. /edit が配信される
+- verify-edit.mjs :: 2. 正UI が配られている（screen-N が在る）
+- verify-edit.mjs :: 3. App が名前で届く（インライン onclick の解決先）
+- verify-edit.mjs :: 3b. App のメソッドが実際に呼べる
+- verify-edit.mjs :: 3c. onclick="App.…" が実在する
+- verify-edit.mjs :: 4. Supabase vendor が載っている
+- verify-edit.mjs :: 5. staff モジュールが載っている（boot を持つ）
+- verify-edit.mjs :: 6. 注入先が backend/js/ に直っている
+- verify-edit.mjs :: 8. ②一覧が実データの犬になっている
+- verify-edit.mjs :: 11. 件数が実データと合っている
+- verify-edit.mjs :: 14. ⑤確認の器から意匠モックの既定文が消えている
+- verify-edit.mjs :: 17. ④の入力欄が空で始まる（見本の文が入っていない）
+- verify-portal.mjs :: 5. 未ログインでログイン導線が出る
+- verify-portal.mjs :: 6. ログインボタンが押せる
+- verify-portal.mjs :: 9. 犬を直接指す URL でもログイン導線が出る
+- verify-portal.mjs :: 14. サインアウトでログイン画面に戻る
+- verify-portal.mjs :: 15. 失効・リンク解除のあとでも、ログインボタンが出て押せる（詰まない）
+- verify-m6.mjs :: ④. カルテを書く画面に、書く場所と確定の入口が在る
+- verify-m6.mjs :: ⑤c. 確定後に④へ戻ると、その犬の名前が見出しに出ている
+- verify-m6.mjs :: ⑥a. 飼い主は一覧から自分の犬に入れる
+- verify-empty-pet.mjs :: 2. 正直な空の状態が出ている
+- verify-empty-pet.mjs :: 3. 写真が1枚も出ていない
+- verify-empty-pet.mjs :: 5. 見本の文章が出ていない
+- verify-empty-pet.mjs :: 6. 確定していないカルテは飼い主に見えない
+- verify-invitation.mjs :: 2. 一覧に初回登録（QR）の入口が出ている
+- verify-invitation.mjs :: 3. 押すと初回登録の URL が出る
+- verify-invitation.mjs :: 4. QR が画像として出ている
+- verify-invitation.mjs :: 6. 招待を消化すると、自分の犬が見える
+- verify-invitation.mjs :: 7. 使い終わった招待は、別の人が使えない
+- verify-delete.mjs :: 3. 製品の削除の道が最後まで通った
+- verify-draft.mjs :: 5. 確定すると下書きは残らない
+- verify-draft.mjs :: 6. 次に開くと、確定済みの記入は蘇らない
+- verify-report-roundtrip.mjs :: 1b. 押したボタンの表示が、そのまま保存される値になっている
+- verify-report-roundtrip.mjs :: 2. 確定してカルテが1件できた
+- verify-report-roundtrip.mjs :: 6. 確認: 歯
+- verify-report-roundtrip.mjs :: 13. 飼い主: 歯
+- verify-photo-roundtrip.mjs :: 10. 飼い主: 壊れた画像（ページURL を指す img）が無い
+
 ## F4 を閉じる範囲（マスター判断・2026-08-28）
 
 台帳を129件すべて埋めるのではなく、**客に当たる経路まで**で F4 を閉じる。
@@ -509,11 +584,7 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 - verify-stack.mjs :: マイグレーションと seed が当たっている（seed の犬 X を id で引ける） #2
 - verify-xss.mjs :: label #2
 - verify-xss.mjs :: label #3
-- verify-admin.mjs :: 2. 管理者ページに リピーター / 新規 / 削除 が在る
-- verify-admin.mjs :: 3. リピーターに カルテ作成 / カルテ修正 が在る
-- verify-admin.mjs :: 4. 新規に 顧客アカウント作成 / ペットアカウント作成 が在る
 - verify-admin.mjs :: 7. 直す対象のカルテを1枚確定できた
-- verify-admin.mjs :: 13. 削除に 顧客 / ペット / カルテ の3つが在る
 - verify-admin.mjs :: 16. ペットが実際に消えた
 - verify-admin.mjs :: 17. 顧客が実際に消えた
 - verify-admin.mjs :: 18. 消した犬の写真が Storage に残っていない
@@ -521,79 +592,45 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 - verify-delete.mjs :: 0. 検査用の犬を登録できた
 - verify-delete.mjs :: 1. 写真つきのカルテを確定できた
 - verify-delete.mjs :: 2. 写真の実体が Storage に在る（service_role で数える）
-- verify-delete.mjs :: 3. 製品の削除の道が最後まで通った
 - verify-draft.mjs :: 4. 下書きの中身が漏れていない
-- verify-draft.mjs :: 5. 確定すると下書きは残らない
-- verify-draft.mjs :: 6. 次に開くと、確定済みの記入は蘇らない
-- verify-edit.mjs :: 1. /edit が配信される
-- verify-edit.mjs :: 2. 正UI が配られている（screen-N が在る）
-- verify-edit.mjs :: 3. App が名前で届く（インライン onclick の解決先）
-- verify-edit.mjs :: 3b. App のメソッドが実際に呼べる
-- verify-edit.mjs :: 3c. onclick="App.…" が実在する
-- verify-edit.mjs :: 4. Supabase vendor が載っている
-- verify-edit.mjs :: 5. staff モジュールが載っている（boot を持つ）
-- verify-edit.mjs :: 6. 注入先が backend/js/ に直っている
 - verify-edit.mjs :: 7. アプリ由来のエラーが無い
-- verify-edit.mjs :: 8. ②一覧が実データの犬になっている
 - verify-edit.mjs :: 9. 仮データ（window.DUMMY）の犬が出ていない
 - verify-edit.mjs :: 10. 持っていない項目（犬種・担当）が空で出ている
-- verify-edit.mjs :: 11. 件数が実データと合っている
 - verify-edit.mjs :: 12. 一覧の画面（screen-2）が開いている
 - verify-edit.mjs :: 13. ⑤確認の画面（screen-4）が開いている
-- verify-edit.mjs :: 14. ⑤確認の器から意匠モックの既定文が消えている
 - verify-edit.mjs :: 15. 空の写真スロットがページURLを指していない
 - verify-edit.mjs :: 16. 担当メッセージが無いカルテで、文例が出ていない
-- verify-edit.mjs :: 17. ④の入力欄が空で始まる（見本の文が入っていない）
 - verify-empty-pet.mjs :: 0b. 下書きのカルテを用意できた
 - verify-empty-pet.mjs :: 1. 犬の名前は出ている（ページ自体は開けている）
-- verify-empty-pet.mjs :: 2. 正直な空の状態が出ている
-- verify-empty-pet.mjs :: 3. 写真が1枚も出ていない
 - verify-empty-pet.mjs :: 4. 履歴の行が1つも出ていない
-- verify-empty-pet.mjs :: 5. 見本の文章が出ていない
 - verify-empty-pet.mjs :: 7. 下書きの中身が漏れていない
 - verify-empty-pet.mjs :: 8. トリマーは1件目を作る画面に入れる
 - verify-empty-pet.mjs :: 9. 確定のボタンが在る（行き止まりでない）
 - verify-invitation.mjs :: 1. その飼い主の犬を登録できた
-- verify-invitation.mjs :: 2. 一覧に初回登録（QR）の入口が出ている
-- verify-invitation.mjs :: 3. 押すと初回登録の URL が出る
-- verify-invitation.mjs :: 4. QR が画像として出ている
 - verify-invitation.mjs :: 5. 招待を消化する前は、その犬を見られない
-- verify-invitation.mjs :: 6. 招待を消化すると、自分の犬が見える
-- verify-invitation.mjs :: 7. 使い終わった招待は、別の人が使えない
 - verify-m6.mjs :: ②b. ログインすると作業画面に入れる
 - verify-m6.mjs :: ③. 名前で犬を選べる
-- verify-m6.mjs :: ④. カルテを書く画面に、書く場所と確定の入口が在る
 - verify-m6.mjs :: ★. 間違えても1タッチで一覧へ戻れる
 - verify-m6.mjs :: ⑤. 確定すると確認の画面に着く
 - verify-m6.mjs :: ⑤b. 確定した中身に、書いた一言が入っている
-- verify-m6.mjs :: ⑤c. 確定後に④へ戻ると、その犬の名前が見出しに出ている
-- verify-m6.mjs :: ⑥a. 飼い主は一覧から自分の犬に入れる
 - verify-m6.mjs :: ⑥b. 飼い主はカルテを開ける
 - verify-photo-roundtrip.mjs :: `${kind === 'trimming' ? '1' : kind === 'ear' ? '2' : '3'}. ${kind} の写真を付けられた`
 - verify-photo-roundtrip.mjs :: 4. 写真つきで確定できた
 - verify-photo-roundtrip.mjs :: 5. 保存された写真4枚が実体になっている（asset://）
-- verify-photo-roundtrip.mjs :: 10. 飼い主: 壊れた画像（ページURL を指す img）が無い
 - verify-photo-roundtrip.mjs :: 13. アプリ由来のエラーが無い
 - verify-portal.mjs :: 1. /my が配信される
 - verify-portal.mjs :: 2. 起動分岐が立っている
 - verify-portal.mjs :: 3. Supabase vendor が読めている
 - verify-portal.mjs :: 4. ポータルが起動している
-- verify-portal.mjs :: 5. 未ログインでログイン導線が出る
-- verify-portal.mjs :: 6. ログインボタンが押せる
 - verify-portal.mjs :: 7. 未ログインで中身とログアウトは隠れている
 - verify-portal.mjs :: 8. 見本画像を出していない
-- verify-portal.mjs :: 9. 犬を直接指す URL でもログイン導線が出る
 - verify-portal.mjs :: 10. アプリ由来のコンソールエラーが無い（ログイン前）
 - verify-portal.mjs :: 12. ログイン後はログアウトボタンが出る
-- verify-portal.mjs :: 14. サインアウトでログイン画面に戻る
-- verify-portal.mjs :: 15. 失効・リンク解除のあとでも、ログインボタンが出て押せる（詰まない）
 - verify-production.mjs :: `配信物が手元の dist と同じ（${sameCount}/${staticFiles.length} 本）`
 - verify-production.mjs :: /my が dist/my.html と同じ
 - verify-production.mjs :: `削除済みの旧UI が本番に残っていない（${deletedUiPaths.length} 本を確認）`
 - verify-production.mjs :: `/edit が正UI を配っている（手元 ${want.length} 本 ＋ 注入 ${injected.length} 本）`
 - verify-report-roundtrip.mjs :: 1. 記入先の要素がすべて実在する
-- verify-report-roundtrip.mjs :: 1b. 押したボタンの表示が、そのまま保存される値になっている
-- verify-report-roundtrip.mjs :: 2. 確定してカルテが1件できた
 - verify-report-roundtrip.mjs :: 8. 確認: 犬体図の印が画像として出ている
 - verify-report-roundtrip.mjs :: 15. 飼い主: 犬体図の印が画像として届く
 - verify-report-roundtrip.mjs :: 16. 飼い主: 壊れた画像（ページURL）が出ていない

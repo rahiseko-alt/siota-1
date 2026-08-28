@@ -302,10 +302,15 @@ export const MUTATIONS = [
     find: "    else img.removeAttribute('src');",
     replace: "    else img.src = '';",
     extra: null,
-    /* `setImage` は `renderMagazine` が確認画面・飼い主画面の両方で使う共通部品なので、
-       同じ再発が verify-photo-roundtrip の 10. と verify-report-roundtrip の 16. にも
-       当たる（5回目のラウンドで追加）。 */
-    scripts: ['verify-edit.mjs', 'verify-photo-roundtrip.mjs', 'verify-report-roundtrip.mjs'],
+    /* **`verify-edit.mjs` と `verify-report-roundtrip.mjs` は外した**（run #139 で
+       実測・⚠️）。`img.src = ''` は**プロパティ**代入で、読み返す `img.src` だけが
+       ページURLに解決される——`getAttribute('src')` は素の空文字のまま変わらない。
+       `verify-photo-roundtrip.mjs` は `i.src === location.href`（プロパティ）で見るが、
+       `verify-edit.mjs`（15.）と `verify-report-roundtrip.mjs`（16.）は
+       `el.getAttribute('src')`（素の属性）で見ている——**同じ再発に見えて、
+       実は別の観測点**だった。狙いを合わせて他の壊し方を探すまで、この2件は
+       未証明のまま残す（F-20260828-54）。 */
+    scripts: ['verify-photo-roundtrip.mjs'],
   },
   {
     id: 'edit-trimmer-letter-prefilled',

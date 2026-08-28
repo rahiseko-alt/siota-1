@@ -693,3 +693,15 @@
 - **How it was found**: CI run #139 の準備で、直前の run #133 の結果を台帳へ反映しようとしたところ、枝に対応するコミットが存在しないことに気づいた。成果物 zip をダウンロードし、`mutate-run-partial.md` の中身を復元して初めて13件の赤が判明した
 - **Fix**: 差分の判定を `git status --porcelain`（無視ファイルを見せない）から、`git add -f` で先にステージしたあと `git diff --cached --quiet`（無視設定と無関係に、ステージされた本当の差分を返す）へ変えた。「見る」と「足す」が同じ無視の扱いで揃うようにした
 - **How to prevent**: **`.gitignore` 対象のファイルを CI でコミットする設計は、それ自体が事故りやすい**（今回のように「見る」処理と「足す」処理で無視の扱いが割れる）。`git status --porcelain -- <path>` を無視ファイルの差分検出に使わない——`git add -f` してから `git diff --cached` で見る、または最初から無視対象にしない設計を検討する
+
+### [F-20260828-54] `img.src = ''` の壊し方が、狙った2件には見えていなかった（プロパティと属性の違い）
+
+- **Date**: 2026-08-28
+- **Status**: 解決済み
+- **Category**: test
+- **Trigger/Context**: `edit-empty-photo-src-regress`（`docs/deferred.md` #16 の再発を確かめる壊し方）の `scripts` を、動作確認済みの `verify-photo-roundtrip.mjs` から `verify-edit.mjs` と `verify-report-roundtrip.mjs` にも広げた（`setImage` が3画面共通の部品だから、という理由づけで）。CI run #139 で初めて実測した
+- **What happened**: `verify-photo-roundtrip.mjs` は狙いどおり赤（`10.`）になったが、**`verify-edit.mjs`（`15.`）と `verify-report-roundtrip.mjs`（`16.`）は1件も赤にならなかった**（⚠️ 2件）
+- **Root Cause**: **3つの検査は、同じ「壊れた画像URL」を、違う場所から読んでいた。** `magazine-view.js` の壊し方は `img.src = ''`（**プロパティ**への代入）。ブラウザは `img.src` プロパティを読むときだけ、空文字を現在のページURLに解決する。`verify-photo-roundtrip.mjs` は `i.src === location.href`（**プロパティ**）で見ているので検出できるが、`verify-edit.mjs` と `verify-report-roundtrip.mjs` は `el.getAttribute('src')`（**素の属性値**）で見ている——こちらは常に空文字のままで、絶対に URL には解決されない。「同じ再発を見ているはず」という思い込みで `scripts` を広げたが、**実際は観測点が違う検査**だった
+- **How it was found**: 壊してみて初めて出た（`proof-of-red` の定義どおり）。⚠️ が2件出たので、両ファイルの該当行を読み比べて `getAttribute` と `.src` の違いに気づいた
+- **Fix**: `edit-empty-photo-src-regress` の `scripts` を `verify-photo-roundtrip.mjs` だけに戻した。`verify-edit.mjs :: 15.` と `verify-report-roundtrip.mjs :: 16.` は未証明のまま——**この2件を狙うなら、`getAttribute('src')` が実際に壊れた値を返す形の壊し方**（例えば `renderMagazine` が生成する HTML 文字列そのものに URL を混入させる）が要る
+- **How to prevent**: **「同じ見出しの検査は同じものを見ている」と決めつけない。** 壊し方を複数の検査に広げるときは、広げる前に**各検査が実際に何を読んでいるか**（プロパティかDOM属性か、どのセレクタか）を1つずつ確認する。「共通部品を直したから共通に効くはず」は仮説であって証拠ではない（`D-18`）
