@@ -1,7 +1,7 @@
-# 毒見の結果（何も動いていない世界で `verify:*` を走らせた）
+# 毒見の結果（毒「empty」の世界で `verify:*` を走らせた）
 
 
-実行: `node scripts/poison-run.mjs`（Docker 不要）
+実行: `node scripts/poison-run.mjs --flavor=empty`（Docker 不要）
 
 - 赤になった（壊すと落ちることを確かめた）: **25件**
 - **緑のまま残った（何も無くても通る）: 18件**

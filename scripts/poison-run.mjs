@@ -146,7 +146,7 @@ const outPath = path.join(
     : `docs/ops/poison-run-result${FLAVOR === 'empty' ? '' : `-${FLAVOR}`}.md`,
 );
 fs.writeFileSync(outPath, [
-  `# 毒見の結果（何も動いていない世界で \`verify:*\` を走らせた）`,
+  `# 毒見の結果（毒「${FLAVOR}」の世界で \`verify:*\` を走らせた）`,
   wanted.length ? `\n**一部だけ（${wanted.join(' ')}）。全体の記録ではない。**` : '',
   '',
   `実行: \`node scripts/poison-run.mjs --flavor=${FLAVOR}\`（Docker 不要）`,
@@ -163,6 +163,9 @@ fs.writeFileSync(outPath, [
   ...survived.map((s) => `- ${s.file} :: ${s.name}`),
   '',
 ].join('\n'));
-process.stdout.write(`  結果を書いた: docs/ops/poison-run-result.md\n`);
+/* **書いた先を、書いた先から出す。** ここを文字列で直書きしていたため、
+   `--flavor=noauth` の回に `-noauth.md` へ書きながら
+   「poison-run-result.md に書いた」と表示していた（説明文が嘘をつく型）。 */
+process.stdout.write(`  結果を書いた: ${path.relative(ROOT, outPath)}\n`);
 
 process.exit(survived.length > 0 ? 1 : 0);

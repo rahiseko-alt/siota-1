@@ -1,4 +1,4 @@
-# 毒見の結果（何も動いていない世界で `verify:*` を走らせた）
+# 毒見の結果（毒「noauth」の世界で `verify:*` を走らせた）
 
 
 実行: `node scripts/poison-run.mjs --flavor=noauth`（Docker 不要）
