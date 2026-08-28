@@ -18,6 +18,14 @@ on:
     branches: [master]
   pull_request:
   workflow_dispatch:
+    inputs:
+      # **壊し方が増えるほど1往復が延びる**（11個で約9分・SQL 入りで約13分）。
+      # その回に足した分だけ走らせられるようにする。空なら従来どおり全部。
+      # 絞った回の結果は `mutate-run-partial.md` に書かれる（全体の記録を上書きしない）。
+      ids:
+        description: 'mutate で走らせる壊し方の id（空白区切り・空なら全部）'
+        required: false
+        default: ''
 
 # 同じ枝で新しい push が来たら、古い実行は止める（待たせない・無駄に回さない）。
 concurrency:
@@ -216,15 +224,20 @@ jobs:
         run: npx supabase start
 
       - name: 1件ずつ壊して、赤になるところを見る
-        run: node scripts/mutate-run.mjs
+        run: node scripts/mutate-run.mjs ${{ github.event.inputs.ids }}
 
+      # 絞った回（ids 指定）は mutate-run-partial.md に書かれる（全体の記録を
+      # 上書きしないため）。どちらが書かれたかは走らせてみないと分からないので、
+      # 存在するほうを成果物として拾う。
       - name: 結果を成果物として上げる
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: mutate-run-result
-          path: docs/ops/mutate-run-result.md
-          if-no-files-found: warn
+          path: |
+            docs/ops/mutate-run-result.md
+            docs/ops/mutate-run-partial.md
+          if-no-files-found: ignore
 
       # 結果を**リポジトリに残す**。成果物（artifact）は90日で消えるうえ、
       # 中身を見るのに毎回ダウンロードが要る。台帳へ移す作業がやりにくいので、
@@ -232,13 +245,13 @@ jobs:
       - name: 結果を枝にコミットする
         if: always()
         run: |
-          if [ -z "$(git status --porcelain -- docs/ops/mutate-run-result.md)" ]; then
+          if [ -z "$(git status --porcelain -- docs/ops/mutate-run-result.md docs/ops/mutate-run-partial.md)" ]; then
             echo "結果に差分なし。コミットしない"
             exit 0
           fi
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/ops/mutate-run-result.md
+          git add -f docs/ops/mutate-run-result.md docs/ops/mutate-run-partial.md
           git commit -m "mutate の結果を記録する（run ${{ github.run_number }}）"
           git push origin HEAD:${{ github.ref_name }}
 

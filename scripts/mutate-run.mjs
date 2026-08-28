@@ -325,9 +325,23 @@ if (DRY) {
   process.stdout.write(`  赤になった（＝その壊しを検出できた）: **${proven.size}件**\n\n`);
   const out = [...proven].sort((a, b) => a[0].localeCompare(b[0]));
   for (const [name, by] of out) process.stdout.write(`    ${name}   ← ${by}\n`);
+  /* **一部だけ走らせた回で、全体の記録を上書きしない。**
+     `poison-run.mjs` が同じ穴をすでに踏んでいる——1本だけ掛け直したとき全14本の
+     結果を消し、**記録が、走らせた範囲より広く見える**形になった（`W-8` の型）。
+     こちらはまだ踏んでいないが、それは CI が毎回全部走らせていたからにすぎない。
+     壊し方が増えて絞って走らせ始めた時点で、同じように踏む。範囲を指定した回は別名へ。 */
+  const outPath = path.join(
+    ROOT,
+    wanted.length ? 'docs/ops/mutate-run-partial.md' : 'docs/ops/mutate-run-result.md',
+  );
+  /* **⚠️ を記録にも残す。** これまでは stderr にしか出しておらず、CI が緑か赤かでしか
+     読み取れなかった。`docs/ops/delivery-ready.mjs`（F4 を閉じてよいかの機械）は
+     「最新の結果に赤0件の組が無い」を見るので、**ファイル自身が自分の結果を語れる**
+     形にする——CI の生きた状態を見に行かなくても、この1本の記録だけで判定できる。 */
   fs.writeFileSync(
-    path.join(ROOT, 'docs/ops/mutate-run-result.md'),
+    outPath,
     ['# 1件ずつ壊した結果',
+      wanted.length ? `\n**一部だけ（${wanted.join(' ')}）。全体の記録ではない。**` : '',
       '',
       '実行: `node scripts/mutate-run.mjs`（**本物の土台が要る**——CI で走らせる）',
       '',
@@ -336,8 +350,14 @@ if (DRY) {
       '## 赤になった（`- <検査の名前>` ← どの壊しで）',
       '',
       ...out.map(([n, by]) => `- ${n}   ← ${by}`),
-      ''].join('\n'),
+      '',
+      ...(problems.length > 0
+        ? ['## ⚠️ 見ておくこと', '', ...problems.map((p) => `- ${p}`), '']
+        : []),
+    ].join('\n'),
   );
+  /* **書いた先を、書いた先から出す**（直書きすると `poison-run` の嘘と同じ型になる）。 */
+  process.stdout.write(`\n  記録: ${path.relative(ROOT, outPath)}\n`);
 }
 
 if (problems.length > 0) {

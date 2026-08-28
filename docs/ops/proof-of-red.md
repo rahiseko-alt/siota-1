@@ -394,6 +394,36 @@ run 124  カルテの RLS だけ開ける  → 画面が犬を引けず、そこ
 - verify-xss.mjs :: `${label}: 実行されない`
 - verify-xss.mjs :: `${label}: 要素として注入されていない`
 
+## F4 を閉じる範囲（マスター判断・2026-08-28）
+
+台帳を129件すべて埋めるのではなく、**客に当たる経路まで**で F4 を閉じる。
+機械（`scripts/guard/delivery-ready.mjs`・`gate.mjs --end` から呼ぶ）が見るのは
+下の3節。**節を離れて「だいたい埋まった」で判断させない**ため、範囲はファイル名で固定する。
+
+### 客に当たる経路（ここが埋まったら F4 を閉じてよい）
+
+以下の11本の**全件**が「証明済み」であること。1本でも減らせば `delivery-ready` が
+「宣言した本数が減っている」で赤になる。
+
+```
+verify-admin.mjs / verify-edit.mjs / verify-portal.mjs / verify-m6.mjs /
+verify-empty-pet.mjs / verify-invitation.mjs / verify-report-roundtrip.mjs /
+verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.mjs
+```
+
+### 判定できない（理由つきで除外・8件）
+
+- **`verify-production.mjs` 4件** … 本番サイトへ出ていく検査で、**壊す対象がこの
+  リポジトリに無い**。`mutate-run.mjs` の仕組みでは判定できない
+- **`verify-stack.mjs` の残り4件** … 土台を落とす毒が要るが、それだと
+  `ensureLocalSupabaseRunning()` の `throw` で止まり**判定行が出ない**
+  （「⛔ 毒見の天井」と同じ構造）
+
+### F4 の後に回す（21件）
+
+- **`verify-screens.mjs`** … 正当な理由は無い。**単に高い**（21件が個別の静的構造で、
+  1件あたりの壊しが重い）。「判定できない」ではなく「まだやっていない」として残す
+
 ## ⛔ 毒見の天井（2026-08-28 に判明）
 
 **毒を3種類まで作って、埋まったのは 182件中 21件。ここで止まる。**
