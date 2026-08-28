@@ -749,3 +749,17 @@
 - **How it was found**: 次セッションのチェックインで `0-J` の「次にまず確認すること」を実行する前に、根拠として書かれている2つの断定をそれぞれ機械で引き直した。visibility は API が即座に `private` を返し、`workflow_dispatch` 限定という記述は run 一覧の `event` 欄（#161 `pull_request` / #162 `push`）と矛盾した
 - **Fix**: まだ無い（**原因は特定できていない**）。ジョブは `runner_id: 0` / `runner_name: ""` / ステップ0件 / check-run の output が空——**runner が一度も割り当てられていない**形で、これは「起動前に拒否された」ことを示す。private であることが確定した以上、**Actions 無料枠または spending limit による停止が最有力**だが、枠の残量はアカウント所有者（マスター）にしか見えないため、ここでは確かめられない。マスターへの確認事項として `docs/handoff.md` `0-K` に上げた
 - **How to prevent**: **切り分けで消去法を使うなら、消す根拠のほうを先に機械で確かめる。**「〜なので、この説は否定された」と書く前に、その「〜」がコマンドで引ける事実かを見る。引けるなら引く（visibility は1本で出る）。もう1つ、**異常値を証拠に使う前に、正常時の同じ値を1回見る**——「0ms だから走っていない」は、成功した run も 0ms を返すと分かった時点で証拠ではなくなる。**正常のサンプルを持たない異常判定はしない**
+
+### [F-20260828-58] 壊し方を1つ足したら、**製品は何も壊れていないのにテストだけが3回に2回赤**になった
+
+- **Date**: 2026-08-28
+- **Status**: 解決済み（赤 → 緑 → 戻して赤の3出力あり）
+- **Category**: test
+- **Trigger/Context**: F4 の台帳を埋める作業で `skin-image-blank`（`backend/js/magazine-view.js` の `setImage(container, 'skin-image-frame', 'skin-image', data.bodyMarkingImage)` を `''` に差し替える壊し方）を足した直後、`npm test` が**走らせるたびに結果の変わる**状態になった
+- **What happened**: `test/ui-body-marking.test.mjs` の `⑥の受け手が読むキーは bodyMarkingImage である` が **3回に2回落ちる**。単体（`node --test test/ui-body-marking.test.mjs`）では必ず通る。作業ツリーは clean で、`backend/js/magazine-view.js` には `data.bodyMarkingImage` がちゃんと在る。**製品は1行も壊れていないのに、テストだけが赤**だった
+- **Root Cause**: **`test/mutate-run.test.mjs` の「壊したあとのファイルが、構文として正しい」が、実リポジトリのファイルを本当に書き換えていた**（`applyMutation(root, m)` の `root` がリポジトリそのもの。壊す → `node --check` → `finally` で戻す）。いっぽう `node --test` は**テストファイルを並行に走らせる**。したがって `ui-body-marking.test.mjs` が `magazine-view.js` を読む瞬間に、別プロセスがそのファイルを壊している窓が存在した。
+  **この競合は前から在ったが、当たらなかった。** `skin-image-blank` は**別のテストが assert している文字列そのもの**（`data.bodyMarkingImage`）を消す初めての壊し方で、これで初めて窓に弾が当たるようになった。**壊し方が増えるほど命中確率が上がる**性質の欠陥である
+- **How it was found**: コミット直前の `npm test` が EXIT 1 を返した。作業ツリーが clean で、対象ファイルにも文字列が在り、単体では通ることから「テストの外に原因がある」と読み、`test:unit` が複数ファイルを並行に走らせること・`mutate-run.test.mjs` が実ファイルを書き換えることの2つを突き合わせて特定した
+- **Fix**: 構文検査を**使い捨てのコピーの上**で行うようにした。同じファイルに既に在った `sandbox(rel, body)`（`os.tmpdir()` に作る）へ本物の中身をコピーし、`applyMutation(sandboxRoot, m)` を当てる。**本物は一度も触らない**ので、戻す処理も不要になった。あわせて「本物のファイルを触っていないこと」を assert として置いた——次に誰かが本物を触る書き方に戻したら、そこで止まる
+- **How to prevent**: **テストの中で実リポジトリのファイルを書き換えない。** `node --test` はファイル単位で並行に走るので、「壊して → 戻す」を実ツリーでやると、他のテストから見える窓が必ず開く。壊す機械を検査したいときは、対象をコピーしてからにする。
+  もう1つ。**「作業ツリーは clean・単体では通る・全体では落ちる」は、並行実行の競合を疑う合図**。製品側を探しても見つからない

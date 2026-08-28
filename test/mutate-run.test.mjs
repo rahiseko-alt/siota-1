@@ -74,39 +74,44 @@ test('壊したあとのファイルが、構文として正しい', async () =>
   const { spawnSync } = await import('node:child_process');
   const root = path.resolve(import.meta.dirname, '..');
   for (const m of MUTATIONS) {
-    const target = path.join(root, m.file);
-    const before = fs.readFileSync(target, 'utf8');
-    let restore = null;
-    try {
-      restore = applyMutation(root, m);
-      if (/\.(mjs|js)$/.test(m.file)) {
-        const r = spawnSync(process.execPath, ['--check', target], { encoding: 'utf8' });
-        assert.equal(r.status, 0,
-          `${m.id}: 壊したあとが構文エラー。**壊し方が下手なだけ**で CI が赤になり、`
-          + `「検査が気づかなかった」と読み違える\n${r.stderr}`);
-      } else if (/\.sql$/.test(m.file)) {
-        /* SQL は `node --check` に掛けられない。**壊れ方が乱暴すぎないか**だけ見る——
-           定義そのものが消えていたら、それは「弱めた」ではなく「壊した」で、
-           db reset が落ちて判定にならない。**RLS のポリシーとは限らない**（`claim_invitation`
-           のような関数の壊し方も足したので）。壊す前にその文字列が在ったときだけ求める——
-           無条件に `create policy` を要求すると、関数だけのファイルは必ず落ちる形だった。 */
-        const after = fs.readFileSync(target, 'utf8');
-        for (const anchor of ['create policy', 'create or replace function']) {
-          if (before.includes(anchor)) {
-            assert.ok(after.includes(anchor), `${m.id}: ${anchor} の定義ごと消えている`);
-          }
+    /* **実リポジトリを書き換えない。** 中身だけ読んで、使い捨てのコピーの上で壊す。
+       `node --test` はテスト**ファイル**を並行に走らせるので、ここで本物を
+       壊している最中に、別のテストが同じファイルを読むことがある。実際に
+       `skin-image-blank`（`data.bodyMarkingImage` を消す壊し方）を足した回に、
+       `ui-body-marking.test.mjs` の「⑥の受け手が読むキーは bodyMarkingImage である」が
+       3回に2回落ちるようになった——**製品は何も壊れていないのにテストだけが赤**。
+       壊し方が増えるほど当たる確率が上がるので、根から断つ（`F-20260828-58`）。 */
+    const before = fs.readFileSync(path.join(root, m.file), 'utf8');
+    const sandboxRoot = sandbox(m.file, before);
+    const target = path.join(sandboxRoot, m.file);
+    applyMutation(sandboxRoot, m);
+    if (/\.(mjs|js)$/.test(m.file)) {
+      const r = spawnSync(process.execPath, ['--check', target], { encoding: 'utf8' });
+      assert.equal(r.status, 0,
+        `${m.id}: 壊したあとが構文エラー。**壊し方が下手なだけ**で CI が赤になり、`
+        + `「検査が気づかなかった」と読み違える\n${r.stderr}`);
+    } else if (/\.sql$/.test(m.file)) {
+      /* SQL は `node --check` に掛けられない。**壊れ方が乱暴すぎないか**だけ見る——
+         定義そのものが消えていたら、それは「弱めた」ではなく「壊した」で、
+         db reset が落ちて判定にならない。**RLS のポリシーとは限らない**（`claim_invitation`
+         のような関数の壊し方も足したので）。壊す前にその文字列が在ったときだけ求める——
+         無条件に `create policy` を要求すると、関数だけのファイルは必ず落ちる形だった。 */
+      const after = fs.readFileSync(target, 'utf8');
+      for (const anchor of ['create policy', 'create or replace function']) {
+        if (before.includes(anchor)) {
+          assert.ok(after.includes(anchor), `${m.id}: ${anchor} の定義ごと消えている`);
         }
-        assert.notEqual(after, before, `${m.id}: 何も変わっていない`);
-      } else {
-        /* HTML など、構文検査のしようが無いファイル。**中身が実際に変わったか**だけ見る——
-           `find`/`replace` を間違えて何も置き換わらなかった（0回でも投げない形の壊し方）を
-           ここで捕まえる。 */
-        const after = fs.readFileSync(target, 'utf8');
-        assert.notEqual(after, before, `${m.id}: 何も変わっていない`);
       }
-    } finally {
-      if (restore) restore();
-      assert.equal(fs.readFileSync(target, 'utf8'), before, `${m.id}: 戻せていない`);
+      assert.notEqual(after, before, `${m.id}: 何も変わっていない`);
+    } else {
+      /* HTML など、構文検査のしようが無いファイル。**中身が実際に変わったか**だけ見る——
+         `find`/`replace` を間違えて何も置き換わらなかった（0回でも投げない形の壊し方）を
+         ここで捕まえる。 */
+      const after = fs.readFileSync(target, 'utf8');
+      assert.notEqual(after, before, `${m.id}: 何も変わっていない`);
     }
+    /* 本物は一度も触っていないので、戻す処理も要らない。 */
+    assert.equal(fs.readFileSync(path.join(root, m.file), 'utf8'), before,
+      `${m.id}: 本物のファイルを触っている（このテストは触ってはいけない）`);
   }
 });
