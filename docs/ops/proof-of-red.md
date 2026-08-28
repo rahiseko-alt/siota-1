@@ -734,6 +734,43 @@ node scripts/mutate-run.mjs edit-dummy-dogs-leak edit-breed-mock-refill \
 - verify-edit.mjs :: 16. 担当メッセージが無いカルテで、文例が出ていない
 - verify-report-roundtrip.mjs :: 16. 飼い主: 壊れた画像（ページURL）が出ていない
 
+### 11回目: 犬体図の印と、体重の見本値 3件（2026-08-28・**手元で実測**）
+
+```
+node scripts/mutate-run.mjs skin-image-blank weight-prefilled-sample
+
+  ✅ skin-image-blank         verify-report-roundtrip.mjs   赤   2件
+  ✅ weight-prefilled-sample  verify-report-roundtrip.mjs   赤   1件
+
+    8. 確認: 犬体図の印が画像として出ている    ← skin-image-blank
+    15. 飼い主: 犬体図の印が画像として届く      ← skin-image-blank
+    19. 体重の欄が空で始まる（見本値が入っていない） ← weight-prefilled-sample
+```
+
+**`20.`（飼い主の画面に、量っていない体重が出ない）は緑のまま残した。**
+既定値を入力欄に入れても、その値は飼い主まで届いていない——つまり
+**症状そのものが起きていない**ので、緑が正しい。検査の欠陥ではないので
+未証明のまま置く（`17.` と同じ扱い。`docs/failures.md` `F-20260828-52` 参照）。
+
+**この回で2つ、記録しておくべきことがあった。**
+
+1. **`weight-prefilled-sample` は、はじめ狙う場所を間違えていた。**
+   `src/js/ui.js` の `applyReport()` にある `data.weights` を壊したが、
+   あそこは**既存カルテを開いたときにしか走らない**。検査19 は「カルテの無い
+   新しい犬」を開くので、1件も赤にならなかった（⚠️）。**壊し方が悪かったので
+   あって、検査は正しかった**——`F-20260828-54` と同じ型。狙う場所を
+   入力欄そのもの（`src/index.html` の `#input-weight`）に付け替えたら赤になった。
+2. **`skin-image-blank` は、1回目の実行で `0. 検査用の犬を登録できた` と
+   `検査を最後まで実行できた` が赤になり、狙った `8./15.` には届かなかった。**
+   壊し方を手で当てて `npm run verify:roundtrip` を直接走らせたところ、
+   **`8.` と `15.` だけが FAIL で他は全部 PASS**——狙いどおりだった。
+   1回目はその回限りの不安定さ。**⚠️ を「検査が壊れている」と記録する前に、
+   壊し方が本当に症状を起こしているかを直接見ること。**
+
+- verify-report-roundtrip.mjs :: 8. 確認: 犬体図の印が画像として出ている
+- verify-report-roundtrip.mjs :: 15. 飼い主: 犬体図の印が画像として届く
+- verify-report-roundtrip.mjs :: 19. 体重の欄が空で始まる（見本値が入っていない）
+
 ## F4 を閉じる範囲（マスター判断・2026-08-28）
 
 台帳を129件すべて埋めるのではなく、**客に当たる経路まで**で F4 を閉じる。
@@ -834,9 +871,6 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 - verify-production.mjs :: `削除済みの旧UI が本番に残っていない（${deletedUiPaths.length} 本を確認）`
 - verify-production.mjs :: `/edit が正UI を配っている（手元 ${want.length} 本 ＋ 注入 ${injected.length} 本）`
 - verify-report-roundtrip.mjs :: 1. 記入先の要素がすべて実在する
-- verify-report-roundtrip.mjs :: 8. 確認: 犬体図の印が画像として出ている
-- verify-report-roundtrip.mjs :: 15. 飼い主: 犬体図の印が画像として届く
-- verify-report-roundtrip.mjs :: 19. 体重の欄が空で始まる（見本値が入っていない）
 - verify-report-roundtrip.mjs :: 20. 飼い主の画面に、量っていない体重が出ない
 - verify-screens.mjs :: 1. `/` が配信される
 - verify-screens.mjs :: 2. `/` に4画面が乗っている

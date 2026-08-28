@@ -45,6 +45,30 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
  * 証明の役に立たない（何を検出したのか言えないため）。
  */
 export const MUTATIONS = [
+  /* ── 10回目: 犬体図の印と、体重の見本値（2026-08-28・手元で実測） ── */
+  {
+    id: 'skin-image-blank',
+    why: '犬体図に付けた印が、確認画面にも飼い主にも画像として出ない（どこを気にしたかが伝わらない）',
+    file: 'backend/js/magazine-view.js',
+    find: "setImage(container, 'skin-image-frame', 'skin-image', data.bodyMarkingImage);",
+    replace: "setImage(container, 'skin-image-frame', 'skin-image', '');",
+    scripts: ['verify-report-roundtrip.mjs'],
+  },
+  {
+    /* 量っていない体重に既定値が入る型。`F-20260821-14`（④の入力欄に見本の文が
+       最初から入っていた）と同じ形で、**入力欄の既定値がそのまま確定され、
+       飼い主に「量っていない数字」が届く**。
+       **狙う場所は入力欄そのもの（テンプレート）。** はじめ `applyReport()` の
+       `data.weights` を壊したが、あそこは**既存カルテを開いたときにしか走らない**
+       ——検査19は「カルテの無い新しい犬」を開くので、1件も赤にならなかった。
+       壊し方が悪かったのであって、検査は正しかった（`F-20260828-54` と同じ型）。 */
+    id: 'weight-prefilled-sample',
+    why: '体重を量っていないのに、見本の数字が最初から入っていて、そのまま飼い主に届く（D-10）',
+    file: 'src/index.html',
+    find: 'id="input-weight" placeholder="—"',
+    replace: 'id="input-weight" value="4.2" placeholder="—"',
+    scripts: ['verify-report-roundtrip.mjs'],
+  },
   /* ── 9回目: verify-edit の残りを狙う（2026-08-28・手元で実測） ──
      `docs/ops/proof-of-red.md`「## F4 を閉じる範囲」の残り42件のうち、
      verify-edit に固まっている6件を狙う。 */
