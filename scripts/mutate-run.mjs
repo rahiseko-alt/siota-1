@@ -115,7 +115,7 @@ export const MUTATIONS = [
       + "      panel.classList.remove('is-active');\n"
       + '    });',
     replace: '    /* mutated: 前の画面を閉じない */',
-    scripts: ['verify-edit.mjs', 'verify-empty-pet.mjs'],
+    scripts: ['verify-edit.mjs', 'verify-empty-pet.mjs', 'verify-m6.mjs'],
   },
   /* ── 11回目: 未ログインの /my（2026-08-28・手元で実測） ── */
   {
@@ -248,7 +248,7 @@ export const MUTATIONS = [
     replace: 'function setText_MUTATED(root, view, text) {',
     extra: 'function setText(root, view) {\n'
       + '  return root.querySelector(\'[data-view="\' + view + \'"]\');\n}\n',
-    scripts: ['verify-report-roundtrip.mjs'],
+    scripts: ['verify-report-roundtrip.mjs', 'verify-m6.mjs'],
   },
   {
     id: 'weight-graph-off',
