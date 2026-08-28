@@ -22,7 +22,31 @@
 
 > **`0-J` より下は過去の記録。`0-J` は根拠が誤っているので、そのまま読まないこと**（下の「訂正」）。
 
-### 台帳 **113 / 183**（1件増えた。**CI ではなく手元で証明した**）
+### 台帳 **123 / 183**（10件増えた。**すべて CI ではなく手元で証明した**）
+
+F4 を閉じる範囲の未証明は **43 → 32件**。増やし方は「新しい壊し方を書く」——
+CI が既に走らせた44個は結果が反映済みなので、フル実行を繰り返しても1件も増えない
+（それを確かめたのが下の②）。この回で壊し方を **8個**足した:
+
+| 壊し方 | 埋めた項 |
+|---|---|
+| `edit-dummy-dogs-leak` | verify-edit 9 |
+| `edit-breed-mock-refill` | verify-edit 10 |
+| `empty-photo-attr-page-url` | verify-edit 15 / report-roundtrip 16 |
+| `letter-section-always-shown` | verify-edit 16 |
+| `skin-image-blank` | report-roundtrip 8, 15 |
+| `weight-prefilled-sample` | report-roundtrip 19 |
+| `portal-content-shown-logged-out` | verify-portal 7 |
+| `portal-sample-image` | verify-portal 8 |
+
+**`empty-photo-attr-page-url` は `F-20260828-54` が残した宿題そのもの。**
+「`getAttribute('src')` が実際に壊れた値を返す形の壊し方が要る」と書き残して
+あったとおりに作ったら、狙った2件が両方赤になった。**記録が次の回を助けた例。**
+
+> ⚠️ **壊し方を足したら、`npm test` を必ず複数回走らせること**（`F-20260828-58`）。
+> `test/mutate-run.test.mjs` は壊し方を1つずつ実際に当てるので、**別のテストが
+> assert している文字列を消す壊し方**を足すと、そのテストが確率的に落ちる。
+> 実ツリーを触らないよう直したが、同種の当たり方は他にもあり得る。
 
 ### ① `0-J` の訂正 — 書いてあった2つの断定は、どちらも間違いだった
 
