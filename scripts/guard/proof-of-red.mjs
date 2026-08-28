@@ -43,7 +43,20 @@ export function allChecks(root) {
   const out = [];
   for (const f of files) {
     const src = fs.readFileSync(path.join(dir, f), 'utf8');
-    for (const { line, name } of passConditions(src)) out.push({ file: f, line, name });
+    /* **同じ名前の検査が複数あると、台帳の鍵が潰れる。**
+       `verify-xss.mjs` は `check(label, …)` を**3か所**で呼ぶが、台帳には
+       `verify-xss.mjs :: label` が1行しか立たず、**3件が1件に見えていた**
+       （182件のうち4件が、数えられてはいるのに区別できていなかった）。
+       証明は「この検査が赤になったか」を1件ずつ問うものなので、
+       **区別できない鍵は、証明の単位として使えない**。
+       出現順の番号を付けて分ける。並べ替えれば鍵がずれるが、
+       ずれれば「台帳が実体に無い検査を指している」で赤になり、人が見に来る。 */
+    const seen = new Map();
+    for (const { line, name } of passConditions(src)) {
+      const n = (seen.get(name) || 0) + 1;
+      seen.set(name, n);
+      out.push({ file: f, line, name: n === 1 ? name : `${name} #${n}` });
+    }
   }
   return out;
 }

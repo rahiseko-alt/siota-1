@@ -36,8 +36,21 @@ function emptySession(email) {
   };
 }
 
+/**
+ * 毒の種類。**1種類では足りない**——毒見の判定力は
+ * 「その検査の対象が、その毒に依存しているか」で決まる（`F-20260828-50`）。
+ *
+ *   empty  … データが空。犬も飼い主もカルテも0件。**データを見る検査**を判定する
+ *   noauth … ログインが通らない。**認証を見る検査**を判定する
+ *
+ * `empty` では `verify-stack` の「seed のアカウントで実ログインできる」が
+ * 緑のまま残った——何を送っても通すサーバ相手だったため。`noauth` はそこを突く。
+ */
+export const FLAVORS = ['empty', 'noauth'];
+
 /** 中身が空の世界を立てる。`{ url, stop }` を返す。 */
-export function startPoisonStack({ port = 54321 } = {}) {
+export function startPoisonStack({ port = 54321, flavor = 'empty' } = {}) {
+  if (!FLAVORS.includes(flavor)) throw new Error(`知らない毒: ${flavor}（${FLAVORS.join(' / ')}）`);
   const hits = [];
   const server = http.createServer((req, res) => {
     hits.push(`${req.method} ${req.url.split('?')[0]}`);
@@ -59,6 +72,18 @@ export function startPoisonStack({ port = 54321 } = {}) {
 
     /* 生きているふりだけする（`ensureLocalSupabaseRunning` の入口）。 */
     if (path === '/auth/v1/health') return send(200, { date: new Date().toISOString() });
+
+    /* `noauth` の毒: **ログインを拒む。**
+       「実ログインできる」と主張する検査は、ここで赤にならなければ嘘をついている。
+       検査は入口で死ぬが、**死ぬこと自体が正しい**——認証が通らない世界で
+       先へ進める検査こそ、認証を見ていない検査である。 */
+    if (flavor === 'noauth' && path.startsWith('/auth/v1/')) {
+      req.resume();
+      return req.on('end', () => send(400, {
+        error: 'invalid_grant',
+        error_description: 'poison: この世界ではログインできない',
+      }));
+    }
 
     /* ログインは通す。通らないと検査が入口で死に、中を判定できない。 */
     if (path.startsWith('/auth/v1/token')) {

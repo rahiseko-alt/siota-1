@@ -22,15 +22,16 @@
  *   `verify-production.mjs` … **本番に向かって出ていく**。毒見の対象ではない
  *   `verify-migrations.mjs` … 実 PostgreSQL に SQL を流す。土台を空にする意味が無い
  *
- *   node scripts/poison-run.mjs            全部
- *   node scripts/poison-run.mjs verify-stack.mjs verify-portal.mjs
+ *   node scripts/poison-run.mjs                      全部（毒は empty）
+ *   node scripts/poison-run.mjs --flavor=noauth      ログインが通らない世界
+ *   node scripts/poison-run.mjs verify-stack.mjs     1本だけ
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { startPoisonStack } from './lib/poison-stack.mjs';
+import { startPoisonStack, FLAVORS } from './lib/poison-stack.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const POISON_PORT = Number(process.env.POISON_PORT || 54399);
@@ -79,17 +80,25 @@ async function runOne(file, port) {
   });
 }
 
-const wanted = process.argv.slice(2);
+const argv = process.argv.slice(2);
+const flavorArg = argv.find((a) => a.startsWith('--flavor='));
+const FLAVOR = flavorArg ? flavorArg.split('=')[1] : 'empty';
+if (!FLAVORS.includes(FLAVOR)) {
+  process.stderr.write(`知らない毒: ${FLAVOR}（使えるのは ${FLAVORS.join(' / ')}）\n`);
+  process.exit(1);
+}
+const wanted = argv.filter((a) => !a.startsWith('--'));
 const files = fs.readdirSync(path.join(ROOT, 'scripts'))
   .filter((f) => /^verify-.*\.mjs$/.test(f))
   .filter((f) => (wanted.length ? wanted.includes(f) : true))
   .sort();
 
-process.stdout.write('【毒見】何も動いていない世界で検査を走らせる\n');
+process.stdout.write(`【毒見】毒「${FLAVOR}」の世界で検査を走らせる\n`);
+process.stdout.write(`  ${FLAVOR === 'noauth' ? 'ログインが通らない世界。認証を見る検査を判定する。' : 'データが空の世界。データを見る検査を判定する。'}\n`);
 process.stdout.write('  この世界では、すべての検査が赤にならなければおかしい。\n');
 process.stdout.write('  緑のまま残ったものが「何も無くても通る検査」。\n\n');
 
-const poison = await startPoisonStack({ port: POISON_PORT });
+const poison = await startPoisonStack({ port: POISON_PORT, flavor: FLAVOR });
 const survived = [];
 const died = [];
 let port = 8880;
@@ -132,13 +141,15 @@ if (survived.length > 0) {
    （`docs/watch.md` W-8 の型）。範囲を指定した回は別名に書く。 */
 const outPath = path.join(
   ROOT,
-  wanted.length ? 'docs/ops/poison-run-partial.md' : 'docs/ops/poison-run-result.md',
+  wanted.length
+    ? 'docs/ops/poison-run-partial.md'
+    : `docs/ops/poison-run-result${FLAVOR === 'empty' ? '' : `-${FLAVOR}`}.md`,
 );
 fs.writeFileSync(outPath, [
   `# 毒見の結果（何も動いていない世界で \`verify:*\` を走らせた）`,
   wanted.length ? `\n**一部だけ（${wanted.join(' ')}）。全体の記録ではない。**` : '',
   '',
-  `実行: \`node scripts/poison-run.mjs\`（Docker 不要）`,
+  `実行: \`node scripts/poison-run.mjs --flavor=${FLAVOR}\`（Docker 不要）`,
   '',
   `- 赤になった（壊すと落ちることを確かめた）: **${died.length}件**`,
   `- **緑のまま残った（何も無くても通る）: ${survived.length}件**`,
