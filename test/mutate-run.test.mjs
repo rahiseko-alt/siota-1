@@ -75,10 +75,19 @@ test('壊したあとのファイルが、構文として正しい', async () =>
     let restore = null;
     try {
       restore = applyMutation(root, m);
-      const r = spawnSync(process.execPath, ['--check', target], { encoding: 'utf8' });
-      assert.equal(r.status, 0,
-        `${m.id}: 壊したあとが構文エラー。**壊し方が下手なだけ**で CI が赤になり、`
-        + `「検査が気づかなかった」と読み違える\n${r.stderr}`);
+      if (/\.(mjs|js)$/.test(m.file)) {
+        const r = spawnSync(process.execPath, ['--check', target], { encoding: 'utf8' });
+        assert.equal(r.status, 0,
+          `${m.id}: 壊したあとが構文エラー。**壊し方が下手なだけ**で CI が赤になり、`
+          + `「検査が気づかなかった」と読み違える\n${r.stderr}`);
+      } else {
+        /* SQL は `node --check` に掛けられない。**壊れ方が乱暴すぎないか**だけ見る——
+           ポリシーの定義そのものが消えていたら、それは「弱めた」ではなく「壊した」で、
+           db reset が落ちて判定にならない。 */
+        const after = fs.readFileSync(target, 'utf8');
+        assert.ok(after.includes('create policy'), `${m.id}: ポリシーの定義ごと消えている`);
+        assert.notEqual(after, before, `${m.id}: 何も変わっていない`);
+      }
     } finally {
       if (restore) restore();
       assert.equal(fs.readFileSync(target, 'utf8'), before, `${m.id}: 戻せていない`);

@@ -123,6 +123,26 @@ export const MUTATIONS = [
     extra: null,
     scripts: ['verify-m6.mjs'],
   },
+  {
+    id: 'rls-any-owner-sees-any-dog',
+    sql: true,
+    why: '**飼い主が、他人の犬を見られる**——ログインさえすれば全店の全頭が一覧に出る',
+    file: 'supabase/migrations/202607160001_supabase_base.sql',
+    find: '  for select to authenticated using (active and private.is_owner_user(owner_id));',
+    replace: '  for select to authenticated using (active);',
+    extra: null,
+    scripts: ['verify-portal.mjs', 'verify-report-roundtrip.mjs'],
+  },
+  {
+    id: 'rls-drafts-leak',
+    sql: true,
+    why: '**書きかけのカルテが飼い主に見える**——確定前の下書きがそのまま届く',
+    file: 'supabase/migrations/202607160001_supabase_base.sql',
+    find: "  for select to authenticated using (status = 'final' and private.can_read_pet(pet_id));",
+    replace: '  for select to authenticated using (private.can_read_pet(pet_id));',
+    extra: null,
+    scripts: ['verify-draft.mjs', 'verify-empty-pet.mjs'],
+  },
 ];
 
 /** ファイルの中身の指紋。戻せたことを**実際に確かめる**ために使う。 */
@@ -158,7 +178,7 @@ export function applyMutation(root, m) {
 }
 
 const run = (cmd, args) => spawnSync(cmd, args, {
-  cwd: ROOT, encoding: 'utf8', timeout: 300_000, env: process.env,
+  cwd: ROOT, encoding: 'utf8', timeout: 600_000, env: process.env,
 });
 
 /** 検査の出力から、赤になった項の名前を拾う。 */
@@ -218,10 +238,22 @@ for (const m of targets) {
       process.stdout.write(`  ✅ ${m.id.padEnd(18)} 壊せた（${m.why}）\n`);
       continue;
     }
-    const built = run('node', ['scripts/build-dist.mjs']);
-    if (built.status !== 0) {
-      problems.push(`[${m.id}] 壊したあと build が通らない: ${(built.stderr || '').split('\n')[0]}`);
-      continue;
+    if (m.sql) {
+      /* **SQL の壊しは、土台に流し直さないと効かない。**
+         RLS はマイグレーションで作られるので、ファイルを書き換えただけでは
+         いま動いている DB は古いポリシーのまま——**壊したつもりで何も壊れていない**
+         状態になり、「検査が気づかなかった」と逆の結論を出す。 */
+      const reset = run('npx', ['supabase', 'db', 'reset']);
+      if (reset.status !== 0) {
+        problems.push(`[${m.id}] 壊したあと db reset が通らない: ${(reset.stderr || '').split('\n').slice(-3).join(' ')}`);
+        continue;
+      }
+    } else {
+      const built = run('node', ['scripts/build-dist.mjs']);
+      if (built.status !== 0) {
+        problems.push(`[${m.id}] 壊したあと build が通らない: ${(built.stderr || '').split('\n')[0]}`);
+        continue;
+      }
     }
     for (const s of m.scripts) {
       const res = run('node', [`scripts/${s}`]);
@@ -241,6 +273,8 @@ for (const m of targets) {
     problems.push(String(e.message));
   } finally {
     if (restore) restore();
+    /* 戻したら**土台にも流し直す**。次の壊し方が、前の壊しの残った DB で走らないように。 */
+    if (m.sql && !DRY) run('npx', ['supabase', 'db', 'reset']);
     if (fingerprint(path.join(ROOT, m.file)) !== fpBefore) {
       problems.push(`[${m.id}] **戻し切れていない**: ${m.file}（手で確かめること）`);
     }

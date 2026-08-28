@@ -191,7 +191,7 @@ jobs:
   mutate:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 70
     steps:
       - uses: actions/checkout@v5
         with:
