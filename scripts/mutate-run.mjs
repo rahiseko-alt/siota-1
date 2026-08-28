@@ -1,0 +1,224 @@
+/**
+ * mutate-run.mjs — **1件ずつ狙って壊し、検査が赤になるところを見る**（マスター判断 A）
+ *
+ * `docs/ops/proof-of-red.md` の定義:
+ *   **「壊して赤になったところを見ていない検査は、壊れているものとして数える」**
+ *
+ * ── なぜ毒見では足りなかったか ──
+ * 毒見（`scripts/poison-run.mjs`）は土台ごと壊すので、**検査は最初の1件で死ぬ**。
+ * 検査 N を判定するには検査 1〜N-1 が通っていなければならず、3種類の毒を作っても
+ * **182件中21件で天井**に当たった（`docs/ops/proof-of-red.md`「⛔ 毒見の天井」）。
+ *
+ * ── こちらの造り ──
+ * **土台は本物のまま**、製品のコードを**1行だけ**壊す。検査は最後まで走り、
+ * **その壊しに気づいた項だけが赤になる**。赤になった項は「この壊しを検出できる」
+ * ことが実測で示されたので、証明済みへ移せる。
+ *
+ * 1つの壊しで複数の検査が赤になるのは**正しい**——どれもその壊しを検出したのだから、
+ * どれも証明されている。161件に161個の壊しは要らない。
+ *
+ * ── 実行できる場所 ──
+ * **本物の土台が要るので、この環境では走らない**（Docker が無い）。CI で走らせる。
+ * ここで確かめられるのは「壊して、戻せること」まで（`--dry-run`）。
+ *
+ *   node scripts/mutate-run.mjs --dry-run     壊して戻せるかだけ見る（土台不要）
+ *   node scripts/mutate-run.mjs               全部（CI・本物の土台が要る）
+ *   node scripts/mutate-run.mjs delete-assets  1つだけ
+ */
+
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * 壊し方の台帳。**客に当たる経路から並べる**（マスター指示・2026-08-28）。
+ *
+ * `find` は**そのファイルにちょうど1回だけ**現れる文字列でなければならない
+ * （0回なら「壊せていない」、2回以上なら「どこを壊したか分からない」）。
+ * 機械がそれを確かめてから壊す。
+ *
+ * `why` は**その壊しで何が客に起きるか**を1行で。ここが書けない壊しは、
+ * 証明の役に立たない（何を検出したのか言えないため）。
+ */
+export const MUTATIONS = [
+  {
+    id: 'delete-assets',
+    why: '犬を消しても、写真の実体が Storage に残り続ける（誰も回収できない）',
+    file: 'backend/js/supabase-storage.js',
+    find: 'export async function deleteReportAssets({ client, api, petId',
+    replace: 'export async function deleteReportAssets_MUTATED({ client, api, petId',
+    extra: 'export async function deleteReportAssets() { return { removed: 0 }; }\n',
+    scripts: ['verify-delete.mjs', 'verify-admin.mjs'],
+  },
+  {
+    id: 'hydrate-assets',
+    why: '飼い主の画面で、写真が実体に戻らない（asset:// のまま出る＝写真が届かない）',
+    file: 'backend/js/supabase-storage.js',
+    find: 'export async function hydrateAssetReferences(data, assets, c',
+    replace: 'export async function hydrateAssetReferences_MUTATED(data, assets, c',
+    extra: 'export async function hydrateAssetReferences(data) { return data; }\n',
+    scripts: ['verify-photo-roundtrip.mjs'],
+  },
+  {
+    id: 'upload-assets',
+    why: '撮った写真が1枚も上がらない（飼い主には何も届かない）',
+    file: 'backend/js/supabase-storage.js',
+    find: 'export async function uploadReportAssets({',
+    replace: 'export async function uploadReportAssets_MUTATED({',
+    extra: 'export async function uploadReportAssets() { return { assets: [] }; }\n',
+    scripts: ['verify-photo-roundtrip.mjs', 'verify-delete.mjs'],
+  },
+];
+
+/** ファイルの中身の指紋。戻せたことを**実際に確かめる**ために使う。 */
+const fingerprint = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
+
+/** 1つ壊す。`restore()` を返す。`find` がちょうど1回でなければ壊さずに投げる。 */
+export function applyMutation(root, m) {
+  const target = path.join(root, m.file);
+  const before = fs.readFileSync(target, 'utf8');
+  const hits = before.split(m.find).length - 1;
+  if (hits !== 1) {
+    throw new Error(
+      `[${m.id}] 壊せない: ${m.file} に目印が ${hits}回（ちょうど1回でなければならない）\n`
+      + `  目印: ${m.find}\n`
+      + `  0回なら**壊したつもりで何も壊れていない**——そのまま走らせると`
+      + `「赤にならなかった＝検査が壊れている」と逆の結論を出す。`,
+    );
+  }
+  const after = before.replace(m.find, m.replace) + `\n${m.extra}`;
+  fs.writeFileSync(target, after);
+  return () => {
+    fs.writeFileSync(target, before);
+    if (fingerprint(target) !== crypto.createHash('sha256').update(before).digest('hex')) {
+      throw new Error(`[${m.id}] 戻せていない: ${m.file}`);
+    }
+  };
+}
+
+const run = (cmd, args) => spawnSync(cmd, args, {
+  cwd: ROOT, encoding: 'utf8', timeout: 300_000, env: process.env,
+});
+
+/** 検査の出力から、赤になった項の名前を拾う。 */
+const failedNames = (out) => [...(out || '').matchAll(/^FAIL {2}(.+?)(?: {2}|$)/gm)]
+  .map((m) => m[1].trim());
+
+/* **直接叩かれたときだけ走る。**
+   これが無いと、`import` しただけで**リポジトリを壊しに行く**——
+   実際 `test/` から関数を取り出そうとして全体が2回走った。
+   壊して戻す機械は、読み込むだけで動いてはならない。 */
+const DIRECT = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (DIRECT) {
+const argv = process.argv.slice(2);
+const DRY = argv.includes('--dry-run');
+const wanted = argv.filter((a) => !a.startsWith('--'));
+const targets = wanted.length ? MUTATIONS.filter((m) => wanted.includes(m.id)) : MUTATIONS;
+
+if (targets.length === 0) {
+  process.stderr.write(`知らない壊し方: ${wanted.join(' ')}\n`
+    + `使えるのは: ${MUTATIONS.map((m) => m.id).join(' / ')}\n`);
+  process.exit(1);
+}
+
+/* **土台が無いのに走らせない。**
+   本物の土台が無ければ検査は全部落ちるか全部素通りし、どちらにしても
+   「赤になった／ならなかった」に意味が無い。にもかかわらず記録だけは書けてしまう——
+   実際、この機械を `import` した事故で **「赤になった 0件」という嘘の記録**が
+   1度できた。**確かめられない場所では、記録を作らせない。** */
+if (!DRY) {
+  const url = process.env.SUPABASE_LOCAL_URL || 'http://127.0.0.1:54321';
+  const alive = await fetch(`${url}/auth/v1/health`).then((r) => r.ok).catch(() => false);
+  if (!alive) {
+    process.stderr.write(
+      `本物の土台が居ない（${url}/auth/v1/health に届かない）。\n`
+      + `  この機械は**壊して赤になるかを実測する**ものなので、土台が無いと何も言えない。\n`
+      + `  ・CI で走らせる（.github/workflows/ci.yml の mutate ジョブ・手動実行）\n`
+      + `  ・手元で壊して戻せることだけ見るなら: node scripts/mutate-run.mjs --dry-run\n`,
+    );
+    process.exit(1);
+  }
+}
+
+process.stdout.write(`【1件ずつ壊す】${targets.length}個の壊し方${DRY ? '（壊して戻せるかだけ見る）' : ''}\n`);
+process.stdout.write('  土台は本物のまま、製品を1か所だけ壊す。\n');
+process.stdout.write('  **その壊しに気づいた項だけ**が赤になる。気づかない項は、その壊しを検出できない。\n\n');
+
+const proven = new Map();   /* 検査の名前 → 気づいた壊し方の id */
+const problems = [];
+
+for (const m of targets) {
+  const fpBefore = fingerprint(path.join(ROOT, m.file));
+  let restore = null;
+  try {
+    restore = applyMutation(ROOT, m);
+    if (DRY) {
+      process.stdout.write(`  ✅ ${m.id.padEnd(18)} 壊せた（${m.why}）\n`);
+      continue;
+    }
+    const built = run('node', ['scripts/build-dist.mjs']);
+    if (built.status !== 0) {
+      problems.push(`[${m.id}] 壊したあと build が通らない: ${(built.stderr || '').split('\n')[0]}`);
+      continue;
+    }
+    for (const s of m.scripts) {
+      const res = run('node', [`scripts/${s}`]);
+      const names = failedNames(`${res.stdout}\n${res.stderr}`);
+      for (const n of names) {
+        if (!proven.has(n)) proven.set(n, `${m.id} / ${s}`);
+      }
+      process.stdout.write(`  ${names.length > 0 ? '✅' : '⚠️ '} ${m.id.padEnd(18)} ${s.padEnd(30)} 赤 ${String(names.length).padStart(3)}件\n`);
+      if (names.length === 0) {
+        problems.push(
+          `[${m.id}] ${s} が**1件も赤にならなかった**。\n`
+          + `    壊したのに気づいていない＝この検査は「${m.why}」を検出できない。`,
+        );
+      }
+    }
+  } catch (e) {
+    problems.push(String(e.message));
+  } finally {
+    if (restore) restore();
+    if (fingerprint(path.join(ROOT, m.file)) !== fpBefore) {
+      problems.push(`[${m.id}] **戻し切れていない**: ${m.file}（手で確かめること）`);
+    }
+  }
+}
+
+if (!DRY) run('node', ['scripts/build-dist.mjs']);   /* 壊す前の dist に戻す */
+
+process.stdout.write(`\n  ── まとめ ──\n`);
+if (DRY) {
+  process.stdout.write(`  ${targets.length}個すべて、壊して戻せた。\n`);
+  process.stdout.write(`  **赤になるかは、本物の土台が要る**（CI で走らせる）。\n`);
+} else {
+  process.stdout.write(`  赤になった（＝その壊しを検出できた）: **${proven.size}件**\n\n`);
+  const out = [...proven].sort((a, b) => a[0].localeCompare(b[0]));
+  for (const [name, by] of out) process.stdout.write(`    ${name}   ← ${by}\n`);
+  fs.writeFileSync(
+    path.join(ROOT, 'docs/ops/mutate-run-result.md'),
+    ['# 1件ずつ壊した結果',
+      '',
+      '実行: `node scripts/mutate-run.mjs`（**本物の土台が要る**——CI で走らせる）',
+      '',
+      `- 赤になった（その壊しを検出できた）: **${proven.size}件**`,
+      '',
+      '## 赤になった（`- <検査の名前>` ← どの壊しで）',
+      '',
+      ...out.map(([n, by]) => `- ${n}   ← ${by}`),
+      ''].join('\n'),
+  );
+}
+
+if (problems.length > 0) {
+  process.stderr.write(`\n  ⚠️  ${problems.length}件、見ておくこと:\n`
+    + problems.map((p) => `  - ${p}`).join('\n') + '\n');
+  process.exit(1);
+}
+process.exit(0);
+}

@@ -17,6 +17,7 @@ on:
   push:
     branches: [master]
   pull_request:
+  workflow_dispatch:
 
 # 同じ枝で新しい push が来たら、古い実行は止める（待たせない・無駄に回さない）。
 concurrency:
@@ -180,6 +181,60 @@ jobs:
   # 19頭並んだ絵**が撮れた。verify:* が同じ土台に作った犬をそのまま撮っていたためで、
   # あの絵では「人が使えるか」を判断できない。土台ごと分けて、seed 直後の
   # Q/X/Y/Z だけが居る状態を撮る。
+  # 「壊して赤になるか」を実際に確かめる（マスター判断 A・D-20260828-53）。
+  # 土台は本物のまま製品を1か所だけ壊し、**その壊しに気づいた項だけ**が赤になる。
+  # 気づかない項は、その壊しを検出できていない＝壊れている検査である。
+  #
+  # **手元では走らない**（Docker が無い）。ここが唯一の実行場所。
+  # PR ごとには回さない——1回が長く、証拠を採る作業であって門番ではないため。
+  # 証拠が採れたら docs/ops/proof-of-red.md へ人が移す。
+  mutate:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: ブラウザを入れる
+        run: npx playwright install --with-deps chromium
+
+      - name: Supabase を起こす
+        run: npx supabase start
+
+      - name: 1件ずつ壊して、赤になるところを見る
+        run: node scripts/mutate-run.mjs
+
+      - name: 結果を成果物として上げる
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutate-run-result
+          path: docs/ops/mutate-run-result.md
+          if-no-files-found: warn
+
+      - name: 壊した跡が残っていないことを確かめる
+        if: always()
+        run: |
+          if [ -n "$(git status --porcelain -- backend/ src/ worker/)" ]; then
+            echo "::error::壊した跡が残っている（戻し切れていない）"
+            git status --porcelain -- backend/ src/ worker/
+            exit 1
+          fi
+          echo "製品のファイルに差分なし。すべて戻せている"
+
+      - name: Supabase を止める
+        if: always()
+        run: npx supabase stop
+
   walk:
     runs-on: ubuntu-latest
     timeout-minutes: 20
