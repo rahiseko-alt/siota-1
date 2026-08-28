@@ -24,10 +24,11 @@
 | | |
 |---|---|
 | 機械が数えた検査 | **182件**（`scripts/verify-*.mjs`） |
-| 壊して赤になったところを見た | **0件** |
-| まだ見ていない | **182件** |
+| 壊して赤になったところを見た | **17件**（毒見・2026-08-28） |
+| まだ見ていない | **164件** |
 
-**182件すべてが「壊したら赤になるか、見ていない」。** これが本当の出発点である。
+**出発点は182件すべてが未確認だった。** 毒見（土台ごと空にする）で17件が赤になり、証明済みへ移った。
+**残り164件は、まだ「壊したら赤になるか」を見ていない。**
 `verify:*` が全部緑であることは、いまのところ**それ自体が何も保証していない**——
 その緑が嘘でないことを、まだ一度も確かめていないため。
 
@@ -78,7 +79,54 @@
 
 <!-- 証拠を書いたら、下の「未証明」から1行ここへ移す。 -->
 
+### 毒見で赤になった 17件（2026-08-28）
+
+壊し方: **土台ごと空にする** — `node scripts/poison-run.mjs`。
+`scripts/lib/poison-stack.mjs` が「形だけ合っていて中身が空」の Supabase を立て、
+`SUPABASE_LOCAL_URL` をそこへ向ける。犬も飼い主もカルテも写真も1件も無い世界。
+
+出力（全文は `docs/ops/poison-run-result.md`）:
+
+```
+  赤になった（＝壊すと落ちることを確かめた）: 25件
+  **緑のまま残った（＝何も無くても通る）: 18件**
+```
+
+**この25件のうち、台帳に移せたのは 17件。** 残り8件は下の「移せなかったもの」。
+
+- verify-admin.mjs :: 検査を最後まで実行できた
+- verify-delete.mjs :: 検査を最後まで実行できた
+- verify-draft.mjs :: 0. 検査用の犬を登録できた
+- verify-draft.mjs :: 検査を最後まで実行できた
+- verify-edit.mjs :: 検査を最後まで実行できた
+- verify-empty-pet.mjs :: 0. カルテ0件の犬を用意できた
+- verify-empty-pet.mjs :: 検査を最後まで実行できた
+- verify-invitation.mjs :: 0. 新しい飼い主を登録できた
+- verify-invitation.mjs :: 検査を最後まで実行できた
+- verify-m6.mjs :: 検査を最後まで実行できた
+- verify-photo-roundtrip.mjs :: 検査を最後まで実行できた
+- verify-portal.mjs :: 検査を最後まで実行できた
+- verify-report-roundtrip.mjs :: 0. 検査用の犬を登録できた
+- verify-report-roundtrip.mjs :: 検査を最後まで実行できた
+- verify-screens.mjs :: 検査を最後まで実行できた
 - verify-stack.mjs :: マイグレーションと seed が当たっている（seed の犬 X を id で引ける）
+- verify-stack.mjs :: 鍵なしでは読めない（RLS/ゲートウェイが効いている）
+
+### 移せなかった8件（`verify-xss.mjs`）
+
+**毒見では赤になったが、台帳の鍵と結び付けられない。**
+`verify-xss.mjs` は `check(label, false, …)` と**名前に変数**を使っており、
+台帳（ソースを静的に読む）には `label` という文字列で載る。実行時の名前は
+`犬の名前（見出しへ入る）` `staffNote（担当からの一言）` など8種で、**別物になる**。
+
+さらに悪いことに、`check(label, …)` は**3か所**あるのに、台帳では
+`verify-xss.mjs :: label` という**同じ鍵に潰れている**。
+つまりこの3件は、いま**証明の単位として区別できていない**。
+
+→ 台帳の鍵の付け方に欠陥がある（名前が動的な検査を扱えない）。
+   直すまで、この8件は**未証明のまま**にしておく。数を良く見せない。
+
+
 
 ### verify-stack.mjs :: マイグレーションと seed が当たっている（seed の犬 X を id で引ける）
 
@@ -121,22 +169,18 @@ FAIL  マイグレーションと seed が当たっている（seed の犬 X を
 - verify-admin.mjs :: 19. 管理者でないスタッフに管理者の操作を出していない
 - verify-admin.mjs :: 20. 行き止まりにせず、その人が使える画面への入口を出している
 - verify-admin.mjs :: 21. アプリ由来のエラーが無い
-- verify-admin.mjs :: 検査を最後まで実行できた
 - verify-delete.mjs :: 0. 検査用の犬を登録できた
 - verify-delete.mjs :: 1. 写真つきのカルテを確定できた
 - verify-delete.mjs :: 2. 写真の実体が Storage に在る（service_role で数える）
 - verify-delete.mjs :: 3. 製品の削除の道が最後まで通った
 - verify-delete.mjs :: 4. 写真の実体が Storage から消えた（service_role で数える）
 - verify-delete.mjs :: 5. 飼い主のページからカルテが消えている
-- verify-delete.mjs :: 検査を最後まで実行できた
-- verify-draft.mjs :: 0. 検査用の犬を登録できた
 - verify-draft.mjs :: 1. 記入が下書きとしてサーバに残った
 - verify-draft.mjs :: 2. 離れて戻ると、続きから書ける
 - verify-draft.mjs :: 3. 下書きは飼い主に見えない
 - verify-draft.mjs :: 4. 下書きの中身が漏れていない
 - verify-draft.mjs :: 5. 確定すると下書きは残らない
 - verify-draft.mjs :: 6. 次に開くと、確定済みの記入は蘇らない
-- verify-draft.mjs :: 検査を最後まで実行できた
 - verify-edit.mjs :: 1. /edit が配信される
 - verify-edit.mjs :: 2. 正UI が配られている（screen-N が在る）
 - verify-edit.mjs :: 3. App が名前で届く（インライン onclick の解決先）
@@ -156,8 +200,6 @@ FAIL  マイグレーションと seed が当たっている（seed の犬 X を
 - verify-edit.mjs :: 15. 空の写真スロットがページURLを指していない
 - verify-edit.mjs :: 16. 担当メッセージが無いカルテで、文例が出ていない
 - verify-edit.mjs :: 17. ④の入力欄が空で始まる（見本の文が入っていない）
-- verify-edit.mjs :: 検査を最後まで実行できた
-- verify-empty-pet.mjs :: 0. カルテ0件の犬を用意できた
 - verify-empty-pet.mjs :: 0b. 下書きのカルテを用意できた
 - verify-empty-pet.mjs :: 1. 犬の名前は出ている（ページ自体は開けている）
 - verify-empty-pet.mjs :: 2. 正直な空の状態が出ている
@@ -168,8 +210,6 @@ FAIL  マイグレーションと seed が当たっている（seed の犬 X を
 - verify-empty-pet.mjs :: 7. 下書きの中身が漏れていない
 - verify-empty-pet.mjs :: 8. トリマーは1件目を作る画面に入れる
 - verify-empty-pet.mjs :: 9. 確定のボタンが在る（行き止まりでない）
-- verify-empty-pet.mjs :: 検査を最後まで実行できた
-- verify-invitation.mjs :: 0. 新しい飼い主を登録できた
 - verify-invitation.mjs :: 1. その飼い主の犬を登録できた
 - verify-invitation.mjs :: 2. 一覧に初回登録（QR）の入口が出ている
 - verify-invitation.mjs :: 3. 押すと初回登録の URL が出る
@@ -177,7 +217,6 @@ FAIL  マイグレーションと seed が当たっている（seed の犬 X を
 - verify-invitation.mjs :: 5. 招待を消化する前は、その犬を見られない
 - verify-invitation.mjs :: 6. 招待を消化すると、自分の犬が見える
 - verify-invitation.mjs :: 7. 使い終わった招待は、別の人が使えない
-- verify-invitation.mjs :: 検査を最後まで実行できた
 - verify-m6.mjs :: ①. URL を開ける
 - verify-m6.mjs :: ②a. 未ログインならログインの画面に導かれる
 - verify-m6.mjs :: ②b. ログインすると作業画面に入れる
@@ -191,7 +230,6 @@ FAIL  マイグレーションと seed が当たっている（seed の犬 X を
 - verify-m6.mjs :: ⑤c. 確定後に④へ戻ると、その犬の名前が見出しに出ている
 - verify-m6.mjs :: ⑥a. 飼い主は一覧から自分の犬に入れる
 - verify-m6.mjs :: ⑥b. 飼い主はカルテを開ける
-- verify-m6.mjs :: 検査を最後まで実行できた
 - verify-photo-roundtrip.mjs :: `${kind === 'trimming' ? '1' : kind === 'ear' ? '2' : '3'}. ${kind} の写真を付けられた`
 - verify-photo-roundtrip.mjs :: 4. 写真つきで確定できた
 - verify-photo-roundtrip.mjs :: 5. 保存された写真4枚が実体になっている（asset://）
@@ -203,7 +241,6 @@ FAIL  マイグレーションと seed が当たっている（seed の犬 X を
 - verify-photo-roundtrip.mjs :: 11. 直しで開くと、付けた写真が控えに残っている
 - verify-photo-roundtrip.mjs :: 12. 直したあとも写真4枚が残っている
 - verify-photo-roundtrip.mjs :: 13. アプリ由来のエラーが無い
-- verify-photo-roundtrip.mjs :: 検査を最後まで実行できた
 - verify-portal.mjs :: 1. /my が配信される
 - verify-portal.mjs :: 2. 起動分岐が立っている
 - verify-portal.mjs :: 3. Supabase vendor が読めている
@@ -219,12 +256,10 @@ FAIL  マイグレーションと seed が当たっている（seed の犬 X を
 - verify-portal.mjs :: 13. 他人の犬（Q）は見えない（RLS）
 - verify-portal.mjs :: 14. サインアウトでログイン画面に戻る
 - verify-portal.mjs :: 15. 失効・リンク解除のあとでも、ログインボタンが出て押せる（詰まない）
-- verify-portal.mjs :: 検査を最後まで実行できた
 - verify-production.mjs :: `配信物が手元の dist と同じ（${sameCount}/${staticFiles.length} 本）`
 - verify-production.mjs :: /my が dist/my.html と同じ
 - verify-production.mjs :: `削除済みの旧UI が本番に残っていない（${deletedUiPaths.length} 本を確認）`
 - verify-production.mjs :: `/edit が正UI を配っている（手元 ${want.length} 本 ＋ 注入 ${injected.length} 本）`
-- verify-report-roundtrip.mjs :: 0. 検査用の犬を登録できた
 - verify-report-roundtrip.mjs :: 1. 記入先の要素がすべて実在する
 - verify-report-roundtrip.mjs :: 1b. 押したボタンの表示が、そのまま保存される値になっている
 - verify-report-roundtrip.mjs :: 2. 確定してカルテが1件できた
@@ -246,7 +281,6 @@ FAIL  マイグレーションと seed が当たっている（seed の犬 X を
 - verify-report-roundtrip.mjs :: 19. 体重の欄が空で始まる（見本値が入っていない）
 - verify-report-roundtrip.mjs :: 20. 飼い主の画面に、量っていない体重が出ない
 - verify-report-roundtrip.mjs :: 18. アプリ由来のエラーが無い
-- verify-report-roundtrip.mjs :: 検査を最後まで実行できた
 - verify-screens.mjs :: 1. `/` が配信される
 - verify-screens.mjs :: 2. `/` に4画面が乗っている
 - verify-screens.mjs :: 3. `/` に段のタブが4つ在る
@@ -268,11 +302,9 @@ FAIL  マイグレーションと seed が当たっている（seed の犬 X を
 - verify-screens.mjs :: 17. 招待の入口を押しても、犬の選択には移らない
 - verify-screens.mjs :: 18. 招待の入口を押すと、その場で出る
 - verify-screens.mjs :: 19. 飼い主の画面で拡大を禁止していない
-- verify-screens.mjs :: 検査を最後まで実行できた
 - verify-stack.mjs :: Supabase が起きている
 - verify-stack.mjs :: seed のアカウントで実ログインできる
 - verify-stack.mjs :: seed のアカウントで実ログインできる
-- verify-stack.mjs :: 鍵なしでは読めない（RLS/ゲートウェイが効いている）
 - verify-xss.mjs :: label
 - verify-xss.mjs :: label
 - verify-xss.mjs :: label
