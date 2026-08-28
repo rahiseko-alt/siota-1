@@ -786,6 +786,37 @@ node scripts/mutate-run.mjs portal-content-shown-logged-out portal-sample-image
 - verify-portal.mjs :: 7. 未ログインで中身とログアウトは隠れている
 - verify-portal.mjs :: 8. 見本画像を出していない
 
+### 13回目: いま開いている画面 2件（2026-08-28・**手元で実測**）
+
+```
+node scripts/mutate-run.mjs screen-stale-panels-stay-active
+
+  ✅ screen-stale-panels-stay-active  verify-edit.mjs   赤   4件
+
+    8. ②一覧が実データの犬になっている
+    11. 件数が実データと合っている
+    12. 一覧の画面（screen-2）が開いている
+    13. ⑤確認の画面（screen-4）が開いている
+```
+
+**1回目の壊し方は失敗した。記録しておく。** はじめ `goToStep()` の
+`document.getElementById(\`screen-${stepNum}\`)` を `'screen-1'` に固定したが、
+狙った `12./13.` には**1件も届かず** `検査を最後まで実行できた` だけが赤になった。
+理由は「壊しすぎ」——**目的の画面が隠れたままなので `waitForSelector` が
+タイムアウトし、検査がそこで死ぬ**。`⛔ 毒見の天井` と同じ型が、1件ずつ壊す
+やり方でも起きる。
+
+**画面を隠さずに、前の画面を閉じないだけ**にしたら通った。`is-active` が複数の
+パネルに残るので `querySelector('.screen-panel.is-active')` は DOM 順で最初の
+ものを返す——**流れは最後まで動いたうえで、「いま居る画面」の判定だけが狂う**。
+
+> **狙う項の手前に `waitForSelector` があるなら、そこを通れる壊し方にする。**
+> 通れないと、赤になるのは `検査を最後まで実行できた` だけで、狙った項は
+> 何も証明できない。
+
+- verify-edit.mjs :: 12. 一覧の画面（screen-2）が開いている
+- verify-edit.mjs :: 13. ⑤確認の画面（screen-4）が開いている
+
 ## F4 を閉じる範囲（マスター判断・2026-08-28）
 
 台帳を129件すべて埋めるのではなく、**客に当たる経路まで**で F4 を閉じる。
@@ -859,8 +890,6 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 - verify-delete.mjs :: 1. 写真つきのカルテを確定できた
 - verify-delete.mjs :: 2. 写真の実体が Storage に在る（service_role で数える）
 - verify-draft.mjs :: 4. 下書きの中身が漏れていない
-- verify-edit.mjs :: 12. 一覧の画面（screen-2）が開いている
-- verify-edit.mjs :: 13. ⑤確認の画面（screen-4）が開いている
 - verify-empty-pet.mjs :: 0b. 下書きのカルテを用意できた
 - verify-empty-pet.mjs :: 1. 犬の名前は出ている（ページ自体は開けている）
 - verify-empty-pet.mjs :: 7. 下書きの中身が漏れていない

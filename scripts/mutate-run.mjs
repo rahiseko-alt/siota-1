@@ -45,6 +45,22 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
  * 証明の役に立たない（何を検出したのか言えないため）。
  */
 export const MUTATIONS = [
+  /* ── 12回目: 前の画面が開いたまま残る（2026-08-28・手元で実測）
+     はじめ「切り替え先を screen-1 に固定する」壊し方にしたが、狙った 12./13. には
+     届かず `検査を最後まで実行できた` だけが赤になった——**画面が隠れたままなので
+     `waitForSelector` がタイムアウトし、検査がそこで死ぬ**（毒見の天井と同じ型）。
+     隠さずに**前の画面も開いたまま**にすれば、流れは最後まで動いたうえで
+     「いま開いている画面」の判定だけが狂う。 */
+  {
+    id: 'screen-stale-panels-stay-active',
+    why: '段を進んでも前の画面が開いたまま重なる（どこに居るのか分からなくなる）',
+    file: 'src/js/ui.js',
+    find: "    document.querySelectorAll('.screen-panel').forEach(panel => {\n"
+      + "      panel.classList.remove('is-active');\n"
+      + '    });',
+    replace: '    /* mutated: 前の画面を閉じない */',
+    scripts: ['verify-edit.mjs'],
+  },
   /* ── 11回目: 未ログインの /my（2026-08-28・手元で実測） ── */
   {
     id: 'portal-content-shown-logged-out',
