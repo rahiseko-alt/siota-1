@@ -700,6 +700,40 @@ node scripts/mutate-run.mjs pet-purge-broken
 
 - verify-admin.mjs :: 18. 消した犬の写真が Storage に残っていない
 
+### 10回目: verify-edit の残りを狙った 5件（2026-08-28・**手元で実測**）
+
+`## F4 を閉じる範囲` の残り42件のうち、`verify-edit` に固まっていた分を狙って
+壊し方を4個足した。**CI ではなく手元の worktree で実測**（`docs/handoff.md` `0-K`）。
+
+```
+node scripts/mutate-run.mjs edit-dummy-dogs-leak edit-breed-mock-refill \
+                            empty-photo-attr-page-url letter-section-always-shown
+
+  ✅ edit-dummy-dogs-leak        verify-edit.mjs               赤   4件
+  ✅ edit-breed-mock-refill      verify-edit.mjs               赤   3件
+  ✅ empty-photo-attr-page-url   verify-edit.mjs               赤   3件
+  ✅ empty-photo-attr-page-url   verify-report-roundtrip.mjs   赤   1件
+  ✅ empty-photo-attr-page-url   verify-photo-roundtrip.mjs    赤   1件
+  ✅ letter-section-always-shown verify-edit.mjs               赤   3件
+
+  赤になった: 8件（⚠️ 0件）
+```
+
+**`empty-photo-attr-page-url` は `F-20260828-54` が残した宿題そのもの。**
+あの回は「共通部品を直したから共通に効くはず」で `edit-empty-photo-src-regress` の
+`scripts` を広げ、`verify-edit :: 15.` と `verify-report-roundtrip :: 16.` が
+赤0件だった。原因は `img.src = ''`（**プロパティ**代入）と `getAttribute('src')`
+（**素の属性**）の観測点の違いで、失敗記録には
+「`getAttribute('src')` が実際に壊れた値を返す形の壊し方が要る」と書き残してあった。
+今回はそのとおり `img.setAttribute('src', location.href)` で**属性そのものに**
+書き込む形にしたので、**両方の観測点から見える**——狙った2件がどちらも赤になった。
+
+- verify-edit.mjs :: 9. 仮データ（window.DUMMY）の犬が出ていない
+- verify-edit.mjs :: 10. 持っていない項目（犬種・担当）が空で出ている
+- verify-edit.mjs :: 15. 空の写真スロットがページURLを指していない
+- verify-edit.mjs :: 16. 担当メッセージが無いカルテで、文例が出ていない
+- verify-report-roundtrip.mjs :: 16. 飼い主: 壊れた画像（ページURL）が出ていない
+
 ## F4 を閉じる範囲（マスター判断・2026-08-28）
 
 台帳を129件すべて埋めるのではなく、**客に当たる経路まで**で F4 を閉じる。
@@ -773,12 +807,8 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 - verify-delete.mjs :: 1. 写真つきのカルテを確定できた
 - verify-delete.mjs :: 2. 写真の実体が Storage に在る（service_role で数える）
 - verify-draft.mjs :: 4. 下書きの中身が漏れていない
-- verify-edit.mjs :: 9. 仮データ（window.DUMMY）の犬が出ていない
-- verify-edit.mjs :: 10. 持っていない項目（犬種・担当）が空で出ている
 - verify-edit.mjs :: 12. 一覧の画面（screen-2）が開いている
 - verify-edit.mjs :: 13. ⑤確認の画面（screen-4）が開いている
-- verify-edit.mjs :: 15. 空の写真スロットがページURLを指していない
-- verify-edit.mjs :: 16. 担当メッセージが無いカルテで、文例が出ていない
 - verify-empty-pet.mjs :: 0b. 下書きのカルテを用意できた
 - verify-empty-pet.mjs :: 1. 犬の名前は出ている（ページ自体は開けている）
 - verify-empty-pet.mjs :: 7. 下書きの中身が漏れていない
@@ -806,7 +836,6 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 - verify-report-roundtrip.mjs :: 1. 記入先の要素がすべて実在する
 - verify-report-roundtrip.mjs :: 8. 確認: 犬体図の印が画像として出ている
 - verify-report-roundtrip.mjs :: 15. 飼い主: 犬体図の印が画像として届く
-- verify-report-roundtrip.mjs :: 16. 飼い主: 壊れた画像（ページURL）が出ていない
 - verify-report-roundtrip.mjs :: 19. 体重の欄が空で始まる（見本値が入っていない）
 - verify-report-roundtrip.mjs :: 20. 飼い主の画面に、量っていない体重が出ない
 - verify-screens.mjs :: 1. `/` が配信される

@@ -45,6 +45,45 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
  * 証明の役に立たない（何を検出したのか言えないため）。
  */
 export const MUTATIONS = [
+  /* ── 9回目: verify-edit の残りを狙う（2026-08-28・手元で実測） ──
+     `docs/ops/proof-of-red.md`「## F4 を閉じる範囲」の残り42件のうち、
+     verify-edit に固まっている6件を狙う。 */
+  {
+    id: 'edit-dummy-dogs-leak',
+    why: '一覧が実データではなく仮データを描く（居ない犬が並び、本物の客の犬が消える）',
+    file: 'src/js/ui.js',
+    find: 'const data = this.dogs || (window.DUMMY && window.DUMMY.dogs) || [];',
+    replace: 'const data = (window.DUMMY && window.DUMMY.dogs) || this.dogs || [];',
+    scripts: ['verify-edit.mjs'],
+  },
+  {
+    id: 'edit-breed-mock-refill',
+    why: '持っていない項目（犬種）に見本の値が出る——客は「うちの子はトイプードルではない」と読む（D-10）',
+    file: 'src/js/ui.js',
+    find: "card.querySelector('.karte-card__breed').textContent = dog.breed;",
+    replace: "card.querySelector('.karte-card__breed').textContent = dog.breed || 'トイプードル';",
+    scripts: ['verify-edit.mjs'],
+  },
+  {
+    /* `F-20260828-54` が「この2件を狙うなら getAttribute('src') が実際に壊れた値を
+       返す形の壊し方が要る」と書き残したもの。`img.src = ''`（プロパティ代入）では
+       素の属性は空文字のままで、`getAttribute` で見ている検査には届かなかった。
+       **属性そのものにページURLを書き込む**ので、両方の観測点から見える。 */
+    id: 'empty-photo-attr-page-url',
+    why: '写真の無いスロットが、現在のページURLを取りに行く（飼い主の画面に読めない画像の取得要求が並ぶ）',
+    file: 'backend/js/magazine-view.js',
+    find: "    else img.removeAttribute('src');",
+    replace: "    else img.setAttribute('src', location.href);",
+    scripts: ['verify-edit.mjs', 'verify-report-roundtrip.mjs', 'verify-photo-roundtrip.mjs'],
+  },
+  {
+    id: 'letter-section-always-shown',
+    why: '担当が何も書いていないのに、手紙の節が飼い主に出る（誰も書いていない空の手紙が届く）',
+    file: 'backend/js/magazine-view.js',
+    find: "  if (letterSection) letterSection.hidden = staffNote === '';",
+    replace: '  if (letterSection) letterSection.hidden = false;',
+    scripts: ['verify-edit.mjs'],
+  },
   {
     id: 'delete-assets',
     why: '犬を消しても、写真の実体が Storage に残り続ける（誰も回収できない）',
