@@ -843,6 +843,37 @@ node scripts/mutate-run.mjs admin-pet-delete-not-persisted
 - verify-admin.mjs :: 16. ペットが実際に消えた
 - verify-admin.mjs :: 17. 顧客が実際に消えた
 
+### 15回目: カルテ0件の犬 3件（2026-08-28・**手元で実測**）
+
+```
+  ✅ screen-stale-panels-stay-active  verify-empty-pet.mjs  赤 1件
+       8. トリマーは1件目を作る画面に入れる
+  ✅ empty-pet-name-wrong             verify-empty-pet.mjs  赤 1件
+       1. 犬の名前は出ている（ページ自体は開けている）
+  ✅ commit-button-out-of-dock        verify-empty-pet.mjs  赤 1件
+       9. 確定のボタンが在る（行き止まりでない）
+```
+
+`8.` は**既存の壊し方の `scripts` を広げて当てた**（`screen-stale-panels-stay-active`
+に `verify-empty-pet.mjs` を追加）。`F-20260828-54` の教訓どおり、**広げてから
+実測して**当たることを確かめている——広げただけで証明済みにはしていない。
+
+**この回も2つ、壊し方のほうが間違っていた。**
+
+1. **`empty-pet-name-lost`（見出しを空にする）は狙いに届かなかった。**
+   見出しが不可視になり `waitForSelector('[data-testid="pet-name"]')` が
+   タイムアウトして、検査がそこで死んだ（13回目とまったく同じ型）。
+   **別の子の名前を出す**形（`empty-pet-name-wrong`）にしたら、見えたまま
+   中身だけが違う状態になり、狙いどおり `1.` が赤になった
+2. **`commit-button-out-of-dock` を `hidden` で作ったら ⚠️（赤0件）だった。**
+   検査は `querySelector` で**在るかどうか**を見ているので、隠しても DOM には
+   残る。**掴む名前のほう**（`class="boxbutton …"`）を変えたら赤になった。
+   **「見えない」と「無い」は別物**——どちらを見ている検査なのかを先に読むこと
+
+- verify-empty-pet.mjs :: 1. 犬の名前は出ている（ページ自体は開けている）
+- verify-empty-pet.mjs :: 8. トリマーは1件目を作る画面に入れる
+- verify-empty-pet.mjs :: 9. 確定のボタンが在る（行き止まりでない）
+
 ## F4 を閉じる範囲（マスター判断・2026-08-28）
 
 台帳を129件すべて埋めるのではなく、**客に当たる経路まで**で F4 を閉じる。
@@ -915,10 +946,7 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 - verify-delete.mjs :: 2. 写真の実体が Storage に在る（service_role で数える）
 - verify-draft.mjs :: 4. 下書きの中身が漏れていない
 - verify-empty-pet.mjs :: 0b. 下書きのカルテを用意できた
-- verify-empty-pet.mjs :: 1. 犬の名前は出ている（ページ自体は開けている）
 - verify-empty-pet.mjs :: 7. 下書きの中身が漏れていない
-- verify-empty-pet.mjs :: 8. トリマーは1件目を作る画面に入れる
-- verify-empty-pet.mjs :: 9. 確定のボタンが在る（行き止まりでない）
 - verify-invitation.mjs :: 1. その飼い主の犬を登録できた
 - verify-invitation.mjs :: 5. 招待を消化する前は、その犬を見られない
 - verify-m6.mjs :: ②b. ログインすると作業画面に入れる

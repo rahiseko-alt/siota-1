@@ -45,6 +45,30 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
  * 証明の役に立たない（何を検出したのか言えないため）。
  */
 export const MUTATIONS = [
+  /* ── 14回目: カルテ0件の犬（2026-08-28・手元で実測） ── */
+  {
+    /* **空にしない。** はじめ `''` にしたら、見出しが不可視になって
+       `waitForSelector('[data-testid="pet-name"]')` がタイムアウトし、検査が
+       そこで死んだ（狙った `1.` に届かず `検査を最後まで実行できた` だけが赤）。
+       別の子の名前を出す形にすれば、見えたまま中身だけが違う。 */
+    id: 'empty-pet-name-wrong',
+    why: '**飼い主のページに、別の子の名前が出る**（どの子の話か分からない）',
+    file: 'backend/js/supabase-auth.js',
+    find: '  heading.textContent = pet.name;',
+    replace: "  heading.textContent = 'ちがう子';",
+    scripts: ['verify-empty-pet.mjs'],
+  },
+  {
+    /* **`hidden` では効かない。** 検査は `querySelector` で**在るかどうか**を見て
+       いるので、隠しても DOM には残り、1件も赤にならなかった。掴む名前のほうを
+       変える——`.dock-action-wrap .boxbutton` から外れるので「入口が無い」になる。 */
+    id: 'commit-button-out-of-dock',
+    why: '**1件目を作る画面に確定の入口が無い**（書いても確定できない行き止まり）',
+    file: 'src/index.html',
+    find: '<button class="boxbutton boxbutton--white" style="min-height: 44px; padding: 10px 48px 10px 18px;" onclick="App.commitReport()">',
+    replace: '<button class="dock-cta" style="min-height: 44px; padding: 10px 48px 10px 18px;" onclick="App.commitReport()">',
+    scripts: ['verify-empty-pet.mjs'],
+  },
   /* ── 13回目: 管理者の削除が、画面では成功して DB に残る（2026-08-28・手元で実測）
      削除は「写真 → DB」の2段（`D-20260824-34`）。**DB を消す段だけ**を落とすと、
      画面は成功したように見えるのに実体が残る——`16./17.` はそこを見ている。
@@ -79,7 +103,7 @@ export const MUTATIONS = [
       + "      panel.classList.remove('is-active');\n"
       + '    });',
     replace: '    /* mutated: 前の画面を閉じない */',
-    scripts: ['verify-edit.mjs'],
+    scripts: ['verify-edit.mjs', 'verify-empty-pet.mjs'],
   },
   /* ── 11回目: 未ログインの /my（2026-08-28・手元で実測） ── */
   {
