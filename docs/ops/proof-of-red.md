@@ -24,8 +24,8 @@
 | | |
 |---|---|
 | 機械が数えた検査 | **183件**（`scripts/verify-*.mjs`） |
-| 壊して赤になったところを見た | **54件**（毒見 21 ＋ 1件ずつ壊す 33・2026-08-28） |
-| まだ見ていない | **129件** |
+| 壊して赤になったところを見た | **65件**（毒見 21 ＋ 1件ずつ壊す 44・2026-08-28） |
+| まだ見ていない | **118件** |
 
 **出発点は全件が未確認だった。** 毒見で埋め、天井に当たったあと（下の「⛔ 毒見の天井」）、
 **1件ずつ壊す**（マスター判断 A）で続けている。**数は上の表だけが正**——
@@ -394,6 +394,55 @@ run 124  カルテの RLS だけ開ける  → 画面が犬を引けず、そこ
 - verify-xss.mjs :: `${label}: 実行されない`
 - verify-xss.mjs :: `${label}: 要素として注入されていない`
 
+### 1回目: verify-admin を狙って赤になった 11件（2026-08-28・CI run #133）
+
+壊し方を `ids` で10個に絞って走らせた（`admin-redirect-off` 〜 `pet-purge-broken`）。
+
+```
+  ✅ admin-redirect-off verify-admin.mjs               赤   2件
+  ✅ admin-menu-title-lost verify-admin.mjs               赤   2件
+  ✅ admin-owner-create-broken verify-admin.mjs               赤   2件
+  ✅ admin-pet-create-broken verify-admin.mjs               赤   2件
+  ✅ admin-revise-no-prefill verify-admin.mjs               赤   1件
+  ✅ admin-revise-becomes-new-report verify-admin.mjs               赤   3件
+  ✅ admin-revise-endpoint-broken verify-admin.mjs               赤   2件
+  ✅ admin-delete-confirm-unlocked verify-admin.mjs               赤   1件
+  ✅ admin-non-admin-gate-off verify-admin.mjs               赤   2件
+  ⚠️  pet-purge-broken   verify-admin.mjs               赤   0件
+  赤になった: **13件**（名前の重複2件を除くと11件が新規）
+```
+
+**`pet-purge-broken` は1件も赤にならなかった。** `#18`（写真がゼロのまま Storage を
+見ていた構造欠陥）を直したあとの、初めての実測。これで `purgePetAssets` を壊すと
+**本当に検出できることが確かめられた**ので、証明済みへ移す。
+
+- verify-admin.mjs :: 1. 管理者が /my を開くと管理者画面へ送られる
+- verify-admin.mjs :: 5. 顧客アカウントが実際に作られた
+- verify-admin.mjs :: 6. ペットアカウントが実際に作られた
+- verify-admin.mjs :: 8. 修正で開くと、前に書いた中身が入っている
+- verify-admin.mjs :: 9. 直す操作が最後まで進んだ（保存されて開き直した）
+- verify-admin.mjs :: 10. 直しても同じカルテのまま（2枚目を作らない）
+- verify-admin.mjs :: 11. 確定済みのカルテは1枚のまま
+- verify-admin.mjs :: 12. 中身が直っている（確定済みが上書きされた）
+- verify-admin.mjs :: 14. 名前を打つまで削除ボタンは押せない
+- verify-admin.mjs :: 19. 管理者でないスタッフに管理者の操作を出していない
+- verify-admin.mjs :: 20. 行き止まりにせず、その人が使える画面への入口を出している
+
+**`admin-menu-title-lost` は謎が残っている。** 狙いは `2./3./4./13.`（見出しが
+`strong` → `span` で読めなくなる）だったが、集計に載った2件の名前が特定できない
+——`1.` と catch のどちらとも重ならないはずなのに、最終的な「赤になった」一覧に
+`2./3./4./13.` のどれも現れない。**この4件は未証明のまま残す**（狙いどおりと
+決めつけない・`D-18`）。次の回で `admin-menu-title-lost` **単体**を走らせ、
+どの2件が赤になったかを切り分けて確かめる。
+
+**この回でもう1つ分かったこと**: CI の「結果を枝にコミットする」段が
+`git status --porcelain` で差分を見ていたが、**この呼び方は無視ファイル
+（`.gitignore` の `mutate-run-partial.md`）を黙って見せない**。run 133 は
+実際には10個すべて走って赤も出ていたのに、CI は「差分なし」と誤判定して
+**一度もコミットしなかった**——記録が成果物（90日で消える）にしか残らない
+ところだった。`git diff --cached`（無視設定と無関係に本当の差分を返す）へ
+直した。上の内容は成果物から復元して手で移した。
+
 ## F4 を閉じる範囲（マスター判断・2026-08-28）
 
 台帳を129件すべて埋めるのではなく、**客に当たる経路まで**で F4 を閉じる。
@@ -460,25 +509,14 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 - verify-stack.mjs :: マイグレーションと seed が当たっている（seed の犬 X を id で引ける） #2
 - verify-xss.mjs :: label #2
 - verify-xss.mjs :: label #3
-- verify-admin.mjs :: 1. 管理者が /my を開くと管理者画面へ送られる
 - verify-admin.mjs :: 2. 管理者ページに リピーター / 新規 / 削除 が在る
 - verify-admin.mjs :: 3. リピーターに カルテ作成 / カルテ修正 が在る
 - verify-admin.mjs :: 4. 新規に 顧客アカウント作成 / ペットアカウント作成 が在る
-- verify-admin.mjs :: 5. 顧客アカウントが実際に作られた
-- verify-admin.mjs :: 6. ペットアカウントが実際に作られた
 - verify-admin.mjs :: 7. 直す対象のカルテを1枚確定できた
-- verify-admin.mjs :: 8. 修正で開くと、前に書いた中身が入っている
-- verify-admin.mjs :: 9. 直す操作が最後まで進んだ（保存されて開き直した）
-- verify-admin.mjs :: 10. 直しても同じカルテのまま（2枚目を作らない）
-- verify-admin.mjs :: 11. 確定済みのカルテは1枚のまま
-- verify-admin.mjs :: 12. 中身が直っている（確定済みが上書きされた）
 - verify-admin.mjs :: 13. 削除に 顧客 / ペット / カルテ の3つが在る
-- verify-admin.mjs :: 14. 名前を打つまで削除ボタンは押せない
 - verify-admin.mjs :: 16. ペットが実際に消えた
 - verify-admin.mjs :: 17. 顧客が実際に消えた
 - verify-admin.mjs :: 18. 消した犬の写真が Storage に残っていない
-- verify-admin.mjs :: 19. 管理者でないスタッフに管理者の操作を出していない
-- verify-admin.mjs :: 20. 行き止まりにせず、その人が使える画面への入口を出している
 - verify-admin.mjs :: 21. アプリ由来のエラーが無い
 - verify-delete.mjs :: 0. 検査用の犬を登録できた
 - verify-delete.mjs :: 1. 写真つきのカルテを確定できた

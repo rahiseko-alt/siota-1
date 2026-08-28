@@ -245,13 +245,20 @@ jobs:
       - name: 結果を枝にコミットする
         if: always()
         run: |
-          if [ -z "$(git status --porcelain -- docs/ops/mutate-run-result.md docs/ops/mutate-run-partial.md)" ]; then
-            echo "結果に差分なし。コミットしない"
-            exit 0
-          fi
+          # **`git status --porcelain` は無視ファイルを黙って見せない。**
+          # `mutate-run-partial.md` は作業用として .gitignore に入れてあり、
+          # `-- <path>` を渡しても対象を絞るだけで無視は解除されない。
+          # run 133 はこれで「結果に差分なし」と誤判定し、走った10個ぶんの
+          # 結果を一度も枝にコミットせず捨てていた（本文を直したのはこの回）。
+          # `git add -f` で無視を上書きしてから、**ステージした差分**を見る
+          # （`git diff --cached` は無視設定と無関係に本当の差分を返す）。
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -f docs/ops/mutate-run-result.md docs/ops/mutate-run-partial.md
+          if git diff --cached --quiet -- docs/ops/mutate-run-result.md docs/ops/mutate-run-partial.md; then
+            echo "結果に差分なし。コミットしない"
+            exit 0
+          fi
           git commit -m "mutate の結果を記録する（run ${{ github.run_number }}）"
           git push origin HEAD:${{ github.ref_name }}
 
