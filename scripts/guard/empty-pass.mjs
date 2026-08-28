@@ -58,6 +58,13 @@ export function passConditions(src) {
   const re = /\bcheck\s*\(/g;
   let m;
   while ((m = re.exec(src))) {
+    /* **`function check(name, pass, detail)` の宣言そのものを数えない。**
+       ここを見落として14件（検査1本につき1件）を「合格条件」として数えていた。
+       台帳に `:: name` という在りもしない検査名が並んで気づいた——
+       **数える機械が、数える対象を取り違えていた**（`docs/watch.md` W-1 の型を、
+       W-1 を止める機械の中で踏んだ）。 */
+    const before = src.slice(Math.max(0, m.index - 30), m.index);
+    if (/\b(function|const|let|var)\s+$/.test(before)) continue;
     let i = m.index + m[0].length;
     let depth = 1;
     const start = i;
@@ -84,9 +91,14 @@ export function passConditions(src) {
     parts.push(args.slice(last));
     if (parts.length < 2) continue;
 
+    /* 名前は、素の文字列なら中身を、そうでなければ**書いてある式をそのまま**使う。
+       `\`${kind === …}\`` のような式を引用符で切ると、途中で千切れた名前になり、
+       台帳の突き合わせが静かにずれる（消えた検査を「在る」と読む）。 */
+    const raw = parts[0].trim();
+    const literal = raw.match(/^'([^'\\]*)'$|^"([^"\\]*)"$|^`([^`$\\]*)`$/);
     out.push({
       line: src.slice(0, m.index).split('\n').length,
-      name: (parts[0].match(/['"`]([\s\S]*?)['"`]/) || [, parts[0].trim()])[1].split('\n')[0].trim(),
+      name: (literal ? (literal[1] ?? literal[2] ?? literal[3]) : raw).replace(/\s+/g, ' ').trim(),
       cond: parts[1].trim(),
     });
   }
