@@ -62,8 +62,17 @@ try {
   /* ── ② ログイン ── */
   await injectSession(page, FIXTURE.staffEmail);
   await page.goto(`${BASE}/edit`, { waitUntil: 'networkidle' });
-  await page.waitForSelector('.karte-card', { timeout: 20_000 });
-  check('②b. ログインすると作業画面に入れる', true, new URL(page.url()).pathname);
+  await page.waitForSelector('.karte-card', { timeout: 20_000 }).catch(() => {});
+  /* **`true` の直書きだった。** `waitForSelector` が落ちればこの行に来る前に
+     catch へ飛ぶので、実際には何も測っていなかった——`proof-of-red` の定義で言えば
+     「壊しても赤になったところを見ていない」検査そのもの。`/edit` に居ることと
+     `.karte-card` が実在することを、ここで初めて測る。 */
+  const arrived = await page.evaluate(() => ({
+    path: location.pathname,
+    cards: document.querySelectorAll('.karte-card').length,
+  }));
+  check('②b. ログインすると作業画面に入れる',
+    arrived.path === '/edit' && arrived.cards > 0, `path=${arrived.path} cards=${arrived.cards}`);
 
   /* ── ③ 犬の名前を選ぶ ── */
   const picked = await page.evaluate((name) => {

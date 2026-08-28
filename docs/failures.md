@@ -705,3 +705,15 @@
 - **How it was found**: 壊してみて初めて出た（`proof-of-red` の定義どおり）。⚠️ が2件出たので、両ファイルの該当行を読み比べて `getAttribute` と `.src` の違いに気づいた
 - **Fix**: `edit-empty-photo-src-regress` の `scripts` を `verify-photo-roundtrip.mjs` だけに戻した。`verify-edit.mjs :: 15.` と `verify-report-roundtrip.mjs :: 16.` は未証明のまま——**この2件を狙うなら、`getAttribute('src')` が実際に壊れた値を返す形の壊し方**（例えば `renderMagazine` が生成する HTML 文字列そのものに URL を混入させる）が要る
 - **How to prevent**: **「同じ見出しの検査は同じものを見ている」と決めつけない。** 壊し方を複数の検査に広げるときは、広げる前に**各検査が実際に何を読んでいるか**（プロパティかDOM属性か、どのセレクタか）を1つずつ確認する。「共通部品を直したから共通に効くはず」は仮説であって証拠ではない（`D-18`）
+
+### [F-20260828-55] `verify-m6.mjs` の「②b. ログインすると作業画面に入れる」が、`true` の直書きだった
+
+- **Date**: 2026-08-28
+- **Status**: 解決済み（機械の直しのみ・壊し方はまだ作っていない）
+- **Category**: test
+- **Trigger/Context**: 台帳を「客に当たる経路まで」埋める作業（`docs/ops/proof-of-red.md`）で `verify-m6.mjs` の未証明を洗っている最中に見つけた
+- **What happened**: `check('②b. ログインすると作業画面に入れる', true, ...)` — **合格条件が `true` の直書き**だった。直前に `.karte-card` の `waitForSelector` があるが、それが失敗すれば `throw` して`catch`（「検査を最後まで実行できた」）へ飛ぶだけで、この行自体には到達しない。**この行に到達した時点で、もう何も測っていない**——何を壊しても赤にならない
+- **Root Cause**: `docs/watch.md` W-1 の型そのもの（合格条件が実際の仕組みと関係ない）。`waitForSelector` の**成功が前提**で書かれた行で、「入れたこと」の確認を`waitForSelector` 自身に**丸投げ**していた。しかし `waitForSelector` が例外を投げる経路は `check()` を1回も呼ばずに `catch` の1件に集約されるため、この行を「壊して赤にする」方法が存在しない構造だった
+- **How it was found**: `proof-of-red` の定義（壊して赤になったところを見ていない検査は壊れているとみなす）に沿って未証明の項を1つずつ読み直している最中に、ソースを読むだけで気づいた——**壊す前に見つかった**数少ない例
+- **Fix**: `waitForSelector(...).catch(() => {})` に変え（例外を握りつぶして次へ進む）、`location.pathname === '/edit'` と `.karte-card` の**実際の件数**を測って合否にした。これで「カードが0件のまま`/edit`に居る」ような中間状態も拾える
+- **How to prevent**: **`check()` の第2引数に `true`/`false` を直書きしない。** 直前の `waitForSelector` の成功可否に丸投げした時点で、その `check()` 自体は死んでいる。合否は必ず、その場で読み直した実際の状態から作る
