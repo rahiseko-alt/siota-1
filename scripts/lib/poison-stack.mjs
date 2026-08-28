@@ -42,11 +42,12 @@ function emptySession(email) {
  *
  *   empty  … データが空。犬も飼い主もカルテも0件。**データを見る検査**を判定する
  *   noauth … ログインが通らない。**認証を見る検査**を判定する
+ *   nodist … **配る側**が空（土台は普通に立てる）。**静的配信と未ログイン画面**を判定する
  *
  * `empty` では `verify-stack` の「seed のアカウントで実ログインできる」が
  * 緑のまま残った——何を送っても通すサーバ相手だったため。`noauth` はそこを突く。
  */
-export const FLAVORS = ['empty', 'noauth'];
+export const FLAVORS = ['empty', 'noauth', 'nodist'];
 
 /** 中身が空の世界を立てる。`{ url, stop }` を返す。 */
 export function startPoisonStack({ port = 54321, flavor = 'empty' } = {}) {

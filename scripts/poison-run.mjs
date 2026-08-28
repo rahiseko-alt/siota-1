@@ -94,11 +94,18 @@ const files = fs.readdirSync(path.join(ROOT, 'scripts'))
   .sort();
 
 process.stdout.write(`【毒見】毒「${FLAVOR}」の世界で検査を走らせる\n`);
-process.stdout.write(`  ${FLAVOR === 'noauth' ? 'ログインが通らない世界。認証を見る検査を判定する。' : 'データが空の世界。データを見る検査を判定する。'}\n`);
+process.stdout.write(`  ${{ noauth: 'ログインが通らない世界。認証を見る検査を判定する。', nodist: '配信物が空の世界。静的配信と未ログイン画面の検査を判定する。' }[FLAVOR] || 'データが空の世界。データを見る検査を判定する。'}\n`);
 process.stdout.write('  この世界では、すべての検査が赤にならなければおかしい。\n');
 process.stdout.write('  緑のまま残ったものが「何も無くても通る検査」。\n\n');
 
-const poison = await startPoisonStack({ port: POISON_PORT, flavor: FLAVOR });
+/* `nodist` は**配る側**を空にする毒。土台の毒（empty / noauth）と違い、
+   Supabase 側は普通に立てる——静的配信の検査だけを判定したいので、
+   ほかの条件は変えない。空のディレクトリは gitignore してあるので毎回作る。 */
+if (FLAVOR === 'nodist') {
+  fs.mkdirSync(path.join(ROOT, '.poison-dist'), { recursive: true });
+  process.env.POISON_WRANGLER_CONFIG = 'worker/wrangler.poison.toml';
+}
+const poison = await startPoisonStack({ port: POISON_PORT, flavor: FLAVOR === 'nodist' ? 'empty' : FLAVOR });
 const survived = [];
 const died = [];
 let port = 8880;

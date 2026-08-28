@@ -158,14 +158,20 @@ function portIsFree(port) {
  * ローカル Supabase を指す Worker を起動する。呼び出し側は必ず `stop()` を呼ぶこと
  * （プロセスグループごと止めないと wrangler(node)/workerd がポートを掴んだまま残る）。
  */
-export async function startLocalWorker({ port = 8787, readyTimeoutMs = 90_000 } = {}) {
+export async function startLocalWorker({ port = 8787, readyTimeoutMs = 90_000, config } = {}) {
   await ensureLocalSupabaseRunning();
   if (!await portIsFree(port)) {
     throw new Error(`ポート ${port} が塞がっている。前回の wrangler dev が残っていないか確認すること。`);
   }
+  /* 配信元を差し替えられるようにする（`POISON_WRANGLER_CONFIG`）。
+     毒見の3種類目「配信物が空」は、**配る側を空にしないと作れない**——
+     土台（Supabase）をいくら壊しても、静的配信と未ログイン画面は変わらないため
+     （`docs/ops/proof-of-red.md`「両方の毒でも判定できない15件」）。
+     既定は従来どおり。何も設定しなければ挙動は変わらない。 */
+  const cfg = config || process.env.POISON_WRANGLER_CONFIG || 'worker/wrangler.local.toml';
   const worker = spawn('npx', [
     'wrangler', 'dev',
-    '--config', 'worker/wrangler.local.toml',
+    '--config', cfg,
     '--port', String(port),
   ], { stdio: ['ignore', 'pipe', 'pipe'], detached: true });
 

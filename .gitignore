@@ -71,3 +71,6 @@ yarn-debug.log*
 
 # 毒見を一部だけ走らせた回の記録（作業用）。全体の記録は poison-run-result*.md が正。
 docs/ops/poison-run-partial.md
+
+# 毒見（配信物が空）が使う空ディレクトリ。中身は要らない
+.poison-dist/
