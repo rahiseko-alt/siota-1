@@ -3,16 +3,16 @@
 
 実行: `node scripts/mutate-run.mjs`（**本物の土台が要る**——CI で走らせる）
 
-- 赤になった（その壊しを検出できた）: **93件**
+- 赤になった（その壊しを検出できた）: **101件**
 
 ## 赤になった（`- <検査の名前>` ← どの壊しで）
 
 - ★b. 戻った先に犬が並んでいる（空の一覧に置き去りにしない）   ← empty-back-off / verify-m6.mjs
 - ★c. 戻ってから、もう一度同じ犬に入れる   ← empty-back-off / verify-m6.mjs
-- 0. 検査用の犬を登録できた   ← rls-drafts-leak / verify-draft.mjs
 - 1. /edit が配信される   ← edit-template-broken / verify-edit.mjs
 - 1. 管理者が /my を開くと管理者画面へ送られる   ← admin-redirect-off / verify-admin.mjs
 - 1. 記入が下書きとしてサーバに残った   ← resume-draft-off / verify-draft.mjs
+- 10. アプリ由来のコンソールエラーが無い（ログイン前）   ← portal-throws-runtime-error / verify-portal.mjs
 - 10. 直しても同じカルテのまま（2枚目を作らない）   ← admin-revise-becomes-new-report / verify-admin.mjs
 - 10. 飼い主: 壊れた画像（ページURL を指す img）が無い   ← edit-empty-photo-src-regress / verify-photo-roundtrip.mjs
 - 10. 飼い主: 担当からの一言   ← settext-off / verify-report-roundtrip.mjs
@@ -21,11 +21,12 @@
 - 11. 直しで開くと、付けた写真が控えに残っている   ← hydrate-assets / verify-photo-roundtrip.mjs
 - 11. 確定済みのカルテは1枚のまま   ← admin-revise-becomes-new-report / verify-admin.mjs
 - 11. 飼い主: 爪   ← settext-off / verify-report-roundtrip.mjs
+- 12. ログイン後はログアウトボタンが出る   ← portal-signout-hidden-after-login / verify-portal.mjs
 - 12. 中身が直っている（確定済みが上書きされた）   ← admin-revise-endpoint-broken / verify-admin.mjs
 - 12. 直したあとも写真4枚が残っている   ← hydrate-assets / verify-photo-roundtrip.mjs
 - 12. 飼い主: 耳   ← settext-off / verify-report-roundtrip.mjs
+- 13. アプリ由来のエラーが無い   ← app-throws-runtime-error / verify-photo-roundtrip.mjs
 - 13. 他人の犬（Q）は見えない（RLS）   ← rls-any-owner-sees-any-dog / verify-portal.mjs
-- 13. 削除に 顧客 / ペット / カルテ の3つが在る   ← admin-menu-title-lost / verify-admin.mjs
 - 13. 飼い主: 歯   ← settext-off / verify-report-roundtrip.mjs
 - 14. ⑤確認の器から意匠モックの既定文が消えている   ← edit-mock-letter-reappears / verify-edit.mjs
 - 14. サインアウトでログイン画面に戻る   ← portal-login-panel-dead / verify-portal.mjs
@@ -36,28 +37,33 @@
 - 15. 失効・リンク解除のあとでも、ログインボタンが出て押せる（詰まない）   ← portal-login-panel-dead / verify-portal.mjs
 - 17. ④の入力欄が空で始まる（見本の文が入っていない）   ← edit-trimmer-letter-prefilled / verify-edit.mjs
 - 17. 他人にはこのカルテが見えない（RLS）   ← rls-both-layers-open / verify-report-roundtrip.mjs
+- 18. アプリ由来のエラーが無い   ← app-throws-runtime-error / verify-report-roundtrip.mjs
 - 19. 管理者でないスタッフに管理者の操作を出していない   ← admin-non-admin-gate-off / verify-admin.mjs
+- 1b. 押したボタンの表示が、そのまま保存される値になっている   ← report-roundtrip-teeth-value-mismatch / verify-report-roundtrip.mjs
 - 2. 一覧に初回登録（QR）の入口が出ている   ← invite-button-off / verify-invitation.mjs
 - 2. 正UI が配られている（screen-N が在る）   ← edit-template-broken / verify-edit.mjs
 - 2. 正直な空の状態が出ている   ← empty-pet-shows-sample / verify-empty-pet.mjs
-- 2. 管理者ページに リピーター / 新規 / 削除 が在る   ← admin-menu-title-lost / verify-admin.mjs
+- 2. 起動分岐が立っている   ← portal-flavor-broken / verify-portal.mjs
 - 2. 離れて戻ると、続きから書ける   ← resume-draft-off / verify-draft.mjs
 - 20. 行き止まりにせず、その人が使える画面への入口を出している   ← admin-non-admin-gate-off / verify-admin.mjs
 - 3. App が名前で届く（インライン onclick の解決先）   ← edit-template-broken / verify-edit.mjs
-- 3. リピーターに カルテ作成 / カルテ修正 が在る   ← admin-menu-title-lost / verify-admin.mjs
+- 3. 下書きは飼い主に見えない   ← rls-drafts-leak / verify-draft.mjs
 - 3. 写真が1枚も出ていない   ← empty-pet-shows-sample / verify-empty-pet.mjs
 - 3. 押すと初回登録の URL が出る   ← invite-url-broken / verify-invitation.mjs
 - 3. 確認: 担当からの一言   ← settext-off / verify-report-roundtrip.mjs
+- 3. 製品の削除の道が最後まで通った   ← delete-throws / verify-delete.mjs
 - 3b. App のメソッドが実際に呼べる   ← edit-template-broken / verify-edit.mjs
 - 3c. onclick="App.…" が実在する   ← edit-template-broken / verify-edit.mjs
 - 4. QR が画像として出ている   ← invite-qr-not-image / verify-invitation.mjs
 - 4. Supabase vendor が載っている   ← edit-template-broken / verify-edit.mjs
 - ④. カルテを書く画面に、書く場所と確定の入口が在る   ← m6-canvas-missing / verify-m6.mjs
+- 4. ポータルが起動している   ← portal-flavor-broken / verify-portal.mjs
 - 4. 写真の実体が Storage から消えた（service_role で数える）   ← delete-assets / verify-delete.mjs
-- 4. 新規に 顧客アカウント作成 / ペットアカウント作成 が在る   ← admin-menu-title-lost / verify-admin.mjs
+- 4. 履歴の行が1つも出ていない   ← empty-pet-fake-history-entry / verify-empty-pet.mjs
 - 4. 確認: 爪   ← settext-off / verify-report-roundtrip.mjs
 - 5. staff モジュールが載っている（boot を持つ）   ← edit-template-broken / verify-edit.mjs
 - 5. 未ログインでログイン導線が出る   ← portal-login-panel-dead / verify-portal.mjs
+- 5. 確定すると下書きは残らない   ← draft-becomes-new-report / verify-draft.mjs
 - 5. 確認: 耳   ← settext-off / verify-report-roundtrip.mjs
 - 5. 見本の文章が出ていない   ← empty-pet-shows-sample / verify-empty-pet.mjs
 - 5. 顧客アカウントが実際に作られた   ← admin-owner-create-broken / verify-admin.mjs
@@ -66,11 +72,13 @@
 - 6. ペットアカウントが実際に作られた   ← admin-pet-create-broken / verify-admin.mjs
 - 6. ログインボタンが押せる   ← portal-login-panel-dead / verify-portal.mjs
 - 6. 招待を消化すると、自分の犬が見える   ← invite-url-broken / verify-invitation.mjs
+- 6. 次に開くと、確定済みの記入は蘇らない   ← draft-becomes-new-report / verify-draft.mjs
 - 6. 注入先が backend/js/ に直っている   ← edit-template-broken / verify-edit.mjs
 - 6. 確定していないカルテは飼い主に見えない   ← rls-drafts-leak / verify-empty-pet.mjs
 - 6. 確認: 歯   ← settext-off / verify-report-roundtrip.mjs
 - 6. 飼い主: 表紙が、1枚目に入れた写真   ← hydrate-assets / verify-photo-roundtrip.mjs
 - ⑥a. 飼い主は一覧から自分の犬に入れる   ← portal-pet-name-lost / verify-m6.mjs
+- 7. アプリ由来のエラーが無い   ← app-throws-runtime-error / verify-edit.mjs
 - 7. 使い終わった招待は、別の人が使えない   ← rls-any-owner-sees-any-dog / verify-invitation.mjs
 - 7. 確認: 体重   ← settext-off / verify-report-roundtrip.mjs
 - 7. 飼い主: ギャラリーに2枚並ぶ   ← hydrate-assets / verify-photo-roundtrip.mjs
@@ -105,27 +113,5 @@
 
 - [pet-purge-broken] verify-admin.mjs が**1件も赤にならなかった**。
     壊したのに気づいていない＝この検査は「**犬を丸ごと消しても、その犬の写真の実体が Storage に残り続ける**（誰も回収できない）」を検出できない。
-- [delete-throws] verify-delete.mjs が**1件も赤にならなかった**。
-    壊したのに気づいていない＝この検査は「**製品の削除の道が、呼んでも通らない**——押しても消えたかどうか分からない」を検出できない。
-- [draft-becomes-new-report] verify-draft.mjs が**1件も赤にならなかった**。
-    壊したのに気づいていない＝この検査は「**「確定」が下書きを確定させず、2枚目を作る**——次に開くと古い記入が蘇る（`#15` の3）」を検出できない。
-- [report-roundtrip-teeth-value-mismatch] verify-report-roundtrip.mjs が**1件も赤にならなかった**。
-    壊したのに気づいていない＝この検査は「**押したボタンの表示と、保存される値が違う**（`docs/deferred.md` #24 の再発——見た目と違う値が飼い主に届く）」を検出できない。
-- [report-roundtrip-finalize-broken] verify-report-roundtrip.mjs が**1件も赤にならなかった**。
-    壊したのに気づいていない＝この検査は「**確定の保存が届かない**——押しても「押せた」だけで何も確定しない」を検出できない。
-- [app-throws-runtime-error] verify-admin.mjs が**1件も赤にならなかった**。
-    壊したのに気づいていない＝この検査は「**トリマー画面のどこかで、捕まえていない例外が飛ぶ**——実害は無くても放置サインを見逃す」を検出できない。
-- [app-throws-runtime-error] verify-edit.mjs が**1件も赤にならなかった**。
-    壊したのに気づいていない＝この検査は「**トリマー画面のどこかで、捕まえていない例外が飛ぶ**——実害は無くても放置サインを見逃す」を検出できない。
-- [app-throws-runtime-error] verify-photo-roundtrip.mjs が**1件も赤にならなかった**。
-    壊したのに気づいていない＝この検査は「**トリマー画面のどこかで、捕まえていない例外が飛ぶ**——実害は無くても放置サインを見逃す」を検出できない。
-- [app-throws-runtime-error] verify-report-roundtrip.mjs が**1件も赤にならなかった**。
-    壊したのに気づいていない＝この検査は「**トリマー画面のどこかで、捕まえていない例外が飛ぶ**——実害は無くても放置サインを見逃す」を検出できない。
-- [portal-throws-runtime-error] verify-portal.mjs が**1件も赤にならなかった**。
-    壊したのに気づいていない＝この検査は「**飼い主のログイン前の画面で、捕まえていない例外が飛ぶ**」を検出できない。
-- [portal-flavor-broken] verify-portal.mjs が**1件も赤にならなかった**。
-    壊したのに気づいていない＝この検査は「**飼い主の画面が、飼い主向けの起動をしない**——`data-portal` の分岐そのものが外れる」を検出できない。
-- [portal-signout-hidden-after-login] verify-portal.mjs が**1件も赤にならなかった**。
-    壊したのに気づいていない＝この検査は「**ログインしても、サインアウトの入口が出ない**——ログアウトできない」を検出できない。
-- [empty-pet-fake-history-entry] verify-empty-pet.mjs が**1件も赤にならなかった**。
-    壊したのに気づいていない＝この検査は「**カルテ0件の犬なのに、履歴の行が1つ出る**——無いはずの記録が見える」を検出できない。
+- [invite-reusable] verify-invitation.mjs が**1件も赤にならなかった**。
+    壊したのに気づいていない＝この検査は「**使い終わった招待を、別の人がもう一度使える**——1枚のQRで他人が他人のカルテに入る」を検出できない。

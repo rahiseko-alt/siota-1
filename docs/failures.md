@@ -717,3 +717,15 @@
 - **How it was found**: `proof-of-red` の定義（壊して赤になったところを見ていない検査は壊れているとみなす）に沿って未証明の項を1つずつ読み直している最中に、ソースを読むだけで気づいた——**壊す前に見つかった**数少ない例
 - **Fix**: `waitForSelector(...).catch(() => {})` に変え（例外を握りつぶして次へ進む）、`location.pathname === '/edit'` と `.karte-card` の**実際の件数**を測って合否にした。これで「カードが0件のまま`/edit`に居る」ような中間状態も拾える
 - **How to prevent**: **`check()` の第2引数に `true`/`false` を直書きしない。** 直前の `waitForSelector` の成功可否に丸投げした時点で、その `check()` 自体は死んでいる。合否は必ず、その場で読み直した実際の状態から作る
+
+### [F-20260828-56] `verify-admin.mjs` の「18. 消した犬の写真が Storage に残っていない」が、API 呼び出しが失敗しても常に合格していた
+
+- **Date**: 2026-08-28
+- **Status**: 解決済み（機械の直しのみ・壊してから赤になることはまだ確認していない）
+- **Category**: test
+- **Trigger/Context**: 台帳を「客に当たる経路まで」埋める作業で `pet-purge-broken`（`purgePetAssets` を壊す壊し方）を CI run #149 で2回（1回目・rerun_failed_jobs での2回目）走らせたが、**どちらも `verify-admin.mjs` が1件も赤にならなかった**。他の8〜9件の ⚠️ が2回目にはすべて赤に転じた（flake だった）中で、これだけ2回連続で0件——flake ではなく実在の欠陥を疑って読み直した
+- **What happened**: `18.` は Storage の一覧を `service_role` で取り、`Array.isArray(objects) && objects.length === 0` を合格条件にしていた。取得の fetch には `Authorization: Bearer ${serviceKey}` だけがあり、**`apikey` ヘッダが無かった**。Supabase のゲートウェイ（Kong）は `apikey` が無いリクエストを弾くため、この呼び出しは**常に失敗**（`listed.ok === false`）していた。失敗したときの扱いが `listed.ok ? await listed.json() : []`——**失敗を「空」に丸めて**いたため、`objects.length === 0` は**Storage 一覧が本当に空でも、API 呼び出し自体が全滅していても**同じく true になり、`purgePetAssets` をどう壊しても検出しようがなかった
+- **Root Cause**: `docs/watch.md` W-1 の型（「無いこと」を空で受けて合格にする）。同じファイルの `16.`／`17.` は、まさにこの型を直した経緯がコメントで残っている（`F-20260825-40` 由来）のに、直後に書かれた `18.` には**同じ直しが及んでいなかった**——「直したという事実が、次の目を止めた」に近い見落とし
+- **How it was found**: `pet-purge-broken` が2回の独立した CI 実行（run #149 の1回目・rerun_failed_jobs の2回目）で連続して0件だったことから、他の一過性の ⚠️（flake、2回目はすべて赤に転じた）と挙動が違うと気づき、`18.` のコードを読み直して `apikey` ヘッダの欠落を見つけた
+- **Fix**: `apikey: serviceKey` ヘッダを足し、`listed.ok` が false のときは `throw` するようにした（`verify-delete.mjs` の同種の呼び出しと同じ形に揃えた）。失敗は握り潰さず、検査自体を止める
+- **How to prevent**: **`res.ok ? await res.json() : []` のような「失敗を空にフォールバックする」書き方は、それ自体が W-1 を作る。** 失敗と「対象が0件」は区別できなければならない——区別できないなら投げる。`16.`／`17.` を直したときと同じ教訓を、**同じファイルの隣の行にも適用したか**を確かめる

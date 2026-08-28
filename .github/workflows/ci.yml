@@ -264,13 +264,25 @@ jobs:
           # （run 139・セッション側が手元の作業を push した直後に起きた）。
           # 拒否されたら中身は手元に残ったまま消える——成果物 zip から手で
           # 復元する羽目になった。fetch して rebase してから retry する。
+          #
+          # **rebase が中身の衝突で止まることがある**（run 149・2回目の実行）。
+          # `docs/ops/mutate-run-result.md` はフル実行のたびに**丸ごと書き直す**
+          # ファイルなので、2つの実行がどちらもこのファイルを変えていれば
+          # 必ず衝突する——単純な「先を取られただけ」の空振りではない。
+          # マージする意味が無い（差分ではなく全体のスナップショット）ので、
+          # `-X theirs` で**今回生成した中身を無条件に勝たせる**。負けた側の
+          # 記録は git の履歴（前のコミット）に残るので消えはしない。
           for i in 1 2 3; do
             if git push origin HEAD:${{ github.ref_name }}; then
               break
             fi
             echo "push が拒否された。fetch して rebase してから ${i}回目のやり直し"
             git fetch origin ${{ github.ref_name }}
-            git rebase origin/${{ github.ref_name }}
+            if ! git rebase origin/${{ github.ref_name }} -X theirs; then
+              echo "::error::rebase 自体が失敗した（-X theirs でも解決できない衝突）。docs/ops/mutate-run-partial.md を成果物から復元すること"
+              git rebase --abort
+              exit 1
+            fi
             if [ "$i" = 3 ]; then
               echo "::error::3回試しても push できなかった。docs/ops/mutate-run-partial.md を成果物から復元すること"
               exit 1

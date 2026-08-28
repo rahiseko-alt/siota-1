@@ -24,8 +24,8 @@
 | | |
 |---|---|
 | 機械が数えた検査 | **183件**（`scripts/verify-*.mjs`） |
-| 壊して赤になったところを見た | **108件**（毒見 21 ＋ 1件ずつ壊す 87・2026-08-28） |
-| まだ見ていない | **75件** |
+| 壊して赤になったところを見た | **112件**（毒見 21 ＋ 1件ずつ壊す 91・2026-08-28） |
+| まだ見ていない | **71件** |
 
 **出発点は全件が未確認だった。** 毒見で埋め、天井に当たったあと（下の「⛔ 毒見の天井」）、
 **1件ずつ壊す**（マスター判断 A）で続けている。**数は上の表だけが正**——
@@ -559,6 +559,48 @@ run 124  カルテの RLS だけ開ける  → 画面が犬を引けず、そこ
 「1回だけ0件」を根拠に恒久的な欠陥と決めつけない——CI babysit のルールどおり、
 **flake の可能性は1回の再実行で確かめてから**判断する。
 
+#### 追記（CI run #149・rerun_failed_jobs）: `walk` は再現せず（flake確定）。`mutate` は別の割れ方をした
+
+`walk` ジョブは**再実行で通った**（「②一覧が出なかった」というログイン注入のタイムアウトは
+1回だけで、2回連続では起きなかった）。**flake と確定**——製品コードの直しは要らない。
+
+`mutate` ジョブ（フル実行・44個）はまた失敗したが、**⚠️ の中身が1回目と変わった**:
+
+```
+- [pet-purge-broken] verify-admin.mjs             赤   0件   ← 1回目・2回目とも0件（2/2）
+- [invite-reusable]  verify-invitation.mjs        赤   0件   ← 1回目は赤だった（1/2）
+```
+
+1回目に ⚠️ だった `delete-throws` / `draft-becomes-new-report` /
+`report-roundtrip-teeth-value-mismatch` / `report-roundtrip-finalize-broken` /
+`app-throws-runtime-error`（4件）/ `portal-throws-runtime-error` /
+`portal-flavor-broken` / `portal-signout-hidden-after-login` /
+`empty-pet-fake-history-entry` の**9件は、2回目はすべて赤になった**（新規4件を
+証明済みへ移した——下記）。**これで一般的な不安定さ説が濃厚**——同じ壊し方でも
+run ごとに違う個別の項目が検出漏れを起こす。1回の0件では判定しない、を徹底する。
+
+`pet-purge-broken` だけは**2回連続で0件**——これは flake ではなく実在の欠陥だった。
+読み直したら `verify-admin.mjs :: 18.`（写真の実体が消えたか）の Storage 一覧 API 呼び出しに
+`apikey` ヘッダが無く、Kong に弾かれて**常に失敗**していた。失敗を `listed.ok ? … : []` で
+黙って「空」に丸め、`objects.length === 0` を合格にしていたため、**Storage 一覧が引けようが
+引けまいが必ず PASS** する構造だった——16/17 で直したのと同じ「空で受けて合格にする」型
+（`docs/watch.md` W-1）が、18 にはまだ残っていた（`F-20260828-56`）。`apikey` を足し、
+失敗を握り潰さず投げるよう直した。**この直しの効果はまだ未証明**（次の `pet-purge-broken`
+単体実行で赤になることを確かめる）。
+
+もう1つ、CI 側の実インフラ不具合も見つかった。`結果を枝にコミットする` 段の
+fetch+rebase+retry は**単純な競合（先を越されただけ）しか想定しておらず**、
+`docs/ops/mutate-run-result.md`（フル実行のたびに丸ごと書き直すファイル）どうしの
+**内容衝突**では `git rebase` 自体が止まり、この回の実測データが1つも枝に
+残らないところだった（成果物 zip から手で復元した）。`git rebase … -X theirs`
+（今回生成した中身を無条件に勝たせる）に直した——このファイルはスナップショットで
+マージする意味が無いため。
+
+- verify-portal.mjs :: 2. 起動分岐が立っている
+- verify-portal.mjs :: 4. ポータルが起動している
+- verify-portal.mjs :: 12. ログイン後はログアウトボタンが出る
+- verify-empty-pet.mjs :: 4. 履歴の行が1つも出ていない
+
 - verify-admin.mjs :: 2. 管理者ページに リピーター / 新規 / 削除 が在る
 - verify-admin.mjs :: 3. リピーターに カルテ作成 / カルテ修正 が在る
 - verify-admin.mjs :: 4. 新規に 顧客アカウント作成 / ペットアカウント作成 が在る
@@ -695,7 +737,6 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 - verify-edit.mjs :: 16. 担当メッセージが無いカルテで、文例が出ていない
 - verify-empty-pet.mjs :: 0b. 下書きのカルテを用意できた
 - verify-empty-pet.mjs :: 1. 犬の名前は出ている（ページ自体は開けている）
-- verify-empty-pet.mjs :: 4. 履歴の行が1つも出ていない
 - verify-empty-pet.mjs :: 7. 下書きの中身が漏れていない
 - verify-empty-pet.mjs :: 8. トリマーは1件目を作る画面に入れる
 - verify-empty-pet.mjs :: 9. 確定のボタンが在る（行き止まりでない）
@@ -711,12 +752,9 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 - verify-photo-roundtrip.mjs :: 4. 写真つきで確定できた
 - verify-photo-roundtrip.mjs :: 5. 保存された写真4枚が実体になっている（asset://）
 - verify-portal.mjs :: 1. /my が配信される
-- verify-portal.mjs :: 2. 起動分岐が立っている
 - verify-portal.mjs :: 3. Supabase vendor が読めている
-- verify-portal.mjs :: 4. ポータルが起動している
 - verify-portal.mjs :: 7. 未ログインで中身とログアウトは隠れている
 - verify-portal.mjs :: 8. 見本画像を出していない
-- verify-portal.mjs :: 12. ログイン後はログアウトボタンが出る
 - verify-production.mjs :: `配信物が手元の dist と同じ（${sameCount}/${staticFiles.length} 本）`
 - verify-production.mjs :: /my が dist/my.html と同じ
 - verify-production.mjs :: `削除済みの旧UI が本番に残っていない（${deletedUiPaths.length} 本を確認）`

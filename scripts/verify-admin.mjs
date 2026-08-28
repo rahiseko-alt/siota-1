@@ -366,16 +366,25 @@ try {
       : `一覧が引けなかった: ${ownersLeft.raw}`);
 
   /* **写真の実体まで消えたか。** RLS 越しに見ると、行が消えた時点で「見えない」に
-     なるので必ず合格してしまう。`service_role` で数える（`verify:delete` と同じ理由）。 */
+     なるので必ず合格してしまう。`service_role` で数える（`verify:delete` と同じ理由）。
+     `apikey` ヘッダが無いと Kong が弾く（`Authorization` だけでは通らない）——それで
+     `listed.ok` が常に false になり、下の `listed.ok ? … : []` が「空」を返して
+     **何を壊しても常に合格**していた（`F-20260828-56`・16/17 で直したのと同じ
+     「空で受けて合格にする」型が、ここにはまだ残っていた）。失敗は握り潰さず投げる。 */
   const listed = await fetch(
     `${LOCAL_SUPABASE_URL}/storage/v1/object/list/report-assets`,
     {
       method: 'POST',
-      headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+      headers: {
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({ prefix: `${FIXTURE.shopId}/${createdPet.id}`, limit: 100 }),
     },
   );
-  const objects = listed.ok ? await listed.json() : [];
+  if (!listed.ok) throw new Error(`storage list failed: ${listed.status} ${await listed.text()}`);
+  const objects = await listed.json();
   check('18. 消した犬の写真が Storage に残っていない',
     Array.isArray(objects) && objects.length === 0, `${(objects || []).length}件`);
 
