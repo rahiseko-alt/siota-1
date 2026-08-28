@@ -68,7 +68,7 @@ export const MUTATIONS = [
     file: 'worker/src/index.js',
     find: 'return json({ pet: await store.createPet(ownerId, parsed.data) }, 201, cors);',
     replace: 'return json({ pet: await store.createPet(ownerId, parsed.data) }, 200, cors);',
-    scripts: ['verify-delete.mjs', 'verify-invitation.mjs'],
+    scripts: ['verify-delete.mjs', 'verify-invitation.mjs', 'verify-xss.mjs'],
   },
   /* ── 14回目: カルテ0件の犬（2026-08-28・手元で実測） ── */
   {
