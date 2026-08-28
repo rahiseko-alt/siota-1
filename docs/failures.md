@@ -731,3 +731,85 @@
 - **How it was found**: `pet-purge-broken` が独立した3回の CI 実行で連続して0件だったこと（他の一過性の ⚠️ と挙動が違う）から実在の欠陥を疑い、1つ目を直したあとも run #154 で再び0件だったため、`18.` に至るまでの手順を最初から読み直して2つ目を見つけた
 - **Fix**: `apikey: serviceKey` ヘッダを足し、`listed.ok` が false のときは `throw` するようにした（`verify-delete.mjs` の同種の呼び出しと同じ形に揃えた）。さらに、`15.`（カルテ1枚削除）の直後・`ペット全データ削除`の直前に、**別のカルテをもう1枚確定させて写真を残す**手順を足し、`purgePetAssets` に実際に消す対象を渡す
 - **How to prevent**: 2つ。(1) **`res.ok ? await res.json() : []` のような「失敗を空にフォールバックする」書き方は、それ自体が W-1 を作る**——失敗と「対象が0件」は区別できなければならない。(2) 「対象を作った」だけでは足りない——**その対象が、検査の後続の手順で（意図せず）先に片付けられていないか**を、チェックする行の直前だけでなく**手順全体を通しで**確認する
+
+### [F-20260828-57] CI 即死の切り分けが、**確かめていない前提**（「このリポジトリは public」）の上に2時間積まれた
+
+- **Date**: 2026-08-28
+- **Status**: 未解決（**誤った前提2つを否定したところまで**。CI は依然として赤）
+- **Category**: ci
+- **Trigger/Context**: 前セッション終盤、`workflow_dispatch` で起動した CI が run #156〜160 で5回連続、全ジョブ5〜6秒で失敗しログも残らない状態になった。`docs/handoff.md` の `0-J` に現象と仮説を書いて引き継いだ
+- **What happened**: 引き継ぎ `0-J` は、切り分けの結果として次の2つを書いていた。**どちらも間違いだった。**
+  1. 「**このリポジトリは public**（マスター確認済み）。public リポジトリの GitHub-hosted runner は Actions の分数無制限——**月間分数の枠切れ説は否定された**」
+     → **実際は private。** GitHub API の `"private": true` / `"visibility": "private"` と、Claude 側のリポジトリ一覧の `"visibility": "private"` の**2つの独立した情報源が一致**して private を返す。private リポジトリのジョブは**アカウントの無料枠を消費する**ので、枠切れ説は否定されていなかった——**いちばん有力な仮説を、確かめずに候補から外していた**
+  2. 「残っている仮説: このセッションが短時間に `workflow_dispatch` を連発したことで、GitHub 側にレート制限・クールダウンが掛かっている」
+     → **`workflow_dispatch` 以外でも同じ死に方をしている。** run #161 は `pull_request`、run #162 は master への `push` で、どちらも AI が連打したものではないのに3秒で全ジョブ失敗している。**「dispatch の連発が原因」は事実と合わない**
+
+  さらに、`0-J` が症状の根拠として挙げた「**課金時間 0ms**」は**手がかりになっていなかった**。`get_workflow_run_usage` はこのリポジトリでは**成功した run でも `total_ms: 0` を返す**（run #153 は 414 秒走って success だが `billable.UBUNTU.total_ms` は 0）。つまり 0ms は「ジョブが走らなかった証拠」ではなく、**この API がここでは常に 0 を返すだけ**だった
+- **Root Cause**: **前提を、機械に一度も聞かなかった。** 「public である」はコマンド1本（リポジトリのメタ情報を引く）で確かめられる事実なのに、記憶ないし口頭の確認だけを根拠に**確定事項として書き、そこから消去法を回した**。消去法は前提が正しいときにしか働かないので、いちばん当たりの候補（無料枠切れ）が最初に落ちた。加えて「0ms」を、**比較対象（成功した run では何が出るのか）を見ずに**異常の証拠として採用した——正常時の値を知らないまま異常を判定していた
+- **How it was found**: 次セッションのチェックインで `0-J` の「次にまず確認すること」を実行する前に、根拠として書かれている2つの断定をそれぞれ機械で引き直した。visibility は API が即座に `private` を返し、`workflow_dispatch` 限定という記述は run 一覧の `event` 欄（#161 `pull_request` / #162 `push`）と矛盾した
+- **Fix**: まだ無い（**原因は特定できていない**）。ジョブは `runner_id: 0` / `runner_name: ""` / ステップ0件 / check-run の output が空——**runner が一度も割り当てられていない**形で、これは「起動前に拒否された」ことを示す。private であることが確定した以上、**Actions 無料枠または spending limit による停止が最有力**だが、枠の残量はアカウント所有者（マスター）にしか見えないため、ここでは確かめられない。マスターへの確認事項として `docs/handoff.md` `0-K` に上げた
+- **How to prevent**: **切り分けで消去法を使うなら、消す根拠のほうを先に機械で確かめる。**「〜なので、この説は否定された」と書く前に、その「〜」がコマンドで引ける事実かを見る。引けるなら引く（visibility は1本で出る）。もう1つ、**異常値を証拠に使う前に、正常時の同じ値を1回見る**——「0ms だから走っていない」は、成功した run も 0ms を返すと分かった時点で証拠ではなくなる。**正常のサンプルを持たない異常判定はしない**
+
+### [F-20260828-58] 壊し方を1つ足したら、**製品は何も壊れていないのにテストだけが3回に2回赤**になった
+
+- **Date**: 2026-08-28
+- **Status**: 解決済み（赤 → 緑 → 戻して赤の3出力あり）
+- **Category**: test
+- **Trigger/Context**: F4 の台帳を埋める作業で `skin-image-blank`（`backend/js/magazine-view.js` の `setImage(container, 'skin-image-frame', 'skin-image', data.bodyMarkingImage)` を `''` に差し替える壊し方）を足した直後、`npm test` が**走らせるたびに結果の変わる**状態になった
+- **What happened**: `test/ui-body-marking.test.mjs` の `⑥の受け手が読むキーは bodyMarkingImage である` が **3回に2回落ちる**。単体（`node --test test/ui-body-marking.test.mjs`）では必ず通る。作業ツリーは clean で、`backend/js/magazine-view.js` には `data.bodyMarkingImage` がちゃんと在る。**製品は1行も壊れていないのに、テストだけが赤**だった
+- **Root Cause**: **`test/mutate-run.test.mjs` の「壊したあとのファイルが、構文として正しい」が、実リポジトリのファイルを本当に書き換えていた**（`applyMutation(root, m)` の `root` がリポジトリそのもの。壊す → `node --check` → `finally` で戻す）。いっぽう `node --test` は**テストファイルを並行に走らせる**。したがって `ui-body-marking.test.mjs` が `magazine-view.js` を読む瞬間に、別プロセスがそのファイルを壊している窓が存在した。
+  **この競合は前から在ったが、当たらなかった。** `skin-image-blank` は**別のテストが assert している文字列そのもの**（`data.bodyMarkingImage`）を消す初めての壊し方で、これで初めて窓に弾が当たるようになった。**壊し方が増えるほど命中確率が上がる**性質の欠陥である
+- **How it was found**: コミット直前の `npm test` が EXIT 1 を返した。作業ツリーが clean で、対象ファイルにも文字列が在り、単体では通ることから「テストの外に原因がある」と読み、`test:unit` が複数ファイルを並行に走らせること・`mutate-run.test.mjs` が実ファイルを書き換えることの2つを突き合わせて特定した
+- **Fix**: 構文検査を**使い捨てのコピーの上**で行うようにした。同じファイルに既に在った `sandbox(rel, body)`（`os.tmpdir()` に作る）へ本物の中身をコピーし、`applyMutation(sandboxRoot, m)` を当てる。**本物は一度も触らない**ので、戻す処理も不要になった。あわせて「本物のファイルを触っていないこと」を assert として置いた——次に誰かが本物を触る書き方に戻したら、そこで止まる
+- **How to prevent**: **テストの中で実リポジトリのファイルを書き換えない。** `node --test` はファイル単位で並行に走るので、「壊して → 戻す」を実ツリーでやると、他のテストから見える窓が必ず開く。壊す機械を検査したいときは、対象をコピーしてからにする。
+  もう1つ。**「作業ツリーは clean・単体では通る・全体では落ちる」は、並行実行の競合を疑う合図**。製品側を探しても見つからない
+
+### [F-20260828-59] 確定が「id の無いカルテ」を返したとき、**画面はそのまま進んで `/null` に着く**
+
+- **Date**: 2026-08-28
+- **Status**: 解決済み（マスター指示「直せ」・2026-08-28。赤 → 緑 → 戻して赤の3出力あり）
+- **Category**: logic
+- **Trigger/Context**: PR #32 の CI（run #163 系・`verify` ジョブ）で `verify:photo` が落ちた。手元の作業ツリーでは同じコミットで3回とも通る。落ち方は `page.waitForURL: Timeout 60000ms exceeded` で、ログに `navigated to "http://localhost:8798/edit/p/9e05dc32-…/null"` と出ていた——**遷移先のカルテIDが文字列 `null`**
+- **What happened**: 確定（`App.commitReport()`）が、**保存できたかどうかを確かめないまま**次の画面へ移っていた。`src/js/ui.js`:
+
+  ```js
+  const saved = this.reviseReportId ? await staff.reviseReport(…) : await staff.saveReport(…);
+  location.href = `/edit/p/${encodeURIComponent(context.petId)}/${encodeURIComponent(saved.id)}`;
+  ```
+
+  `saved.id` が `null` だと `encodeURIComponent(null)` は文字列 `"null"` になるので、**例外も出ず、警告も出ず、`/edit/p/{petId}/null` へ進む**。この関数の直前のコメントは「失敗したら**画面を移さず、理由を出す**。黙って進むと『保存しました』と出たのに残っていない、が起きる（`D-2`）」と書いてあるが、**`saved` が返ってきさえすれば中身を見ていない**
+- **Root Cause**: `backend/js/supabase-staff.js` の `saveReport()` は、**作る段では id を検査しているのに、確定段では検査していない**——非対称になっている。
+
+  ```js
+  const report = saved.report;
+  if (!report || !report.id) throw new Error('カルテを作れませんでした');   // ← 作る段は id を見る
+  …
+  const finalized = await api(`…/finalize`, { method: 'POST' });
+  if (!finalized || !finalized.report) throw new Error('カルテを確定できませんでした'); // ← 確定段は器しか見ない
+  return finalized.report;                                                  // ← id が無くても返る
+  ```
+
+  したがって「確定は応答を返したが、その中に id が無い」ときだけ、**`D-2` の防波堤をすり抜ける**。呼ぶ側（`commitReport`）も `saved.id` をそのまま信じているので、二重に素通りする
+- **How it was found**: CI の失敗を「製品コードを1行も触っていない diff なのに落ちた」として調べた。手元で `verify:photo` を3回走らせて再現しなかったため、CI ログの遷移先 URL（`/null`）だけを手がかりに、その文字列を作り得る場所をコードから逆に辿って見つけた。**壊して確かめたのではなく、読んで見つけた**
+- **Fix**: **マスター指示（2026-08-28「直せ」）で直した。** 2箇所、どちらも「番号が入っているか」を足しただけ。
+  1. `backend/js/supabase-staff.js` — `saveReport` の確定段と `reviseReport` の直し段に `|| !….report.id` を足し、**作る段（もともと `!report.id` を見ていた）と揃えた**
+  2. `src/js/ui.js` `commitReport()` — `location.href` を組む**前**に `if (!saved || !saved.id) throw` を置き、既存の `catch` に落とす。理由が出て、ボタンも押せる状態に戻る（行き止まりにしない）
+
+  **二重にしてある。** 片方だけだと、片方が壊れた日に誰も気づかない——`F-20260828-52` で同じことを学んだ（結果だけを見る項が1本だと、守りが1枚剥がれても緑のままになる）。
+
+  検査は `test/report-commit-guard.test.mjs`（7件・`npm run test:unit` に組み込み済み）。
+  **実測（`D-18` の3出力）**:
+
+  ```
+  直す前     node --test test/report-commit-guard.test.mjs  → 7件中 6件が赤
+  直したあと                                                 → 7件すべて緑
+  直しを戻す                                                 → 再び 6件が赤
+  ```
+
+  7件目「番号が在るときは、これまでどおり進む」は**直す前から緑**。これが赤に
+  ならないことで、**直しが機能そのものを殺していない**ことを示している。
+
+  実データでも確かめた（`commitReport` を通る3本）: `verify:photo` 13/13 ／
+  `verify:roundtrip` 23/23 ／ `verify:m6` 13/13、すべて EXIT 0。
+
+- **How to prevent**: **「返ってきた」と「使える値が入っている」は別物。** `throw` しない API の返り値は、**呼ぶ側が使うフィールドまで**確かめる。とくに `encodeURIComponent()` は `null`／`undefined` を**文字列に変えてしまう**ので、URL を組むところでは値の欠落が例外にならず、**そのまま遷移してしまう**。同じ型が `D-2`（`finalize_report` の `null` 返却）で既に一度起きている——**そのとき塞いだのは「`null` が返る」場合だけで、「器は返るが中身が欠けている」場合は塞がっていなかった**

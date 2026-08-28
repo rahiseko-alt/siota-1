@@ -123,3 +123,57 @@ test('いまのリポジトリで、機械自身は矛盾なく動く（範囲�
   assert.ok(r.scopeFiles.length >= 10, `客に当たる経路が ${r.scopeFiles?.length}本しか無い`);
   assert.deepEqual(r.unaccounted, [], '理由の無い未証明がある');
 });
+
+/* ── 1項ごとの理由（マスター判断 A・2026-08-28） ────────────────────────
+   除外はそれまでファイル単位でしか書けず、「この項だけは埋められない」を
+   機械に伝える場所が無かった。ここを足したので、**黙らせる道具にならない**
+   ことを機械で確かめる——理由が短ければ認めない／古ければ赤／矛盾すれば赤。 */
+
+const TWO_CHECKS = { 'verify-a.mjs': "check('1. 例', x === 1);\ncheck('2. 例2', y === 2);\n" };
+/** `2. 例2` だけが未証明の台帳を作る。`reason` を渡すと理由の節を足す。 */
+function ledgerWithSecond(reasonBlock = '') {
+  return LEDGER_BASE.replace(
+    '## 未証明（**壊して赤になるところを、まだ見ていない**）',
+    `${reasonBlock}## 未証明（**壊して赤になるところを、まだ見ていない**）`,
+  );
+}
+
+test('理由が無ければ、範囲内の未証明として赤のまま（素通りしない）', () => {
+  const r = check(sandbox({ ledger: ledgerWithSecond(), checks: TWO_CHECKS }));
+  assert.equal(r.unprovenInScope.length, 1, '理由を書いていないのに外れている');
+  assert.equal(r.excused.length, 0);
+});
+
+test('理由を書くと外れる（そして何件外したかが残る）', () => {
+  const block = '## 1項ごとに埋められない理由（機械が読む）\n\n'
+    + '- verify-a.mjs :: 2. 例2\n'
+    + '  理由: 直前の待ちが同じことを既に保証しているので、単発の壊しでは赤にできない。\n\n';
+  const r = check(sandbox({ ledger: ledgerWithSecond(block), checks: TWO_CHECKS }));
+  assert.equal(r.unprovenInScope.length, 0, '理由つきなのに外れていない');
+  assert.equal(r.excused.length, 1, '外した件数が残っていない');
+});
+
+test('理由が短すぎると認めない（短い言い訳で外せない）', () => {
+  const block = '## 1項ごとに埋められない理由（機械が読む）\n\n'
+    + '- verify-a.mjs :: 2. 例2\n'
+    + '  理由: 無理\n\n';
+  const r = check(sandbox({ ledger: ledgerWithSecond(block), checks: TWO_CHECKS }));
+  assert.equal(r.thin.length, 1, '短い理由を通している');
+  assert.equal(r.unprovenInScope.length, 1, '短い理由で外れてしまっている');
+});
+
+test('実体に無い検査を指した理由は「古い」として捕まえる', () => {
+  const block = '## 1項ごとに埋められない理由（機械が読む）\n\n'
+    + '- verify-a.mjs :: 9. もう無い項\n'
+    + '  理由: 直前の待ちが同じことを既に保証しているので、単発の壊しでは赤にできない。\n\n';
+  const r = check(sandbox({ ledger: ledgerWithSecond(block), checks: TWO_CHECKS }));
+  assert.equal(r.staleReasons.length, 1, '古い行を見逃している');
+});
+
+test('証明済みの項に理由が付いていたら矛盾として捕まえる', () => {
+  const block = '## 1項ごとに埋められない理由（機械が読む）\n\n'
+    + '- verify-a.mjs :: 1. 例\n'
+    + '  理由: 直前の待ちが同じことを既に保証しているので、単発の壊しでは赤にできない。\n\n';
+  const r = check(sandbox({ ledger: ledgerWithSecond(block), checks: TWO_CHECKS }));
+  assert.equal(r.contradicting.length, 1, '証明済みに理由が付いているのを見逃している');
+});

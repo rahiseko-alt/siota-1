@@ -45,6 +45,211 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
  * 証明の役に立たない（何を検出したのか言えないため）。
  */
 export const MUTATIONS = [
+  /* ── 20回目: 確定の要求がエラーになる（2026-08-28・手元で実測）
+     `verify-xss` の3つ目の分岐（112行目）は「細工を飼い主の画面まで届けられ
+     なかった」ことを報告する行。**これが無いと、検査が実際には走っていないのに
+     緑になる**——`XSS の検査が緑だから安全` という偽の安心を止めるための行なので、
+     赤にできることを確かめておく価値がある。 */
+  {
+    id: 'finalize-returns-error',
+    why: '**確定の要求がサーバでエラーになる**（書いたカルテが飼い主に届かない）',
+    file: 'worker/src/index.js',
+    find: 'return json({ report: await store.finalizeReport(petId, reportId) }, 200, cors);',
+    replace: 'return json({ report: await store.finalizeReport(petId, reportId) }, 500, cors);',
+    scripts: ['verify-xss.mjs'],
+  },
+  /* ── 19回目: カルテ作成が「できた」と返さない（2026-08-28・手元で実測）
+     `pet-create-wrong-status` と同じ型。**実体は作られる**ので土台は壊れず、
+     「作れたかどうかを状態コードで見ている」検査だけが赤になる。 */
+  {
+    id: 'report-create-wrong-status',
+    why: '**カルテを作っても「作れた」と返らない**（画面は失敗と出て、同じカルテが二重に作られる）',
+    file: 'worker/src/index.js',
+    find: 'return json({ report: await store.createReport(petId, parsed.data) }, 201, cors);',
+    replace: 'return json({ report: await store.createReport(petId, parsed.data) }, 200, cors);',
+    scripts: ['verify-empty-pet.mjs', 'verify-xss.mjs'],
+  },
+  /* ── 18回目: 記入欄がひとつ消える（2026-08-28・手元で実測）
+     `1. 記入先の要素がすべて実在する` は、記入に使う要素が**画面に在るか**を
+     まとめて見ている。1つでも消えれば、トリマーはその項目を記録できない——
+     しかも「押せない」だけなので、気づかずに確定まで進んでしまう。 */
+  {
+    id: 'ear-right-input-missing',
+    why: '**右耳の記入欄が画面から消える**（記録できないまま確定でき、飼い主にはその項目が空で届く）',
+    file: 'src/index.html',
+    find: '<div class="segmented-stepper" data-ear="right">',
+    replace: '<div class="segmented-stepper">',
+    scripts: ['verify-report-roundtrip.mjs'],
+  },
+  /* ── 17回目: 一覧に犬が1頭も並ばない（2026-08-28・手元で実測）
+     `②b. ログインすると作業画面に入れる` は「`/edit` に居て、かつカードが
+     1枚以上ある」を見ている（`F-20260828-55` で `true` の直書きから直したもの）。
+     **カードが0枚**になれば、画面には入れているのに仕事は始められない——
+     まさにこの検査が守っている状態。 */
+  {
+    id: 'edit-dog-list-empty',
+    why: '**作業画面に入れても、犬が1頭も並ばない**（入れたのに仕事を始められない）',
+    file: 'src/js/ui.js',
+    find: '    data.forEach((dog) => {',
+    replace: '    [].forEach((dog) => {',
+    scripts: ['verify-m6.mjs'],
+  },
+  /* ── 15回目: 犬の登録が「できた」と返さない（2026-08-28・手元で実測）
+     201（作った）ではなく 200 を返す。**犬そのものは作られる**ので土台は壊れず、
+     「作れたかどうか」を状態コードで見ている検査だけが赤になる。呼ぶ側は
+     成功を判定できないので、画面は「登録できませんでした」に落ちる。 */
+  {
+    id: 'pet-create-wrong-status',
+    why: '**犬を登録しても「登録できた」と返らない**（画面は失敗と出て、同じ子が二重に作られる）',
+    file: 'worker/src/index.js',
+    find: 'return json({ pet: await store.createPet(ownerId, parsed.data) }, 201, cors);',
+    replace: 'return json({ pet: await store.createPet(ownerId, parsed.data) }, 200, cors);',
+    scripts: ['verify-delete.mjs', 'verify-invitation.mjs', 'verify-xss.mjs'],
+  },
+  /* ── 14回目: カルテ0件の犬（2026-08-28・手元で実測） ── */
+  {
+    /* **空にしない。** はじめ `''` にしたら、見出しが不可視になって
+       `waitForSelector('[data-testid="pet-name"]')` がタイムアウトし、検査が
+       そこで死んだ（狙った `1.` に届かず `検査を最後まで実行できた` だけが赤）。
+       別の子の名前を出す形にすれば、見えたまま中身だけが違う。 */
+    id: 'empty-pet-name-wrong',
+    why: '**飼い主のページに、別の子の名前が出る**（どの子の話か分からない）',
+    file: 'backend/js/supabase-auth.js',
+    find: '  heading.textContent = pet.name;',
+    replace: "  heading.textContent = 'ちがう子';",
+    scripts: ['verify-empty-pet.mjs'],
+  },
+  {
+    /* **`hidden` では効かない。** 検査は `querySelector` で**在るかどうか**を見て
+       いるので、隠しても DOM には残り、1件も赤にならなかった。掴む名前のほうを
+       変える——`.dock-action-wrap .boxbutton` から外れるので「入口が無い」になる。 */
+    id: 'commit-button-out-of-dock',
+    why: '**1件目を作る画面に確定の入口が無い**（書いても確定できない行き止まり）',
+    file: 'src/index.html',
+    find: '<button class="boxbutton boxbutton--white" style="min-height: 44px; padding: 10px 48px 10px 18px;" onclick="App.commitReport()">',
+    replace: '<button class="dock-cta" style="min-height: 44px; padding: 10px 48px 10px 18px;" onclick="App.commitReport()">',
+    scripts: ['verify-empty-pet.mjs'],
+  },
+  /* ── 13回目: 管理者の削除が、画面では成功して DB に残る（2026-08-28・手元で実測）
+     削除は「写真 → DB」の2段（`D-20260824-34`）。**DB を消す段だけ**を落とすと、
+     画面は成功したように見えるのに実体が残る——`16./17.` はそこを見ている。
+     写真の段は残すので、検査は最後まで動く。 */
+  {
+    id: 'admin-pet-delete-not-persisted',
+    why: '**「削除しました」と出るのに、その子のデータが残り続ける**（消えたと思って渡せない）',
+    file: 'backend/js/supabase-admin.js',
+    find: "await api(`/api/pets/${encodeURIComponent(item.pet.id)}`, { method: 'DELETE' });",
+    replace: 'await Promise.resolve();',
+    scripts: ['verify-admin.mjs'],
+  },
+  {
+    id: 'admin-owner-delete-not-persisted',
+    why: '**「削除しました」と出るのに、その顧客のデータが残り続ける**（消したつもりが消えていない）',
+    file: 'backend/js/supabase-admin.js',
+    find: "await api(`/api/owners/${encodeURIComponent(item.owner.id)}`, { method: 'DELETE' });",
+    replace: 'await Promise.resolve();',
+    scripts: ['verify-admin.mjs'],
+  },
+  /* ── 12回目: 前の画面が開いたまま残る（2026-08-28・手元で実測）
+     はじめ「切り替え先を screen-1 に固定する」壊し方にしたが、狙った 12./13. には
+     届かず `検査を最後まで実行できた` だけが赤になった——**画面が隠れたままなので
+     `waitForSelector` がタイムアウトし、検査がそこで死ぬ**（毒見の天井と同じ型）。
+     隠さずに**前の画面も開いたまま**にすれば、流れは最後まで動いたうえで
+     「いま開いている画面」の判定だけが狂う。 */
+  {
+    id: 'screen-stale-panels-stay-active',
+    why: '段を進んでも前の画面が開いたまま重なる（どこに居るのか分からなくなる）',
+    file: 'src/js/ui.js',
+    find: "    document.querySelectorAll('.screen-panel').forEach(panel => {\n"
+      + "      panel.classList.remove('is-active');\n"
+      + '    });',
+    replace: '    /* mutated: 前の画面を閉じない */',
+    scripts: ['verify-edit.mjs', 'verify-empty-pet.mjs', 'verify-m6.mjs'],
+  },
+  /* ── 11回目: 未ログインの /my（2026-08-28・手元で実測） ── */
+  {
+    id: 'portal-content-shown-logged-out',
+    why: '**ログインしていない人に、中身の器が開いたまま出る**（守りの前提が崩れている）',
+    file: 'backend/js/supabase-auth.js',
+    find: '    show(loginPanel, true);\n    show(content, false);',
+    replace: '    show(loginPanel, true);\n    show(content, true);',
+    scripts: ['verify-portal.mjs'],
+  },
+  {
+    /* `D-10`／`D-4` の型。見本の写真が飼い主の入口に出ると、客はそれを
+       自分の犬の写真だと読む。出どころ不明の素材でもある。 */
+    id: 'portal-sample-image',
+    why: '飼い主の入口に、誰のものでもない見本の写真が出る（D-10・D-4）',
+    file: 'src/my.html',
+    find: '<section class="portal-content" data-portal-content hidden></section>',
+    replace: '<section class="portal-content" data-portal-content hidden>'
+      + '<img alt="" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">'
+      + '</section>',
+    scripts: ['verify-portal.mjs'],
+  },
+  /* ── 10回目: 犬体図の印と、体重の見本値（2026-08-28・手元で実測） ── */
+  {
+    id: 'skin-image-blank',
+    why: '犬体図に付けた印が、確認画面にも飼い主にも画像として出ない（どこを気にしたかが伝わらない）',
+    file: 'backend/js/magazine-view.js',
+    find: "setImage(container, 'skin-image-frame', 'skin-image', data.bodyMarkingImage);",
+    replace: "setImage(container, 'skin-image-frame', 'skin-image', '');",
+    scripts: ['verify-report-roundtrip.mjs'],
+  },
+  {
+    /* 量っていない体重に既定値が入る型。`F-20260821-14`（④の入力欄に見本の文が
+       最初から入っていた）と同じ形で、**入力欄の既定値がそのまま確定され、
+       飼い主に「量っていない数字」が届く**。
+       **狙う場所は入力欄そのもの（テンプレート）。** はじめ `applyReport()` の
+       `data.weights` を壊したが、あそこは**既存カルテを開いたときにしか走らない**
+       ——検査19は「カルテの無い新しい犬」を開くので、1件も赤にならなかった。
+       壊し方が悪かったのであって、検査は正しかった（`F-20260828-54` と同じ型）。 */
+    id: 'weight-prefilled-sample',
+    why: '体重を量っていないのに、見本の数字が最初から入っていて、そのまま飼い主に届く（D-10）',
+    file: 'src/index.html',
+    find: 'id="input-weight" placeholder="—"',
+    replace: 'id="input-weight" value="4.2" placeholder="—"',
+    scripts: ['verify-report-roundtrip.mjs'],
+  },
+  /* ── 9回目: verify-edit の残りを狙う（2026-08-28・手元で実測） ──
+     `docs/ops/proof-of-red.md`「## F4 を閉じる範囲」の残り42件のうち、
+     verify-edit に固まっている6件を狙う。 */
+  {
+    id: 'edit-dummy-dogs-leak',
+    why: '一覧が実データではなく仮データを描く（居ない犬が並び、本物の客の犬が消える）',
+    file: 'src/js/ui.js',
+    find: 'const data = this.dogs || (window.DUMMY && window.DUMMY.dogs) || [];',
+    replace: 'const data = (window.DUMMY && window.DUMMY.dogs) || this.dogs || [];',
+    scripts: ['verify-edit.mjs', 'verify-m6.mjs'],
+  },
+  {
+    id: 'edit-breed-mock-refill',
+    why: '持っていない項目（犬種）に見本の値が出る——客は「うちの子はトイプードルではない」と読む（D-10）',
+    file: 'src/js/ui.js',
+    find: "card.querySelector('.karte-card__breed').textContent = dog.breed;",
+    replace: "card.querySelector('.karte-card__breed').textContent = dog.breed || 'トイプードル';",
+    scripts: ['verify-edit.mjs'],
+  },
+  {
+    /* `F-20260828-54` が「この2件を狙うなら getAttribute('src') が実際に壊れた値を
+       返す形の壊し方が要る」と書き残したもの。`img.src = ''`（プロパティ代入）では
+       素の属性は空文字のままで、`getAttribute` で見ている検査には届かなかった。
+       **属性そのものにページURLを書き込む**ので、両方の観測点から見える。 */
+    id: 'empty-photo-attr-page-url',
+    why: '写真の無いスロットが、現在のページURLを取りに行く（飼い主の画面に読めない画像の取得要求が並ぶ）',
+    file: 'backend/js/magazine-view.js',
+    find: "    else img.removeAttribute('src');",
+    replace: "    else img.setAttribute('src', location.href);",
+    scripts: ['verify-edit.mjs', 'verify-report-roundtrip.mjs', 'verify-photo-roundtrip.mjs'],
+  },
+  {
+    id: 'letter-section-always-shown',
+    why: '担当が何も書いていないのに、手紙の節が飼い主に出る（誰も書いていない空の手紙が届く）',
+    file: 'backend/js/magazine-view.js',
+    find: "  if (letterSection) letterSection.hidden = staffNote === '';",
+    replace: '  if (letterSection) letterSection.hidden = false;',
+    scripts: ['verify-edit.mjs'],
+  },
   {
     id: 'delete-assets',
     why: '犬を消しても、写真の実体が Storage に残り続ける（誰も回収できない）',
@@ -92,7 +297,7 @@ export const MUTATIONS = [
     replace: 'function setText_MUTATED(root, view, text) {',
     extra: 'function setText(root, view) {\n'
       + '  return root.querySelector(\'[data-view="\' + view + \'"]\');\n}\n',
-    scripts: ['verify-report-roundtrip.mjs'],
+    scripts: ['verify-report-roundtrip.mjs', 'verify-m6.mjs'],
   },
   {
     id: 'weight-graph-off',

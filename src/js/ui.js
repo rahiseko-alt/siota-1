@@ -920,6 +920,11 @@ const App = {
         : await staff.saveReport(
           context.petId, this.extractReport(), this.today(), this.draftReportId,
         );
+      /* **番号が入っているところまで確かめてから移る。** `encodeURIComponent` は
+         `null`／`undefined` を**文字列**に変えてしまうので、欠けていても URL は
+         組み上がり、例外が出ないまま `/edit/p/{petId}/null` へ進んでいた
+         （`F-20260828-59`）。ここで投げて、下の `catch` に理由を出させる。 */
+      if (!saved || !saved.id) throw new Error('確定の応答にカルテの番号がありませんでした');
       location.href = `/edit/p/${encodeURIComponent(context.petId)}/${encodeURIComponent(saved.id)}`;
     } catch (error) {
       if (button) button.disabled = false;

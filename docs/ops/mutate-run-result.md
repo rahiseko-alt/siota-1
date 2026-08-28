@@ -3,12 +3,13 @@
 
 実行: `node scripts/mutate-run.mjs`（**本物の土台が要る**——CI で走らせる）
 
-- 赤になった（その壊しを検出できた）: **101件**
+- 赤になった（その壊しを検出できた）: **106件**
 
 ## 赤になった（`- <検査の名前>` ← どの壊しで）
 
 - ★b. 戻った先に犬が並んでいる（空の一覧に置き去りにしない）   ← empty-back-off / verify-m6.mjs
 - ★c. 戻ってから、もう一度同じ犬に入れる   ← empty-back-off / verify-m6.mjs
+- 0. 検査用の犬を登録できた   ← rls-both-layers-open / verify-report-roundtrip.mjs
 - 1. /edit が配信される   ← edit-template-broken / verify-edit.mjs
 - 1. 管理者が /my を開くと管理者画面へ送られる   ← admin-redirect-off / verify-admin.mjs
 - 1. 記入が下書きとしてサーバに残った   ← resume-draft-off / verify-draft.mjs
@@ -16,6 +17,7 @@
 - 10. 直しても同じカルテのまま（2枚目を作らない）   ← admin-revise-becomes-new-report / verify-admin.mjs
 - 10. 飼い主: 壊れた画像（ページURL を指す img）が無い   ← edit-empty-photo-src-regress / verify-photo-roundtrip.mjs
 - 10. 飼い主: 担当からの一言   ← settext-off / verify-report-roundtrip.mjs
+- 11. ログイン後、自分の犬（X/Y/Z）が一覧に出て、他人の犬（Q）は出ない   ← rls-any-owner-sees-any-dog / verify-portal.mjs
 - 11. 件数が実データと合っている   ← edit-trimmer-letter-prefilled / verify-edit.mjs
 - 11. 直しで開くと、付けた写真が控えに残っている   ← hydrate-assets / verify-photo-roundtrip.mjs
 - 11. 確定済みのカルテは1枚のまま   ← admin-revise-becomes-new-report / verify-admin.mjs
@@ -24,6 +26,7 @@
 - 12. 直したあとも写真4枚が残っている   ← hydrate-assets / verify-photo-roundtrip.mjs
 - 12. 飼い主: 耳   ← settext-off / verify-report-roundtrip.mjs
 - 13. アプリ由来のエラーが無い   ← app-throws-runtime-error / verify-photo-roundtrip.mjs
+- 13. 他人の犬（Q）は見えない（RLS）   ← rls-any-owner-sees-any-dog / verify-portal.mjs
 - 13. 削除に 顧客 / ペット / カルテ の3つが在る   ← admin-menu-title-lost / verify-admin.mjs
 - 13. 飼い主: 歯   ← settext-off / verify-report-roundtrip.mjs
 - 14. ⑤確認の器から意匠モックの既定文が消えている   ← edit-mock-letter-reappears / verify-edit.mjs
@@ -35,6 +38,7 @@
 - 15. 失効・リンク解除のあとでも、ログインボタンが出て押せる（詰まない）   ← portal-login-panel-dead / verify-portal.mjs
 - 17. ④の入力欄が空で始まる（見本の文が入っていない）   ← edit-trimmer-letter-prefilled / verify-edit.mjs
 - 18. アプリ由来のエラーが無い   ← app-throws-runtime-error / verify-report-roundtrip.mjs
+- 18. 消した犬の写真が Storage に残っていない   ← pet-purge-broken / verify-admin.mjs
 - 19. 管理者でないスタッフに管理者の操作を出していない   ← admin-non-admin-gate-off / verify-admin.mjs
 - 1b. 押したボタンの表示が、そのまま保存される値になっている   ← report-roundtrip-teeth-value-mismatch / verify-report-roundtrip.mjs
 - 2. 一覧に初回登録（QR）の入口が出ている   ← invite-button-off / verify-invitation.mjs
@@ -47,6 +51,7 @@
 - 21. アプリ由来のエラーが無い   ← app-throws-runtime-error / verify-admin.mjs
 - 3. App が名前で届く（インライン onclick の解決先）   ← edit-template-broken / verify-edit.mjs
 - 3. リピーターに カルテ作成 / カルテ修正 が在る   ← admin-menu-title-lost / verify-admin.mjs
+- 3. 下書きは飼い主に見えない   ← rls-drafts-leak / verify-draft.mjs
 - 3. 写真が1枚も出ていない   ← empty-pet-shows-sample / verify-empty-pet.mjs
 - 3. 押すと初回登録の URL が出る   ← invite-url-broken / verify-invitation.mjs
 - 3. 確認: 担当からの一言   ← settext-off / verify-report-roundtrip.mjs
@@ -74,7 +79,7 @@
 - 6. 招待を消化すると、自分の犬が見える   ← invite-url-broken / verify-invitation.mjs
 - 6. 次に開くと、確定済みの記入は蘇らない   ← draft-becomes-new-report / verify-draft.mjs
 - 6. 注入先が backend/js/ に直っている   ← edit-template-broken / verify-edit.mjs
-- 6. 確定していないカルテは飼い主に見えない   ← empty-pet-shows-sample / verify-empty-pet.mjs
+- 6. 確定していないカルテは飼い主に見えない   ← rls-drafts-leak / verify-empty-pet.mjs
 - 6. 確認: 歯   ← settext-off / verify-report-roundtrip.mjs
 - 6. 飼い主: 表紙が、1枚目に入れた写真   ← hydrate-assets / verify-photo-roundtrip.mjs
 - ⑥a. 飼い主は一覧から自分の犬に入れる   ← portal-pet-name-lost / verify-m6.mjs
@@ -108,12 +113,3 @@
 - 犬の名前（見出しへ入る）: 実行されない   ← text-as-html / verify-xss.mjs
 - 犬の名前（見出しへ入る）: 細工が文字として飼い主の画面に出ている   ← text-as-html / verify-xss.mjs
 - 犬の名前（見出しへ入る）: 要素として注入されていない   ← text-as-html / verify-xss.mjs
-
-## ⚠️ 見ておくこと
-
-- [rls-drafts-leak] verify-draft.mjs が**1件も赤にならなかった**。
-    壊したのに気づいていない＝この検査は「**書きかけのカルテが飼い主に見える**——確定前の下書きがそのまま届く」を検出できない。
-- [rls-drafts-leak] verify-empty-pet.mjs が**1件も赤にならなかった**。
-    壊したのに気づいていない＝この検査は「**書きかけのカルテが飼い主に見える**——確定前の下書きがそのまま届く」を検出できない。
-- [pet-purge-broken] verify-admin.mjs が**1件も赤にならなかった**。
-    壊したのに気づいていない＝この検査は「**犬を丸ごと消しても、その犬の写真の実体が Storage に残り続ける**（誰も回収できない）」を検出できない。
