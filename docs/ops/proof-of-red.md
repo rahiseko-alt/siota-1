@@ -1183,10 +1183,51 @@ node scripts/mutate-run.mjs rls-any-owner-sees-any-dog
 > 名前（「招待を消化する前は、その犬を見られない」）が守っていると言っている
 > ものと、実際に守っている仕組みが一致しているかを、まだ誰も確かめていない。
 >
-> **次にやるなら、これが決定打になる**: SQL の壊し方を当てた状態で、
-> `uninvited@local.test` のトークンを使って PostgREST に
-> `/rest/v1/pets?id=eq.<petId>` を**直接**投げる。行が返れば止めているのは
-> アプリ側、返らなければ DB 側——**壊し方を増やさずに、どちらかを確定できる。**
+### 決定打を実行した。**2枚目の層を特定した**（2026-08-28・手元で実測）
+
+上の手順を実際にやった。`pets` の RLS を全開にして `db reset` し、
+`uninvited@local.test` のトークンで PostgREST に直接問い合わせた:
+
+```
+curl "$API/rest/v1/pets?select=id,name,active&limit=5" -H "Authorization: Bearer <uninvited>"
+
+[{"id":"…a1","name":"X","active":true},
+ {"id":"…a2","name":"Y","active":true},
+ {"id":"…a3","name":"Z","active":true},
+ {"id":"…b1","name":"Q","active":true}]
+```
+
+**招待未消化の人が、犬を全部引けている。** つまり**止めているのは DB ではない。**
+
+2枚目は `backend/js/supabase-auth.js` の `bootProtectedPortal()` にあった——
+犬を取りに行く**前**の関門:
+
+```js
+const session = await (await authorizedFetch(supabase, '/api/session')).json();
+if ((session.ownerLinks || []).length === 0 && (session.memberships || []).length === 0) {
+  setMessage(status, invitationMessage || '登録されたお客様情報が見つかりません');
+  show(loginPanel, false);
+  return;                    // ← loadProtectedResource を呼ばずに戻る
+}
+```
+
+紐付きも所属も無いアカウントは、**ここで止まって犬を取りに行かない**。
+だから RLS を全開にしても `5.` は緑のままだった。
+
+> **`verify-invitation :: 5.` の守りは2層**（DB の RLS ＋ この関門）。
+> `F-20260828-52` の `17.` と同じで、**2枚同時に剥がさないと判定できない。**
+
+**いま作れない理由（機械の制約）**: `applyMutation` は `m.file` **1つ**しか扱えず、
+`edits` も**その1ファイルの中**での複数編集にしか対応していない。今回の2層は
+`supabase/migrations/…sql` と `backend/js/supabase-auth.js` の**別ファイル**に
+またがるため、**いまの機械では表現できない**。
+
+**次にやること（小さい）**: `applyMutation` の `edits` に**編集ごとの `file`**を
+許す（既定は `m.file`）。`test/mutate-run.test.mjs` の構文検査もファイルごとに
+回すよう合わせる。そのうえで `invitation-both-layers-open` を作れば `5.` を判定できる。
+**層は両方とも名指しで特定済みなので、これは当てずっぽうではない。**
+
+
 
 ## F4 を閉じる範囲（マスター判断・2026-08-28）
 
