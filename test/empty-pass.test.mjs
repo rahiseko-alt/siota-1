@@ -93,3 +93,23 @@ test('いまのリポジトリは、全件が台帳に載っている', async ()
   assert.deepEqual(r.stale, [], '台帳が実体に無い検査を指している');
   assert.ok(r.total >= 150, `検査が ${r.total}件しか数えられていない`);
 });
+
+test('コメントの中の check(…) を、検査として数えない', async () => {
+  const { stripComments } = await import('../scripts/guard/empty-pass.mjs');
+  const src = '/* 昔は check(x, true) と直書きしていた */\n// check("嘘", true)\ncheck("1. 本物", y === 1);\n';
+  const got = passConditions(src);
+  assert.equal(got.length, 1);
+  assert.equal(got[0].name, '1. 本物');
+  /* 行番号がずれない（コメントは空白に潰すが改行は残す）。 */
+  assert.equal(got[0].line, 3);
+  assert.doesNotMatch(stripComments(src), /昔は|嘘/);
+});
+
+test('文字列の中の // や /* は、コメントとして潰さない', async () => {
+  const { stripComments } = await import('../scripts/guard/empty-pass.mjs');
+  const src = 'check("http://例/*a*/", u === v);\n';
+  const got = passConditions(src);
+  assert.equal(got.length, 1);
+  assert.equal(got[0].name, 'http://例/*a*/');
+  assert.match(stripComments(src), /http:\/\/例/);
+});

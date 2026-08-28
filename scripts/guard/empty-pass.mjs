@@ -50,10 +50,47 @@ function skipString(src, i) {
   return i + 1;
 }
 
+/** コメントを空白に潰す（中身の桁と行数は保つので、行番号がずれない）。
+ *
+ * **これが無くて、説明文の中の `check(…, true)` を検査として数えた。**
+ * `verify-stack.mjs` の「恒真だった」ことを説明するコメントを自分で書いた直後に、
+ * その説明文が1件の検査として台帳に載った（名前は `…`）。
+ * **数える機械が、数える対象を取り違えた3度目**（`F-20260828-49` の続き）。 */
+export function stripComments(src) {
+  let out = '';
+  for (let i = 0; i < src.length;) {
+    const c = src[i];
+    const two = src.slice(i, i + 2);
+    if (c === "'" || c === '"' || c === '`') {
+      const q = c;
+      let j = i + 1;
+      while (j < src.length && src[j] !== q) { if (src[j] === '\\') j += 1; j += 1; }
+      out += src.slice(i, Math.min(j + 1, src.length));
+      i = j + 1;
+    } else if (two === '//') {
+      let j = i;
+      while (j < src.length && src[j] !== '\n') j += 1;
+      out += ' '.repeat(j - i);
+      i = j;
+    } else if (two === '/*') {
+      const end = src.indexOf('*/', i + 2);
+      const j = end < 0 ? src.length : end + 2;
+      /* 改行だけ残す。行番号を保つため。 */
+      out += src.slice(i, j).replace(/[^\n]/g, ' ');
+      i = j;
+    } else {
+      out += c;
+      i += 1;
+    }
+  }
+  return out;
+}
+
 /** `check(` の呼び出しから、**第2引数（合格条件）だけ**を取り出す。
     第3引数（画面に出す説明文）は判定に使わない——説明文の中の `|| []` は
     合否に効かないので、混ぜると嘘の指摘が出る。 */
-export function passConditions(src) {
+export function passConditions(rawSrc) {
+  const src = stripComments(rawSrc);
   const out = [];
   const re = /\bcheck\s*\(/g;
   let m;

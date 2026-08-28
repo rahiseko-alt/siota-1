@@ -125,10 +125,18 @@ if (survived.length > 0) {
   process.stdout.write('\n');
 }
 
-/* 台帳に貼れる形でも出す。 */
-const outPath = path.join(ROOT, 'docs/ops/poison-run-result.md');
+/* 台帳に貼れる形でも出す。
+
+   **一部だけ走らせた回で、全体の記録を上書きしない。** 実際に1本だけ掛け直したとき
+   全14本の結果を消してしまった——**記録が、走らせた範囲より広く見える**形だった
+   （`docs/watch.md` W-8 の型）。範囲を指定した回は別名に書く。 */
+const outPath = path.join(
+  ROOT,
+  wanted.length ? 'docs/ops/poison-run-partial.md' : 'docs/ops/poison-run-result.md',
+);
 fs.writeFileSync(outPath, [
-  '# 毒見の結果（何も動いていない世界で `verify:*` を走らせた）',
+  `# 毒見の結果（何も動いていない世界で \`verify:*\` を走らせた）`,
+  wanted.length ? `\n**一部だけ（${wanted.join(' ')}）。全体の記録ではない。**` : '',
   '',
   `実行: \`node scripts/poison-run.mjs\`（Docker 不要）`,
   '',

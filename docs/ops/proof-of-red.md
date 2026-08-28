@@ -78,6 +78,26 @@
 
 <!-- 証拠を書いたら、下の「未証明」から1行ここへ移す。 -->
 
+- verify-stack.mjs :: マイグレーションと seed が当たっている（seed の犬 X を id で引ける）
+
+### verify-stack.mjs :: マイグレーションと seed が当たっている（seed の犬 X を id で引ける）
+
+壊し方: **土台ごと空にする**（`node scripts/poison-run.mjs verify-stack.mjs`）。
+`scripts/lib/poison-stack.mjs` が「形だけ合っていて中身が空」の Supabase を立てる。
+
+直す前は、その世界で**緑のまま**だった——これが `F-20260828-50`:
+
+```
+PASS  マイグレーションが当たっている（pets を実際に引ける）  HTTP 200 / 0件
+```
+
+`200 かつ配列` を合格条件にしていたが、**空の配列も配列**である。
+seed にしか無いもの（犬 X を id で名指し）を引く形に直したあと、同じ毒見で:
+
+```
+FAIL  マイグレーションと seed が当たっている（seed の犬 X を id で引ける）  HTTP 200 / 0件
+```
+
 ## 未証明（**壊して赤になるところを、まだ見ていない**）
 
 - verify-admin.mjs :: 1. 管理者が /my を開くと管理者画面へ送られる
@@ -252,8 +272,6 @@
 - verify-stack.mjs :: Supabase が起きている
 - verify-stack.mjs :: seed のアカウントで実ログインできる
 - verify-stack.mjs :: seed のアカウントで実ログインできる
-- verify-stack.mjs :: マイグレーションが当たっている（pets を実際に引ける）
-- verify-stack.mjs :: マイグレーションが当たっている（pets を実際に引ける）
 - verify-stack.mjs :: 鍵なしでは読めない（RLS/ゲートウェイが効いている）
 - verify-xss.mjs :: label
 - verify-xss.mjs :: label
