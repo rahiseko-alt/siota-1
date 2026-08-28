@@ -168,6 +168,13 @@ try {
       earPill: at('ear-pill'),
       teethPill: at('teeth-pill'),
       weightPill: at('weight-pill'),
+      /* **体重のグラフが実際に描かれたか。**
+         数字（`weight-pill`）が出ていてもグラフは別の関数が描く。
+         `mutate-run.mjs` の `weight-graph-off`（`renderWeightGraph` を空にする）で
+         **どの検査も赤にならなかった**——数字だけ見ていて、グラフを誰も見ていなかった
+         （`F-20260828-51`）。中の要素を数える（枠が在るだけでは通さない）。 */
+      weightGraphNodes: (document.querySelector('[data-view="weight-graph"]') || {})
+        .childElementCount ?? -1,
       /* 犬体図の印が**画像として**届いているか。`asset://` のままだと出ない。 */
       skinImage: (document.querySelector('[data-view="skin-image"]') || {}).getAttribute
         ? (document.querySelector('[data-view="skin-image"]').getAttribute('src') || '')
@@ -204,6 +211,8 @@ try {
   check('12. 飼い主: 耳', ownerView.earPill, `右 Lv.${INPUT.earRight} / 左 Lv.${INPUT.earLeft}`);
   check('13. 飼い主: 歯', ownerView.teethPill, INPUT.teeth);
   check('14. 飼い主: 体重', ownerView.weightPill, `${INPUT.weight}kg`);
+  check('14b. 飼い主: 体重のグラフが描かれている（数字だけでなく）',
+    ownerView.weightGraphNodes > 0 ? 'ok' : `中の要素=${ownerView.weightGraphNodes}`, 'ok');
   check('15. 飼い主: 犬体図の印が画像として届く',
     /^(blob:|data:image)/.test(ownerView.skinImage) ? 'ok' : `src=${ownerView.skinImage.slice(0, 40)}`, 'ok');
   check('16. 飼い主: 壊れた画像（ページURL）が出ていない', ownerView.pageUrlImgs, 0);
@@ -219,7 +228,13 @@ try {
   const strangerSees = await strangerPage.evaluate(
     (note) => document.body.textContent.includes(note), INPUT.staffNote,
   );
-  check('17. 他人には見えない（RLS）', strangerSees ? '見えた' : 'ok', 'ok');
+  /* **名前を実態に合わせてある。** ここが見ているのは `reports_customer_select`
+     （このカルテが他人に読めるか）だけで、`pets_customer_select`（他人の犬が一覧に
+     出るか）は見ていない。実際、犬の方の RLS を `using (active)` まで開いても
+     この項は緑のままだった（run 122）。**「他人には見えない」という広い名前のまま
+     置くと、犬が丸見えでもここが緑なので「RLS は見ている」と読めてしまう。**
+     犬の方は `verify-portal.mjs` の 11/13 が見ている（同じ run で赤になった）。 */
+  check('17. 他人にはこのカルテが見えない（RLS）', strangerSees ? '見えた' : 'ok', 'ok');
   await ownerContext.close();
   await strangerContext.close();
 

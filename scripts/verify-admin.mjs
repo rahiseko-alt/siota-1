@@ -16,11 +16,56 @@
  *   npm run verify:admin
  */
 
+import zlib from 'node:zlib';
 import {
   startLocalWorker, injectSession, passwordLogin, localServiceRoleKey,
   FIXTURE, LOCAL_PASSWORD, LOCAL_SUPABASE_URL,
 } from './lib/local-stack.mjs';
 import { launchChromium } from './lib/chromium.mjs';
+
+/** 単色 PNG（`verify-photo-roundtrip.mjs` と同じ作り方をそのまま持ってきた）。
+    `18.` は Storage の実体が消えたかを見るが、**この検査の動線では写真を1枚も
+    上げていなかった**——upload の有無にかかわらず prefix 下は常に0件で、
+    `purgePetAssets` をどう壊しても赤にならない構造欠陥だった（W-1 の型）。
+    1枚だけ実際に上げることで、消す対象を作る。 */
+const CRC = (() => {
+  const table = new Int32Array(256);
+  for (let n = 0; n < 256; n += 1) {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[n] = c;
+  }
+  return (buf) => {
+    let c = -1;
+    for (const byte of buf) c = table[(c ^ byte) & 0xff] ^ (c >>> 8);
+    return (c ^ -1) >>> 0;
+  };
+})();
+function chunk(type, body) {
+  const head = Buffer.alloc(8);
+  head.writeUInt32BE(body.length, 0);
+  head.write(type, 4, 'ascii');
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(CRC(Buffer.concat([Buffer.from(type, 'ascii'), body])), 0);
+  return Buffer.concat([head, body, crc]);
+}
+function solidPng([r, g, b], size = 16) {
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(size, 0); ihdr.writeUInt32BE(size, 4);
+  ihdr[8] = 8; ihdr[9] = 2;
+  const raw = Buffer.alloc(size * (size * 3 + 1));
+  for (let y = 0; y < size; y += 1) {
+    const row = y * (size * 3 + 1);
+    raw[row] = 0;
+    for (let x = 0; x < size; x += 1) {
+      raw[row + 1 + x * 3] = r; raw[row + 2 + x * 3] = g; raw[row + 3 + x * 3] = b;
+    }
+  }
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
 
 const results = [];
 function check(name, pass, detail) {
@@ -143,6 +188,16 @@ try {
   await page.goto(`${BASE}/edit/p/${createdPet.id}`, { waitUntil: 'networkidle' });
   await page.waitForSelector('#screen-3.is-active', { timeout: 20_000 });
   await page.waitForTimeout(2000);
+  /* **`18.`（写真の実体が消えたか）が測る対象を、実際に作る。** ここで1枚も上げなければ
+     `18.` は upload の有無に関係なく常に0件で緑になり、`purgePetAssets` をどう壊しても
+     気づけない（W-1 の型）。他の項と同じく製品の道（`[data-field="photo-ear"]`）で上げる。 */
+  await page.locator('[data-field="photo-ear"]').setInputFiles(
+    { name: 'ear.png', mimeType: 'image/png', buffer: solidPng([40, 60, 200]) },
+  );
+  await page.waitForFunction(
+    () => document.querySelectorAll('[data-photo-thumbs="ear"] .photo-pick__thumb').length === 1,
+    { timeout: 20_000 },
+  ).catch(() => {});
   await page.fill('[data-field="staff-note"]', FIRST);
   await Promise.all([
     page.waitForURL(/\/edit\/p\/[0-9a-f-]+\/[0-9a-f-]+/, { timeout: 30_000 }),
@@ -234,6 +289,28 @@ try {
   check('15. カルテ1枚が実際に消えた', finalsLeft === 0,
     finalsLeft === 0 ? '' : `${finalsLeft}枚残っている　画面の表示="${await resultText(page)}"`);
 
+  /* **`18.`（ペット丸ごと削除で写真の実体が消えるか）が測る対象を、ここでもう一度作る。**
+     直前の「カルテ1枚単位削除」（15.）が、この犬の唯一の写真を**すでに Storage から
+     消している**——`purgePetAssets` がこのあと何を壊されようと、対象が0件のままで
+     常に合格してしまう構造欠陥だった（`F-20260828-56` の続き・`pet-purge-broken` が
+     CI で2回連続で気づかれなかった原因）。ここで別のカルテを1枚確定させ、
+     写真を残したまま「⑤ 削除: ペット全データ」へ進む。 */
+  await page.goto(`${BASE}/edit/p/${createdPet.id}`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('#screen-3.is-active', { timeout: 20_000 });
+  await page.waitForTimeout(2000);
+  await page.locator('[data-field="photo-ear"]').setInputFiles(
+    { name: 'ear2.png', mimeType: 'image/png', buffer: solidPng([90, 30, 150]) },
+  );
+  await page.waitForFunction(
+    () => document.querySelectorAll('[data-photo-thumbs="ear"] .photo-pick__thumb').length === 1,
+    { timeout: 20_000 },
+  ).catch(() => {});
+  await page.fill('[data-field="staff-note"]', '2枚目の一言。');
+  await Promise.all([
+    page.waitForURL(/\/edit\/p\/[0-9a-f-]+\/[0-9a-f-]+/, { timeout: 30_000 }),
+    page.click('.dock-action-wrap .boxbutton'),
+  ]);
+
   /* ── ⑤ 削除: ペット全データ ── */
   await page.goto(`${BASE}/admin`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('.admin-menu__item', { timeout: 20_000 });
@@ -311,16 +388,25 @@ try {
       : `一覧が引けなかった: ${ownersLeft.raw}`);
 
   /* **写真の実体まで消えたか。** RLS 越しに見ると、行が消えた時点で「見えない」に
-     なるので必ず合格してしまう。`service_role` で数える（`verify:delete` と同じ理由）。 */
+     なるので必ず合格してしまう。`service_role` で数える（`verify:delete` と同じ理由）。
+     `apikey` ヘッダが無いと Kong が弾く（`Authorization` だけでは通らない）——それで
+     `listed.ok` が常に false になり、下の `listed.ok ? … : []` が「空」を返して
+     **何を壊しても常に合格**していた（`F-20260828-56`・16/17 で直したのと同じ
+     「空で受けて合格にする」型が、ここにはまだ残っていた）。失敗は握り潰さず投げる。 */
   const listed = await fetch(
     `${LOCAL_SUPABASE_URL}/storage/v1/object/list/report-assets`,
     {
       method: 'POST',
-      headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+      headers: {
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({ prefix: `${FIXTURE.shopId}/${createdPet.id}`, limit: 100 }),
     },
   );
-  const objects = listed.ok ? await listed.json() : [];
+  if (!listed.ok) throw new Error(`storage list failed: ${listed.status} ${await listed.text()}`);
+  const objects = await listed.json();
   check('18. 消した犬の写真が Storage に残っていない',
     Array.isArray(objects) && objects.length === 0, `${(objects || []).length}件`);
 

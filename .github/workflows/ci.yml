@@ -17,6 +17,15 @@ on:
   push:
     branches: [master]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      # **壊し方が増えるほど1往復が延びる**（11個で約9分・SQL 入りで約13分）。
+      # その回に足した分だけ走らせられるようにする。空なら従来どおり全部。
+      # 絞った回の結果は `mutate-run-partial.md` に書かれる（全体の記録を上書きしない）。
+      ids:
+        description: 'mutate で走らせる壊し方の id（空白区切り・空なら全部）'
+        required: false
+        default: ''
 
 # 同じ枝で新しい push が来たら、古い実行は止める（待たせない・無駄に回さない）。
 concurrency:
@@ -180,6 +189,120 @@ jobs:
   # 19頭並んだ絵**が撮れた。verify:* が同じ土台に作った犬をそのまま撮っていたためで、
   # あの絵では「人が使えるか」を判断できない。土台ごと分けて、seed 直後の
   # Q/X/Y/Z だけが居る状態を撮る。
+  # 「壊して赤になるか」を実際に確かめる（マスター判断 A・D-20260828-53）。
+  # 土台は本物のまま製品を1か所だけ壊し、**その壊しに気づいた項だけ**が赤になる。
+  # 気づかない項は、その壊しを検出できていない＝壊れている検査である。
+  #
+  # **手元では走らない**（Docker が無い）。ここが唯一の実行場所。
+  # PR ごとには回さない——1回が長く、証拠を採る作業であって門番ではないため。
+  # 証拠が採れたら docs/ops/proof-of-red.md へ人が移す。
+  mutate:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    # 結果を枝へコミットして戻すので、書ける権限が要る。
+    # 既定は読み取りだけで、push が `403 Write access to repository not granted` で落ちた
+    # （run 122）。**結果が10分かけて出たのに、記録が残らなかった。**
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: ブラウザを入れる
+        run: npx playwright install --with-deps chromium
+
+      - name: Supabase を起こす
+        run: npx supabase start
+
+      - name: 1件ずつ壊して、赤になるところを見る
+        run: node scripts/mutate-run.mjs ${{ github.event.inputs.ids }}
+
+      # 絞った回（ids 指定）は mutate-run-partial.md に書かれる（全体の記録を
+      # 上書きしないため）。どちらが書かれたかは走らせてみないと分からないので、
+      # 存在するほうを成果物として拾う。
+      - name: 結果を成果物として上げる
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutate-run-result
+          path: |
+            docs/ops/mutate-run-result.md
+            docs/ops/mutate-run-partial.md
+          if-no-files-found: ignore
+
+      # 結果を**リポジトリに残す**。成果物（artifact）は90日で消えるうえ、
+      # 中身を見るのに毎回ダウンロードが要る。台帳へ移す作業がやりにくいので、
+      # 走った枝へそのままコミットする（記録は手の届く所に置く）。
+      - name: 結果を枝にコミットする
+        if: always()
+        run: |
+          # **`git status --porcelain` は無視ファイルを黙って見せない。**
+          # `mutate-run-partial.md` は作業用として .gitignore に入れてあり、
+          # `-- <path>` を渡しても対象を絞るだけで無視は解除されない。
+          # run 133 はこれで「結果に差分なし」と誤判定し、走った10個ぶんの
+          # 結果を一度も枝にコミットせず捨てていた（本文を直したのはこの回）。
+          # `git add -f` で無視を上書きしてから、**ステージした差分**を見る
+          # （`git diff --cached` は無視設定と無関係に本当の差分を返す）。
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f docs/ops/mutate-run-result.md docs/ops/mutate-run-partial.md
+          if git diff --cached --quiet -- docs/ops/mutate-run-result.md docs/ops/mutate-run-partial.md; then
+            echo "結果に差分なし。コミットしない"
+            exit 0
+          fi
+          git commit -m "mutate の結果を記録する（run ${{ github.run_number }}）"
+          # **他から同じ枝に push が挟まると、素の push は拒否される**
+          # （run 139・セッション側が手元の作業を push した直後に起きた）。
+          # 拒否されたら中身は手元に残ったまま消える——成果物 zip から手で
+          # 復元する羽目になった。fetch して rebase してから retry する。
+          #
+          # **rebase が中身の衝突で止まることがある**（run 149・2回目の実行）。
+          # `docs/ops/mutate-run-result.md` はフル実行のたびに**丸ごと書き直す**
+          # ファイルなので、2つの実行がどちらもこのファイルを変えていれば
+          # 必ず衝突する——単純な「先を取られただけ」の空振りではない。
+          # マージする意味が無い（差分ではなく全体のスナップショット）ので、
+          # `-X theirs` で**今回生成した中身を無条件に勝たせる**。負けた側の
+          # 記録は git の履歴（前のコミット）に残るので消えはしない。
+          for i in 1 2 3; do
+            if git push origin HEAD:${{ github.ref_name }}; then
+              break
+            fi
+            echo "push が拒否された。fetch して rebase してから ${i}回目のやり直し"
+            git fetch origin ${{ github.ref_name }}
+            if ! git rebase origin/${{ github.ref_name }} -X theirs; then
+              echo "::error::rebase 自体が失敗した（-X theirs でも解決できない衝突）。docs/ops/mutate-run-partial.md を成果物から復元すること"
+              git rebase --abort
+              exit 1
+            fi
+            if [ "$i" = 3 ]; then
+              echo "::error::3回試しても push できなかった。docs/ops/mutate-run-partial.md を成果物から復元すること"
+              exit 1
+            fi
+          done
+
+      - name: 壊した跡が残っていないことを確かめる
+        if: always()
+        run: |
+          if [ -n "$(git status --porcelain -- backend/ src/ worker/)" ]; then
+            echo "::error::壊した跡が残っている（戻し切れていない）"
+            git status --porcelain -- backend/ src/ worker/
+            exit 1
+          fi
+          echo "製品のファイルに差分なし。すべて戻せている"
+
+      - name: Supabase を止める
+        if: always()
+        run: npx supabase stop
+
   walk:
     runs-on: ubuntu-latest
     timeout-minutes: 20

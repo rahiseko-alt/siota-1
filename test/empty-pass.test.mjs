@@ -63,3 +63,53 @@ test('いまのリポジトリは緑（回帰したら赤になる）', () => {
   assert.ok(scanned >= 150, `合格条件が ${scanned}件しか取れていない——取り出しが壊れた疑い`);
   assert.deepEqual(bad, []);
 });
+
+/* ── proof-of-red（壊して赤にならない検査は壊れているとみなす）── */
+
+test('check の宣言そのものを、検査として数えない', () => {
+  const got = passConditions('function check(name, pass, detail) {}\ncheck("1. 例", x === 1);\n');
+  assert.equal(got.length, 1);
+  assert.equal(got[0].name, '1. 例');
+});
+
+test('名前が式のときは、書いてある式をそのまま持つ（途中で千切らない）', () => {
+  const got = passConditions('check(`${label}: 実行されない`, x === 1);\n');
+  assert.equal(got.length, 1);
+  assert.equal(got[0].name, '`${label}: 実行されない`');
+});
+
+test('台帳の節を読み分ける', async () => {
+  const { sectionEntries } = await import('../scripts/guard/proof-of-red.mjs');
+  const led = '## 証明済み\n\n- verify-a.mjs :: 1. あ\n\n## 未証明\n\n- verify-b.mjs :: 2. い\n';
+  assert.deepEqual(sectionEntries(led, '## 証明済み'), [{ file: 'verify-a.mjs', name: '1. あ' }]);
+  assert.deepEqual(sectionEntries(led, '## 未証明'), [{ file: 'verify-b.mjs', name: '2. い' }]);
+});
+
+test('いまのリポジトリは、全件が台帳に載っている', async () => {
+  const { audit } = await import('../scripts/guard/proof-of-red.mjs');
+  const r = audit(path.resolve(import.meta.dirname, '..'));
+  assert.equal(r.fatal, undefined);
+  assert.deepEqual(r.unlisted, [], '台帳に無い検査がある');
+  assert.deepEqual(r.stale, [], '台帳が実体に無い検査を指している');
+  assert.ok(r.total >= 150, `検査が ${r.total}件しか数えられていない`);
+});
+
+test('コメントの中の check(…) を、検査として数えない', async () => {
+  const { stripComments } = await import('../scripts/guard/empty-pass.mjs');
+  const src = '/* 昔は check(x, true) と直書きしていた */\n// check("嘘", true)\ncheck("1. 本物", y === 1);\n';
+  const got = passConditions(src);
+  assert.equal(got.length, 1);
+  assert.equal(got[0].name, '1. 本物');
+  /* 行番号がずれない（コメントは空白に潰すが改行は残す）。 */
+  assert.equal(got[0].line, 3);
+  assert.doesNotMatch(stripComments(src), /昔は|嘘/);
+});
+
+test('文字列の中の // や /* は、コメントとして潰さない', async () => {
+  const { stripComments } = await import('../scripts/guard/empty-pass.mjs');
+  const src = 'check("http://例/*a*/", u === v);\n';
+  const got = passConditions(src);
+  assert.equal(got.length, 1);
+  assert.equal(got[0].name, 'http://例/*a*/');
+  assert.match(stripComments(src), /http:\/\/例/);
+});

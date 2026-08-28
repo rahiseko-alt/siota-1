@@ -50,14 +50,58 @@ function skipString(src, i) {
   return i + 1;
 }
 
+/** コメントを空白に潰す（中身の桁と行数は保つので、行番号がずれない）。
+ *
+ * **これが無くて、説明文の中の `check(…, true)` を検査として数えた。**
+ * `verify-stack.mjs` の「恒真だった」ことを説明するコメントを自分で書いた直後に、
+ * その説明文が1件の検査として台帳に載った（名前は `…`）。
+ * **数える機械が、数える対象を取り違えた3度目**（`F-20260828-49` の続き）。 */
+export function stripComments(src) {
+  let out = '';
+  for (let i = 0; i < src.length;) {
+    const c = src[i];
+    const two = src.slice(i, i + 2);
+    if (c === "'" || c === '"' || c === '`') {
+      const q = c;
+      let j = i + 1;
+      while (j < src.length && src[j] !== q) { if (src[j] === '\\') j += 1; j += 1; }
+      out += src.slice(i, Math.min(j + 1, src.length));
+      i = j + 1;
+    } else if (two === '//') {
+      let j = i;
+      while (j < src.length && src[j] !== '\n') j += 1;
+      out += ' '.repeat(j - i);
+      i = j;
+    } else if (two === '/*') {
+      const end = src.indexOf('*/', i + 2);
+      const j = end < 0 ? src.length : end + 2;
+      /* 改行だけ残す。行番号を保つため。 */
+      out += src.slice(i, j).replace(/[^\n]/g, ' ');
+      i = j;
+    } else {
+      out += c;
+      i += 1;
+    }
+  }
+  return out;
+}
+
 /** `check(` の呼び出しから、**第2引数（合格条件）だけ**を取り出す。
     第3引数（画面に出す説明文）は判定に使わない——説明文の中の `|| []` は
     合否に効かないので、混ぜると嘘の指摘が出る。 */
-export function passConditions(src) {
+export function passConditions(rawSrc) {
+  const src = stripComments(rawSrc);
   const out = [];
   const re = /\bcheck\s*\(/g;
   let m;
   while ((m = re.exec(src))) {
+    /* **`function check(name, pass, detail)` の宣言そのものを数えない。**
+       ここを見落として14件（検査1本につき1件）を「合格条件」として数えていた。
+       台帳に `:: name` という在りもしない検査名が並んで気づいた——
+       **数える機械が、数える対象を取り違えていた**（`docs/watch.md` W-1 の型を、
+       W-1 を止める機械の中で踏んだ）。 */
+    const before = src.slice(Math.max(0, m.index - 30), m.index);
+    if (/\b(function|const|let|var)\s+$/.test(before)) continue;
     let i = m.index + m[0].length;
     let depth = 1;
     const start = i;
@@ -84,9 +128,14 @@ export function passConditions(src) {
     parts.push(args.slice(last));
     if (parts.length < 2) continue;
 
+    /* 名前は、素の文字列なら中身を、そうでなければ**書いてある式をそのまま**使う。
+       `\`${kind === …}\`` のような式を引用符で切ると、途中で千切れた名前になり、
+       台帳の突き合わせが静かにずれる（消えた検査を「在る」と読む）。 */
+    const raw = parts[0].trim();
+    const literal = raw.match(/^'([^'\\]*)'$|^"([^"\\]*)"$|^`([^`$\\]*)`$/);
     out.push({
       line: src.slice(0, m.index).split('\n').length,
-      name: (parts[0].match(/['"`]([\s\S]*?)['"`]/) || [, parts[0].trim()])[1].split('\n')[0].trim(),
+      name: (literal ? (literal[1] ?? literal[2] ?? literal[3]) : raw).replace(/\s+/g, ' ').trim(),
       cond: parts[1].trim(),
     });
   }

@@ -26,6 +26,7 @@ import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { readPhase, rel, ALWAYS } from './scope.mjs';
 import { checkSolved } from './solved.mjs';
+import { check as deliveryCheck } from './delivery-ready.mjs';
 import { pathToFileURL } from 'node:url';
 
 /** 関所を通さずに書いてよい場所（＝成果物と仕組みの置き場）。 */
@@ -143,6 +144,26 @@ export function missingArtifacts(root, phase, { end = false } = {}) {
   if (end && !fs.existsSync(at(`failure-check-${phase}-end.md`))) {
     missing.push(`③ 再発防止（完了）が無い → docs/ops/failure-check-${phase}-end.md\n`
       + `   フェーズを閉じる前に、もう一度全件照合すること。`);
+  }
+  /* F4 固有: 台帳（docs/ops/proof-of-red.md）が「客に当たる経路」まで埋まっているか。
+     `docs/ops/proof-of-red.md` の「## F4 を閉じる範囲」節が無ければ delivery-ready 側が
+     fatal を返すので、その場合はここでは何も言わない（台帳自体が無いフェーズで
+     誤って引っかからないように、節の有無で判定する）。 */
+  if (end && phase === 'F4' && fs.existsSync(path.join(root, 'docs/ops/proof-of-red.md'))) {
+    const d = deliveryCheck(root);
+    if (!d.fatal) {
+      if (d.unprovenInScope.length > 0) {
+        missing.push(`台帳（客に当たる経路）に未証明が ${d.unprovenInScope.length}件 → docs/ops/proof-of-red.md\n`
+          + `   node scripts/guard/delivery-ready.mjs で内訳を見ること。`);
+      }
+      if (d.unaccounted.length > 0) {
+        missing.push(`台帳に理由の無い未証明が ${d.unaccounted.length}件 → docs/ops/proof-of-red.md\n`
+          + `   「### 判定できない」か「### F4 の後に回す」に理由つきで足すこと。`);
+      }
+      if (d.result.missing || d.result.warning) {
+        missing.push(`1件ずつ壊す（mutate-run.mjs）の全体結果に赤0件の組が残っているか、まだ無い → docs/ops/mutate-run-result.md`);
+      }
+    }
   }
   return missing;
 }
