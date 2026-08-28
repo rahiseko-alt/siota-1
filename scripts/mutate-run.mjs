@@ -311,6 +311,50 @@ export const MUTATIONS = [
     extra: null,
     scripts: ['verify-edit.mjs'],
   },
+
+  /* 3回目: verify-portal.mjs + verify-m6.mjs（合わせて22件のうち8件を狙う。
+     残りは個別の壊しが要る構造的な項目——★（1タッチで戻れる本体の遷移）や
+     portal 1〜4・7・8・10・12 など——で、後の回にまとめて回す）。 */
+  {
+    id: 'portal-login-panel-dead',
+    why: '**飼い主のログインパネルが一切出なくなる**——新規も、失効後も、押すものが画面に無い',
+    file: 'backend/js/supabase-auth.js',
+    find: '  const openLoginPanel = (message, returnPath) => {\n',
+    replace: '  const openLoginPanel = (message, returnPath) => {\n',
+    extra: null,
+    injectAfter: '  const openLoginPanel = (message, returnPath) => {\n',
+    inject: '    if (message) return;\n',
+    scripts: ['verify-portal.mjs'],
+  },
+  {
+    id: 'portal-pet-name-lost',
+    why: '**飼い主の一覧に、犬の名前が出ない**——どれが自分の子か分からない',
+    file: 'backend/js/supabase-auth.js',
+    find: '    link.textContent = pet.name;',
+    replace: "    link.textContent = '';",
+    extra: null,
+    scripts: ['verify-m6.mjs'],
+  },
+  {
+    id: 'm6-canvas-missing',
+    why: '**カルテ作成画面に、犬体図を描く場所が無い**——爪・耳・体の印を記録できない',
+    file: 'src/index.html',
+    find: '<canvas id="marking-canvas"></canvas>',
+    replace: '<canvas id="marking-canvas-x"></canvas>',
+    extra: null,
+    scripts: ['verify-m6.mjs'],
+  },
+  {
+    id: 'm6-header-wrong-dog',
+    why: '**確定後に④へ戻ると、別の犬の名前が見出しに出る**（`docs/deferred.md` #28 の再発）',
+    file: 'src/js/ui.js',
+    find: "    this.selectKarte(pet.petName || '', pet.ownerName || '', '');\n"
+      + '    /* **描いてから移る。**',
+    replace: "    /* MUTATED: this.selectKarte(pet.petName || '', pet.ownerName || '', ''); */\n"
+      + '    /* **描いてから移る。**',
+    extra: null,
+    scripts: ['verify-m6.mjs'],
+  },
 ];
 
 /** ファイルの中身の指紋。戻せたことを**実際に確かめる**ために使う。 */
