@@ -24,8 +24,8 @@
 | | |
 |---|---|
 | 機械が数えた検査 | **183件**（`scripts/verify-*.mjs`） |
-| 壊して赤になったところを見た | **103件**（毒見 21 ＋ 1件ずつ壊す 82・2026-08-28） |
-| まだ見ていない | **80件** |
+| 壊して赤になったところを見た | **106件**（毒見 21 ＋ 1件ずつ壊す 85・2026-08-28） |
+| まだ見ていない | **77件** |
 
 **出発点は全件が未確認だった。** 毒見で埋め、天井に当たったあと（下の「⛔ 毒見の天井」）、
 **1件ずつ壊す**（マスター判断 A）で続けている。**数は上の表だけが正**——
@@ -339,8 +339,6 @@ run #116（14b を足した後） ✅  weight-graph-off  verify-report-roundtrip
 `rls-drafts-leak` は `reports_customer_select` から `status = 'final'` を落とす。
 **確定前の下書きが飼い主にそのまま届く**状態である。
 
-- verify-portal.mjs :: 11. ログイン後、自分の犬（X/Y/Z）が一覧に出て、他人の犬（Q）は出ない
-- verify-portal.mjs :: 13. 他人の犬（Q）は見えない（RLS）
 - verify-draft.mjs :: 3. 下書きは飼い主に見えない
 
 **出た穴**: `verify-report-roundtrip :: 17. 他人には見えない（RLS）` は、
@@ -476,6 +474,42 @@ run 124  カルテの RLS だけ開ける  → 画面が犬を引けず、そこ
 できていない**。次の回で**この壊し方だけを単体で**再実行し、切り分ける。
 `verify-invitation.mjs`（今回追加した分）の期待もその結果を見てから判断する。
 
+#### 追記（CI run #144・単体再実行）: もう1回、赤0件を再現した
+
+`ids` を `rls-any-owner-sees-any-dog app-throws-runtime-error portal-throws-runtime-error`
+の3つだけに絞り、`rls-any-owner-sees-any-dog` を完全に単独で再実行した。
+結果は同じ——`verify-portal.mjs` が**また1件も赤にならなかった**（`verify-invitation.mjs`
+も0件）。これで **run #122・#126（赤になった・2回）と run #139・#144（赤にならない・2回）
+が2対2で割れている**。
+
+切り分けのため、次の仮説を調べたが**どれも決め手にならなかった**:
+
+- 壊し方のコード自体がずれた → `grep -n "id: 'rls-any-owner-sees-any-dog'" -A 15
+  scripts/mutate-run.mjs` で確認、run #122 時点と**バイト単位で同一**
+- 別の migration がポリシーを上書きしている → `grep -rn "pets_customer_select"
+  supabase/migrations/*.sql` は1か所のみ。定義は1つしかない
+- 対象ペット（Q）の `active` フラグが立っていない → seed の INSERT は `active` を
+  明示していない。列は `not null default true` なので既定で `true`。除外の説明にならない
+- 他の permissive ポリシーが割り込んでいる → `pets_staff_all` は
+  `is_shop_staff(shop_id)` が要るので customer ロールでは false のはず
+- `mutate-run.mjs` の SQL 壊し全般が壊れている → **同じ run #144 のバッチに含まれる
+  他の SQL 壊し方は正しく赤になっている**ので、一般的な「SQL 壊し・db reset が
+  効いていない」という説明は成り立たない
+
+残っている仮説は2つ、どちらも確かめていない:
+
+1. **`ids` で絞った実行に固有の何か**（フル実行では違う結果になる可能性）
+2. **CI 環境側の何かが本当に変わった**（PostgREST のスキーマキャッシュ、
+   コネクションプール、runner イメージの更新など）
+
+これは `pets_customer_select`（**他人の犬が見えないこと**）を守る RLS を検出する
+検査で、**製品のセキュリティに直結する**。判別がつかないまま「証明済み」と
+書くのは `D-18` に反する（同じ壊し方で2回連続赤にならなかったのに、過去の
+2回だけを見て緑と決めるのは「落ちるはず」の側に立つことになる）ので、
+`verify-portal.mjs :: 11.` と `13.` は**「証明済み」から一旦外し、下の「未証明」
+へ戻す**。上の仮説1を切り分けるため、`ids` を絞らない**フル実行**（CI run #149）を
+別途走らせている——結果はこのファイルへ追記する。
+
 - verify-admin.mjs :: 2. 管理者ページに リピーター / 新規 / 削除 が在る
 - verify-admin.mjs :: 3. リピーターに カルテ作成 / カルテ修正 が在る
 - verify-admin.mjs :: 4. 新規に 顧客アカウント作成 / ペットアカウント作成 が在る
@@ -517,6 +551,18 @@ run 124  カルテの RLS だけ開ける  → 画面が犬を引けず、そこ
 - verify-report-roundtrip.mjs :: 6. 確認: 歯
 - verify-report-roundtrip.mjs :: 13. 飼い主: 歯
 - verify-photo-roundtrip.mjs :: 10. 飼い主: 壊れた画像（ページURL を指す img）が無い
+
+### 6回目: 「アプリ由来のエラーが無い」系をまとめて狙った（CI run #144・部分実行）
+
+`app-throws-runtime-error`（`ui.js init()` に遅延 throw を注入）と
+`portal-throws-runtime-error`（`supabase-auth.js bootProtectedPortal()` に同型の注入）の
+2つで、4本の検査ファイルにまたがる5件が同時に赤になった。
+
+- verify-admin.mjs :: 21. アプリ由来のエラーが無い
+- verify-edit.mjs :: 7. アプリ由来のエラーが無い
+- verify-photo-roundtrip.mjs :: 13. アプリ由来のエラーが無い
+- verify-report-roundtrip.mjs :: 18. アプリ由来のエラーが無い
+- verify-portal.mjs :: 10. アプリ由来のコンソールエラーが無い（ログイン前）
 
 ## F4 を閉じる範囲（マスター判断・2026-08-28）
 
@@ -588,12 +634,10 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 - verify-admin.mjs :: 16. ペットが実際に消えた
 - verify-admin.mjs :: 17. 顧客が実際に消えた
 - verify-admin.mjs :: 18. 消した犬の写真が Storage に残っていない
-- verify-admin.mjs :: 21. アプリ由来のエラーが無い
 - verify-delete.mjs :: 0. 検査用の犬を登録できた
 - verify-delete.mjs :: 1. 写真つきのカルテを確定できた
 - verify-delete.mjs :: 2. 写真の実体が Storage に在る（service_role で数える）
 - verify-draft.mjs :: 4. 下書きの中身が漏れていない
-- verify-edit.mjs :: 7. アプリ由来のエラーが無い
 - verify-edit.mjs :: 9. 仮データ（window.DUMMY）の犬が出ていない
 - verify-edit.mjs :: 10. 持っていない項目（犬種・担当）が空で出ている
 - verify-edit.mjs :: 12. 一覧の画面（screen-2）が開いている
@@ -617,15 +661,15 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 - verify-photo-roundtrip.mjs :: `${kind === 'trimming' ? '1' : kind === 'ear' ? '2' : '3'}. ${kind} の写真を付けられた`
 - verify-photo-roundtrip.mjs :: 4. 写真つきで確定できた
 - verify-photo-roundtrip.mjs :: 5. 保存された写真4枚が実体になっている（asset://）
-- verify-photo-roundtrip.mjs :: 13. アプリ由来のエラーが無い
 - verify-portal.mjs :: 1. /my が配信される
 - verify-portal.mjs :: 2. 起動分岐が立っている
 - verify-portal.mjs :: 3. Supabase vendor が読めている
 - verify-portal.mjs :: 4. ポータルが起動している
 - verify-portal.mjs :: 7. 未ログインで中身とログアウトは隠れている
 - verify-portal.mjs :: 8. 見本画像を出していない
-- verify-portal.mjs :: 10. アプリ由来のコンソールエラーが無い（ログイン前）
+- verify-portal.mjs :: 11. ログイン後、自分の犬（X/Y/Z）が一覧に出て、他人の犬（Q）は出ない
 - verify-portal.mjs :: 12. ログイン後はログアウトボタンが出る
+- verify-portal.mjs :: 13. 他人の犬（Q）は見えない（RLS）
 - verify-production.mjs :: `配信物が手元の dist と同じ（${sameCount}/${staticFiles.length} 本）`
 - verify-production.mjs :: /my が dist/my.html と同じ
 - verify-production.mjs :: `削除済みの旧UI が本番に残っていない（${deletedUiPaths.length} 本を確認）`
@@ -636,7 +680,6 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 - verify-report-roundtrip.mjs :: 16. 飼い主: 壊れた画像（ページURL）が出ていない
 - verify-report-roundtrip.mjs :: 19. 体重の欄が空で始まる（見本値が入っていない）
 - verify-report-roundtrip.mjs :: 20. 飼い主の画面に、量っていない体重が出ない
-- verify-report-roundtrip.mjs :: 18. アプリ由来のエラーが無い
 - verify-screens.mjs :: 1. `/` が配信される
 - verify-screens.mjs :: 2. `/` に4画面が乗っている
 - verify-screens.mjs :: 3. `/` に段のタブが4つ在る
