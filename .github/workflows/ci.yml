@@ -221,6 +221,22 @@ jobs:
           path: docs/ops/mutate-run-result.md
           if-no-files-found: warn
 
+      # 結果を**リポジトリに残す**。成果物（artifact）は90日で消えるうえ、
+      # 中身を見るのに毎回ダウンロードが要る。台帳へ移す作業がやりにくいので、
+      # 走った枝へそのままコミットする（記録は手の届く所に置く）。
+      - name: 結果を枝にコミットする
+        if: always()
+        run: |
+          if [ -z "$(git status --porcelain -- docs/ops/mutate-run-result.md)" ]; then
+            echo "結果に差分なし。コミットしない"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/ops/mutate-run-result.md
+          git commit -m "mutate の結果を記録する（run ${{ github.run_number }}）"
+          git push origin HEAD:${{ github.ref_name }}
+
       - name: 壊した跡が残っていないことを確かめる
         if: always()
         run: |
