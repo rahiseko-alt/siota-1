@@ -45,6 +45,18 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
  * 証明の役に立たない（何を検出したのか言えないため）。
  */
 export const MUTATIONS = [
+  /* ── 18回目: 記入欄がひとつ消える（2026-08-28・手元で実測）
+     `1. 記入先の要素がすべて実在する` は、記入に使う要素が**画面に在るか**を
+     まとめて見ている。1つでも消えれば、トリマーはその項目を記録できない——
+     しかも「押せない」だけなので、気づかずに確定まで進んでしまう。 */
+  {
+    id: 'ear-right-input-missing',
+    why: '**右耳の記入欄が画面から消える**（記録できないまま確定でき、飼い主にはその項目が空で届く）',
+    file: 'src/index.html',
+    find: '<div class="segmented-stepper" data-ear="right">',
+    replace: '<div class="segmented-stepper">',
+    scripts: ['verify-report-roundtrip.mjs'],
+  },
   /* ── 17回目: 一覧に犬が1頭も並ばない（2026-08-28・手元で実測）
      `②b. ログインすると作業画面に入れる` は「`/edit` に居て、かつカードが
      1枚以上ある」を見ている（`F-20260828-55` で `true` の直書きから直したもの）。

@@ -1023,6 +1023,24 @@ FAIL  staffNote（担当からの一言）  犬を登録できず、細工を届
 
 - verify-xss.mjs :: label
 
+### 20回目: 記入欄がひとつ消える 1件（2026-08-28・**手元で実測**）
+
+```
+node scripts/mutate-run.mjs ear-right-input-missing
+
+  ✅ ear-right-input-missing  verify-report-roundtrip.mjs  赤 2件
+
+    1. 記入先の要素がすべて実在する
+    検査を最後まで実行できた   ← 1. が落ちたら throw する設計なので、これは正しい道連れ
+```
+
+**この行が守っているもの**: 記入に使う要素が1つでも画面から消えると、トリマーは
+その項目を記録できない。しかも**押せないだけで警告は出ない**ので、気づかずに
+確定まで進み、飼い主にはその項目が空のまま届く。壊し方は
+`<div class="segmented-stepper" data-ear="right">` から掴む名前を外すだけ。
+
+- verify-report-roundtrip.mjs :: 1. 記入先の要素がすべて実在する
+
 ## F4 を閉じる範囲（マスター判断・2026-08-28）
 
 台帳を129件すべて埋めるのではなく、**客に当たる経路まで**で F4 を閉じる。
@@ -1106,7 +1124,6 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 - verify-production.mjs :: /my が dist/my.html と同じ
 - verify-production.mjs :: `削除済みの旧UI が本番に残っていない（${deletedUiPaths.length} 本を確認）`
 - verify-production.mjs :: `/edit が正UI を配っている（手元 ${want.length} 本 ＋ 注入 ${injected.length} 本）`
-- verify-report-roundtrip.mjs :: 1. 記入先の要素がすべて実在する
 - verify-report-roundtrip.mjs :: 20. 飼い主の画面に、量っていない体重が出ない
 - verify-screens.mjs :: 1. `/` が配信される
 - verify-screens.mjs :: 2. `/` に4画面が乗っている
