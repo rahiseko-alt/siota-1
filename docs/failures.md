@@ -814,3 +814,22 @@
   `verify:roundtrip` 23/23 ／ `verify:m6` 13/13、すべて EXIT 0。
 
 - **How to prevent**: **「返ってきた」と「使える値が入っている」は別物。** `throw` しない API の返り値は、**呼ぶ側が使うフィールドまで**確かめる。とくに `encodeURIComponent()` は `null`／`undefined` を**文字列に変えてしまう**ので、URL を組むところでは値の欠落が例外にならず、**そのまま遷移してしまう**。同じ型が `D-2`（`finalize_report` の `null` 返却）で既に一度起きている——**そのとき塞いだのは「`null` が返る」場合だけで、「器は返るが中身が欠けている」場合は塞がっていなかった**
+
+### [F-20260829-60] 本番トップページで仮データの犬をタップすると `/edit/p/d1` へ遷移し404になった
+
+- **Date**: 2026-08-29
+- **Category**: logic
+- **Trigger/Context**: マスターが本番 `https://trimmer-system.kouheikosehira.com` を実機で操作し、`/edit/p/d1` で `HTTP ERROR 404` に遭遇したと報告。「トップページから操作して途中でエラーになるのはダメな事だ」「直通URLではなくてトップからつながるようにしろ」との指摘
+- **Failure**: `src/js/dummy.js`（`window.DUMMY`）の仮データの犬5頭が、`id: 'd1'`〜`'d5'` を持っていた。`src/js/ui.js: renderDogs()` は「`id` を持っていれば実データとして扱い `openPet(id)` で URL 遷移、持っていなければ仮データとして画面内だけで進む」を**データの形だけ**で判定する契約（コードコメントに明記）だが、仮データ自身がこの契約に違反して `id` を持っていた。バックエンド（`TrimmerSupabaseStaff`）の読み込みが何らかの理由（スクリプト読み込みの遅延・失敗等）で `init()` 実行時点に間に合わないと、仮データがそのまま描画され、「ポンチ」をタップすると実在しない `/edit/p/d1` へ遷移して404になる
+- **Root Cause**: `dummy.js` は「UI だけを完成させるための仮データ」（F1〜F2 時代の遺物）で、当時は実データへの接続自体が無かったため `id` を持たせても実害が無かった。F3 でバックエンド接続後も、この契約違反（仮データが `id` を持つ）が見落とされたまま残っていた
+- **Fix**: `src/js/dummy.js` の5頭すべてから `id` フィールドを削除。これにより `dog.id ? openPet(dog.id) : selectKarte(...)` は仮データに対して常に後者（画面内だけの遷移。実URLへは行かない）を通る
+- **実測（`D-18` の3出力）**: 新設した `test/dummy-no-id.test.mjs` で確認
+
+  ```
+  直す前（id: 'd1' を仮に戻す）  not ok - 仮データの犬「ポンチ」が id を持っている
+  直したあと                     ok - window.DUMMY.dogs のどの犬も id を持たない
+  もう一度戻す                   not ok（再現）
+  ```
+
+  `npm run build && npm run check && npm test`（EXIT 0）、`verify:*` 全12本（208/208 PASS）、`gate.mjs --end` / `delivery-ready.mjs` とも通過を確認
+- **How to prevent**: 仮データ（`window.DUMMY` 等）に、実データと同じ形のフィールド（とくに `id` のような「これがあれば本物」の判定軸に使われるもの）を持たせない。バックエンド接続後も仮データファイルは残り続ける設計（フォールバック用）なので、**仮データの「形」自体が本物と区別できることを、機械（`test/dummy-no-id.test.mjs`）で押さえた**
