@@ -64,10 +64,17 @@ yarn-debug.log*
 .screens/
 .human/
 
-# 特定の AI だけが読む設定は置かない（正は AGENTS.md ひとつ）
-.claude/
+# 特定の AI だけが読む設定は置かない（正は AGENTS.md ひとつ）。
+# `.claude/` 自体を除外すると、配下のファイルは `!` で戻せない
+# （git の仕様——親ディレクトリが除外されていると個別ファイルの再対象化は効かない）。
+# だから**中身を全部除外**し、`settings.json` だけを戻す（`AGENTS.md` D-15 追記）。
+.claude/*
+!.claude/settings.json
 .codex/
 *.claude.json
+
+# 「いまやる番」を今回のセッションで読んだ印（checkin.mjs が書く・作業用）
+.plan-read
 
 # 毒見を一部だけ走らせた回の記録（作業用）。全体の記録は poison-run-result*.md が正。
 docs/ops/poison-run-partial.md

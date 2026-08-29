@@ -102,8 +102,11 @@ export function checkSolved(root, phase) {
     }
 
     if (kind !== '解決') {
-      if (!/deferred[^\n]*#\s*\d+|docs\/deferred\.md[^\n]*\d+/.test(body)) {
-        problems.push(`#${no}: 種別が「${kind}」なのに docs/deferred.md の番号が無い。`
+      /* 2026-08-29: docs/deferred.md は docs/ops/plan.md 第12章（放置リスト）に統合された。
+         過去の記述（「deferred #N」）と新しい記述（「放置リスト #N」「plan.md #N」）の
+         両方を受け付ける——番号は維持されているので、どちらの書き方でも同じ項目を指す。 */
+      if (!/(deferred|放置リスト)[^\n]*#\s*\d+|docs\/(deferred|ops\/plan)\.md[^\n]*\d+/.test(body)) {
+        problems.push(`#${no}: 種別が「${kind}」なのに docs/ops/plan.md（放置リスト）の番号が無い。`
           + `\n  逃がすなら記録に残す（D-18 偽-3・偽-8）。`);
       }
       continue;

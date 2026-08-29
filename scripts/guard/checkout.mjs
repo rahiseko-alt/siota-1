@@ -26,14 +26,14 @@ const ROOT = process.env.REPO_ROOT || process.cwd();
 const sh = (cmd, opts = {}) => execSync(cmd, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();
 const quiet = (cmd, opts = {}) => { try { execSync(cmd, { cwd: ROOT, stdio: 'ignore', ...opts }); return 0; } catch (e) { return e.status || 1; } };
 
-/** 次のセッションが、これが無いと前回の続きを始められない、というもの。 */
+/** 次のセッションが、これが無いと前回の続きを始められない、というもの。
+    2026-08-29: `docs/deferred.md` は `docs/ops/plan.md`（第12章・放置リスト）に統合され、廃止した。 */
 const HANDOFF_FILES = [
   'docs/handoff.md',
   'docs/ops/phase',
   'docs/ops/plan.md',
   'docs/failures.md',
   'docs/decisions.md',
-  'docs/deferred.md',
   'AGENTS.md',
 ];
 
@@ -112,6 +112,41 @@ if (skipBuild) {
   }
   add(ok, 'まっさらな作業場で build / check / test が通る',
     `master の中身だけを取り出して実行した\n${results.map((r) => `      ${r}`).join('\n')}`);
+}
+
+/* ── 7. 「いまやる番」（docs/ops/plan.md）を、このセッションで更新したか ──
+   マスター指示（2026-08-29）: 「毎回全体計画を強制的に進捗の読み書きをする」。
+   `checkin.mjs` は読んだことを機械で確かめる。ここは**書いたこと**を機械で確かめる。
+   セッション開始時点（`origin/master`）の行と、いま手元にある行を比べるだけ——
+   同じままなら、進んでいないか、進んだのに書き忘れたかのどちらか。 */
+const NEXT_RE = /^\*\*いまやる番:\s*(.+?)\*\*\s*$/m;
+{
+  let ok = false;
+  let detail;
+  try {
+    const localPlan = fs.readFileSync(path.join(ROOT, 'docs/ops/plan.md'), 'utf8');
+    const localNext = (localPlan.match(NEXT_RE) || [])[1];
+    if (localNext === undefined) {
+      detail = 'docs/ops/plan.md に「いまやる番」の行が無い（第0章の直下にあるはず）';
+    } else {
+      let baseNext = null;
+      try { baseNext = (sh('git show origin/master:docs/ops/plan.md').match(NEXT_RE) || [])[1]; } catch { /* origin/master にまだ無い＝初回 */ }
+      if (baseNext === null) {
+        ok = true;
+        detail = `新設: ${localNext}`;
+      } else if (baseNext !== localNext) {
+        ok = true;
+        detail = `${baseNext}\n      → ${localNext}`;
+      } else {
+        detail = `セッション開始時点から変わっていない: "${localNext}"\n`
+          + '      進めたなら、この行を次の項目に書き換えること。\n'
+          + '      本当に何も進まなかった回なら、その旨をマスターへ報告すること（優先度の禁止事項②）。';
+      }
+    }
+  } catch (e) {
+    detail = `確認できなかった: ${e.message.split('\n')[0]}`;
+  }
+  add(ok, '「いまやる番」（docs/ops/plan.md）を今回のセッションで更新した', detail);
 }
 
 /* ── 結果 ── */
