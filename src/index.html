@@ -662,6 +662,17 @@ button, input, textarea, select {
 .photo-pick__drop { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border: 1px solid var(--border-subtle); background: #ffffff; font-size: 12px; line-height: 1; font-weight: 700; cursor: pointer; }
 .photo-pick__note { font-size: 10px; color: var(--ink-muted); margin-top: 6px; }
 
+/* 口の写真への書き込み（マスター指示 2026-08-29・C-10）。
+   `#marking-canvas`（犬体4面図・全画面で1個だけの決め打ち）とは別に、
+   写真1枚ごとの使い捨てオーバーレイをその場で作る。 */
+.annotate-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 999; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.annotate-box { background: #ffffff; padding: 12px; max-width: 100%; max-height: 100%; display: flex; flex-direction: column; gap: 10px; }
+.annotate-canvas-wrap { max-width: 90vw; max-height: 70vh; overflow: auto; touch-action: none; }
+.annotate-canvas { display: block; touch-action: none; border: 1px solid var(--border-subtle); }
+.annotate-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.btn-inline { border: 1px solid var(--border-subtle); background: #ffffff; padding: 8px 14px; font-size: 12px; font-weight: 700; cursor: pointer; }
+.annotate-save { background: var(--ink-body); color: #ffffff; }
+
 .segmented-stepper { display: flex; gap: 6px; width: 100%; }
 
 .stepper-btn {
@@ -1801,10 +1812,32 @@ button, input, textarea, select {
             <div class="past-reports__list" id="past-reports-list"></div>
           </div>
 
+          <!-- 0. 来店日・コース（マスター指示 2026-08-29）
+               C-3: 体重の時系列は来店日を基準にする（`report_date` は触らず、
+               この入力欄を別に持って `weights[].date` へ使う）。
+               C-9: コースは来店ごとに変わるので毎回選択必須。 -->
+          <div class="clinical-group">
+            <div class="clinical-group__label">
+              <span>◎ 来店日・コース</span>
+              <span class="clinical-group__hint">必須・カルテごとに選ぶ</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px;">
+              <input type="date" data-field="visit-date" id="input-visit-date"
+                     style="width: 100%; border: 1px solid var(--border-subtle); padding: 8px; background: #ffffff; font-weight: 700;">
+              <select data-field="course" required
+                      style="width: 100%; border: 1px solid var(--border-subtle); padding: 8px; background: #ffffff; font-weight: 700;">
+                <option value="" disabled selected>コースを選択してください</option>
+                <option value="トリミングコース">トリミングコース</option>
+                <option value="グルーミングコース">グルーミングコース</option>
+                <option value="部分ケアコース">部分ケアコース</option>
+              </select>
+            </div>
+          </div>
+
           <!-- 1. Weight & BCS -->
           <div class="clinical-group">
             <div class="clinical-group__label">
-              <span>① 体重・コンディション (BCS / MCS)</span>
+              <span>① 体重・コンディション</span>
             </div>
             <div class="weight-input-container">
               <div class="weight-stat-box">
@@ -1822,17 +1855,48 @@ button, input, textarea, select {
                   <span class="weight-diff-badge" id="weight-diff-badge">前回の記録なし</span>
                 </div>
               </div>
+              <div class="weight-stat-box">
+                <div class="weight-stat-box__title">ベスト体重</div>
+                <div class="weight-stat-box__val-wrap">
+                  <input type="number" step="0.01" class="weight-input" id="input-best-weight" placeholder="—" oninput="App.onBestWeightChange(this.value)">
+                  <span style="font-size: 13px; font-weight: 700;">kg</span>
+                </div>
+              </div>
+            </div>
+            <div class="clinical-group__hint" style="margin-top: 6px; display: block;">筋肉量を知りたい方はお問い合わせください</div>
+
+            <!-- BCS 5段階（マスター指示 2026-08-29・C-1）。体重の数値とは別に、見た目・触診での
+                 コンディション評価を残す。5段階の標準的な区分（削痩〜肥満）。 -->
+            <div class="clinical-group__label" style="margin-top: 14px;">
+              <span>BCS（ボディコンディションスコア・5段階）</span>
+            </div>
+            <div class="segmented-stepper" id="bcs-stepper-wrap">
+              <button class="stepper-btn is-alert" onclick="App.selectStepper(this, 'bcs', 1)">
+                <span class="val">1</span><span class="desc">削痩</span>
+              </button>
+              <button class="stepper-btn" onclick="App.selectStepper(this, 'bcs', 2)">
+                <span class="val">2</span><span class="desc">やや細い</span>
+              </button>
+              <button class="stepper-btn is-active" onclick="App.selectStepper(this, 'bcs', 3)">
+                <span class="val">3</span><span class="desc">適正</span>
+              </button>
+              <button class="stepper-btn" onclick="App.selectStepper(this, 'bcs', 4)">
+                <span class="val">4</span><span class="desc">やや肥満</span>
+              </button>
+              <button class="stepper-btn is-alert" onclick="App.selectStepper(this, 'bcs', 5)">
+                <span class="val">5</span><span class="desc">肥満</span>
+              </button>
             </div>
           </div>
 
-          <!-- 2. Nail Examination -->
+          <!-- 2. Nail Examination（前足・後ろ足を分けて記録・マスター指示 2026-08-29・C-5） -->
           <div class="clinical-group" id="sec-nail">
             <div class="clinical-group__label">
-              <span>② 爪のチェック (3段階判定)</span>
+              <span>② 爪のチェック (3段階判定・前足/後ろ足)</span>
               <span class="clinical-group__hint">※血管位置と接地状態</span>
             </div>
-            
-            <!-- **繋いだ**（`docs/deferred.md` #1・マスター判断 `D-20260827-47` の 1
+
+            <!-- **繋いだ**（放置リスト #1・マスター判断 `D-20260827-47` の 1
                  「そのまま繋ぐ」）。血管の位置を見て3段階を判定する図なので、
                  **画質を落とさない**——縮めて血管が見えなくなれば、図が在る意味が無い。
                  `nail-diagram.png` は **6.2MB** ある。`loading="lazy"` を付けるのは、
@@ -1849,44 +1913,52 @@ button, input, textarea, select {
               <span class="guide-diagram-box__caption">爪の基準図</span>
             </div>
 
-            <div class="segmented-stepper" id="nail-stepper-wrap">
-              <button class="stepper-btn" onclick="App.selectStepper(this, 'nail', 1)">
-                <span class="val">1. 適切</span>
-                <span class="desc">血管前カット済</span>
-              </button>
-              <button class="stepper-btn" onclick="App.selectStepper(this, 'nail', 2)">
-                <span class="val">2. やや長め</span>
-                <span class="desc">維持レベル</span>
-              </button>
-              <button class="stepper-btn is-alert" onclick="App.selectStepper(this, 'nail', 3)">
-                <span class="val">3. 要注意</span>
-                <span class="desc">指変形の恐れ</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- 3. Ear Examination -->
-          <div class="clinical-group">
-            <div class="clinical-group__label">
-              <span>③ 耳のチェック (左右判定)</span>
-              <span class="clinical-group__hint">1〜3レベル</span>
-            </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
               <div>
-                <div style="font-size: 11px; font-weight: 700; text-align: center; margin-bottom: 4px; background: var(--bg-paper); padding: 3px;">右耳 (R)</div>
-                <div class="segmented-stepper" data-ear="right">
-                  <button class="stepper-btn is-active" onclick="App.selectSubStepper(this)"><span class="val">1</span><span class="desc">良好</span></button>
-                  <button class="stepper-btn" onclick="App.selectSubStepper(this)"><span class="val">2</span><span class="desc">赤み</span></button>
-                  <button class="stepper-btn is-alert" onclick="App.selectSubStepper(this)"><span class="val">3</span><span class="desc">処置</span></button>
+                <div style="font-size: 11px; font-weight: 700; text-align: center; margin-bottom: 4px; background: var(--bg-paper); padding: 3px;">前足</div>
+                <div class="segmented-stepper" data-group="nail" data-side="front">
+                  <button class="stepper-btn" onclick="App.selectSubStepper(this)"><span class="val">1</span><span class="desc">適切</span></button>
+                  <button class="stepper-btn" onclick="App.selectSubStepper(this)"><span class="val">2</span><span class="desc">やや長め</span></button>
+                  <button class="stepper-btn is-alert" onclick="App.selectSubStepper(this)"><span class="val">3</span><span class="desc">要注意</span></button>
                 </div>
               </div>
               <div>
-                <div style="font-size: 11px; font-weight: 700; text-align: center; margin-bottom: 4px; background: var(--bg-paper); padding: 3px;">左耳 (L)</div>
-                <div class="segmented-stepper" data-ear="left">
-                  <button class="stepper-btn is-active" onclick="App.selectSubStepper(this)"><span class="val">1</span><span class="desc">良好</span></button>
-                  <button class="stepper-btn" onclick="App.selectSubStepper(this)"><span class="val">2</span><span class="desc">赤み</span></button>
-                  <button class="stepper-btn is-alert" onclick="App.selectSubStepper(this)"><span class="val">3</span><span class="desc">処置</span></button>
+                <div style="font-size: 11px; font-weight: 700; text-align: center; margin-bottom: 4px; background: var(--bg-paper); padding: 3px;">後ろ足</div>
+                <div class="segmented-stepper" data-group="nail" data-side="rear">
+                  <button class="stepper-btn" onclick="App.selectSubStepper(this)"><span class="val">1</span><span class="desc">適切</span></button>
+                  <button class="stepper-btn" onclick="App.selectSubStepper(this)"><span class="val">2</span><span class="desc">やや長め</span></button>
+                  <button class="stepper-btn is-alert" onclick="App.selectSubStepper(this)"><span class="val">3</span><span class="desc">要注意</span></button>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Ear Examination（6段階判定・マスター指示 2026-08-29・C-6） -->
+          <div class="clinical-group">
+            <div class="clinical-group__label">
+              <span>③ 耳のチェック (左右判定・6段階)</span>
+              <span class="clinical-group__hint">1〜6レベル</span>
+            </div>
+            <div>
+              <div style="font-size: 11px; font-weight: 700; text-align: center; margin-bottom: 4px; background: var(--bg-paper); padding: 3px;">右耳 (R)</div>
+              <div class="teeth-selector-grid" data-ear="right">
+                <button class="teeth-pill-btn is-active" data-level="1" onclick="App.selectEarLevel(this)"><span class="name">Lv.1 良好</span><span class="sub">問題なし</span></button>
+                <button class="teeth-pill-btn" data-level="2" onclick="App.selectEarLevel(this)"><span class="name">Lv.2 やや汚れ</span><span class="sub">軽い汚れ</span></button>
+                <button class="teeth-pill-btn" data-level="3" onclick="App.selectEarLevel(this)"><span class="name">Lv.3 汚れあり</span><span class="sub">要清掃</span></button>
+                <button class="teeth-pill-btn" data-level="4" onclick="App.selectEarLevel(this)"><span class="name">Lv.4 赤み</span><span class="sub">軽い炎症</span></button>
+                <button class="teeth-pill-btn" data-level="5" onclick="App.selectEarLevel(this)"><span class="name">Lv.5 悪臭</span><span class="sub">要注意</span></button>
+                <button class="teeth-pill-btn" data-level="6" onclick="App.selectEarLevel(this)"><span class="name">Lv.6 要処置</span><span class="sub">通院推奨</span></button>
+              </div>
+            </div>
+            <div style="margin-top: 10px;">
+              <div style="font-size: 11px; font-weight: 700; text-align: center; margin-bottom: 4px; background: var(--bg-paper); padding: 3px;">左耳 (L)</div>
+              <div class="teeth-selector-grid" data-ear="left">
+                <button class="teeth-pill-btn is-active" data-level="1" onclick="App.selectEarLevel(this)"><span class="name">Lv.1 良好</span><span class="sub">問題なし</span></button>
+                <button class="teeth-pill-btn" data-level="2" onclick="App.selectEarLevel(this)"><span class="name">Lv.2 やや汚れ</span><span class="sub">軽い汚れ</span></button>
+                <button class="teeth-pill-btn" data-level="3" onclick="App.selectEarLevel(this)"><span class="name">Lv.3 汚れあり</span><span class="sub">要清掃</span></button>
+                <button class="teeth-pill-btn" data-level="4" onclick="App.selectEarLevel(this)"><span class="name">Lv.4 赤み</span><span class="sub">軽い炎症</span></button>
+                <button class="teeth-pill-btn" data-level="5" onclick="App.selectEarLevel(this)"><span class="name">Lv.5 悪臭</span><span class="sub">要注意</span></button>
+                <button class="teeth-pill-btn" data-level="6" onclick="App.selectEarLevel(this)"><span class="name">Lv.6 要処置</span><span class="sub">通院推奨</span></button>
               </div>
             </div>
 
@@ -1899,14 +1971,14 @@ button, input, textarea, select {
             </div>
           </div>
 
-          <!-- 4. Teeth & Oral Examination -->
+          <!-- 4. Teeth & Oral Examination（口の写真2枚・書き込み可能・マスター指示 2026-08-29・C-10/C-11） -->
           <div class="clinical-group">
             <div class="clinical-group__label">
               <span>④ 口・歯のチェック (6段階判定)</span>
               <span class="clinical-group__hint">頭骨歯列基準</span>
             </div>
 
-            <!-- **実物を繋いだ**（`docs/deferred.md` #1/#14）。`src` が無い `<img>` は
+            <!-- **実物を繋いだ**（放置リスト #1/#14）。`src` が無い `<img>` は
                  絵ではなく `alt` の文字が並ぶだけで、基準図として役に立たない。
                  `teeth-diagram.jpg` は 92KB・台帳が「使用中（トリマー側の画面）」と
                  書いている当のもの（`docs/ASSET-PROVENANCE.md:115`）。 -->
@@ -1943,11 +2015,11 @@ button, input, textarea, select {
             </div>
 
             <div class="photo-pick">
-              <span class="photo-pick__label">歯の写真（1枚）</span>
-              <input type="file" class="photo-pick__input" accept="image/*"
+              <span class="photo-pick__label">口の写真（2枚まで・タップして書き込み可能）</span>
+              <input type="file" class="photo-pick__input" accept="image/*" multiple
                      data-field="photo-teeth" onchange="App.onPhotoPick('teeth', this)">
               <div class="photo-pick__thumbs" data-photo-thumbs="teeth"></div>
-              <div class="photo-pick__note">飼い主のカルテの「歯」の欄に出ます。</div>
+              <div class="photo-pick__note">飼い主のカルテの「歯」の欄に出ます。サムネイルをタップすると丸印を書き込めます。</div>
             </div>
           </div>
 
@@ -1956,9 +2028,9 @@ button, input, textarea, select {
 
         <!-- RIGHT COLUMN -->
         <div class="editor-col-card">
-          
+
           <div class="editor-col-card__header">
-            <h2 class="editor-col-card__title">皮膚スパ & カットスタイル</h2>
+            <h2 class="editor-col-card__title">皮膚スパ &amp; 仕上がり写真</h2>
             <span class="editor-col-card__badge">4面図マーキング</span>
           </div>
 
@@ -1985,31 +2057,10 @@ button, input, textarea, select {
             </div>
           </div>
 
-          <!-- 6. Cut Style -->
+          <!-- 6. 仕上がり写真（カットスタイルの選択欄は削除・マスター指示 2026-08-29・C-12） -->
           <div class="clinical-group">
             <div class="clinical-group__label">
-              <span>⑥ カットスタイル設定</span>
-              <span class="clinical-group__hint">ミリ数・ハサミ仕上げ</span>
-            </div>
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
-              <div style="border: 1px solid var(--border-subtle); padding: 10px; background: var(--bg-paper);">
-                <div style="font-size: 11px; font-weight: 700; margin-bottom: 4px;">ボディバリカン</div>
-                <select data-field="trim-length" style="width: 100%; border: 1px solid var(--border-subtle); padding: 6px; background: #ffffff; font-weight: 700;">
-                  <option>6mm (スッキリ)</option>
-                  <option>8mm (標準ふんわり)</option>
-                  <option>10mm (長め)</option>
-                  <option>ハサミオールシザー</option>
-                </select>
-              </div>
-              <div style="border: 1px solid var(--border-subtle); padding: 10px; background: var(--bg-paper);">
-                <div style="font-size: 11px; font-weight: 700; margin-bottom: 4px;">足回り・お顔</div>
-                <select data-field="trim-style" style="width: 100%; border: 1px solid var(--border-subtle); padding: 6px; background: #ffffff; font-weight: 700;">
-                  <option>テディベアカット</option>
-                  <option>アフロ風マッシュ</option>
-                  <option>足先すっきりブーツ</option>
-                </select>
-              </div>
+              <span>⑥ 仕上がり写真</span>
             </div>
 
             <div class="photo-pick">

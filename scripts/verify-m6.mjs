@@ -135,6 +135,8 @@ try {
     el.value = note;
     el.dispatchEvent(new Event('input', { bubbles: true }));
   }, NOTE);
+  /* コースは必須（マスター指示 2026-08-29・C-9）。選ばないと確定できない。 */
+  await page.selectOption('[data-field="course"]', 'トリミングコース');
 
   /* ── ⑤ 確認 ── */
   await Promise.all([

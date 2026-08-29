@@ -95,6 +95,8 @@ try {
   await ownerPage.close();
 
   /* ── 3. 確定すると下書きは消える（古い記入が蘇らない） ── */
+  /* コースは必須（マスター指示 2026-08-29・C-9）。選ばないと確定できない。 */
+  await page.selectOption('[data-field="course"]', 'トリミングコース');
   await Promise.all([
     page.waitForURL(/\/edit\/p\/[0-9a-f-]+\/[0-9a-f-]+/, { timeout: 30_000 }),
     page.click('.dock-action-wrap .boxbutton'),

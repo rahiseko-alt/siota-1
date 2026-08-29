@@ -25,11 +25,18 @@
 import { startLocalWorker, injectSession, passwordLogin, FIXTURE, LOCAL_PASSWORD } from './lib/local-stack.mjs';
 import { launchChromium } from './lib/chromium.mjs';
 
-/** トリマーが1回の施術で入れる値。**正UI に実在する入力だけ**を使う。 */
+/** トリマーが1回の施術で入れる値。**正UI に実在する入力だけ**を使う。
+    2026-08-29・マスター指示 C-1〜C-12 で足した項目（course/visitDate/bcs/bestWeight/
+    nailFront/nailRear/耳6段階）も、ここに足す（`AGENTS.md` STEP 5 の指示）。 */
 const INPUT = {
   staffNote: '耳の裏を丁寧に洗いました。来月もお待ちしています。',
-  nail: 2,          /* 爪レベル（1〜3） */
-  earRight: 3,
+  course: 'トリミングコース',
+  visitDate: '2026-07-20',
+  bcs: 4,
+  bestWeight: 3.20,
+  nailFront: 2,      /* 爪レベル（1〜3・前足） */
+  nailRear: 3,       /* 爪レベル（1〜3・後ろ足） */
+  earRight: 5,       /* 耳レベル（1〜6） */
   earLeft: 1,
   teeth: 'ちょっと付着💦',   /* 値が日本語。セレクタに連結しない（D-9） */
   weight: 3.42,
@@ -65,6 +72,11 @@ try {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const pageErrors = [];
   page.on('pageerror', (e) => pageErrors.push(e.message));
+  /* コース未選択のまま確定を押すと `alert()` が出る（マスター指示 2026-08-29・C-9）。
+     この検査では必ずコースを選んでから押すので出ないはずだが、
+     出た場合に画面が固まって検査全体が timeout するのを防ぐ（`verify-admin.mjs` と同型）。 */
+  const dialogs = [];
+  page.on('dialog', (d) => { dialogs.push(d.message()); d.dismiss().catch(() => {}); });
 
   /* ── トリマー側: ④カルテ作成に入って記入する ── */
   await page.goto(`${BASE}/my`);
@@ -80,6 +92,16 @@ try {
     if (!note) missing.push('[data-field="staff-note"]');
     else { note.value = input.staffNote; note.dispatchEvent(new Event('input', { bubbles: true })); }
 
+    /* コース（マスター指示 2026-08-29・C-9）。未選択だと確定できない（`commitReport`）。 */
+    const courseEl = document.querySelector('[data-field="course"]');
+    if (!courseEl) missing.push('[data-field="course"]');
+    else { courseEl.value = input.course; courseEl.dispatchEvent(new Event('change', { bubbles: true })); }
+
+    /* 来店日（C-3）。 */
+    const dateEl = document.getElementById('input-visit-date');
+    if (!dateEl) missing.push('#input-visit-date');
+    else { dateEl.value = input.visitDate; dateEl.dispatchEvent(new Event('input', { bubbles: true })); }
+
     const weight = document.getElementById('input-weight');
     if (!weight) missing.push('#input-weight');
     else {
@@ -87,23 +109,40 @@ try {
       weight.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
-    /* 爪は `App.selectStepper(this,'nail',N)` を持つボタン。N で選ぶ（ASCII）。 */
-    const nailBtn = [...document.querySelectorAll('#nail-stepper-wrap .stepper-btn')]
-      .find((el) => (el.getAttribute('onclick') || '').includes(`'nail', ${input.nail}`));
-    if (!nailBtn) missing.push(`nail=${input.nail}`); else nailBtn.click();
+    /* ベスト体重（C-4）。 */
+    const bestWeightEl = document.getElementById('input-best-weight');
+    if (!bestWeightEl) missing.push('#input-best-weight');
+    else {
+      bestWeightEl.value = String(input.bestWeight);
+      bestWeightEl.dispatchEvent(new Event('input', { bubbles: true }));
+    }
 
-    for (const [side, value] of [['right', input.earRight], ['left', input.earLeft]]) {
-      const group = document.querySelector(`[data-ear="${side}"]`);
-      if (!group) { missing.push(`[data-ear="${side}"]`); continue; }
+    /* BCS（C-1）。`App.selectStepper(this,'bcs',N)` を持つボタン。N で選ぶ（ASCII）。 */
+    const bcsBtn = [...document.querySelectorAll('#bcs-stepper-wrap .stepper-btn')]
+      .find((el) => (el.getAttribute('onclick') || '').includes(`'bcs', ${input.bcs}`));
+    if (!bcsBtn) missing.push(`bcs=${input.bcs}`); else bcsBtn.click();
+
+    /* 爪は前足・後ろ足に分かれた（C-5）。`data-group="nail"` `data-side="front"/"rear"`。 */
+    for (const [side, value] of [['front', input.nailFront], ['rear', input.nailRear]]) {
+      const group = document.querySelector(`[data-group="nail"][data-side="${side}"]`);
+      if (!group) { missing.push(`[data-group="nail"][data-side="${side}"]`); continue; }
       const btn = [...group.querySelectorAll('.stepper-btn')]
         .find((el) => (el.querySelector('.val') || {}).textContent === String(value));
+      if (!btn) missing.push(`nail ${side}=${value}`); else btn.click();
+    }
+
+    /* 耳は6段階（C-6）。値は表示文字ではなく `data-level`（ASCII）から選ぶ（`D-9`）。 */
+    for (const [side, value] of [['right', input.earRight], ['left', input.earLeft]]) {
+      const btn = document.querySelector(`[data-ear="${side}"] .teeth-pill-btn[data-level="${value}"]`);
       if (!btn) missing.push(`ear ${side}=${value}`); else btn.click();
     }
 
     /* 歯は**ボタンの表示**で選ぶ。表示と保存値は同じもの——もとは HTML 側で
        保存値を第2引数に二重に書いており、6つのうち3つでずれていた（`#24`・直した）。
-       日本語は**セレクタに連結せず**、中身を読んで比べる（`D-9`）。 */
-    const teethBtn = [...document.querySelectorAll('.teeth-pill-btn')]
+       日本語は**セレクタに連結せず**、中身を読んで比べる（`D-9`）。
+       ⚠️ 耳のグリッドも同じ `.teeth-pill-btn` クラスを使うので、`data-level` を
+       **持たない**ボタン（＝歯のグリッド）だけに絞る。 */
+    const teethBtn = [...document.querySelectorAll('.teeth-pill-btn:not([data-level])')]
       .find((el) => ((el.querySelector('.name') || {}).textContent || '').trim() === input.teeth);
     if (!teethBtn) missing.push(`teeth=${input.teeth}`);
     else {
@@ -163,7 +202,11 @@ try {
     };
     return {
       dogName: at('dog-name'),
+      dogSub: at('dog-sub'),
+      reportDate: at('report-date'),
+      courseBadge: at('course-badge'),
       staffNote: at('staff-note'),
+      bcsText: at('bcs-text'),
       nailPill: at('nail-pill'),
       earPill: at('ear-pill'),
       teethPill: at('teeth-pill'),
@@ -188,7 +231,16 @@ try {
   process.stdout.write('\n── ⑤確認（トリマー）に出ている値 ──\n');
   const staffView = await view(page);
   check('3. 確認: 担当からの一言', staffView.staffNote, INPUT.staffNote);
-  check('4. 確認: 爪', staffView.nailPill, `Lv.${INPUT.nail}`);
+  check('3b. 確認: 来店コース', staffView.courseBadge, INPUT.course);
+  check('3c. 確認: ベスト体重', staffView.dogSub, `目標体重 ${INPUT.bestWeight}kg`);
+  check('3d. 確認: BCS', staffView.bcsText.includes(String(INPUT.bcs)) ? 'ok' : staffView.bcsText, 'ok');
+  /* 来店日（C-3）。**確定を押した日ではなく、来店日入力欄の値**が出ること。
+     `magazine-view.js` は元々「確定した日（`report.reportDate`）」を優先する
+     並びだったため、来店日欄を新設しても画面には確定日が出続ける穴があった
+     （敵対検証・検証2で指摘）。ここを直した証拠として、この行を追加する。 */
+  const expectedDate = INPUT.visitDate.replace(/-/g, '.');
+  check('3e. 確認: 来店日（確定日ではなく）', staffView.reportDate, expectedDate);
+  check('4. 確認: 爪（前足/後ろ足）', staffView.nailPill, `前 Lv.${INPUT.nailFront} / 後 Lv.${INPUT.nailRear}`);
   check('5. 確認: 耳', staffView.earPill, `右 Lv.${INPUT.earRight} / 左 Lv.${INPUT.earLeft}`);
   check('6. 確認: 歯', staffView.teethPill, INPUT.teeth);
   check('7. 確認: 体重', staffView.weightPill, `${INPUT.weight}kg`);
@@ -206,8 +258,14 @@ try {
   process.stdout.write('\n── ⑥飼い主が /my で見るもの ──\n');
   const ownerView = await view(ownerPage);
   check('9. 飼い主: 犬の名前', ownerView.dogName, PET_NAME);
+  check('9b. 飼い主: 来店コース', ownerView.courseBadge, INPUT.course);
+  check('9c. 飼い主: ベスト体重', ownerView.dogSub, `目標体重 ${INPUT.bestWeight}kg`);
+  check('9d. 飼い主: BCS', ownerView.bcsText.includes(String(INPUT.bcs)) ? 'ok' : ownerView.bcsText, 'ok');
+  /* 飼い主側は `backend/js/supabase-auth.js :: renderReport()` が `report.report_date`
+     （確定日・DB列）を渡す別経路なので、⑤とは独立に確かめる必要がある。 */
+  check('9e. 飼い主: 来店日（確定日ではなく）', ownerView.reportDate, expectedDate);
   check('10. 飼い主: 担当からの一言', ownerView.staffNote, INPUT.staffNote);
-  check('11. 飼い主: 爪', ownerView.nailPill, `Lv.${INPUT.nail}`);
+  check('11. 飼い主: 爪（前足/後ろ足）', ownerView.nailPill, `前 Lv.${INPUT.nailFront} / 後 Lv.${INPUT.nailRear}`);
   check('12. 飼い主: 耳', ownerView.earPill, `右 Lv.${INPUT.earRight} / 左 Lv.${INPUT.earLeft}`);
   check('13. 飼い主: 歯', ownerView.teethPill, INPUT.teeth);
   check('14. 飼い主: 体重', ownerView.weightPill, `${INPUT.weight}kg`);
@@ -255,6 +313,8 @@ try {
   const startedEmpty = await page.inputValue('#input-weight');
   check('19. 体重の欄が空で始まる（見本値が入っていない）', startedEmpty === '' ? 'ok' : startedEmpty, 'ok');
   await page.fill('[data-field="staff-note"]', '体重は量っていない回。');
+  /* コースは必須（C-9）。選ばないと確定の `alert()` に止められる。 */
+  await page.selectOption('[data-field="course"]', INPUT.course);
   await Promise.all([
     page.waitForURL(/\/edit\/p\/[0-9a-f-]{36}\/[0-9a-f-]{36}$/, { timeout: 30_000 }),
     page.click('.dock-action-wrap .boxbutton'),
@@ -273,6 +333,27 @@ try {
   const nwWeightText = nwOwnerView.weightPill;
   check('20. 飼い主の画面に、量っていない体重が出ない',
     /\d/.test(nwWeightText) ? `出た: "${nwWeightText}"` : 'ok', 'ok');
+
+  /* 21: **コース未選択では確定できない**（マスター指示 2026-08-29・C-9）。
+     `<select required>` は見た目だけの印なので、`commitReport()` 側の
+     機械強制を実際に押して確かめる——コードを読むだけでは「本当に止まるか」
+     は分からない（`D-12` と同じ発想を必須チェックに当てる）。 */
+  const NO_COURSE_PET = `NC${Math.random().toString(36).slice(2, 7)}`;
+  const ncRes = await fetch(`${BASE}/api/owners/${FIXTURE.ownerAOwnerId}/pets`, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ ownerId: FIXTURE.ownerAOwnerId, name: NO_COURSE_PET, template: 'ponchi' }),
+  });
+  const ncPet = (await ncRes.json()).pet;
+  await page.goto(`${BASE}/edit/p/${ncPet.id}`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('#screen-3.is-active', { timeout: 20_000 });
+  await page.waitForTimeout(1_000);
+  const dialogsBefore = dialogs.length;
+  const urlBefore = page.url();
+  await page.click('.dock-action-wrap .boxbutton');
+  await page.waitForTimeout(1_000);
+  check('21. コースを選ばずに確定を押すと、案内が出て画面が進まない',
+    dialogs.length > dialogsBefore && page.url() === urlBefore ? 'ok'
+      : `dialogs=${dialogs.length - dialogsBefore} url変化=${page.url() !== urlBefore}`, 'ok');
 
   check('18. アプリ由来のエラーが無い', pageErrors.length === 0 ? 'ok' : pageErrors.join(' | '), 'ok');
 } catch (error) {

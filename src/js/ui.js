@@ -22,14 +22,21 @@ const App = {
 
   /* ④カルテ作成で押された値の控え。**押された時点で入る**（DOM から読み直さない）。
      初期値は「まだ触っていない」を表す。触っていないものを 0 や既定値で埋めない
-     ——書いていないことが書いてあるように見える（`D-10`）。 */
-  form: { nail: 0, ear: { right: 0, left: 0 }, teeth: '', weight: 0 },
+     ——書いていないことが書いてあるように見える（`D-10`）。
+     `nail` は前足・後ろ足を分けて記録する（マスター指示 2026-08-29・C-5）。 */
+  form: {
+    nail: { front: 0, rear: 0 }, ear: { right: 0, left: 0 }, teeth: '', weight: 0,
+    bcs: 0, bestWeight: 0,
+  },
+
+  /* 口の写真1枚あたりの上限枚数（マスター指示 2026-08-29・C-11）。 */
+  MAX_TEETH_PHOTOS: 2,
 
   /* 選ばれた写真。**中身は `data:image/jpeg` か、既に上がっている `asset://{id}`。**
      前者は `saveReport`/`reviseReport` が実体化し（`replaceDataUrlAssets`）、
      後者は**そのまま出し直す**——直しのときに落とすと、飼い主に届いていた写真が消える。
-     `trimming` は配列（1枚目が表紙・残りはギャラリー）、耳と歯は1枚。 */
-  photos: { trimming: [], ear: '', teeth: '' },
+     `trimming` と `teeth` は配列（`teeth` は最大2枚・C-11）、耳は1枚のまま。 */
+  photos: { trimming: [], ear: '', teeth: [] },
 
   /* 下書きの居場所。`null` は「まだ1度も保存していない」。 */
   draftPetId: null,
@@ -235,25 +242,6 @@ const App = {
       });
   },
 
-  /**
-   * `trimming.comment` から、カットの長さとスタイルの選択を戻す。
-   *
-   * **文字を `' / '` で割って入れるだけにはしない。** それだと選択肢に無い言葉まで
-   * `select.value` に代入しようとして、静かに空になる（`select` は無い値を拒む）。
-   * **選択肢そのものと突き合わせて、一致したものだけ選ぶ。**
-   * 一致しなければ触らない——戻せないものを推測で埋めない。
-   */
-  restoreTrimSelects(comment) {
-    const parts = String(comment || '').split(' / ').map((part) => part.trim()).filter(Boolean);
-    if (parts.length === 0) return;
-    for (const selector of ['[data-field="trim-length"]', '[data-field="trim-style"]']) {
-      const el = document.querySelector(selector);
-      if (!el || !el.options) continue;
-      const hit = Array.from(el.options).find((opt) => opt.value && parts.includes(opt.value));
-      if (hit) el.value = hit.value;
-    }
-  },
-
   /** 下書きを画面に戻す。`extractReport()` の逆。 */
   applyReport(data) {
     const set = (selector, value) => {
@@ -261,49 +249,63 @@ const App = {
       if (el && value != null) el.value = value;
     };
     set('[data-field="staff-note"]', data.staffNote || '');
-    /* **カットの長さ・スタイルを戻す**（`docs/deferred.md` #26）。
-       出すときは `[length, style].join(' / ')` で `trimming.comment` に**まとめて**
-       入れている（`extractReport`）。戻さないままにしていたが、それだと
-       「カルテ修正」（`?revise=1`・`showReport`）で選び直さなかったとき、
-       `extractReport` が `trimming.comment` を出さず、**すでに飼い主に届いていた
-       カット内容が黙って消える**。下書き再開だけの話ではなかった。 */
-    this.restoreTrimSelects((data.trimming || {}).comment);
+    set('[data-field="course"]', data.course || '');
+    /* **来店日を戻す**（マスター指示 2026-08-29・C-3）。`isoDate`/`date` のどちらかに
+       入っている（⑥の受け手は両方読む・`magazine-view.js`）。 */
+    set('#input-visit-date', data.isoDate || data.date || '');
     const weight = (data.weights || [])[0];
     if (weight && weight.kg) {
       set('#input-weight', weight.kg);
       this.onWeightChange(weight.kg);
     }
-    const nail = (data.nail || {}).level;
-    if (nail) {
-      const btn = [...document.querySelectorAll('#nail-stepper-wrap .stepper-btn')]
-        .find((el) => (el.getAttribute('onclick') || '').includes(`'nail', ${nail}`));
+    if (data.bestWeight) {
+      set('#input-best-weight', data.bestWeight);
+      this.onBestWeightChange(data.bestWeight);
+    }
+    const bcs = data.bcs;
+    if (bcs) {
+      const btn = [...document.querySelectorAll('#bcs-stepper-wrap .stepper-btn')]
+        .find((el) => (el.getAttribute('onclick') || '').includes(`'bcs', ${bcs}`));
       if (btn) btn.click();
     }
-    for (const side of ['right', 'left']) {
-      const value = (data.ear || {})[side];
+    /* 爪は前足・後ろ足に分けて記録する（マスター指示 2026-08-29・C-5）。
+       ⚠️ 移行前の記録は `nail.level`（単一値）で保存されている。新しい形
+       （`nail.front` / `nail.rear`）が無ければ、そちらへは戻さない
+       （無い値を推測で埋めない＝`D-10`）。 */
+    for (const side of ['front', 'rear']) {
+      const value = (data.nail || {})[side];
       if (!value) continue;
-      const group = document.querySelector(`[data-ear="${side}"]`);
+      const group = document.querySelector(`[data-group="nail"][data-side="${side}"]`);
       if (!group) continue;
       const btn = [...group.querySelectorAll('.stepper-btn')]
         .find((el) => (el.querySelector('.val') || {}).textContent === String(value));
+      if (btn) btn.click();
+    }
+    /* 耳は6段階（マスター指示 2026-08-29・C-6）。段は `data-level` の数字で持つ
+       （日本語の表示文字列に依存しない＝`D-9`）。 */
+    for (const side of ['right', 'left']) {
+      const value = (data.ear || {})[side];
+      if (!value) continue;
+      const btn = document.querySelector(`[data-ear="${side}"] .teeth-pill-btn[data-level="${value}"]`);
       if (btn) btn.click();
     }
     const teeth = (data.teeth || {}).status;
     if (teeth) {
       /* 日本語はセレクタに連結しない。中身を読んで比べる（`D-9`）。
          表示＝保存値なので、表示で探せる。 */
-      const btn = [...document.querySelectorAll('.teeth-pill-btn')]
+      const btn = [...document.querySelectorAll('.teeth-pill-btn:not([data-level])')]
         .find((el) => ((el.querySelector('.name') || {}).textContent || '').trim() === teeth);
       if (btn) btn.click();
     }
     /* **写真を戻す。** 下書きの再開でも「カルテ修正」でも、ここで戻さなければ
        次の確定で**落ちる**——飼い主に届いていた写真が消える。中身は
-       `asset://{id}`（保存済み）のことが多く、絵にはできないが**そのまま出し直せる**。 */
-    this.photos = { trimming: [], ear: '', teeth: '' };
+       `asset://{id}`（保存済み）のことが多く、絵にはできないが**そのまま出し直せる**。
+       `teeth` は最大2枚の配列になった（マスター指示 2026-08-29・C-11）。 */
+    this.photos = { trimming: [], ear: '', teeth: [] };
     const keep = (value) => (typeof value === 'string' && value.trim() !== '' ? value : '');
     this.photos.trimming = ((data.trimming || {}).photos || []).filter((v) => keep(v));
     this.photos.ear = keep((data.ear || {}).photo);
-    this.photos.teeth = keep((data.teeth || {}).photo);
+    this.photos.teeth = ((data.teeth || {}).photos || []).filter((v) => keep(v)).slice(0, this.MAX_TEETH_PHOTOS);
     for (const kind of ['trimming', 'ear', 'teeth']) this.renderPhotoThumbs(kind);
 
     if (Array.isArray(data.__marks) && data.__marks.length > 0) {
@@ -648,43 +650,59 @@ const App = {
     alert(`【過去カルテ表示】${dateStr} の施術記録に切り替えました。`);
   },
 
+  /* `nail`（前足/後ろ足）は分割済みで、いまここを通るのは `bcs` だけ。
+     `this.form[type]` に**そのまま代入する型**（数値1個）にのみ使うこと。 */
   selectStepper(btn, type, val) {
     const parent = btn.parentElement;
     if (parent) {
       parent.querySelectorAll('.stepper-btn').forEach(b => b.classList.remove('is-active'));
       btn.classList.add('is-active');
     }
-    
-    /* 掴んだ値を控える。`is-active` から読み直す手もあるが、爪の表示は
-       「1. 適切」のように**日本語混じり**で、数字だけを取り出す規則が要る。
-       押された時点の値をそのまま持つほうが、規則を1つ減らせる。 */
     this.form[type] = val;
-
-    if (type === 'nail') {
-      const dock = document.getElementById('editor-bottom-dock');
-      const statusIcon = document.getElementById('dock-status-icon');
-      const statusText = document.getElementById('dock-status-text');
-      const gotoBtn = document.getElementById('btn-dock-goto');
-
-      if (dock) dock.classList.remove('has-incomplete');
-      if (statusIcon) statusIcon.textContent = '✓';
-      if (statusText) statusText.textContent = '全項目入力完了 (6/6)';
-      if (gotoBtn) gotoBtn.style.display = 'none';
-    }
   },
 
-  /* 耳は左右で同じ形の段が2つ並ぶ。押されたボタンだけでは**どちらの耳か分からない**
-     ので、囲みに付けた `data-ear`（`right` / `left`・ASCII。`D-9`）で見分ける。 */
+  /* 前足/後ろ足の爪、左右の耳……**同じ形の段が2つ並ぶ項目**で使う。
+     押されたボタンだけでは**どの組か分からない**ので、囲みに付けた
+     `data-group`（例: `nail`）と `data-side`（例: `front`/`rear`・ASCII。`D-9`）で見分ける。
+     `this.form[group]` が `{ side: number, ... }` の形を持っていることが前提。 */
   selectSubStepper(btn) {
     const parent = btn.parentElement;
     if (parent) {
       parent.querySelectorAll('.stepper-btn').forEach(b => b.classList.remove('is-active'));
       btn.classList.add('is-active');
-      const side = parent.dataset && parent.dataset.ear;
-      if (side === 'right' || side === 'left') {
+      const group = parent.dataset && parent.dataset.group;
+      const side = parent.dataset && parent.dataset.side;
+      if (group && side && this.form[group] && typeof this.form[group] === 'object') {
         const val = btn.querySelector('.val');
-        this.form.ear[side] = Number((val && val.textContent) || '') || 0;
+        this.form[group][side] = Number((val && val.textContent) || '') || 0;
+
+        /* 爪は前足・後ろ足の**両方**を選んで初めて完了扱いにする
+           （マスター指示 2026-08-29・C-5。以前は爪1系統を選んだ時点で完了にしていた）。 */
+        if (group === 'nail' && this.form.nail.front && this.form.nail.rear) {
+          const dock = document.getElementById('editor-bottom-dock');
+          const statusIcon = document.getElementById('dock-status-icon');
+          const statusText = document.getElementById('dock-status-text');
+          const gotoBtn = document.getElementById('btn-dock-goto');
+          if (dock) dock.classList.remove('has-incomplete');
+          if (statusIcon) statusIcon.textContent = '✓';
+          if (statusText) statusText.textContent = '全項目入力完了 (6/6)';
+          if (gotoBtn) gotoBtn.style.display = 'none';
+        }
       }
+    }
+  },
+
+  /* 耳の6段階（マスター指示 2026-08-29・C-6）。歯と同じグリッド見た目を使うが、
+     押した先が**どちらの耳か**を `data-ear` から見分け、値は表示文字ではなく
+     `data-level`（ASCII の数字・`D-9`）から取る。 */
+  selectEarLevel(btn) {
+    const group = btn.closest('[data-ear]');
+    if (!group) return;
+    group.querySelectorAll('.teeth-pill-btn').forEach((b) => b.classList.remove('is-active'));
+    btn.classList.add('is-active');
+    const side = group.dataset.ear;
+    if (side === 'right' || side === 'left') {
+      this.form.ear[side] = Number(btn.dataset.level || '') || 0;
     }
   },
 
@@ -727,6 +745,12 @@ const App = {
         badge.textContent = `${diff}g ▼`;
       }
     }
+  },
+
+  /* ベスト体重（目標体重）。⑥側の受け手は既にあり、この値をそのまま渡すだけ
+     （マスター指示 2026-08-29・C-4）。 */
+  onBestWeightChange(val) {
+    this.form.bestWeight = parseFloat(val) || 0;
   },
 
   toggleEditorVoice() {
@@ -850,37 +874,53 @@ const App = {
     const staffNote = text('[data-field="staff-note"]');
     if (staffNote) report.staffNote = staffNote;
 
-    if (this.form.nail) report.nail = { level: this.form.nail };
+    const course = text('[data-field="course"]');
+    if (course) report.course = course;
+
+    /* 来店日（マスター指示 2026-08-29・C-3）。`report_date`（DB 列）は触らない
+       ——トリマーのトークンでは書き換えられない設計のまま（`#33`）。
+       体重の時系列は、この入力値を基準にする。未入力なら押した日のまま
+       （従来どおり・`today()`）。⑥は `isoDate` と `date` の両方を読む
+       （`magazine-view.js:550`）ので両方に入れる。 */
+    const visitDate = text('#input-visit-date');
+    if (visitDate) {
+      report.date = visitDate;
+      report.isoDate = visitDate;
+    }
+
+    if (this.form.bcs) report.bcs = this.form.bcs;
+    if (this.form.bestWeight) report.bestWeight = this.form.bestWeight;
+
+    /* 爪は前足・後ろ足を分けて記録する（マスター指示 2026-08-29・C-5）。 */
+    if (this.form.nail.front || this.form.nail.rear) {
+      report.nail = { front: this.form.nail.front, rear: this.form.nail.rear };
+    }
     /* **写真だけでもキーを出す。** レベルが未選択でも、撮った写真は届けたい。
        逆に、どちらも無ければキーごと出さない（空の器を出さない）。 */
     if (this.form.ear.right || this.form.ear.left || this.photos.ear) {
       report.ear = { right: this.form.ear.right, left: this.form.ear.left };
       if (this.photos.ear) report.ear.photo = this.photos.ear;
     }
-    if (this.form.teeth || this.photos.teeth) {
+    if (this.form.teeth || this.photos.teeth.length > 0) {
       report.teeth = {};
       if (this.form.teeth) report.teeth.status = this.form.teeth;
-      if (this.photos.teeth) report.teeth.photo = this.photos.teeth;
+      /* 口の写真は最大2枚（マスター指示 2026-08-29・C-11）。 */
+      if (this.photos.teeth.length > 0) report.teeth.photos = [...this.photos.teeth];
     }
     /* **`ym` を必ず添える。** ⑥は `weights` を `w.ym` が在るものだけに絞ってから描く
        （`magazine-view.js:575`）ので、`kg` だけ出すと**体重は「未記録」になる**——
-       書いたのに届かない（`F-20260821-12`/`-13` の型）。月は施術日から作る。 */
-    if (this.form.weight) report.weights = [{ ym: this.today().slice(0, 7), kg: this.form.weight }];
+       書いたのに届かない（`F-20260821-12`/`-13` の型）。**月は来店日から作る**
+       （マスター指示 2026-08-29・C-3。未入力なら押した日のまま）。 */
+    if (this.form.weight) {
+      const baseDate = visitDate || this.today();
+      report.weights = [{ ym: baseDate.slice(0, 7), date: baseDate, kg: this.form.weight }];
+    }
 
-    /* **⑥が読むのは `trimming.comment` と `trimming.photos` だけ**（`magazine-view.js:582`）。
-       `length` / `style` という名前で出しても、どこにも表示されない。
-       画面に在る2つの select は「カットの長さ」と「スタイル」なので、
-       ⑥が出す場所——トリミングの一言——にまとめて入れる。 */
-    const length = text('[data-field="trim-length"]');
-    const style = text('[data-field="trim-style"]');
-    const trimming = [length, style].filter(Boolean).join(' / ');
-    /* **写真は `trimming.photos` へ。** ⑥はここの1枚目を表紙（hero）にし、
-       残りをギャラリーに並べる（`magazine-view.js:549,580`）。
-       だから hero 用の入力を別に作らない——1つの入口が2か所に効く。 */
-    if (trimming || this.photos.trimming.length > 0) {
-      report.trimming = {};
-      if (trimming) report.trimming.comment = trimming;
-      if (this.photos.trimming.length > 0) report.trimming.photos = [...this.photos.trimming];
+    /* ⑥が読むのは `trimming.comment` と `trimming.photos`（`magazine-view.js:582`）。
+       カットの長さ・スタイルの選択欄は削除した（マスター指示 2026-08-29・C-12）ので、
+       `comment` はもう作らない。写真の入口はそのまま残す。 */
+    if (this.photos.trimming.length > 0) {
+      report.trimming = { photos: [...this.photos.trimming] };
     }
 
     /* 犬体図の印。**印が無ければキーごと出さない**（白紙の絵を「所見あり」にしない）。
@@ -903,6 +943,15 @@ const App = {
      失敗したら**画面を移さず、理由を出す。** 黙って進むと「保存しました」と
      出たのに残っていない、が起きる（`D-2`・`bad-scenarios-F3` #1）。 */
   async commitReport() {
+    /* コースは来店ごとに変わるので、カルテ作成のたびに選択必須にする
+       （マスター指示 2026-08-29・C-9）。`<select required>` は HTML の見た目だけの
+       印なので、確定の直前にもう一度ここで確かめる——ボタンを直接叩かれても抜けない。 */
+    const courseEl = document.querySelector('[data-field="course"]');
+    if (courseEl && !courseEl.value) {
+      globalThis.alert('来店コースを選択してください。');
+      courseEl.focus();
+      return;
+    }
     const staff = globalThis.TrimmerSupabaseStaff;
     const context = globalThis.__REPORT_CONTEXT__;
     if (!staff || !staff.saveReport || !context || !context.petId) {
@@ -969,16 +1018,29 @@ const App = {
     return canvas.toDataURL('image/jpeg', 0.8);
   },
 
+  /* `trimming` と `teeth` は配列（複数枚）、`ear` は文字列（1枚）。
+     配列かどうかで分岐すれば、新しく配列になったキーにも自動で対応する。 */
+  isMultiPhoto(kind) {
+    return Array.isArray(this.photos[kind]);
+  },
+
   /* ファイルが選ばれたとき。**1枚でも失敗したら理由を出す**——黙って減ると、
-     トリマーは「入れたつもり」で確定してしまう（`D-2`）。 */
+     トリマーは「入れたつもり」で確定してしまう（`D-2`）。
+     `teeth` は上限が2枚（マスター指示 2026-08-29・C-11）——**超えた分は理由を出して捨てる**。
+     黙って先頭2枚だけ使うと、選んだのに届かない写真が出る。 */
   async onPhotoPick(kind, input) {
     const files = [...(input.files || [])];
     input.value = '';
     if (files.length === 0) return;
+    const limit = kind === 'teeth' ? this.MAX_TEETH_PHOTOS : Infinity;
     for (const file of files) {
+      if (this.isMultiPhoto(kind) && this.photos[kind].length >= limit) {
+        globalThis.alert(`「${file.name}」は追加できませんでした。この項目は最大${limit}枚までです。`);
+        continue;
+      }
       try {
         const dataUrl = await this.shrinkImage(file);
-        if (kind === 'trimming') this.photos.trimming.push(dataUrl);
+        if (this.isMultiPhoto(kind)) this.photos[kind].push(dataUrl);
         else this.photos[kind] = dataUrl;
       } catch (error) {
         globalThis.alert(error.message);
@@ -992,18 +1054,20 @@ const App = {
   },
 
   removePhoto(kind, index) {
-    if (kind === 'trimming') this.photos.trimming.splice(index, 1);
+    if (this.isMultiPhoto(kind)) this.photos[kind].splice(index, 1);
     else this.photos[kind] = '';
     this.renderPhotoThumbs(kind);
     this.saveDraft();
   },
 
   /* 選んだものを見せる。**`asset://` は絵にできない**（実体は認証つきでしか取れない）ので、
-     「保存済み」と字で出す。消せることは同じ——押せば次の確定で落ちる。 */
+     「保存済み」と字で出す。消せることは同じ——押せば次の確定で落ちる。
+     `kind === 'teeth'` の `data:` 画像だけは、タップで書き込み（お絵描き）を開ける
+     （マスター指示 2026-08-29・C-10。`asset://` は復号していないので対象外）。 */
   renderPhotoThumbs(kind) {
     const box = document.querySelector(`[data-photo-thumbs="${kind}"]`);
     if (!box) return;
-    const list = kind === 'trimming' ? this.photos.trimming : [this.photos[kind]].filter(Boolean);
+    const list = this.isMultiPhoto(kind) ? this.photos[kind] : [this.photos[kind]].filter(Boolean);
     box.textContent = '';
     list.forEach((src, index) => {
       const cell = document.createElement('div');
@@ -1012,6 +1076,11 @@ const App = {
         const img = document.createElement('img');
         img.src = src;
         img.alt = '';
+        if (kind === 'teeth') {
+          img.style.cursor = 'pointer';
+          img.title = 'タップして書き込む';
+          img.onclick = () => this.openAnnotate(kind, index);
+        }
         cell.appendChild(img);
       } else {
         const kept = document.createElement('span');
@@ -1027,6 +1096,94 @@ const App = {
       cell.appendChild(drop);
       box.appendChild(cell);
     });
+  },
+
+  /* 口の写真への書き込み（マスター指示 2026-08-29・C-10）。
+     犬体4面図（`#marking-canvas`）とは別の、写真1枚専用の使い捨てキャンバスを
+     その場で作る——`#marking-canvas` は全画面で1個だけの決め打ちで、
+     複数の写真スロットには使えないため。フリーハンドで丸を描き、
+     「保存」で元の写真に焼き込む（差し替え）。 */
+  openAnnotate(kind, index) {
+    const src = this.photos[kind][index];
+    if (!src || !src.startsWith('data:')) return;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'annotate-overlay';
+    overlay.innerHTML = `
+      <div class="annotate-box">
+        <div class="annotate-canvas-wrap"><canvas class="annotate-canvas"></canvas></div>
+        <div class="annotate-actions">
+          <button type="button" class="btn-inline annotate-clear">やり直す</button>
+          <button type="button" class="btn-inline annotate-cancel">キャンセル</button>
+          <button type="button" class="btn-inline annotate-save">保存する</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    const canvas = overlay.querySelector('.annotate-canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    let strokes = [];
+    let drawing = false;
+
+    const redraw = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = '#e0392b';
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      for (const stroke of strokes) {
+        if (stroke.length < 2) continue;
+        ctx.beginPath();
+        ctx.moveTo(stroke[0].x, stroke[0].y);
+        for (const pt of stroke.slice(1)) ctx.lineTo(pt.x, pt.y);
+        ctx.stroke();
+      }
+    };
+
+    const pointFromEvent = (event) => {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: (event.clientX - rect.left) * (canvas.width / rect.width),
+        y: (event.clientY - rect.top) * (canvas.height / rect.height),
+      };
+    };
+
+    img.onload = () => {
+      const long = Math.max(img.naturalWidth, img.naturalHeight) || 1;
+      const scale = long > 900 ? 900 / long : 1;
+      canvas.width = Math.round((img.naturalWidth || 1) * scale);
+      canvas.height = Math.round((img.naturalHeight || 1) * scale);
+      redraw();
+    };
+    img.src = src;
+
+    canvas.addEventListener('pointerdown', (event) => {
+      drawing = true;
+      strokes.push([pointFromEvent(event)]);
+    });
+    canvas.addEventListener('pointermove', (event) => {
+      if (!drawing) return;
+      strokes[strokes.length - 1].push(pointFromEvent(event));
+      redraw();
+    });
+    const stopDrawing = () => { drawing = false; };
+    canvas.addEventListener('pointerup', stopDrawing);
+    canvas.addEventListener('pointerleave', stopDrawing);
+
+    const close = () => overlay.remove();
+    overlay.querySelector('.annotate-cancel').onclick = close;
+    overlay.querySelector('.annotate-clear').onclick = () => { strokes = []; redraw(); };
+    overlay.querySelector('.annotate-save').onclick = () => {
+      /* 印を焼き込んだ1枚として保存し直す。書き込みは元の写真に**戻せない形で**
+         合成する——このリポジトリの犬体図と同じ「印は最終的に画像として出す」方式
+         （`exportBodyMarking()` と同型）。 */
+      this.photos[kind][index] = canvas.toDataURL('image/jpeg', 0.85);
+      this.renderPhotoThumbs(kind);
+      this.saveDraft();
+      close();
+    };
   },
 
   exportBodyMarking() {

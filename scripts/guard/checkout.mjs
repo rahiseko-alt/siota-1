@@ -95,8 +95,13 @@ if (skipBuild) {
     /* origin/master の中身だけを取り出す。node_modules は付いてこないので、
        次のセッション（別コンテナ）と同じ条件になる。 */
     execSync(`git worktree add --detach -q "${tmp}" origin/master`, { cwd: ROOT, stdio: 'ignore' });
+    /* `npm run check` の1本目（`plan-read.mjs`）は「このセッションが `plan.md` を
+       読んだか」を見る関所で、**CI では見ない**（実際の CI に `.plan-read` は無い）。
+       ここは CI と同じ「まっさらな作業場」を模しているのに `CI` を立てていなかった
+       ため、`npm run check` が毎回 plan-read で止まり、**この関所自体が壊れていた**
+       （本物の CI では通るのに、ここでは常に赤になる）。実際の CI 環境に合わせる。 */
     const run = (label, cmd) => {
-      const code = quiet(cmd, { cwd: tmp });
+      const code = quiet(cmd, { cwd: tmp, env: { ...process.env, CI: 'true' } });
       results.push(`${label}: EXIT ${code}`);
       return code === 0;
     };

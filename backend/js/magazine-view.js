@@ -50,6 +50,7 @@ const TEMPLATE = `
           <div style="font-size:11px;font-weight:700;letter-spacing:0.16em;color:var(--ink-muted);text-transform:uppercase;margin-bottom:6px">Trimming &amp; Spa Report</div>
           <h2 class="magazine-dog-title" data-view="dog-name"></h2>
           <div class="magazine-dog-sub" data-view="dog-sub"></div>
+          <div class="magazine-course-badge" data-view="course-badge" hidden></div>
         </div>
       </div>
     </div>
@@ -100,7 +101,8 @@ const TEMPLATE = `
       </div>
       <svg class="wave-separator-svg" viewBox="0 0 1000 12" preserveAspectRatio="none"><path d="M0,6 Q250,12 500,6 T1000,6"/></svg>
       <div class="wave-card-body">
-        <p style="font-size:13.5px;line-height:1.8;color:var(--ink-body)" data-view="nail-comment"></p>
+        <div class="wave-body-grid-2col" data-view="nail-sides"></div>
+        <p style="font-size:13.5px;line-height:1.8;color:var(--ink-body);margin-top:8px" data-view="nail-comment"></p>
       </div>
     </div>
 
@@ -138,7 +140,7 @@ const TEMPLATE = `
       <svg class="wave-separator-svg" viewBox="0 0 1000 12" preserveAspectRatio="none"><path d="M0,6 Q250,12 500,6 T1000,6"/></svg>
       <div class="wave-card-body">
         <div class="wave-body-grid-2col">
-          <div class="wave-body-img-frame" data-view="teeth-image-frame" hidden><img data-view="teeth-image" alt="歯のチェック"></div>
+          <div class="gallery-mosaic-grid" data-view="teeth-gallery"></div>
           <p style="font-size:13.5px;line-height:1.8;color:var(--ink-body)" data-view="teeth-comment"></p>
         </div>
       </div>
@@ -157,6 +159,7 @@ const TEMPLATE = `
       </div>
       <svg class="wave-separator-svg" viewBox="0 0 1000 12" preserveAspectRatio="none"><path d="M0,6 Q250,0 500,6 T1000,6"/></svg>
       <div class="wave-card-body">
+        <p style="font-size:13.5px;line-height:1.8;color:var(--ink-body);margin-bottom:8px" data-view="bcs-text" hidden></p>
         <div data-view="weight-graph"></div>
       </div>
     </div>
@@ -236,6 +239,7 @@ const STYLE = `
 .magazine-hero-side-card{display:flex;flex-direction:column;justify-content:space-between;padding:24px;background:var(--bg-paper);border:1px solid var(--border-subtle)}
 .magazine-dog-title{font-family:var(--font-serif) !important;font-size:30px !important;font-weight:700;letter-spacing:.08em;color:var(--ink-primary);line-height:1.2;margin-bottom:8px !important}
 .magazine-dog-sub{font-size:13px;color:var(--ink-secondary)}
+.magazine-course-badge{display:inline-block;margin-top:8px;padding:4px 10px;font-size:11px;font-weight:700;letter-spacing:.04em;background:var(--bg-paper);border:1px solid var(--border-subtle)}
 .magazine-letter-section{padding:28px 24px;background:var(--bg-paper);border-left:3px solid var(--ink-primary);margin-bottom:40px}
 .magazine-letter-title{font-family:var(--font-serif) !important;font-size:18px !important;font-weight:600;letter-spacing:.08em;color:var(--ink-primary);margin-bottom:12px !important}
 .magazine-letter-body{font-size:14.5px !important;line-height:2.1 !important;color:var(--ink-body);letter-spacing:.03em;white-space:pre-wrap;margin-bottom:0 !important}
@@ -423,8 +427,8 @@ function renderWeightGraph(root, weights, bestWeight) {
   host.append(wrap);
 }
 
-function renderGallery(root, photos) {
-  const host = root.querySelector('[data-view="trimming-gallery"]');
+function renderGallery(root, photos, view = 'trimming-gallery') {
+  const host = root.querySelector(`[data-view="${view}"]`);
   if (!host) return;
   host.replaceChildren();
   const list = (photos || []).filter((src) => typeof src === 'string' && src.trim() !== '');
@@ -547,9 +551,20 @@ export function renderMagazine(container, report, opts = {}) {
   container.innerHTML = TEMPLATE;
   const data = report.data || {};
 
-  setText(container, 'report-date', `${fmtDate(report.reportDate || data.isoDate || data.date)}`);
+  /* 来店日（マスター指示 2026-08-29・C-3）を時系列基準にする。`report.reportDate`
+     は確定を押した日（`report_date` 列・migration 回避のため触っていない）で、
+     `data.isoDate`/`data.date` が来店日入力欄からの値。**来店日が有れば来店日を
+     優先する**——確定日を先に置くと、来店日入力の意味が画面に出ない
+     （検証2・敵対検証で指摘）。古い報告（来店日入力欄が無かった頃）には
+     `data.isoDate`/`data.date` が無いので、その場合だけ確定日にフォールバックする。 */
+  setText(container, 'report-date', `${fmtDate(data.isoDate || data.date || report.reportDate)}`);
   setText(container, 'dog-name', esc(report.petName || data.pet));
   setText(container, 'dog-sub', data.bestWeight ? `目標体重 ${data.bestWeight}kg` : '');
+
+  /* 来店コース（マスター指示 2026-08-29・C-9）。未記入（旧いカルテ等）は帯ごと隠す（`D-10`）。 */
+  const course = esc(data.course).trim();
+  const courseBadge = setText(container, 'course-badge', course);
+  if (courseBadge) courseBadge.hidden = course === '';
 
   const heroPhoto = firstNonEmpty(data.heroPhotos) || firstNonEmpty((data.trimming || {}).photos);
   setImage(container, 'hero-photo-frame', 'hero-photo', heroPhoto);
@@ -563,23 +578,49 @@ export function renderMagazine(container, report, opts = {}) {
   setText(container, 'skin-pill', skinCount > 0 ? `記録 ${skinCount}件` : '記録なし');
   setImage(container, 'skin-image-frame', 'skin-image', data.bodyMarkingImage);
 
-  const nailLevel = Number(data.nail && data.nail.level) || 0;
-  setText(container, 'nail-pill', nailLevel > 0 ? `Lv.${nailLevel}` : '未記録');
+  /* 爪は前足・後ろ足を分けて記録する（マスター指示 2026-08-29・C-5）。
+     ⚠️ 移行前の旧いカルテは `nail.level`（単一値）のまま——**推測で埋めない**。
+     前足・後ろ足のどちらも無ければ、旧い形の `level` を「前足」の値として出す
+     （旧いカルテを空欄扱いにしないための、片方向だけの読み替え）。 */
+  const nailFront = Number(data.nail && data.nail.front) || Number(data.nail && data.nail.level) || 0;
+  const nailRear = Number(data.nail && data.nail.rear) || 0;
+  const nailHost = container.querySelector('[data-view="nail-sides"]');
+  if (nailHost) {
+    nailHost.replaceChildren();
+    const mk = (label, level) => {
+      const div = document.createElement('div');
+      div.style.cssText = 'font-size:12.5px;background:var(--bg-paper);padding:10px;border:1px solid var(--border-subtle);text-align:center';
+      div.textContent = `${label}: ${level > 0 ? `Lv.${level}` : '未記録'}`;
+      return div;
+    };
+    nailHost.append(mk('前足', nailFront), mk('後ろ足', nailRear));
+  }
+  setText(container, 'nail-pill', nailFront || nailRear ? `前 Lv.${nailFront || '-'} / 後 Lv.${nailRear || '-'}` : '未記録');
   setText(container, 'nail-comment', esc(data.nail && data.nail.comment).trim() || '記録がありません。');
 
+  /* 耳は6段階（マスター指示 2026-08-29・C-6）。表示の形は従来どおり Lv.N。 */
   const earRight = Number(data.ear && data.ear.right) || 0;
   const earLeft = Number(data.ear && data.ear.left) || 0;
   setText(container, 'ear-pill', earRight || earLeft ? `右 Lv.${earRight || '-'} / 左 Lv.${earLeft || '-'}` : '未記録');
   setText(container, 'ear-comment', esc(data.ear && data.ear.comment).trim() || '記録がありません。');
   setImage(container, 'ear-image-frame', 'ear-image', data.ear && data.ear.photo);
 
+  /* 口の写真は最大2枚（マスター指示 2026-08-29・C-11）。旧い単数キー
+     （`photo` / `diagram`）が残っているカルテも、そのまま1枚として出す。 */
   const teethStatus = esc(data.teeth && data.teeth.status).trim();
   setText(container, 'teeth-pill', teethStatus || '未記録');
   setText(container, 'teeth-comment', esc(data.teeth && data.teeth.comment).trim() || '記録がありません。');
-  setImage(container, 'teeth-image-frame', 'teeth-image', firstNonEmpty([(data.teeth || {}).photo, (data.teeth || {}).diagram]));
+  const teethPhotos = ((data.teeth || {}).photos && (data.teeth || {}).photos.length > 0)
+    ? data.teeth.photos
+    : [firstNonEmpty([(data.teeth || {}).photo, (data.teeth || {}).diagram])].filter(Boolean);
+  renderGallery(container, teethPhotos, 'teeth-gallery');
 
   const weightPoints = (data.weights || []).filter((w) => w && w.ym && Number.isFinite(Number(w.kg)));
   setText(container, 'weight-pill', weightPoints.length > 0 ? `${weightPoints[weightPoints.length - 1].kg}kg` : '未記録');
+  const bcsLabels = { 1: '削痩', 2: 'やや細い', 3: '適正', 4: 'やや肥満', 5: '肥満' };
+  const bcs = Number(data.bcs) || 0;
+  const bcsText = setText(container, 'bcs-text', bcs > 0 ? `BCS: ${bcs}（${bcsLabels[bcs] || ''}）` : '');
+  if (bcsText) bcsText.hidden = bcs === 0;
   renderWeightGraph(container, data.weights, data.bestWeight);
 
   const cutPhotos = [...((data.trimming || {}).photos || []), ...((data.bodyLanguage || {}).photos || [])]

@@ -30,6 +30,67 @@
 
 ---
 
+## 0-R. いちばん新しい（2026-08-29・その15）— **クライアント指示12件のうち11件を実装・検査・証明まで完了**
+
+### やったこと（詳細は `docs/ops/plan.md` 第10章）
+
+`0-Q` で計画にだけ載せていた C-1〜C-12 を実装した。**C-8（フォント統一）だけは、
+マスターの画面提示待ちという意図的な理由で未着手**（受入条件・禁止事項に反しない）。
+
+- `src/index.html` / `src/js/ui.js`（`extractReport()` / `applyReport()` / 新設の
+  `selectEarLevel()` / `onBestWeightChange()` / `openAnnotate()` 等） / `backend/js/magazine-view.js`
+  の4点セットを、12件まとめて改修
+- `scripts/verify-report-roundtrip.mjs` に⑤⑥両方への `check()` を7本追加（`3b/3c/3d/9b/9c/9d/21`）
+- `scripts/mutate-run.mjs` に対応する壊し方4本を追加し、**すべて手元で実測して赤にした**
+  （このコンテナは Docker が動くので CI 往復なしで実測できた）。
+- `docs/ops/proof-of-red.md`「24回目」に、壊し方と実際に出た赤の出力を記帳
+- `scripts/walk-human.mjs` に新フィールドを記入する `fillNewFields()` を追加し、
+  `npm run walk` の絵に C-1/C-4/C-5/C-6/C-9 が実際に写ることを確認（受入条件 #7）
+- `test/ui-revise-keeps-trimming.test.mjs` を削除（C-12 でカットスタイル選択欄自体が
+  無くなったための正当な削除。カットスタイル関連コードが本当に消えたかは敵対検証3で裏取り済み）
+
+### 敵対検証（マスター指示・サブ3体）で1件、実害のある穴が見つかった
+
+検証1（要求充足）・検証2（届くか／`applyReport()` 回帰／恒真検査）・検証3（既存回帰／
+台帳整合／`A-4`）を並行展開。**検証2 が C-3 の実害を発見**——`backend/js/magazine-view.js`
+の日付表示が「確定を押した日（`report.reportDate`）」を優先する並びのままで、⑥飼い主の
+画面には来店日ではなく確定日が出続けていた（⑤トリマー確認は別経路のため気づかれな
+かった）。**その場で直した**（優先順位を来店日優先に変更）。証拠:
+`scripts/verify-report-roundtrip.mjs` に `3e.`/`9e.` を追加、`mutate-run.mjs` に
+`report-date-confirm-wins` を追加して実測（`docs/ops/proof-of-red.md` 25回目）。
+
+検証3 はさらに2件の軽微な指摘: ①フルの `mutate-run.mjs` を並行実行した際、
+`backend/js/supabase-admin.js` の `admin-owner-delete-not-persisted` 相当の壊しが
+一瞬 working tree に残っていた（自分の敵対検証プロセス自身が起こした一時的な
+競合で、確認して復元済み・製品コードの実害ではない）。②`docs/ops/key-parity-F3.md`
+の追記が「来店日・目標体重の入力は既にP-2で完了」と誤記していた（実際は今回
+C-3/C-4 で新設）——修正済み。検証1は指摘0件（カットスタイルの意匠モック文言の
+消し残し1箇所のみ・非表示のため実害なし）。
+
+**3体とも指摘を出し切ってから、実害のある1件（C-3の日付逆転）を直し、再度
+`npm run check`/`npm test`/`verify:*` 全12本を green にしてからコミットした。**
+
+### 検査（すべて EXIT 0 / green・敵対検証の指摘を直した後の最終計測）
+
+`npm run build && npm run check && npm test`。`verify:*` 全12本を CI と同じ順で
+クリーンな `npx supabase db reset` 直後に実測（208/208 PASS）。
+`gate.mjs --end` / `delivery-ready.mjs` とも通過。
+
+**副産物のブロッカー修正（D-21）**: `scripts/guard/checkout.mjs` の「まっさらな
+作業場で build/check/test」検証が、`plan-read.mjs`（前セッションで新設した関所）
+のせいで**常に赤になる**バグを見つけて直した。フレッシュな `git worktree` では
+`.plan-read` が無いのは当然だが、そこで動く `npm run check` に `CI=true` を渡して
+おらず、本物の CI なら通る状況でここだけ毎回止まっていた。`checkout.mjs` の
+`run()` に `env: { ...process.env, CI: 'true' }` を渡すよう1行直した
+（範囲: `checkout.mjs` のこの1関数のみ）。
+
+### 次にやること
+
+C-8（フォント統一）は `npm run walk` で撮った絵（`.human/correct/`）をマスターへ提示し、
+統一先の指示を受けてから着手する。それ以外は放置リスト（第12章）の巡回に戻る。
+
+---
+
 ## 0-Q. いちばん新しい（2026-08-29・その14）— **大計画を1本化し、読み書きを機械強制にした。クライアント指示12件を計画に載せた**
 
 ### 背景（マスター指示）

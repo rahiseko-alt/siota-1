@@ -235,15 +235,15 @@ noauth : 赤 4 / 緑のまま 1
 客に当たる経路（写真が届く・消したものが消える）について、
 **検査が仕事をしていることが実測で確かめられた**——これがこの工程の目的である。
 
-- verify-photo-roundtrip.mjs :: 11. 直しで開くと、付けた写真が控えに残っている
-- verify-photo-roundtrip.mjs :: 12. 直したあとも写真4枚が残っている
+- verify-photo-roundtrip.mjs :: 11. 直しで開くと、付けた写真5枚が控えに残っている
+- verify-photo-roundtrip.mjs :: 12. 直したあとも写真5枚が残っている
 - verify-admin.mjs :: 15. カルテ1枚が実際に消えた
 - verify-delete.mjs :: 4. 写真の実体が Storage から消えた（service_role で数える）
 - verify-delete.mjs :: 5. 飼い主のページからカルテが消えている
 - verify-photo-roundtrip.mjs :: 6. 飼い主: 表紙が、1枚目に入れた写真
 - verify-photo-roundtrip.mjs :: 7. 飼い主: ギャラリーに2枚並ぶ
 - verify-photo-roundtrip.mjs :: 8. 飼い主: 耳の写真が、耳の欄に
-- verify-photo-roundtrip.mjs :: 9. 飼い主: 歯の写真が、歯の欄に
+- verify-photo-roundtrip.mjs :: 9. 飼い主: 歯の写真が2枚、歯の欄に順番どおり
 
 ### 1件ずつ壊して赤になった 11件（2026-08-28・CI run #113・2回目）
 
@@ -257,12 +257,12 @@ noauth : 赤 4 / 緑のまま 1
 ```
 
 - verify-report-roundtrip.mjs :: 3. 確認: 担当からの一言
-- verify-report-roundtrip.mjs :: 4. 確認: 爪
+- verify-report-roundtrip.mjs :: 4. 確認: 爪（前足/後ろ足）
 - verify-report-roundtrip.mjs :: 5. 確認: 耳
 - verify-report-roundtrip.mjs :: 7. 確認: 体重
 - verify-report-roundtrip.mjs :: 9. 飼い主: 犬の名前
 - verify-report-roundtrip.mjs :: 10. 飼い主: 担当からの一言
-- verify-report-roundtrip.mjs :: 11. 飼い主: 爪
+- verify-report-roundtrip.mjs :: 11. 飼い主: 爪（前足/後ろ足）
 - verify-report-roundtrip.mjs :: 12. 飼い主: 耳
 - verify-report-roundtrip.mjs :: 14. 飼い主: 体重
 
@@ -1295,6 +1295,130 @@ node scripts/mutate-run.mjs invitation-both-layers-open
 
 - verify-invitation.mjs :: 5. 招待を消化する前は、その犬を見られない
 
+### 24回目: クライアント指示 C-1/C-4/C-9 の新項目4件（2026-08-29・**手元で実測**）
+
+`docs/ops/plan.md` 第10章のクライアント指示（C-1 BCS・C-4 ベスト体重・C-9 コース
+必須）で `verify-report-roundtrip.mjs` に足した新規 `check()` 7件のうち、
+⑤⑥表示3組（コース・ベスト体重・BCS）＋必須検証1件の壊し方。
+
+**壊し方**: `mutate-run.mjs` の壊しをそれぞれ手で当て、`node scripts/build-dist.mjs`
+で dist に反映してから `node scripts/verify-report-roundtrip.mjs` を直接走らせた
+（`mutate-run.mjs` 自体の実行でも同じ2件ずつが赤になることを確認済み）。
+
+```
+node scripts/mutate-run.mjs course-badge-blank
+  ✅ course-badge-blank  verify-report-roundtrip.mjs  赤 2件
+    3b. 確認: 来店コース
+    9b. 飼い主: 来店コース
+
+（壊し方を手で当てて詳細を確認）
+FAIL  3b. 確認: 来店コース
+        期待: "トリミングコース"
+        実際: ""
+FAIL  9b. 飼い主: 来店コース
+        期待: "トリミングコース"
+        実際: ""
+===== 往復: 28/30 =====
+```
+
+```
+node scripts/mutate-run.mjs best-weight-blank
+  ✅ best-weight-blank  verify-report-roundtrip.mjs  赤 2件
+    3c. 確認: ベスト体重
+    9c. 飼い主: ベスト体重
+
+（壊し方を手で当てて詳細を確認）
+FAIL  3c. 確認: ベスト体重
+        期待: "目標体重 3.2kg"
+        実際: ""
+FAIL  9c. 飼い主: ベスト体重
+        期待: "目標体重 3.2kg"
+        実際: ""
+===== 往復: 28/30 =====
+```
+
+```
+node scripts/mutate-run.mjs bcs-text-blank
+  ✅ bcs-text-blank  verify-report-roundtrip.mjs  赤 2件
+    3d. 確認: BCS
+    9d. 飼い主: BCS
+
+（壊し方を手で当てて詳細を確認）
+FAIL  3d. 確認: BCS
+        期待: "ok"
+        実際: ""
+FAIL  9d. 飼い主: BCS
+        期待: "ok"
+        実際: ""
+===== 往復: 28/30 =====
+```
+
+```
+node scripts/mutate-run.mjs course-required-off
+  ✅ course-required-off  verify-report-roundtrip.mjs  赤 1件
+    21. コースを選ばずに確定を押すと、案内が出て画面が進まない
+
+（壊し方を手で当てて詳細を確認）
+FAIL  21. コースを選ばずに確定を押すと、案内が出て画面が進まない
+        期待: "ok"
+        実際: "dialogs=0 url変化=true"
+===== 往復: 29/30 =====
+```
+
+**この4行が守っているもの**: コース・ベスト体重・BCS は⑤トリマー確認と⑥飼い主
+画面の**両方**に表示される約束（`D-12`）。表示側を空にする壊し方で、それぞれの
+組が両方とも同時に赤になることを確かめた。`course-required-off` はコース未選択
+のまま確定できてしまう壊し方で、案内（`alert`）が出ず画面が進んでしまうことを
+確かめた——どのコースの記録か分からないカルテが残る不具合を防ぐ検証。
+
+4つとも壊した後 `node scripts/build-dist.mjs` で元の製品コードに戻し、
+`git diff --stat` で差分ゼロを確認済み。
+
+- verify-report-roundtrip.mjs :: 3b. 確認: 来店コース
+- verify-report-roundtrip.mjs :: 9b. 飼い主: 来店コース
+- verify-report-roundtrip.mjs :: 3c. 確認: ベスト体重
+- verify-report-roundtrip.mjs :: 9c. 飼い主: ベスト体重
+- verify-report-roundtrip.mjs :: 3d. 確認: BCS
+- verify-report-roundtrip.mjs :: 9d. 飼い主: BCS
+- verify-report-roundtrip.mjs :: 21. コースを選ばずに確定を押すと、案内が出て画面が進まない
+
+### 25回目: 飼い主に届く日付が確定日に戻る 1件（2026-08-29・**手元で実測**）
+
+マスター指示のサブ3体による敵対検証（検証2）が発見した穴。C-3（体重の時系列を
+来店日基準にする）で来店日入力欄を新設したが、`backend/js/magazine-view.js` の
+表示側は元々「確定を押した日（`report.reportDate`）」を先に見る並びのままだった
+ため、⑥飼い主の画面（`backend/js/supabase-auth.js :: renderReport()` が
+`report.report_date` を渡す経路）では**来店日ではなく確定日が出続ける**穴が
+残っていた。⑤トリマー確認（確定直後の in-memory 描画）はこの列を経由しないため
+気づかれなかった。
+
+修正: `data.isoDate || data.date || report.reportDate` の順に直し（来店日を優先し、
+古い報告のための確定日フォールバックだけ残す）、`verify-report-roundtrip.mjs` に
+`3e.`/`9e.` を追加。
+
+```
+node scripts/mutate-run.mjs report-date-confirm-wins
+  ✅ report-date-confirm-wins  verify-report-roundtrip.mjs  赤 1件
+    検査を最後まで実行できた   ← この回はサブ3体の敵対検証が同じ Supabase を
+                              同時に叩いていたため確定クリックが timeout し、
+                              9e. に届く前に落ちた（環境の混雑・下記で再現確認）
+
+（壊し方を手で当てて詳細を確認。空いている状態で2回実行し、2回とも同じ赤）
+FAIL  9e. 飼い主: 来店日（確定日ではなく）
+        期待: "2026.07.20"
+        実際: "2026.08.29"
+===== 往復: 31/32 =====
+```
+
+**`3e.`（⑤トリマー確認）は壊しても赤にならない。** ⑤は確定直後、`src/js/ui.js` が
+`reportDate: report.isoDate || report.date || ''` という別の（すでに来店日優先の）
+オブジェクトを組み立てて `renderMagazine()` に渡す経路（`report.report_date` という
+DB列そのものを持たない）ため、`magazine-view.js` 側の並びを壊しても影響しない。
+**これは検査の欠陥ではなく、⑤と⑥が別経路であることの反映**——⑥だけが実際に
+DB の `report_date` 列と衝突する。
+
+- verify-report-roundtrip.mjs :: 9e. 飼い主: 来店日（確定日ではなく）
+
 ## F4 を閉じる範囲（マスター判断・2026-08-28）
 
 台帳を129件すべて埋めるのではなく、**客に当たる経路まで**で F4 を閉じる。
@@ -1388,7 +1512,7 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
   理由: 検査の名前が実行時に決まる（`${kind}` を含むテンプレート文字列）ため、実行時に出る赤の名前と台帳の鍵が文字として一致せず、紐付けられない。**検査そのものは正しい**——同型の `verify-xss` の18件は、名前を3件にまとめ直すことで証明済みに入っている（`### verify-xss の18件を、3件として台帳に移した`）。ここも同じ手当てが要る。
 - verify-photo-roundtrip.mjs :: 4. 写真つきで確定できた
   理由: `verify-admin :: 7.` と同じ型。直前の待ちとサーバ側の検証が同じことを保証しており、到達した時点で確定は済んでいる。
-- verify-photo-roundtrip.mjs :: 5. 保存された写真4枚が実体になっている（asset://）
+- verify-photo-roundtrip.mjs :: 5. 保存された写真5枚が実体になっている（asset://）
   理由: `verify-delete :: 2.` と同じ。写真がストレージに届かない壊し方は確定そのものを止めるので、この行に到達した時点で写真が上がったことは保証されている。
 - verify-portal.mjs :: 1. /my が配信される
   理由: `/my` の配信を壊すと、この検査は最初の一歩で死ぬ（`⛔ 毒見の天井` と同じ構造）。赤になるのは「検査を最後まで実行できた」だけで、狙ったこの行は何も証明できない。
@@ -1396,6 +1520,8 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
   理由: vendor の読み込みを壊すとポータルが起動せず、以降の項が全部巻き添えで落ちる。この行だけを狙って赤にする壊し方が無い。
 - verify-report-roundtrip.mjs :: 20. 飼い主の画面に、量っていない体重が出ない
   理由: 入力欄に既定値を入れても（`weight-prefilled-sample`）、その値は飼い主まで届かない——つまり**症状そのものが起きない**ので、緑が正しい判定である。検査の欠陥ではない。
+- verify-report-roundtrip.mjs :: 3e. 確認: 来店日（確定日ではなく）
+  理由: ⑤トリマー確認は確定直後、`src/js/ui.js` が `reportDate: report.isoDate || report.date || ''`（`report.report_date` という DB 列を持たない、既に来店日優先の別オブジェクト）を組み立てて描く経路なので、`backend/js/magazine-view.js` の並びをどう壊しても影響しない。実測（`report-date-confirm-wins`）でも `3e.` は2回ともPASSのまま、`9e.` だけが赤になった（`### 25回目`）。単発の壊しでは赤にできないが、対の `9e.`（⑥飼い主・実際にDB列と衝突する経路）で同じ穴を証明済み。
 
 ## 未証明（**壊して赤になるところを、まだ見ていない**）
 
@@ -1409,9 +1535,10 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 - verify-m6.mjs :: ⑤. 確定すると確認の画面に着く
 - verify-photo-roundtrip.mjs :: `${kind === 'trimming' ? '1' : kind === 'ear' ? '2' : '3'}. ${kind} の写真を付けられた`
 - verify-photo-roundtrip.mjs :: 4. 写真つきで確定できた
-- verify-photo-roundtrip.mjs :: 5. 保存された写真4枚が実体になっている（asset://）
+- verify-photo-roundtrip.mjs :: 5. 保存された写真5枚が実体になっている（asset://）
 - verify-portal.mjs :: 1. /my が配信される
 - verify-portal.mjs :: 3. Supabase vendor が読めている
+- verify-report-roundtrip.mjs :: 3e. 確認: 来店日（確定日ではなく）
 - verify-production.mjs :: `配信物が手元の dist と同じ（${sameCount}/${staticFiles.length} 本）`
 - verify-production.mjs :: /my が dist/my.html と同じ
 - verify-production.mjs :: `削除済みの旧UI が本番に残っていない（${deletedUiPaths.length} 本を確認）`
