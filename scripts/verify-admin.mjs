@@ -120,11 +120,12 @@ try {
 
   await page.waitForSelector('.admin-menu__item', { timeout: 20_000 });
 
-  /* ── ② 管理者ページの3つ ── */
+  /* ── ② 管理者ページの4つ（`#4` 店舗設定はマスター指示 2026-08-29・D-20260829-58 で新設） ── */
   const top = await menuTitles(page);
-  check('2. 管理者ページに リピーター / 新規 / 削除 が在る',
-    top.length === 3
-    && top[0].includes('リピーター') && top[1].includes('新規') && top[2].includes('削除'),
+  check('2. 管理者ページに リピーター / 新規 / 削除 / 店舗設定 が在る',
+    top.length === 4
+    && top[0].includes('リピーター') && top[1].includes('新規') && top[2].includes('削除')
+    && top[3].includes('店舗設定'),
     `出た項目=${JSON.stringify(top)}`);
 
   /* ── ③ リピーター ── */

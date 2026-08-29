@@ -630,7 +630,7 @@ run #154: 赤 → 3回中2回赤）。`rls-drafts-leak` が今回**新たに** 0
 `verify-empty-pet.mjs :: 6.` は動かさない。もう一度0件が出たら
 `rls-any-owner-sees-any-dog` と同じ扱い（未証明へ戻して調べる）にする。
 
-- verify-admin.mjs :: 2. 管理者ページに リピーター / 新規 / 削除 が在る
+- verify-admin.mjs :: 2. 管理者ページに リピーター / 新規 / 削除 / 店舗設定 が在る
 - verify-admin.mjs :: 3. リピーターに カルテ作成 / カルテ修正 が在る
 - verify-admin.mjs :: 4. 新規に 顧客アカウント作成 / ペットアカウント作成 が在る
 - verify-admin.mjs :: 13. 削除に 顧客 / ペット / カルテ の3つが在る
