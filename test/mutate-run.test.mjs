@@ -11,10 +11,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { applyMutation, MUTATIONS } from '../scripts/mutate-run.mjs';
+import { applyMutation, mutationFiles, MUTATIONS } from '../scripts/mutate-run.mjs';
 
-function sandbox(rel, body) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mutate-'));
+/** 使い捨ての作業場に1本置く。`root` を渡せば**同じ作業場に足す**
+    （ファイルをまたぐ壊し方は、全部が同じ作業場に無いと当てられない）。 */
+function sandbox(rel, body, root = fs.mkdtempSync(path.join(os.tmpdir(), 'mutate-'))) {
   fs.mkdirSync(path.join(root, path.dirname(rel)), { recursive: true });
   fs.writeFileSync(path.join(root, rel), body);
   return root;
@@ -53,12 +54,14 @@ test('目印が2回以上なら、壊さずに投げる（どこを壊したか�
 test('台帳の壊し方は、いまのリポジトリに1回ずつ現れる', () => {
   const root = path.resolve(import.meta.dirname, '..');
   for (const m of MUTATIONS) {
-    const src = fs.readFileSync(path.join(root, m.file), 'utf8');
     /* 2か所を同時に開ける壊し方（`edits`）は、**そのどれもが**1回でなければならない。
-       1つでも 0回なら、その1枚は剥がれないまま「両方開けた」と記録される。 */
+       1つでも 0回なら、その1枚は剥がれないまま「両方開けた」と記録される。
+       **`edits` の1件ごとに `file` を書ける**ので、読む先も1件ごとに決める。 */
     for (const e of (m.edits || [{ find: m.find }])) {
+      const f = e.file || m.file;
+      const src = fs.readFileSync(path.join(root, f), 'utf8');
       const hits = src.split(e.find).length - 1;
-      assert.equal(hits, 1, `${m.id}: ${m.file} に目印が ${hits}回（1回でなければ壊せない）\n  ${e.find}`);
+      assert.equal(hits, 1, `${m.id}: ${f} に目印が ${hits}回（1回でなければ壊せない）\n  ${e.find}`);
     }
   }
 });
@@ -81,37 +84,92 @@ test('壊したあとのファイルが、構文として正しい', async () =>
        `ui-body-marking.test.mjs` の「⑥の受け手が読むキーは bodyMarkingImage である」が
        3回に2回落ちるようになった——**製品は何も壊れていないのにテストだけが赤**。
        壊し方が増えるほど当たる確率が上がるので、根から断つ（`F-20260828-58`）。 */
-    const before = fs.readFileSync(path.join(root, m.file), 'utf8');
-    const sandboxRoot = sandbox(m.file, before);
-    const target = path.join(sandboxRoot, m.file);
+    /* **触るファイルは1つとは限らない**（`edits` の1件ごとに `file` を書ける）。
+       使い捨ての作業場に**全部**置いてから壊し、**全部**を見る。 */
+    const files = mutationFiles(m);
+    const originals = new Map(files.map((f) => [f, fs.readFileSync(path.join(root, f), 'utf8')]));
+    let sandboxRoot;
+    for (const f of files) sandboxRoot = sandbox(f, originals.get(f), sandboxRoot);
     applyMutation(sandboxRoot, m);
-    if (/\.(mjs|js)$/.test(m.file)) {
-      const r = spawnSync(process.execPath, ['--check', target], { encoding: 'utf8' });
-      assert.equal(r.status, 0,
-        `${m.id}: 壊したあとが構文エラー。**壊し方が下手なだけ**で CI が赤になり、`
-        + `「検査が気づかなかった」と読み違える\n${r.stderr}`);
-    } else if (/\.sql$/.test(m.file)) {
-      /* SQL は `node --check` に掛けられない。**壊れ方が乱暴すぎないか**だけ見る——
-         定義そのものが消えていたら、それは「弱めた」ではなく「壊した」で、
-         db reset が落ちて判定にならない。**RLS のポリシーとは限らない**（`claim_invitation`
-         のような関数の壊し方も足したので）。壊す前にその文字列が在ったときだけ求める——
-         無条件に `create policy` を要求すると、関数だけのファイルは必ず落ちる形だった。 */
+    for (const f of files) {
+      const before = originals.get(f);
+      const target = path.join(sandboxRoot, f);
       const after = fs.readFileSync(target, 'utf8');
-      for (const anchor of ['create policy', 'create or replace function']) {
-        if (before.includes(anchor)) {
-          assert.ok(after.includes(anchor), `${m.id}: ${anchor} の定義ごと消えている`);
+      if (/\.(mjs|js)$/.test(f)) {
+        const r = spawnSync(process.execPath, ['--check', target], { encoding: 'utf8' });
+        assert.equal(r.status, 0,
+          `${m.id}: 壊したあとが構文エラー。**壊し方が下手なだけ**で CI が赤になり、`
+          + `「検査が気づかなかった」と読み違える\n${r.stderr}`);
+      } else if (/\.sql$/.test(f)) {
+        /* SQL は `node --check` に掛けられない。**壊れ方が乱暴すぎないか**だけ見る——
+           定義そのものが消えていたら、それは「弱めた」ではなく「壊した」で、
+           db reset が落ちて判定にならない。**RLS のポリシーとは限らない**（`claim_invitation`
+           のような関数の壊し方も足したので）。壊す前にその文字列が在ったときだけ求める——
+           無条件に `create policy` を要求すると、関数だけのファイルは必ず落ちる形だった。 */
+        for (const anchor of ['create policy', 'create or replace function']) {
+          if (before.includes(anchor)) {
+            assert.ok(after.includes(anchor), `${m.id}: ${anchor} の定義ごと消えている`);
+          }
         }
       }
-      assert.notEqual(after, before, `${m.id}: 何も変わっていない`);
-    } else {
-      /* HTML など、構文検査のしようが無いファイル。**中身が実際に変わったか**だけ見る——
-         `find`/`replace` を間違えて何も置き換わらなかった（0回でも投げない形の壊し方）を
-         ここで捕まえる。 */
-      const after = fs.readFileSync(target, 'utf8');
-      assert.notEqual(after, before, `${m.id}: 何も変わっていない`);
+      /* HTML など構文検査のしようが無いファイルも含め、**中身が実際に変わったか**は
+         全部について見る——`find`/`replace` を間違えて何も置き換わらなかった形を
+         ここで捕まえる。ファイルをまたぐ壊し方では、**片方だけ当たった**も捕まる。 */
+      assert.notEqual(after, before, `${m.id}: ${f} が何も変わっていない`);
+      /* 本物は一度も触っていないので、戻す処理も要らない。 */
+      assert.equal(fs.readFileSync(path.join(root, f), 'utf8'), before,
+        `${m.id}: 本物のファイルを触っている（このテストは触ってはいけない）`);
     }
-    /* 本物は一度も触っていないので、戻す処理も要らない。 */
-    assert.equal(fs.readFileSync(path.join(root, m.file), 'utf8'), before,
-      `${m.id}: 本物のファイルを触っている（このテストは触ってはいけない）`);
   }
+});
+
+/* ── ファイルをまたぐ壊し方（`edits` の1件ごとの `file`）──
+   守りが**別々のファイルで二重**になっていることがある（`verify-invitation :: 5.` の
+   DB の RLS ＋ アプリ側の関門）。片方だけ剥がしても何も漏れないので、
+   **2枚を同時に**剥がせないと、その検査は赤にできない＝判定できない。 */
+const TWO = {
+  id: 'two', why: 'ためし（2枚）', file: 'a/b.js',
+  edits: [
+    { find: 'const gate = true;', replace: 'const gate = false;' },
+    { file: 'db/c.sql', find: 'using (mine)', replace: 'using (true)' },
+  ],
+  scripts: [],
+};
+
+test('ファイルをまたいで壊し、両方を元どおりに戻せる', () => {
+  const js = 'const gate = true;\n';
+  const sql = 'create policy p on t for select using (mine);\n';
+  const root = sandbox('a/b.js', js);
+  sandbox('db/c.sql', sql, root);
+  const restore = applyMutation(root, TWO);
+  assert.match(fs.readFileSync(path.join(root, 'a/b.js'), 'utf8'), /gate = false/,
+    '1枚目（js・`file` 省略＝`m.file`）が剥がれていない');
+  assert.match(fs.readFileSync(path.join(root, 'db/c.sql'), 'utf8'), /using \(true\)/,
+    '2枚目（sql・`file` 指定）が剥がれていない');
+  restore();
+  assert.equal(fs.readFileSync(path.join(root, 'a/b.js'), 'utf8'), js, 'js が戻っていない');
+  assert.equal(fs.readFileSync(path.join(root, 'db/c.sql'), 'utf8'), sql, 'sql が戻っていない');
+});
+
+test('片方の目印が1回でなければ、どちらのファイルも壊さずに投げる', () => {
+  /* **半分だけ当たった状態を作らない。** 1枚目を書いてから2枚目で投げると、
+     壊れた js だけがリポジトリに残り、次の壊し方がその上で走る。 */
+  const js = 'const gate = true;\n';
+  const sql = 'create policy p on t for select using (yours);\n';   /* 目印が 0回 */
+  const root = sandbox('a/b.js', js);
+  sandbox('db/c.sql', sql, root);
+  assert.throws(() => applyMutation(root, TWO), /db\/c\.sql に目印が 0回/);
+  assert.equal(fs.readFileSync(path.join(root, 'a/b.js'), 'utf8'), js,
+    '投げたのに1枚目を書き換えている');
+  assert.equal(fs.readFileSync(path.join(root, 'db/c.sql'), 'utf8'), sql);
+});
+
+test('mutationFiles は、触るファイルを重複なく並べる', () => {
+  assert.deepEqual(mutationFiles(TWO), ['a/b.js', 'db/c.sql']);
+  assert.deepEqual(mutationFiles(M), ['a/b.js']);
+  /* 同じファイルを2回編集する既存の形（`rls-both-layers-open`）は1本に畳む。 */
+  assert.deepEqual(
+    mutationFiles({ file: 'x.sql', edits: [{ find: 'a' }, { find: 'b' }] }),
+    ['x.sql'],
+  );
 });
