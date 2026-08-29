@@ -23,9 +23,9 @@
 
 | | |
 |---|---|
-| 機械が数えた検査 | **183件**（`scripts/verify-*.mjs`） |
-| 壊して赤になったところを見た | **143件**（毒見 21 ＋ 1件ずつ壊す 122・2026-08-29） |
-| まだ見ていない | **40件** |
+| 機械が数えた検査 | **204件**（`scripts/verify-*.mjs`） |
+| 壊して赤になったところを見た | **162件**（毒見 21 ＋ 1件ずつ壊す 141・2026-08-29） |
+| まだ見ていない | **42件** |
 
 > **この表は 112/71 のまま止まっていた**（`node scripts/guard/proof-of-red.mjs` は
 > その間ずっと 142/41 と出していた）。数を数えているのは機械なので、**この表が
@@ -1419,6 +1419,160 @@ DB の `report_date` 列と衝突する。
 
 - verify-report-roundtrip.mjs :: 9e. 飼い主: 来店日（確定日ではなく）
 
+### 26回目: 「次回のおすすめご来店時期」新設 11件（2026-08-29・**手元で実測**）
+
+マスター指示（`D-20260829-58`）: 「デフォルトは30日後、別途修正できるようにする。
+修正はデフォルト自体の修正も犬ごとの修正も可能とする。」で新設した
+`scripts/verify-revisit-interval.mjs`（12 `check()`）のうち、11件を1件ずつ壊して赤にした。
+残り1件（`9.`）は下の「未証明」へ。
+
+**壊し方**: `mutate-run.mjs` に8つの壊し方を足し、`node scripts/mutate-run.mjs <id>`
+（本物の Supabase を通す）で実測。RLS の壊し（`shops-admin-update-rls-open`）だけは
+migration ファイルの書き換えなので `npx supabase db reset` を挟んでから検査、
+確認後に元へ戻して再度 `db reset`（`git diff --stat` で差分ゼロを確認済み）。
+
+```
+node scripts/mutate-run.mjs shops-admin-update-rls-open
+  ✅ shops-admin-update-rls-open  verify-revisit-interval.mjs  赤 1件
+    0. 一般スタッフは店舗の既定日数を変えられない
+
+（壊し方を手で当てて詳細を確認。RLS の using/with check を true に緩めた）
+FAIL  0. 一般スタッフは店舗の既定日数を変えられない
+        期待: "404"
+        実際: "200"
+===== 次回のおすすめご来店時期: 10/11 =====
+```
+
+```
+node scripts/mutate-run.mjs shop-patch-route-off
+  ✅ shop-patch-route-off  verify-revisit-interval.mjs  赤 3件
+    1. 管理者は店舗の既定日数を変えられる
+    1b. 変えた値が読み返せる
+    3. 確認: 次回日（上書き無し・店舗の既定日数）
+
+（壊し方を手で当てて詳細を確認。PATCH /api/shop の分岐を丸ごと無効化）
+FAIL  1. 管理者は店舗の既定日数を変えられる
+        期待: "200"
+        実際: "404"
+FAIL  1b. 変えた値が読み返せる
+        期待: "45"
+        実際: "null"
+===== 次回のおすすめご来店時期: 9/11 =====
+```
+
+（`3.` は、店舗の既定日数がまだ30（migration の既定値）のままの、まっさらな
+`supabase db reset` 直後に走らせたときだけ赤になる——PATCH が死んで45に変わらない
+ため、来店日+30日で計算された値と期待値+45日がずれる。手で当て直した2回目は、
+直前の別の検査が既定日数を45に変えたあとの状態が残っていたため`3.`はPASSのまま
+だったが、これは検査対象の状態依存であって壊し方の効き目とは無関係——
+`mutate-run.mjs` 本体の実行が、まっさらな状態での赤を実測している。）
+
+```
+node scripts/mutate-run.mjs revisit-edit-stays-hidden
+  ✅ revisit-edit-stays-hidden  verify-revisit-interval.mjs  赤 2件
+    4. 確認: 編集欄がスタッフ側に出ている
+    検査を最後まで実行できた
+
+（壊し方を手で当てて詳細を確認。編集欄の unhide だけを外す）
+FAIL  4. 確認: 編集欄がスタッフ側に出ている
+        期待: "ok"
+        実際: "出ていない"
+FAIL  検査を最後まで実行できた
+        期待: "ok"
+        実際: "page.fill: Timeout 30000ms exceeded.
+        - element is not visible"
+===== 次回のおすすめご来店時期: 5/7 =====
+```
+
+```
+node scripts/mutate-run.mjs revisit-save-stale-display
+  ✅ revisit-save-stale-display  verify-revisit-interval.mjs  赤 1件
+    5. 確認: 保存直後にその場で日付が変わる
+
+（壊し方を手で当てて詳細を確認。保存直後の再描画を古い値に戻す）
+FAIL  5. 確認: 保存直後にその場で日付が変わる
+        期待: "2026.07.30"
+        実際: "2026.09.03"
+===== 次回のおすすめご来店時期: 10/11 =====
+```
+
+```
+node scripts/mutate-run.mjs revisit-override-not-persisted
+  ✅ revisit-override-not-persisted  verify-revisit-interval.mjs  赤 2件
+    6. 確認: 読み直しても上書きが残っている
+    7. 飼い主: 上書き後の次回日が同じ値で届く
+
+（壊し方を手で当てて詳細を確認。PATCH本文の値を常に null に固定＝保存は200で
+成功するがサーバには残らない）
+FAIL  6. 確認: 読み直しても上書きが残っている
+        期待: "2026.07.30"
+        実際: "2026.09.03"
+FAIL  7. 飼い主: 上書き後の次回日が同じ値で届く
+        期待: "2026.07.30"
+        実際: "2026.09.03"
+===== 次回のおすすめご来店時期: 9/11 =====
+```
+
+```
+node scripts/mutate-run.mjs revisit-owner-override-dropped
+  ✅ revisit-owner-override-dropped  verify-revisit-interval.mjs  赤 1件
+    7. 飼い主: 上書き後の次回日が同じ値で届く
+
+（壊し方を手で当てて詳細を確認。⑥飼い主向けの応答だけ revisitDaysOverride を
+常に null にする——⑤は別経路なので無事）
+FAIL  7. 飼い主: 上書き後の次回日が同じ値で届く
+        期待: "2026.07.30"
+        実際: "2026.09.03"
+===== 次回のおすすめご来店時期: 10/11 =====
+```
+
+```
+node scripts/mutate-run.mjs revisit-edit-leaks-to-owner
+  ✅ revisit-edit-leaks-to-owner  verify-revisit-interval.mjs  赤 1件
+    8. 飼い主画面に編集欄が出ない（編集はスタッフ限定）
+
+（壊し方を手で当てて詳細を確認。編集欄の表示条件から onRevisitDaysChange の
+有無チェックを外す）
+FAIL  8. 飼い主画面に編集欄が出ない（編集はスタッフ限定）
+        期待: "ok"
+        実際: "出た"
+===== 次回のおすすめご来店時期: 10/11 =====
+```
+
+```
+node scripts/mutate-run.mjs pet-create-wrong-status
+  ✅ pet-create-wrong-status  verify-revisit-interval.mjs  赤 1件
+    2. 検査用の犬を登録できた
+  （同時に verify-delete.mjs / verify-invitation.mjs / verify-xss.mjs も赤——既存の壊し方）
+
+（壊し方を手で当てて詳細を確認。POST /api/owners/{id}/pets の成功コードを201→200に）
+FAIL  2. 検査用の犬を登録できた
+        期待: "201"
+        実際: "200"
+===== 次回のおすすめご来店時期: 10/11 =====
+```
+
+8つとも壊した後 `node scripts/build-dist.mjs` で元の製品コードに戻し（SQLの壊しは
+`npx supabase db reset` も再実行）、`git diff --stat` で差分ゼロを確認済み。
+
+**この11行が守っているもの**: 店舗の既定来店間隔は管理者しか変えられない（RLS）・
+変えれば実際に反映される・上書きが無い犬には既定日数が使われる・この犬だけの
+上書き入力欄は⑤（スタッフ）にだけ出る・保存すればその場でもサーバでも新しい値が
+使われる・⑥（飼い主）にも同じ計算結果が届くが編集欄は出ない——という
+`D-20260829-58` の全条件。
+
+- verify-revisit-interval.mjs :: 0. 一般スタッフは店舗の既定日数を変えられない
+- verify-revisit-interval.mjs :: 1. 管理者は店舗の既定日数を変えられる
+- verify-revisit-interval.mjs :: 1b. 変えた値が読み返せる
+- verify-revisit-interval.mjs :: 2. 検査用の犬を登録できた
+- verify-revisit-interval.mjs :: 3. 確認: 次回日（上書き無し・店舗の既定日数）
+- verify-revisit-interval.mjs :: 4. 確認: 編集欄がスタッフ側に出ている
+- verify-revisit-interval.mjs :: 5. 確認: 保存直後にその場で日付が変わる
+- verify-revisit-interval.mjs :: 6. 確認: 読み直しても上書きが残っている
+- verify-revisit-interval.mjs :: 7. 飼い主: 上書き後の次回日が同じ値で届く
+- verify-revisit-interval.mjs :: 8. 飼い主画面に編集欄が出ない（編集はスタッフ限定）
+- verify-revisit-interval.mjs :: 検査を最後まで実行できた
+
 ## F4 を閉じる範囲（マスター判断・2026-08-28）
 
 台帳を129件すべて埋めるのではなく、**客に当たる経路まで**で F4 を閉じる。
@@ -1522,6 +1676,8 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
   理由: 入力欄に既定値を入れても（`weight-prefilled-sample`）、その値は飼い主まで届かない——つまり**症状そのものが起きない**ので、緑が正しい判定である。検査の欠陥ではない。
 - verify-report-roundtrip.mjs :: 3e. 確認: 来店日（確定日ではなく）
   理由: ⑤トリマー確認は確定直後、`src/js/ui.js` が `reportDate: report.isoDate || report.date || ''`（`report.report_date` という DB 列を持たない、既に来店日優先の別オブジェクト）を組み立てて描く経路なので、`backend/js/magazine-view.js` の並びをどう壊しても影響しない。実測（`report-date-confirm-wins`）でも `3e.` は2回ともPASSのまま、`9e.` だけが赤になった（`### 25回目`）。単発の壊しでは赤にできないが、対の `9e.`（⑥飼い主・実際にDB列と衝突する経路）で同じ穴を証明済み。
+- verify-revisit-interval.mjs :: 9. アプリ由来の確認ダイアログが余計に出ていない
+  理由: 「想定外の alert/confirm/prompt が出ていないか」だけを見る安全網で、対応する「出すべき場面」が無い（`21.` のようなコース必須の alert とは違い、この項は「出ない」ことしか守っていない）。この検査の他の項目（0〜8）を壊す壊し方はどれも値のずれ・欄の表示/非表示で赤になり、余計なダイアログを1つだけ出すピンポイントな壊し方をまだ書いていない。
 
 ## 未証明（**壊して赤になるところを、まだ見ていない**）
 
@@ -1544,6 +1700,7 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 - verify-production.mjs :: `削除済みの旧UI が本番に残っていない（${deletedUiPaths.length} 本を確認）`
 - verify-production.mjs :: `/edit が正UI を配っている（手元 ${want.length} 本 ＋ 注入 ${injected.length} 本）`
 - verify-report-roundtrip.mjs :: 20. 飼い主の画面に、量っていない体重が出ない
+- verify-revisit-interval.mjs :: 9. アプリ由来の確認ダイアログが余計に出ていない
 - verify-screens.mjs :: 1. `/` が配信される
 - verify-screens.mjs :: 2. `/` に4画面が乗っている
 - verify-screens.mjs :: 3. `/` に段のタブが4つ在る

@@ -25,6 +25,7 @@
     "verify:photo": "node scripts/build-dist.mjs && node scripts/verify-photo-roundtrip.mjs",
     "verify:m6": "node scripts/build-dist.mjs && node scripts/verify-m6.mjs",
     "verify:prod": "node scripts/build-dist.mjs && node scripts/verify-production.mjs",
+    "verify:revisit": "node scripts/build-dist.mjs && node scripts/verify-revisit-interval.mjs",
     "test:migration": "node --test test/kv-migration.test.mjs",
     "test:sql": "node scripts/guard/sql-verified.mjs",
     "plan": "node scripts/plan.mjs",

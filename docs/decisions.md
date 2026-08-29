@@ -852,3 +852,30 @@
   `deploy.yml` を起動し、`wrangler deploy` と `verify:prod` の結果を報告する
   （失敗時は当然報告・対応する）。マージ自体の承認は引き続き扱いが変わらない
   （このプロジェクトはそもそも PR 作成からマージまで Claude Code が一貫して行ってきた）
+
+### [D-20260829-58] 「次回のおすすめご来店時期」の値の出どころ（第6章 `#3`）
+
+- **日付**: 2026-08-29
+- **決めた人**: マスター
+- **問い**: `docs/ops/plan.md` 第6章 `#3`「飼い主画面『次回のおすすめご来店時期』の
+  値の出どころ」——(a) 固定文のまま (b) 来店間隔を設定可能にする、のどちらか
+- **回答**: 「デフォルトは30日後、別途修正できるようにする。修正はデフォルト自体の
+  修正も犬ごとの修正も可能とする。」（(b) を採用。ただし細部はこの回答で確定）
+- **決定**:
+  1. 効果的な次回来店日 = カルテの来店日 +（その犬の上書き日数があればそれ、
+     無ければ店舗の既定日数）。店舗の既定日数は `shops.default_revisit_days`
+     （既定値30・1〜3650）、犬ごとの上書きは `pets.revisit_days_override`
+     （nullable・1〜3650）——`supabase/migrations/202608290010_revisit_interval.sql`
+  2. **店舗の既定日数は管理者だけが編集できる**（RLS `shops_admin_update`）。
+     `admin.html`（`backend/js/supabase-admin.js`）に「④ 店舗設定」を新設
+  3. **犬ごとの上書きは⑤カルテ確認画面から編集できる**（スタッフ限定・
+     `backend/js/magazine-view.js` の `revisit-edit` ブロック、`opts.onRevisitDaysChange`
+     が渡っているときだけ表示）。⑥飼い主画面には編集欄を出さない
+  4. ⑤⑥とも同じ `renderMagazine()` が計算・表示する（マスター指定の「同一レンダラ」
+     方針を踏襲）。⑥（飼い主）が店舗の既定日数を読むために、RLS に
+     `shops_customer_select`（自分の犬が居る店舗に限る）を新設した——
+     `shops_staff_select` はスタッフ限定で飼い主には使えないため
+- **裏づけ**: `npm run build`/`check`/`test`（EXIT 0）、新設 `scripts/verify-revisit-interval.mjs`
+  （11/11）、`mutate-run.mjs` の壊し8種で12件の `check()` のうち11件を実測で赤にした
+  （`docs/ops/proof-of-red.md` 26回目）。残り1件（余計なダイアログが出ていないかの
+  安全網）は未証明のまま理由つきで記帳。`gate.mjs --end`/`delivery-ready.mjs` とも通過
