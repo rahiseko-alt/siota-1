@@ -208,8 +208,9 @@ const STYLE = `
   --ink-primary:#121212; --ink-body:#2c2c2c; --ink-secondary:#585858; --ink-muted:#8c8c88; --ink-inverse:#ffffff;
   --border-subtle:#e6e6e2; --border-divider:#deded9; --border-strong:#121212;
   --accent-terracotta:#c85a32; --accent-sage:#4a7c59; --accent-alert:#d32f2f;
-  --font-sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic Medium","Yu Gothic",Meiryo,sans-serif;
-  --font-en:"Inter",-apple-system,sans-serif;
+  /* 全文明朝体（マスター指示・C-8再指示）。理由は src/index.html 参照。 */
+  --font-sans:"Hiragino Mincho ProN","Yu Mincho",YuMincho,"Times New Roman",serif;
+  --font-en:"Hiragino Mincho ProN","Yu Mincho",YuMincho,"Times New Roman",serif;
   --font-serif:"Hiragino Mincho ProN","Yu Mincho",YuMincho,"Times New Roman",serif;
   --ease-editorial:cubic-bezier(0.16,1,0.3,1);
   --header-height:54px;

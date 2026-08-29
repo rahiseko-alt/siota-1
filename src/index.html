@@ -44,8 +44,15 @@
      "Noto Sans JP"/"Noto Serif JP" を指定していたが、フォントファイルを同梱していない
      ため実機ではどのみちシステムフォントに落ちていた（見た目は変わらない・実測して
      `npm run walk` の絵で確認済み）。指定を実態に合わせ、4箇所を揃える。 */
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic Medium", "Yu Gothic", Meiryo, sans-serif;
-  --font-en: "Inter", -apple-system, sans-serif;
+  /* 全文明朝体（マスター指示・C-8再指示）。`--font-sans`/`--font-en` も
+     `--font-serif` と同じ明朝体の並びにし、個別の `font-family: var(--font-xxx)` 呼び出し
+     箇所（数十か所）を1つずつ書き換えずに、この3行だけで全文を明朝体に揃える。
+     日本語フォントはファイルサイズの都合で同梱していない（`docs/ASSET-PROVENANCE.md`）
+     ため、実際に描画されるのは端末のシステム明朝体——Mac/iOS は Hiragino Mincho ProN、
+     Windows は Yu Mincho（無ければ MS Mincho 相当）。Android 等システムに明朝体が
+     無い端末では、ブラウザの既定 serif（欧文明朝の代替）に落ちる。 */
+  --font-sans: "Hiragino Mincho ProN", "Yu Mincho", YuMincho, "Times New Roman", serif;
+  --font-en: "Hiragino Mincho ProN", "Yu Mincho", YuMincho, "Times New Roman", serif;
   --font-serif: "Hiragino Mincho ProN", "Yu Mincho", YuMincho, "Times New Roman", serif;
 
   --ease-editorial: cubic-bezier(0.16, 1, 0.3, 1);

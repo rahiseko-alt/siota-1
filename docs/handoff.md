@@ -30,6 +30,33 @@
 
 ---
 
+## 0-U. いちばん新しい（2026-08-29・その18）— **C-8: 全文明朝体に再指示（`D-20260829-56`）**
+
+マスターより「次回のおすすめご来店時期」ブロックのフォントを問われ、見出しは明朝体・
+本文はゴシック体という混在があることを回答したところ、「全文明朝体で進めろ。明朝体にも
+種類あるだろ」と再指示。
+
+**やったこと**: `--font-sans`/`--font-en` を `--font-serif`
+（`"Hiragino Mincho ProN", "Yu Mincho", YuMincho, "Times New Roman", serif`）と同じ
+フォント列に揃え、4ファイル（`index.html`/`my.html`/`admin.html`/`magazine-view.js`）＋
+Canvas直書き2箇所（`ui.js`）を明朝体で統一。**外部通信ゼロ**（`D-20260823-14`）と
+**日本語フォント非同梱**（`docs/ASSET-PROVENANCE.md`）という既存の制約上、実際に
+描画されるのは端末のシステム明朝体（Mac/iOS: Hiragino Mincho ProN、Windows: Yu Mincho、
+Android等: ブラウザ既定serifへフォールバック）であることをマスターに明記して報告した。
+
+**検査（すべて EXIT 0 / green）**: `npm run build && npm run check && npm test`。
+`verify:*` 全12本をクリーンな `db reset` 後に実測（208/208 PASS）。`gate.mjs --end` /
+`delivery-ready.mjs` とも通過。`npm run walk` の絵で全画面が明朝体になったことを確認。
+
+### 次にやること
+
+クライアント指示12件（C-1〜C-12）は完了済み。本番へのデプロイはこのセッションで
+`workflow_dispatch`（`deploy.yml`）を使い、マスター承認のうえ実施した実績がある
+（`F-20260829-60` の修正）。今回のフォント変更もマスター承認を得てから同様にデプロイする。
+残るは第6章のマスター判断待ち6件（`#3` `#5` `#6` `#11` `#22` `#35`）。
+
+---
+
 ## 0-T. いちばん新しい（2026-08-29・その17）— **本番でマスターが実際に踏んだ404を直した（`F-20260829-60`）**
 
 マスターが本番 `https://trimmer-system.kouheikosehira.com` を操作中、`/edit/p/d1` で
