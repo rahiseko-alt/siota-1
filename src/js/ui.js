@@ -1213,7 +1213,9 @@ const App = {
       ctx.fillStyle = '#faf9f6';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = '#8c8c88';
-      ctx.font = '12px Noto Sans JP';
+      /* Canvas の `font` は CSS の `var(--font-sans)` を参照できないので、
+         フォント統一（C-8）と同じシステムフォント列を直書きする。 */
+      ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic Medium", "Yu Gothic", Meiryo, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('犬体4面図（前面・背面・左側面・右側面）', canvas.width / 2, canvas.height / 2);
     }
@@ -1235,7 +1237,9 @@ const App = {
       ctx.stroke();
 
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 8px Inter';
+      /* ここに乗るのは印の種類の頭文字（例:「赤み」→「赤」）で日本語なので、
+         ラテン文字専用の `Inter` ではなく（C-8）システムフォント列に揃える。 */
+      ctx.font = 'bold 8px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic Medium", "Yu Gothic", Meiryo, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(m.type.charAt(0), px, py + 3);
     });

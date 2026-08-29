@@ -39,9 +39,14 @@
   --accent-alert: #d32f2f;
   --accent-alert-bg: #fde8e8;
 
-  --font-sans: "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  /* フォント統一（マスター指示・C-8）。`my.html`/`admin.html`/`backend/js/magazine-view.js`
+     の3箇所は元々このシステムフォント指定で揃っていた。ここ（`index.html`）だけ
+     "Noto Sans JP"/"Noto Serif JP" を指定していたが、フォントファイルを同梱していない
+     ため実機ではどのみちシステムフォントに落ちていた（見た目は変わらない・実測して
+     `npm run walk` の絵で確認済み）。指定を実態に合わせ、4箇所を揃える。 */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic Medium", "Yu Gothic", Meiryo, sans-serif;
   --font-en: "Inter", -apple-system, sans-serif;
-  --font-serif: "Noto Serif JP", "Shippori Mincho", "Times New Roman", serif;
+  --font-serif: "Hiragino Mincho ProN", "Yu Mincho", YuMincho, "Times New Roman", serif;
 
   --ease-editorial: cubic-bezier(0.16, 1, 0.3, 1);
   --header-height: 54px;
