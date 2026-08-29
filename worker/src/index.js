@@ -29,6 +29,7 @@ import {
   updateMembershipSchema,
   updatePetSchema,
   updateReportSchema,
+  updateShopSchema,
 } from './api-schemas.js';
 import { createDataStore } from './data-stores/create-data-store.js';
 import { StoreError } from './data-stores/supabase-data-store.js';
@@ -218,6 +219,17 @@ async function handleSupabaseApi(request, store, path, cors, env) {
     return json({ membership: await store.updateStaff(parts[2], parsed.data) }, 200, cors);
   }
 
+  /* 「次回のおすすめご来店時期」の既定日数。書き換えは RLS `shops_admin_update` が
+     店舗の管理者だけに絞る（一般スタッフの PATCH は upstream_rejected になる）。 */
+  if (path === '/api/shop') {
+    if (request.method === 'GET') return json({ shop: await store.getShop() }, 200, cors);
+    if (request.method === 'PATCH') {
+      const parsed = await parseJson(request, updateShopSchema);
+      if (!parsed.ok) return invalidJsonResult(parsed, cors);
+      return json({ shop: await store.updateShop(parsed.data) }, 200, cors);
+    }
+  }
+
   if (path === '/api/my/pets' && request.method === 'GET') {
     return json({ pets: await store.listPets() }, 200, cors);
   }
@@ -231,7 +243,16 @@ async function handleSupabaseApi(request, store, path, cors, env) {
         store.getReport(petId, parts[5]),
         store.getPet(petId),
       ]);
-      return json({ report: { ...report, pet: { id: pet.id, name: pet.name } } }, 200, cors);
+      /* 「次回のおすすめご来店時期」（マスター指示 2026-08-29・D-20260829-58）。
+         読めなくてもカルテ本体は返す——欄が空になるだけにする。 */
+      const shopDefaultRevisitDays = await store.getShopDefaultRevisitDays(pet.shop_id).catch(() => null);
+      return json({
+        report: {
+          ...report,
+          pet: { id: pet.id, name: pet.name, revisitDaysOverride: pet.revisit_days_override ?? null },
+          shopDefaultRevisitDays,
+        },
+      }, 200, cors);
     }
   }
 

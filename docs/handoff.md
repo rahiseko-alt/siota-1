@@ -30,6 +30,47 @@
 
 ---
 
+## 0-V. いちばん新しい（2026-08-29・その19）— **第6章 `#3`「次回のおすすめご来店時期」を実装（`D-20260829-58`）**
+
+マスターが「デフォルトは30日後、別途修正できるようにする。修正はデフォルト自体の
+修正も犬ごとの修正も可能とする。」と回答（`D-20260829-58`）。これに沿って
+新規 migration・API・UI・検査を一式実装した。
+
+**やったこと**:
+- `supabase/migrations/202608290010_revisit_interval.sql`: `shops.default_revisit_days`
+  （既定30・1〜3650）と `pets.revisit_days_override`（nullable・1〜3650）を新設。
+  RLS は書き込みを管理者限定（`shops_admin_update`）に、⑥飼い主の読み取りを
+  自分の犬が居る店舗に限定（`shops_customer_select`）で許可。列を絞った GRANT
+  （`202608270009` と同じ多層防御パターン）も両方の新列に追加
+- `worker/src/api-schemas.js`: `updatePetSchema` に `revisitDaysOverride`、新規
+  `updateShopSchema` を追加
+- `worker/src/data-stores/supabase-data-store.js`: pet の SELECT 列に
+  `revisit_days_override` を追加、`updatePet()` のマッピングを拡張、
+  `getShop()`/`updateShop()`/`getShopDefaultRevisitDays()` を新設
+- `worker/src/index.js`: `/api/shop` の GET/PATCH を新設。⑥飼い主向けレポート
+  応答に `pet.revisitDaysOverride` と `shopDefaultRevisitDays` を追加
+- `backend/js/magazine-view.js`: `renderMagazine()` に「次回のおすすめご来店時期」の
+  実描画を新設（来店日＋（犬の上書き ?? 店舗既定）日数を計算・表示）。編集欄
+  （`opts.onRevisitDaysChange` が渡っているときだけ表示＝スタッフ限定）も同居させた
+- `src/js/ui.js`（⑤側）・`backend/js/supabase-staff.js`（`/api/shop` 取得・
+  `mapPet()` に `revisitDaysOverride` 追加）・`backend/js/supabase-auth.js`（⑥側）を配線
+- `backend/js/supabase-admin.js`: 管理者画面に「④ 店舗設定」を新設（既定日数の編集）
+- 新設 `scripts/verify-revisit-interval.mjs`（12 `check()`）。`mutate-run.mjs` に
+  壊し方8種を追加し、実測で11件を赤にした（残り1件は未証明のまま理由つきで記帳）
+
+**検査（すべて EXIT 0 / green）**: `npm run build && npm run check && npm test`。
+`verify:revisit`（11/11）。`gate.mjs --end`/`delivery-ready.mjs` とも通過。
+
+### 次にやること
+
+第6章のマスター判断待ちは残り5件（`#5` `#6` `#11` `#22` `#35`）——`#3` は今回で完了。
+master の「再度質問しろ」指示（`#3`/`#5`/`#6`/`#11`/`#22`/`#35`）のうち `#3` のみ
+本回答で消化済み。残り5件を `AskUserQuestion` で改めて問うこと。マージ後は
+`D-20260829-57` によりデプロイの都度確認不要——ただしマスターへの完了報告は
+日本語で毎回行うこと（マスター指示・2回繰り返し）。
+
+---
+
 ## 0-U. いちばん新しい（2026-08-29・その18）— **C-8: 全文明朝体に再指示（`D-20260829-56`）**
 
 マスターより「次回のおすすめご来店時期」ブロックのフォントを問われ、見出しは明朝体・

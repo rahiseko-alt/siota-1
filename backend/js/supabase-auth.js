@@ -155,6 +155,10 @@ async function renderReport(container, report, supabase, siblingReports) {
     siblingReports: siblingReports || [],
     currentReportId: report.id,
     linkBase: `/my/pets/${encodeURIComponent(report.pet_id || '')}/reports/`,
+    /* 次回のおすすめご来店時期（マスター指示 2026-08-29・D-20260829-58）。
+       編集は⑤スタッフ側だけ——ここには `onRevisitDaysChange` を渡さない。 */
+    revisitDaysOverride: report.pet?.revisitDaysOverride ?? null,
+    shopDefaultRevisitDays: report.shopDefaultRevisitDays,
   }, {
     onBack: () => { location.href = `/my/pets/${encodeURIComponent(report.pet_id || '')}`; },
     backLabel: 'このわんちゃんのカルテ一覧へ戻る',

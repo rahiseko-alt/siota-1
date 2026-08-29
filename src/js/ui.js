@@ -355,6 +355,18 @@ const App = {
       petName: pet.petName || '',
       reportDate: report.isoDate || report.date || '',
       data: report,
+      /* 「次回のおすすめご来店時期」（マスター指示 2026-08-29・D-20260829-58）。 */
+      revisitDaysOverride: pet.revisitDaysOverride ?? null,
+      shopDefaultRevisitDays: pet.shopDefaultRevisitDays,
+    }, {
+      onRevisitDaysChange: (value) => globalThis.TrimmerStaffApi.request(
+        `/api/pets/${encodeURIComponent(pet.id)}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ revisitDaysOverride: value }),
+        },
+      ),
     });
     /* **描けたことを覚えておく。** 段のタブ「04」は本番の動線として使う
        （マスター回答 2026-08-27・`docs/deferred.md` #2）ので、まだ描いていない

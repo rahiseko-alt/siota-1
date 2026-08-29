@@ -184,6 +184,24 @@ const TEMPLATE = `
     </div>
   </section>
 
+  <section class="magazine-revisit-box" data-view="revisit-box" hidden>
+    <div class="magazine-revisit-tag">Next Schedule</div>
+    <h4 class="magazine-revisit-title">次回のおすすめご来店時期</h4>
+    <p class="magazine-revisit-desc">
+      被毛の毛玉防止と皮膚の健康維持のため、定期的なケアをおすすめいたします。
+    </p>
+    <div class="magazine-revisit-date" data-view="revisit-date"></div>
+    <div data-view="revisit-edit" hidden style="margin-top:20px">
+      <label style="font-size:12px;opacity:.8;display:block;margin-bottom:6px">この犬だけの来店間隔（空欄なら既定日数を使用）</label>
+      <div style="display:flex;gap:8px;justify-content:center;align-items:center">
+        <input type="number" data-view="revisit-days-input" min="1" max="3650" style="width:90px;padding:8px;text-align:center">
+        <span style="font-size:12px">日後</span>
+        <button type="button" data-view="revisit-save-btn" class="boxbutton boxbutton--white" style="padding:8px 16px;min-height:auto">保存</button>
+      </div>
+      <p data-view="revisit-save-status" style="font-size:11px;margin-top:6px;min-height:14px"></p>
+    </div>
+  </section>
+
   <div style="text-align:center;margin-top:40px">
     <button type="button" class="btn-toggle-all" data-view="back-btn" style="padding:12px 28px" hidden></button>
   </div>
@@ -258,6 +276,11 @@ const STYLE = `
 .wave-card.is-open .wave-card-toggle-icon{transform:rotate(180deg)}
 .wave-separator-svg{width:100%;height:12px;display:block;fill:none;stroke:var(--border-subtle);stroke-width:1.5}
 .wave-card-body{display:none;padding:24px 20px}
+.magazine-revisit-box{background:var(--ink-primary);color:#fff;padding:36px 28px;text-align:center;margin-bottom:40px}
+.magazine-revisit-tag{font-family:var(--font-en);font-size:11px;letter-spacing:.2em;color:rgba(255,255,255,.6);text-transform:uppercase;margin-bottom:8px}
+.magazine-revisit-title{font-family:var(--font-serif);font-size:22px;font-weight:600;letter-spacing:.08em;margin-bottom:14px}
+.magazine-revisit-desc{font-size:14px;line-height:1.9;color:rgba(255,255,255,.85);max-width:600px;margin:0 auto 24px}
+.magazine-revisit-date{font-family:var(--font-en);font-size:26px;font-weight:700;letter-spacing:.05em}
 .wave-card.is-open .wave-card-body{display:block}
 .wave-body-grid-2col{display:grid;grid-template-columns:1fr;gap:20px}
 @media(min-width:768px){.wave-body-grid-2col{grid-template-columns:1fr 1fr}}
@@ -313,6 +336,21 @@ function fmtDate(isoOrSlash) {
   const slash = s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/);
   if (slash) return `${slash[1]}.${String(slash[2]).padStart(2, '0')}.${String(slash[3]).padStart(2, '0')}`;
   return s || '（日付未入力）';
+}
+
+/* 来店日に日数を足す（マスター指示 2026-08-29・D-20260829-58「次回のおすすめご来店時期」）。
+   `fmtDate` と表記を揃えるため同じ `YYYY.MM.DD` で返す。UTC で計算する
+   （タイムゾーンの日またぎでローカル日時を使うと1日ずれることがあるため）。 */
+function addDaysToIsoLike(dateStr, days) {
+  const s = esc(dateStr).trim();
+  const m = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (!m) return '';
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  d.setUTCDate(d.getUTCDate() + days);
+  const y = d.getUTCFullYear();
+  const mo = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const da = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}.${mo}.${da}`;
 }
 
 function firstNonEmpty(list) {
@@ -632,6 +670,61 @@ export function renderMagazine(container, report, opts = {}) {
   renderGallery(container, cutPhotos);
 
   renderTimeline(container, report);
+
+  /* 次回のおすすめご来店時期（マスター指示 2026-08-29・D-20260829-58）。
+     日数 = 犬ごとの上書き（`report.revisitDaysOverride`）優先、無ければ店舗の既定
+     （`report.shopDefaultRevisitDays`）。**どちらも渡ってこなければ節ごと隠す**
+     （D-10・持っていない値を出さない）。編集欄はスタッフ側だけ
+     （`opts.onRevisitDaysChange` が渡っているとき）出す——⑥飼い主画面には渡さない。 */
+  const visitDateStr = data.isoDate || data.date || report.reportDate;
+  const overrideRaw = report.revisitDaysOverride;
+  const hasOverride = overrideRaw !== null && overrideRaw !== undefined && Number.isFinite(Number(overrideRaw));
+  const shopDefaultRaw = report.shopDefaultRevisitDays;
+  const revisitDays = hasOverride ? Number(overrideRaw) : Number(shopDefaultRaw);
+  const revisitBox = container.querySelector('[data-view="revisit-box"]');
+  if (revisitBox) {
+    const revisitDateText = Number.isFinite(revisitDays) && revisitDays > 0
+      ? addDaysToIsoLike(visitDateStr, revisitDays)
+      : '';
+    revisitBox.hidden = revisitDateText === '';
+    setText(container, 'revisit-date', revisitDateText);
+
+    const revisitEdit = container.querySelector('[data-view="revisit-edit"]');
+    if (revisitEdit && typeof opts.onRevisitDaysChange === 'function') {
+      revisitBox.hidden = false;
+      revisitEdit.hidden = false;
+      const input = container.querySelector('[data-view="revisit-days-input"]');
+      if (input) input.value = hasOverride ? String(Number(overrideRaw)) : '';
+      const statusEl = container.querySelector('[data-view="revisit-save-status"]');
+      const saveBtn = container.querySelector('[data-view="revisit-save-btn"]');
+      if (saveBtn) {
+        saveBtn.addEventListener('click', async () => {
+          const raw = (input && input.value || '').trim();
+          const value = raw === '' ? null : Number(raw);
+          if (value !== null && (!Number.isInteger(value) || value < 1 || value > 3650)) {
+            if (statusEl) statusEl.textContent = '1〜3650の整数か、空欄にしてください。';
+            return;
+          }
+          saveBtn.disabled = true;
+          if (statusEl) statusEl.textContent = '保存中…';
+          try {
+            await opts.onRevisitDaysChange(value);
+            const nextDays = value !== null ? value : Number(shopDefaultRaw);
+            const nextText = Number.isFinite(nextDays) && nextDays > 0
+              ? addDaysToIsoLike(visitDateStr, nextDays)
+              : '';
+            setText(container, 'revisit-date', nextText);
+            revisitBox.hidden = nextText === '';
+            if (statusEl) statusEl.textContent = '保存しました。';
+          } catch (error) {
+            if (statusEl) statusEl.textContent = `保存できませんでした。${error.message || ''}`;
+          } finally {
+            saveBtn.disabled = false;
+          }
+        });
+      }
+    }
+  }
 
   const backBtn = container.querySelector('[data-view="back-btn"]');
   if (backBtn && typeof opts.onBack === 'function') {

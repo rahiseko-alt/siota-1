@@ -23,9 +23,15 @@ export const updatePetSchema = z.object({
   name: z.string().trim().min(1).max(120).optional(),
   template: z.string().trim().min(1).max(50).optional(),
   active: z.boolean().optional(),
+  revisitDaysOverride: z.number().int().min(1).max(3650).nullable().optional(),
 }).strict().refine((value) => (
   value.name !== undefined || value.template !== undefined || value.active !== undefined
+    || value.revisitDaysOverride !== undefined
 ));
+
+export const updateShopSchema = z.object({
+  defaultRevisitDays: z.number().int().min(1).max(3650),
+}).strict();
 
 export const createReportSchema = z.object({
   petId: uuidSchema,

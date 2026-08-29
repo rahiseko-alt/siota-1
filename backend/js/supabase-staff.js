@@ -47,6 +47,9 @@ export function mapPet(pet) {
     ownerName: (pet.owners && pet.owners.name) || undefined,
     template: pet.template,
     months: (pet.reports || []).map(reportMonth),
+    /* 「次回のおすすめご来店時期」のこの犬だけの上書き（マスター指示 2026-08-29・
+       D-20260829-58）。null = 上書き無し（店舗の既定日数を使う）。 */
+    revisitDaysOverride: pet.revisit_days_override ?? null,
   };
 }
 
@@ -376,10 +379,15 @@ async function bootStaffPortal(PonchiApp) {
     return;
   }
 
-  const reportBody = await readJson(
-    client,
-    `/api/pets/${encodeURIComponent(route.petId)}/reports/${encodeURIComponent(route.reportId)}`,
-  );
+  const [reportBody, shopBody] = await Promise.all([
+    readJson(
+      client,
+      `/api/pets/${encodeURIComponent(route.petId)}/reports/${encodeURIComponent(route.reportId)}`,
+    ),
+    /* 「次回のおすすめご来店時期」の既定日数（マスター指示 2026-08-29・D-20260829-58）。
+       読めなくても⑤の他の項目は表示する——欄が空になるだけにする。 */
+    readJson(client, '/api/shop').catch(() => null),
+  ]);
   activeObjectUrls.forEach((url) => URL.revokeObjectURL(url));
   const hydrated = await hydrateAssetReferences(
     reportBody.report.data,
@@ -388,7 +396,11 @@ async function bootStaffPortal(PonchiApp) {
   );
   activeObjectUrls = hydrated.objectUrls;
   globalThis.__REPORT__ = { ...hydrated.data, reportId: reportBody.report.id };
-  PonchiApp.show('report', { ...pet, reportId: route.reportId });
+  PonchiApp.show('report', {
+    ...pet,
+    reportId: route.reportId,
+    shopDefaultRevisitDays: shopBody && shopBody.shop ? shopBody.shop.default_revisit_days : null,
+  });
   if (globalThis.SaltyDogPonchi) globalThis.SaltyDogPonchi.applyReport(globalThis.__REPORT__);
 }
 

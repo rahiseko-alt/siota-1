@@ -263,7 +263,59 @@ function screenHome() {
       testid: 'delete',
       onSelect: screenDelete,
     },
+    {
+      title: '④ 店舗設定',
+      note: '「次回のおすすめご来店時期」の既定日数を変える',
+      testid: 'shop-settings',
+      onSelect: screenShopSettings,
+    },
   ]));
+}
+
+/* 「次回のおすすめご来店時期」の既定日数（マスター指示 2026-08-29・D-20260829-58）。
+   犬ごとの上書きはこの画面ではなく⑤カルテ確認画面（`magazine-view.js`）で直す
+   ——編集の場所は「その犬のカルテを見ているとき」がいちばん迷わない。 */
+function screenShopSettings() {
+  clear();
+  contentEl.append(backButton(screenHome));
+  contentEl.append(heading('店舗設定'));
+  contentEl.append(note('「次回のおすすめご来店時期」は、カルテの来店日にこの日数を足して出します。犬ごとに別の日数を使いたいときは、その犬のカルテ確認画面で個別に設定できます。'));
+  const field = el('label', 'admin-field');
+  field.append(el('span', null, '既定の来店間隔（日）'));
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.min = '1';
+  input.max = '3650';
+  input.dataset.adminField = 'shop-default-revisit-days';
+  field.append(input);
+  contentEl.append(field);
+  const button = submitButton('保存する', 'save-shop-settings');
+  const result = el('p', 'admin-result');
+  contentEl.append(button, result);
+
+  api('/api/shop').then((body) => {
+    input.value = String((body.shop && body.shop.default_revisit_days) || '');
+  }).catch(() => {
+    setMessage(result, '既定の日数を読み込めませんでした。');
+  });
+
+  button.onclick = async () => {
+    const value = Number(input.value);
+    if (!Number.isInteger(value) || value < 1 || value > 3650) {
+      setMessage(result, '1〜3650の整数で入力してください。');
+      return;
+    }
+    button.disabled = true;
+    setMessage(result, '保存しています…');
+    try {
+      await api('/api/shop', { method: 'PATCH', body: JSON.stringify({ defaultRevisitDays: value }) });
+      setMessage(result, '保存しました。');
+    } catch (error) {
+      setMessage(result, `保存できませんでした: ${error.message}`);
+    } finally {
+      button.disabled = false;
+    }
+  };
 }
 
 function screenRepeat() {

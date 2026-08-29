@@ -68,7 +68,7 @@ export class SupabaseDataStore {
   }
 
   async listPets() {
-    return this.request('/rest/v1/pets?select=id,shop_id,owner_id,name,template,active,created_at,updated_at&active=eq.true&order=created_at.desc');
+    return this.request('/rest/v1/pets?select=id,shop_id,owner_id,name,template,active,revisit_days_override,created_at,updated_at&active=eq.true&order=created_at.desc');
   }
 
   /* スタッフ側の「犬を選ぶ」画面（/edit）用。飼い主を経由せず店舗の犬を直接一覧する（F2）。
@@ -76,7 +76,7 @@ export class SupabaseDataStore {
      embed 構文で、pets_owner_shop_fkey を辿って飼い主名を1回の問い合わせで取得する。 */
   async listPetsWithOwner() {
     return this.request(
-      '/rest/v1/pets?select=id,shop_id,owner_id,name,template,active,created_at,owners(name)&active=eq.true&order=created_at.desc',
+      '/rest/v1/pets?select=id,shop_id,owner_id,name,template,active,revisit_days_override,created_at,owners(name)&active=eq.true&order=created_at.desc',
     );
   }
 
@@ -108,6 +108,34 @@ export class SupabaseDataStore {
     return this.staffShopId;
   }
 
+  /** 「次回のおすすめご来店時期」の既定日数。店舗の管理者だけが書き換えられる（RLS `shops_admin_update`）。 */
+  async getShop() {
+    const shopId = await this.getStaffShopId();
+    const rows = await this.request(
+      `/rest/v1/shops?select=id,name,slug,default_revisit_days,created_at&id=eq.${encodeURIComponent(shopId)}&limit=1`,
+    );
+    return this.one(rows);
+  }
+
+  /* ⑥飼い主画面が「次回のおすすめご来店時期」を出すための、店側限定でない読み口。
+     `getShop()` は `getStaffShopId()` を要求する（スタッフしか通らない）ので使えない。
+     RLS `shops_customer_select`（自分の犬が居る店舗に限る）が飼い主の読み取りを許す。 */
+  async getShopDefaultRevisitDays(shopId) {
+    const rows = await this.request(
+      `/rest/v1/shops?select=default_revisit_days&id=eq.${encodeURIComponent(shopId)}&limit=1`,
+    );
+    return this.one(rows).default_revisit_days;
+  }
+
+  async updateShop(input) {
+    const shopId = await this.getStaffShopId();
+    const rows = await this.request(
+      `/rest/v1/shops?id=eq.${encodeURIComponent(shopId)}&select=id,name,slug,default_revisit_days,created_at`,
+      { method: 'PATCH', body: { default_revisit_days: input.defaultRevisitDays }, prefer: 'return=representation' },
+    );
+    return this.one(rows);
+  }
+
   async listOwners() {
     return this.request(
       '/rest/v1/owners?select=id,shop_id,name,active,created_at,updated_at&active=eq.true&order=created_at.desc',
@@ -118,7 +146,7 @@ export class SupabaseDataStore {
     const encoded = encodeURIComponent(ownerId);
     const [owners, pets] = await Promise.all([
       this.request(`/rest/v1/owners?select=id,shop_id,name,active,created_at,updated_at&id=eq.${encoded}&limit=1`),
-      this.request(`/rest/v1/pets?select=id,shop_id,owner_id,name,template,active,created_at,updated_at&owner_id=eq.${encoded}&active=eq.true&order=created_at.desc`),
+      this.request(`/rest/v1/pets?select=id,shop_id,owner_id,name,template,active,revisit_days_override,created_at,updated_at&owner_id=eq.${encoded}&active=eq.true&order=created_at.desc`),
     ]);
     return { ...this.one(owners), pets };
   }
@@ -152,14 +180,14 @@ export class SupabaseDataStore {
 
   async listOwnerPets(ownerId) {
     return this.request(
-      `/rest/v1/pets?select=id,shop_id,owner_id,name,template,active,created_at,updated_at&owner_id=eq.${encodeURIComponent(ownerId)}&active=eq.true&order=created_at.desc`,
+      `/rest/v1/pets?select=id,shop_id,owner_id,name,template,active,revisit_days_override,created_at,updated_at&owner_id=eq.${encodeURIComponent(ownerId)}&active=eq.true&order=created_at.desc`,
     );
   }
 
   async getPet(petId) {
     const encoded = encodeURIComponent(petId);
     const [pets, reports] = await Promise.all([
-      this.request(`/rest/v1/pets?select=id,shop_id,owner_id,name,template,active,created_at,updated_at&id=eq.${encoded}&limit=1`),
+      this.request(`/rest/v1/pets?select=id,shop_id,owner_id,name,template,active,revisit_days_override,created_at,updated_at&id=eq.${encoded}&limit=1`),
       /* `deleting` も返す。以前は隠していたが、削除が途中で失敗するとカルテは
          `deleting` のまま残り、**一覧から消えるだけで実体は残る**——写真ごと
          残っているのに、画面からは再試行にも到達できなかった（D-20260824-30 の 10）。
@@ -174,7 +202,7 @@ export class SupabaseDataStore {
   async createPet(ownerId, input) {
     const owner = await this.getOwner(ownerId);
     const rows = await this.request(
-      '/rest/v1/pets?select=id,shop_id,owner_id,name,template,active,created_at,updated_at',
+      '/rest/v1/pets?select=id,shop_id,owner_id,name,template,active,revisit_days_override,created_at,updated_at',
       {
         method: 'POST',
         body: { shop_id: owner.shop_id, owner_id: ownerId, name: input.name, template: input.template },
@@ -185,9 +213,12 @@ export class SupabaseDataStore {
   }
 
   async updatePet(petId, input) {
+    const { revisitDaysOverride, ...rest } = input;
+    const body = { ...rest };
+    if ('revisitDaysOverride' in input) body.revisit_days_override = revisitDaysOverride;
     const rows = await this.request(
-      `/rest/v1/pets?id=eq.${encodeURIComponent(petId)}&select=id,shop_id,owner_id,name,template,active,created_at,updated_at`,
-      { method: 'PATCH', body: input, prefer: 'return=representation' },
+      `/rest/v1/pets?id=eq.${encodeURIComponent(petId)}&select=id,shop_id,owner_id,name,template,active,revisit_days_override,created_at,updated_at`,
+      { method: 'PATCH', body, prefer: 'return=representation' },
     );
     return this.one(rows);
   }
