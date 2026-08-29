@@ -83,12 +83,14 @@ function solidPng([r, g, b], size = 48) {
   ]);
 }
 
-/** 枠ごとに違う色。**どれがどこへ行ったか**を色で見分ける。 */
+/** 枠ごとに違う色。**どれがどこへ行ったか**を色で見分ける。
+    `teeth2` は口の写真2枚目（マスター指示 2026-08-29・C-11で複数枚に対応）。 */
 const COLOR = {
   hero: [220, 40, 40],      /* 仕上がり1枚目 → 表紙 */
   gallery: [40, 160, 60],   /* 仕上がり2枚目 → ギャラリー */
   ear: [40, 60, 200],       /* 耳 */
-  teeth: [230, 180, 30],    /* 歯 */
+  teeth: [230, 180, 30],    /* 歯（1枚目） */
+  teeth2: [180, 90, 220],   /* 歯（2枚目） */
 };
 
 const file = (name, color) => ({ name, mimeType: 'image/png', buffer: solidPng(color) });
@@ -122,6 +124,32 @@ const pixelOf = (page, view) => page.evaluate(async (selector) => {
 const near = (got, want) => Array.isArray(got)
   && got.every((v, i) => Math.abs(v - want[i]) <= 12);
 
+/** ギャラリー（`data-view` が付いた container の中の `img` 全部）の中心色を
+    順番に読む。歯の写真が複数枚になった（C-11）ので、単一 img の `pixelOf` では
+    2枚目を見られない。 */
+const pixelsOfGallery = (page, view) => page.evaluate(async (selector) => {
+  const imgs = [...document.querySelectorAll(`[data-view="${selector}"] img`)];
+  const out = [];
+  for (const img of imgs) {
+    if (!img.complete || img.naturalWidth === 0) {
+      await new Promise((resolve) => {
+        const done = () => resolve();
+        img.addEventListener('load', done, { once: true });
+        img.addEventListener('error', done, { once: true });
+        setTimeout(done, 10_000);
+      });
+    }
+    if (img.naturalWidth === 0) { out.push('まだ絵が入っていない'); continue; }
+    const canvas = document.createElement('canvas');
+    canvas.width = 8; canvas.height = 8;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, 8, 8);
+    const d = ctx.getImageData(4, 4, 1, 1).data;
+    out.push([d[0], d[1], d[2]]);
+  }
+  return out;
+}, view);
+
 const PET_NAME = `写真犬${Math.random().toString(36).slice(2, 7)}`;
 const { base: BASE, stop } = await startLocalWorker({ port: Number(process.env.PHOTO_PORT || 8798) });
 let browser = null;
@@ -152,7 +180,8 @@ try {
   for (const [kind, files] of [
     ['trimming', [file('finish-1.png', COLOR.hero), file('finish-2.png', COLOR.gallery)]],
     ['ear', [file('ear.png', COLOR.ear)]],
-    ['teeth', [file('teeth.png', COLOR.teeth)]],
+    /* 口の写真は最大2枚（マスター指示 2026-08-29・C-11）。 */
+    ['teeth', [file('teeth-1.png', COLOR.teeth), file('teeth-2.png', COLOR.teeth2)]],
   ]) {
     const input = page.locator(`[data-field="photo-${kind}"]`);
     const exists = await input.count();
@@ -169,6 +198,8 @@ try {
       exists === 1 && thumbs === files.length, `入力欄=${exists} 付いた枚数=${thumbs}`);
   }
 
+  /* コースは必須（マスター指示 2026-08-29・C-9）。選ばないと確定できない。 */
+  await page.selectOption('[data-field="course"]', 'トリミングコース');
   /* ── ④ 確定 ── */
   await Promise.all([
     page.waitForURL((u) => /^\/edit\/p\/[0-9a-f-]{36}\/[0-9a-f-]{36}$/.test(u.pathname), { timeout: 60_000 }),
@@ -177,7 +208,8 @@ try {
   const reportId = new URL(page.url()).pathname.split('/').pop();
   check('4. 写真つきで確定できた', /^[0-9a-f-]{36}$/.test(reportId), `id=${reportId}`);
 
-  /* ── ⑤ 実体が上がっている（data: のままなら finalize が拒否する） ── */
+  /* ── ⑤ 実体が上がっている（data: のままなら finalize が拒否する） ──
+     写真の枚数は 5（仕上がり2 + 耳1 + 歯2・マスター指示 2026-08-29・C-11）。 */
   const saved = await (await fetch(
     `${BASE}/api/pets/${pet.id}/reports/${reportId}`, { headers: authHeaders },
   )).json();
@@ -185,10 +217,10 @@ try {
   const savedPhotos = [
     ...((savedData.trimming || {}).photos || []),
     (savedData.ear || {}).photo,
-    (savedData.teeth || {}).photo,
+    ...((savedData.teeth || {}).photos || []),
   ].filter(Boolean);
-  check('5. 保存された写真4枚が実体になっている（asset://）',
-    savedPhotos.length === 4 && savedPhotos.every((v) => v.startsWith('asset://')),
+  check('5. 保存された写真5枚が実体になっている（asset://）',
+    savedPhotos.length === 5 && savedPhotos.every((v) => v.startsWith('asset://')),
     `${savedPhotos.length}件 / ${JSON.stringify(savedPhotos.map((v) => v.slice(0, 14)))}`);
 
   /* ── ⑥〜⑩ 飼い主の画面で、入れたとおりに出る ── */
@@ -210,8 +242,11 @@ try {
   const ear = await pixelOf(ownerPage, 'ear-image');
   check('8. 飼い主: 耳の写真が、耳の欄に', near(ear, COLOR.ear), `色=${JSON.stringify(ear)}`);
 
-  const teeth = await pixelOf(ownerPage, 'teeth-image');
-  check('9. 飼い主: 歯の写真が、歯の欄に', near(teeth, COLOR.teeth), `色=${JSON.stringify(teeth)}`);
+  /* 口の写真は2枚（C-11）。ギャラリーに順番どおり並ぶこと。 */
+  const teethColors = await pixelsOfGallery(ownerPage, 'teeth-gallery');
+  check('9. 飼い主: 歯の写真が2枚、歯の欄に順番どおり',
+    teethColors.length === 2 && near(teethColors[0], COLOR.teeth) && near(teethColors[1], COLOR.teeth2),
+    `${teethColors.length}枚 ${JSON.stringify(teethColors)}`);
 
   /* **`src=""` の img を数える。** 空文字はブラウザが**いま開いているページのURL**に
      解決するので、`img.src === location.href` で見分けられる。右辺を `/my/pets/` の
@@ -230,7 +265,7 @@ try {
   await page.goto(`${BASE}/edit/p/${pet.id}/${reportId}?revise=1`, { waitUntil: 'networkidle' });
   await page.waitForSelector('#screen-3.is-active', { timeout: 20_000 });
   const keptThumbs = await page.locator('.photo-pick__thumb').count();
-  check('11. 直しで開くと、付けた写真が控えに残っている', keptThumbs === 4, `${keptThumbs}枚`);
+  check('11. 直しで開くと、付けた写真5枚が控えに残っている', keptThumbs === 5, `${keptThumbs}枚`);
 
   await page.fill('[data-field="staff-note"]', '写真はそのままで、文だけ直した。');
   await Promise.all([
@@ -244,9 +279,9 @@ try {
   const revisedPhotos = [
     ...((revisedData.trimming || {}).photos || []),
     (revisedData.ear || {}).photo,
-    (revisedData.teeth || {}).photo,
+    ...((revisedData.teeth || {}).photos || []),
   ].filter(Boolean);
-  check('12. 直したあとも写真4枚が残っている', revisedPhotos.length === 4, `${revisedPhotos.length}件`);
+  check('12. 直したあとも写真5枚が残っている', revisedPhotos.length === 5, `${revisedPhotos.length}件`);
 
   check('13. アプリ由来のエラーが無い', pageErrors.length === 0, pageErrors.join(' | '));
 } catch (error) {

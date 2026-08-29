@@ -45,6 +45,58 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
  * 証明の役に立たない（何を検出したのか言えないため）。
  */
 export const MUTATIONS = [
+  /* ── 25回目: 飼い主に届く日付が、来店日ではなく確定日に戻る
+     （2026-08-29・手元で実測・マスター指示 C-3・敵対検証「検証2」の指摘） */
+  {
+    id: 'report-date-confirm-wins',
+    why: '**飼い主の画面に、来店日ではなく確定を押した日が出る**（C-3「来店日を時系列基準にする」が画面に反映されない）',
+    file: 'backend/js/magazine-view.js',
+    find: "setText(container, 'report-date', `${fmtDate(data.isoDate || data.date || report.reportDate)}`);",
+    replace: "setText(container, 'report-date', `${fmtDate(report.reportDate || data.isoDate || data.date)}`);",
+    scripts: ['verify-report-roundtrip.mjs'],
+  },
+  /* ── 24回目: コース必須を通り抜けられる（2026-08-29・手元で実測・マスター指示 C-9）
+     `commitReport()` 先頭の必須検証を外す。**確定は通ってしまう**ので土台は壊れず、
+     「コースを選ばずに確定を押すと止まる」ことだけを見ている `21.` が赤になる。 */
+  {
+    id: 'course-required-off',
+    why: '**コースを選ばずに確定できてしまう**（どのコースの記録か分からないカルテが残る）',
+    file: 'src/js/ui.js',
+    find: 'if (courseEl && !courseEl.value) {',
+    replace: 'if (false && courseEl && !courseEl.value) {',
+    scripts: ['verify-report-roundtrip.mjs'],
+  },
+  /* ── 23回目: ⑤⑥にBCSが出ない（2026-08-29・手元で実測・マスター指示 C-1）
+     `bcs` を常に0にする。**保存は壊れない**ので他の項目は無事だが、
+     BCS を読む `3d./9d.` だけが赤になる。 */
+  {
+    id: 'bcs-text-blank',
+    why: '**BCSがトリマー確認にも飼い主画面にも出ない**（見せる約束のBCSが消える）',
+    file: 'backend/js/magazine-view.js',
+    find: 'const bcs = Number(data.bcs) || 0;',
+    replace: 'const bcs = 0;',
+    scripts: ['verify-report-roundtrip.mjs'],
+  },
+  /* ── 22回目: ベスト体重が出ない（2026-08-29・手元で実測・マスター指示 C-4）
+     `dog-sub` を常に空にする。ベスト体重を読む `3c./9c.` だけが赤になる。 */
+  {
+    id: 'best-weight-blank',
+    why: '**ベスト体重がトリマー確認にも飼い主画面にも出ない**（目標が伝わらない）',
+    file: 'backend/js/magazine-view.js',
+    find: "setText(container, 'dog-sub', data.bestWeight ? `目標体重 ${data.bestWeight}kg` : '');",
+    replace: "setText(container, 'dog-sub', '');",
+    scripts: ['verify-report-roundtrip.mjs'],
+  },
+  /* ── 21回目: 来店コースが出ない（2026-08-29・手元で実測・マスター指示 C-9）
+     `course` を常に空にする。コースを読む `3b./9b.` だけが赤になる。 */
+  {
+    id: 'course-badge-blank',
+    why: '**来店コースがトリマー確認にも飼い主画面にも出ない**（どのコースの記録か分からない）',
+    file: 'backend/js/magazine-view.js',
+    find: 'const course = esc(data.course).trim();',
+    replace: "const course = '';",
+    scripts: ['verify-report-roundtrip.mjs'],
+  },
   /* ── 20回目: 確定の要求がエラーになる（2026-08-28・手元で実測）
      `verify-xss` の3つ目の分岐（112行目）は「細工を飼い主の画面まで届けられ
      なかった」ことを報告する行。**これが無いと、検査が実際には走っていないのに
@@ -76,9 +128,12 @@ export const MUTATIONS = [
   {
     id: 'ear-right-input-missing',
     why: '**右耳の記入欄が画面から消える**（記録できないまま確定でき、飼い主にはその項目が空で届く）',
+    /* 2026-08-29: 耳が6段階になり（マスター指示 C-6）、右耳の入れ物は
+       `.segmented-stepper` から `.teeth-selector-grid` へ変わった。`data-ear="right"`
+       自体は残っているので、壊し方はそこを狙う（`docs/ops/plan.md` 第10章）。 */
     file: 'src/index.html',
-    find: '<div class="segmented-stepper" data-ear="right">',
-    replace: '<div class="segmented-stepper">',
+    find: '<div class="teeth-selector-grid" data-ear="right">',
+    replace: '<div class="teeth-selector-grid">',
     scripts: ['verify-report-roundtrip.mjs'],
   },
   /* ── 17回目: 一覧に犬が1頭も並ばない（2026-08-28・手元で実測）

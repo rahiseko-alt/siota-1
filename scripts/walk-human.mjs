@@ -99,6 +99,48 @@ try {
     }
   }
 
+  /** 新しい欄（マスター指示 2026-08-29・C-1〜C-12）を記入する。**書けたことを確かめて
+      から先へ進む**——`writeKarte` と同じ理由。空のまま撮ると、絵にその項目が
+      写らず、絵だけで判定するマスターにはその項目が存在しないのと同じになる
+      （受入条件 #7）。コースは確定の必須条件でもある（C-9）。 */
+  async function fillNewFields() {
+    const result = await page.evaluate(() => {
+      const missing = [];
+      const course = document.querySelector('[data-field="course"]');
+      if (!course) missing.push('course');
+      else { course.value = 'トリミングコース'; course.dispatchEvent(new Event('change', { bubbles: true })); }
+
+      const date = document.getElementById('input-visit-date');
+      if (!date) missing.push('visit-date');
+      else { date.value = '2026-08-29'; date.dispatchEvent(new Event('input', { bubbles: true })); }
+
+      const bestWeight = document.getElementById('input-best-weight');
+      if (!bestWeight) missing.push('best-weight');
+      else { bestWeight.value = '3.2'; bestWeight.dispatchEvent(new Event('input', { bubbles: true })); }
+
+      const bcsBtn = [...document.querySelectorAll('#bcs-stepper-wrap .stepper-btn')]
+        .find((el) => (el.getAttribute('onclick') || '').includes("'bcs', 3"));
+      if (!bcsBtn) missing.push('bcs'); else bcsBtn.click();
+
+      for (const [side, value] of [['front', 2], ['rear', 3]]) {
+        const group = document.querySelector(`[data-group="nail"][data-side="${side}"]`);
+        const btn = group && [...group.querySelectorAll('.stepper-btn')]
+          .find((el) => (el.querySelector('.val') || {}).textContent === String(value));
+        if (!btn) missing.push(`nail-${side}`); else btn.click();
+      }
+
+      for (const [side, value] of [['right', 5], ['left', 2]]) {
+        const btn = document.querySelector(`[data-ear="${side}"] .teeth-pill-btn[data-level="${value}"]`);
+        if (!btn) missing.push(`ear-${side}`); else btn.click();
+      }
+
+      return { missing };
+    });
+    if (result.missing.length > 0) {
+      throw new Error(`新しい欄が画面に無い: ${JSON.stringify(result.missing)}`);
+    }
+  }
+
   /** 見えている文字をタップする（人間と同じ探し方）。
       同じ文字のボタンが複数あるときは、見えているものを選ぶ。 */
   async function tapText(text) {
@@ -191,6 +233,9 @@ try {
     await tapDog(DOG);
     await shot(page, `03 犬の名前を選んだ（${DOG}）`);
 
+    await fillNewFields();
+    await shot(page, '03b コース・ベスト体重・BCS・爪（前足/後ろ足）・耳（6段階）を記入した');
+
     await writeKarte('今日はおとなしくしていました。');
     await shot(page, '04 カルテを書いた');
 
@@ -260,6 +305,13 @@ try {
     await shot(page, 'M2-2 タッチ1 同じ犬に戻った 書きかけは残っているか');
 
     /* 間違い3: 顧客ページまで進んだが直したい → 記入に戻るまで */
+    /* コース未選択のままだと確定が `alert()` で止まる（マスター指示 2026-08-29・C-9）。
+       ここで見たいのは「進んでから戻る」動線であって新しい欄の絵ではないので、
+       画面には残さず確定を通すためだけに選ぶ。 */
+    await page.evaluate(() => {
+      const course = document.querySelector('[data-field="course"]');
+      if (course) { course.value = 'トリミングコース'; course.dispatchEvent(new Event('change', { bubbles: true })); }
+    });
     await tapText('確定してお客様カルテ');
     await shot(page, 'M3-0 顧客ページまで進んだ');
     await tapText('03 カルテ作成');

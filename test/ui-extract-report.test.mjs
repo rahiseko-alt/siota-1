@@ -61,9 +61,9 @@ test('何も触っていないカルテは、キーを1つも出さない', () =
 test('触った項目だけがキーになる（触っていない項目は器ごと出さない）', () => {
   const App = loadApp({ fields: { 'staff-note': '耳の裏を丁寧に洗いました。' } });
   App.marks = [];
-  App.form.nail = 2;
+  App.form.nail.front = 2;
   const out = App.extractReport();
-  assert.deepEqual(plain(out), { staffNote: '耳の裏を丁寧に洗いました。', nail: { level: 2 } });
+  assert.deepEqual(plain(out), { staffNote: '耳の裏を丁寧に洗いました。', nail: { front: 2, rear: 0 } });
   assert.ok(!('ear' in out), '触っていない耳が出ている');
   assert.ok(!('teeth' in out), '触っていない歯が出ている');
   assert.ok(!('weights' in out), '触っていない体重が出ている');
@@ -95,10 +95,14 @@ test('⑥が読むキーの外は出さない（届かないキーを作らな�
   );
   const App = loadApp({
     petName: 'X',
-    fields: { 'staff-note': 'a', 'trim-length': '8mm (標準ふんわり)', 'trim-style': 'テディベアカット' },
+    fields: { 'staff-note': 'a', course: 'トリミングコース' },
   });
   App.marks = [];
-  App.form = { nail: 1, ear: { right: 1, left: 2 }, teeth: 'ピカピカ✨', weight: 2.8 };
+  App.form = {
+    nail: { front: 1, rear: 1 }, ear: { right: 1, left: 2 }, teeth: 'ピカピカ✨', weight: 2.8,
+    bcs: 3, bestWeight: 3.5,
+  };
+  App.photos = { trimming: [], ear: '', teeth: [] };
   for (const key of Object.keys(App.extractReport())) {
     assert.ok(READ_BY_MAGAZINE.has(key), `⑥が読まないキーを出している: ${key}`);
   }
