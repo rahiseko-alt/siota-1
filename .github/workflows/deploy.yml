@@ -6,8 +6,11 @@
 #   両方を満たす道はこれだけ——**鍵は GitHub の Secrets に入れ、実行はランナーが行う。**
 #   人が値を触るのは、Secrets に貼る1回だけになる。
 #
-# **自動では走らない。** `workflow_dispatch` だけ＝GitHub の画面で押したときのみ。
-# デプロイは戻しにくい外向きの操作で、実行前にマスターの承認が要る（`worker/wrangler.toml` の注記）。
+# **手動起動（`workflow_dispatch`）のみ。プッシュでは自動で走らない。**
+# マスターが GitHub の画面で押すか、Claude Code のセッションがこの workflow を起動する。
+# **毎回の個別承認は不要**（マスター指示・2026-08-29・`D-20260829-57`）——PR がマージされたら
+# Claude Code は都度確認を挟まず、この workflow を起動してよい。`workflow_dispatch` という
+# 起動方式そのものは変えていない（プッシュ契機の完全自動化ではない）。
 #
 # 出す先: **Supabase 版 Worker `shiota0823`**（`worker/wrangler.supabase.toml`）。
 #   独自ドメイン `trimmer-system.kouheikosehira.com` を配信しているのはこちら。
