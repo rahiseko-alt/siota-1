@@ -24,8 +24,13 @@
 | | |
 |---|---|
 | 機械が数えた検査 | **183件**（`scripts/verify-*.mjs`） |
-| 壊して赤になったところを見た | **112件**（毒見 21 ＋ 1件ずつ壊す 91・2026-08-28） |
-| まだ見ていない | **71件** |
+| 壊して赤になったところを見た | **143件**（毒見 21 ＋ 1件ずつ壊す 122・2026-08-29） |
+| まだ見ていない | **40件** |
+
+> **この表は 112/71 のまま止まっていた**（`node scripts/guard/proof-of-red.mjs` は
+> その間ずっと 142/41 と出していた）。数を数えているのは機械なので、**この表が
+> 遅れても数が小さく見えるだけ**だが、遅れた表を根拠に判断されると困る。
+> 2026-08-29 に機械の出力へ合わせ直した。**迷ったら表ではなく機械を見ること。**
 
 **出発点は全件が未確認だった。** 毒見で埋め、天井に当たったあと（下の「⛔ 毒見の天井」）、
 **1件ずつ壊す**（マスター判断 A）で続けている。**数は上の表だけが正**——
@@ -1242,7 +1247,53 @@ if ((session.ownerLinks || []).length === 0 && (session.memberships || []).lengt
 見えて `Q` は見えない——`verify-portal :: 11./13.` が守っているものを、
 画面を通さず DB の側から直接確かめた形になる。
 
+**続きは下の「23回目」で実際に赤にした。** 上の「いま作れない理由（機械の制約）」は
+2026-08-29 に解消してある（`applyMutation` が**ファイルをまたぐ `edits`** を扱えるようにした）。
 
+### 23回目: 招待未消化の人に、他人の犬が見える 1件（2026-08-29・**手元で実測**）
+
+**上で名指しした2層を、同時に剥がした。** `invitation-both-layers-open`:
+
+| 剥がした層 | どこ |
+|---|---|
+| (1) DB | `pets` の SELECT ポリシーから `is_owner_user(owner_id)` を外す |
+| (2) アプリ | `bootProtectedPortal()` の「紐付きも所属も無ければ犬を取りに行かない」関門を外す |
+
+**当てずっぽうではない。** どちらの層も、上の2節で**実測して名指しした**もの
+（PostgREST への直接問い合わせで「DB は開いている／止めているのはアプリ側」まで
+確定させてある）。層を発明したのではなく、**特定済みの層をそのまま剥がした**。
+
+```
+node scripts/mutate-run.mjs invitation-both-layers-open
+  ✅ invitation-both-layers-open verify-invitation.mjs          赤   2件
+
+    5. 招待を消化する前は、その犬を見られない   ← invitation-both-layers-open / verify-invitation.mjs
+    7. 使い終わった招待は、別の人が使えない   ← invitation-both-layers-open / verify-invitation.mjs
+```
+
+**同じ壊し方をもう一度当てて、検査の生の出力も見た**（`偽-11`「一度の緑で終える」を
+踏まないため。2回とも同じ結果）:
+
+```
+（壊す前・素の状態）node scripts/verify-invitation.mjs
+  PASS  5. 招待を消化する前は、その犬を見られない
+  8/8 PASS
+
+（2層を剥がして）  node scripts/verify-invitation.mjs
+  FAIL  5. 招待を消化する前は、その犬を見られない  ★ 見えている
+  FAIL  7. 使い終わった招待は、別の人が使えない  ★ 別の人にも見えた
+  6/8 PASS
+```
+
+**人間に何が起きるか**: 招待の紙をまだ渡していない相手が、`/my/pets/<犬のid>` を
+開くだけで**他人の犬のページを読める**。`5.` はそこを見ていた——**名前のとおりの
+ことを、実際に守っていた**。
+
+**`7.` は既に `rls-any-owner-sees-any-dog` で証明済み。** ここで一緒に赤になったのは、
+(1) だけでも `7.` は落ちるため（`docs/ops/mutate-run-result.md`）。新しく埋まるのは
+`5.` の1件。
+
+- verify-invitation.mjs :: 5. 招待を消化する前は、その犬を見られない
 
 ## F4 を閉じる範囲（マスター判断・2026-08-28）
 
@@ -1331,8 +1382,6 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
   理由: いまの飼い主ページは一覧しか描かず、カルテの本文を出さない。RLS を開けて下書きが漏れても（`rls-drafts-leak`）、本文の文字列は画面に現れないので、この行は赤にならない。将来ここに本文を出す造りにしたときのための見張りで、いまの画面では症状を起こせない。
 - verify-empty-pet.mjs :: 7. 下書きの中身が漏れていない
   理由: `verify-draft :: 4.` と同じ。いまの飼い主ページはカルテの本文を描かないので、下書きが漏れても本文の文字列は画面に出ず、この行は赤にならない。
-- verify-invitation.mjs :: 5. 招待を消化する前は、その犬を見られない
-  理由: 守りが二重で、1枚剥がしても赤にならない。実測で層を両方特定した——(1) DB の `pets` RLS、(2) `backend/js/supabase-auth.js` の `bootProtectedPortal()` にある「`ownerLinks` も `memberships` も空なら取りに行かずに `return` する」関門。RLS を全開にしても (2) が止めるため緑のまま（PostgREST に直接問い合わせて DB 側ではないと確定済み）。2枚同時に剥がす壊し方が要るが、いまの `applyMutation` は1ファイルしか扱えず、この2層は別ファイルにまたがるため表現できない。
 - verify-m6.mjs :: ⑤. 確定すると確認の画面に着く
   理由: `verify-admin :: 7.` と同じ型。確定後の URL の最後が36文字のカルテ番号かを見ているが、番号が壊れていればページ取得の時点で落ちるので、到達した時点で保証されている。
 - verify-photo-roundtrip.mjs :: `${kind === 'trimming' ? '1' : kind === 'ear' ? '2' : '3'}. ${kind} の写真を付けられた`
@@ -1357,7 +1406,6 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 - verify-delete.mjs :: 2. 写真の実体が Storage に在る（service_role で数える）
 - verify-draft.mjs :: 4. 下書きの中身が漏れていない
 - verify-empty-pet.mjs :: 7. 下書きの中身が漏れていない
-- verify-invitation.mjs :: 5. 招待を消化する前は、その犬を見られない
 - verify-m6.mjs :: ⑤. 確定すると確認の画面に着く
 - verify-photo-roundtrip.mjs :: `${kind === 'trimming' ? '1' : kind === 'ear' ? '2' : '3'}. ${kind} の写真を付けられた`
 - verify-photo-roundtrip.mjs :: 4. 写真つきで確定できた

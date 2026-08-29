@@ -365,6 +365,33 @@ export const MUTATIONS = [
     scripts: ['verify-report-roundtrip.mjs'],
   },
   {
+    id: 'invitation-both-layers-open',
+    sql: true,
+    why: '**招待をまだ使っていない人に、他人の犬が見えてしまう**——紙を渡す前から、赤の他人が中身を開ける',
+    file: 'supabase/migrations/202607160001_supabase_base.sql',
+    /* **`rls-both-layers-open` と同じ形だが、2枚目が別ファイルに在る。**
+       `5. 招待を消化する前は、その犬を見られない` を守っているのは2層で、
+       どちらも実測で名指しできている（`docs/ops/proof-of-red.md`
+       「決定打を実行した。**2枚目の層を特定した**」）:
+         (1) DB … `pets` の SELECT ポリシー `is_owner_user(owner_id)`
+         (2) アプリ … `bootProtectedPortal()` の「紐付きも所属も無いなら
+             犬を取りに行かずに `return` する」関門
+       (1) だけ剥がしても緑のままだった（run 122）——(2) がそもそも犬を
+       取りに行かせないため。PostgREST に直接問い合わせて「DB は開いている」
+       ことを確かめたうえで、止めているのが (2) だと確定させている。
+       **当てずっぽうで2枚目を剥がしているのではない。** */
+    edits: [
+      { file: 'supabase/migrations/202607160001_supabase_base.sql',
+        find: '  for select to authenticated using (active and private.is_owner_user(owner_id));',
+        replace: '  for select to authenticated using (active);' },
+      { file: 'backend/js/supabase-auth.js',
+        find: '    if ((session.ownerLinks || []).length === 0 && (session.memberships || []).length === 0) {',
+        replace: '    if (false && (session.ownerLinks || []).length === 0 && (session.memberships || []).length === 0) {' },
+    ],
+    extra: null,
+    scripts: ['verify-invitation.mjs'],
+  },
+  {
     id: 'rls-drafts-leak',
     sql: true,
     why: '**書きかけのカルテが飼い主に見える**——確定前の下書きがそのまま届く',
@@ -743,10 +770,25 @@ export const MUTATIONS = [
 /** ファイルの中身の指紋。戻せたことを**実際に確かめる**ために使う。 */
 const fingerprint = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
 
+/**
+ * この壊し方が触るファイルを、重複を畳んで並べる。
+ *
+ * **`edits` の1件ごとに `file` を書ける**（省略したら `m.file`）。守りが
+ * **別々のファイルにまたがって二重**になっていることがあるためで、実例が
+ * `verify-invitation :: 5.`——DB の RLS（`.sql`）とアプリ側の関門（`.js`）の
+ * 2枚で、**どちらか片方だけを剥がしても何も漏れない**（`docs/ops/proof-of-red.md`
+ * 「決定打を実行した。**2枚目の層を特定した**」）。
+ */
+export function mutationFiles(m) {
+  const edits = m.edits || [{ find: m.find, replace: m.replace }];
+  const files = edits.map((e) => e.file || m.file);
+  /* `inject` / `extra` は行き先を持たないので、いつも `m.file` に付く。 */
+  if (m.inject || m.extra) files.push(m.file);
+  return [...new Set(files)];
+}
+
 /** 1つ壊す。`restore()` を返す。`find` がちょうど1回でなければ壊さずに投げる。 */
 export function applyMutation(root, m) {
-  const target = path.join(root, m.file);
-  const before = fs.readFileSync(target, 'utf8');
   /* **守りが二重のときは、1枚ずつ剥がしても何も漏れない。**
      `verify-report-roundtrip :: 17.` は、犬の RLS だけ開けても（run 122）
      カルテの RLS だけ開けても（run 124）緑のままだった——**どちらも正しい**。
@@ -754,11 +796,16 @@ export function applyMutation(root, m) {
      つまりこの項を判定するには**両方を同時に開ける**しかない。
      `edits` はそのための形で、単発の `find`/`replace` はその1件版として扱う。 */
   const edits = m.edits || [{ find: m.find, replace: m.replace }];
+  const files = mutationFiles(m);
+  const before = new Map(files.map((f) => [f, fs.readFileSync(path.join(root, f), 'utf8')]));
+  /* **目印は、1文字も書き換える前に全部数える。** 1枚目を書いてから2枚目で投げると、
+     ファイルをまたぐ壊し方が**半分だけ当たったまま**リポジトリに残る。 */
   for (const e of edits) {
-    const hits = before.split(e.find).length - 1;
+    const f = e.file || m.file;
+    const hits = before.get(f).split(e.find).length - 1;
     if (hits !== 1) {
       throw new Error(
-        `[${m.id}] 壊せない: ${m.file} に目印が ${hits}回（ちょうど1回でなければならない）\n`
+        `[${m.id}] 壊せない: ${f} に目印が ${hits}回（ちょうど1回でなければならない）\n`
         + `  目印: ${e.find}\n`
         + `  0回なら**壊したつもりで何も壊れていない**——そのまま走らせると`
         + `「赤にならなかった＝検査が壊れている」と逆の結論を出す。`,
@@ -769,15 +816,22 @@ export function applyMutation(root, m) {
      ためのもので、条件を `false &&` にするような壊しには要らない。
      無いのに `undefined` を足すと、**壊した跡が文字列として残って build が通らなくなり**、
      「検査が気づかなかった」ではなく「壊し方が下手だった」で赤になる。 */
-  let after = before;
-  for (const e of edits) after = after.replace(e.find, e.replace);
-  if (m.inject) after = after.replace(m.injectAfter, m.injectAfter + m.inject);
-  if (m.extra) after += `\n${m.extra}`;
-  fs.writeFileSync(target, after);
+  const after = new Map(before);
+  for (const e of edits) {
+    const f = e.file || m.file;
+    after.set(f, after.get(f).replace(e.find, e.replace));
+  }
+  if (m.inject) after.set(m.file, after.get(m.file).replace(m.injectAfter, m.injectAfter + m.inject));
+  if (m.extra) after.set(m.file, `${after.get(m.file)}\n${m.extra}`);
+  for (const f of files) fs.writeFileSync(path.join(root, f), after.get(f));
   return () => {
-    fs.writeFileSync(target, before);
-    if (fingerprint(target) !== crypto.createHash('sha256').update(before).digest('hex')) {
-      throw new Error(`[${m.id}] 戻せていない: ${m.file}`);
+    /* **触った全部を戻す。** 1枚でも戻し漏らすと、次の壊し方が前の壊しの上で走る。 */
+    for (const f of files) {
+      const p = path.join(root, f);
+      fs.writeFileSync(p, before.get(f));
+      if (fingerprint(p) !== crypto.createHash('sha256').update(before.get(f)).digest('hex')) {
+        throw new Error(`[${m.id}] 戻せていない: ${f}`);
+      }
     }
   };
 }
@@ -835,7 +889,10 @@ const proven = new Map();   /* 検査の名前 → 気づいた壊し方の id *
 const problems = [];
 
 for (const m of targets) {
-  const fpBefore = fingerprint(path.join(ROOT, m.file));
+  /* **触るファイルは1つとは限らない**（`edits` の1件ごとに `file` を書ける）。
+     指紋も、戻ったことの確認も、**触った全部**について取る。 */
+  const files = mutationFiles(m);
+  const fpBefore = files.map((f) => fingerprint(path.join(ROOT, f)));
   let restore = null;
   try {
     restore = applyMutation(ROOT, m);
@@ -843,7 +900,12 @@ for (const m of targets) {
       process.stdout.write(`  ✅ ${m.id.padEnd(18)} 壊せた（${m.why}）\n`);
       continue;
     }
-    if (m.sql) {
+    /* **どちらか一方ではない。両方いる場合がある。**
+       ファイルをまたぐ壊し方（`edits` の `file`）は SQL とアプリを同時に剥がすので、
+       **db reset と build の片方だけを回すと、その片方は壊れないまま走る**——
+       「壊したつもりで何も壊れていない」の、いちばん気づきにくい形。
+       だから条件は排他にせず、**触ったものごとに**判定する。 */
+    if (m.sql || files.some((f) => f.endsWith('.sql'))) {
       /* **SQL の壊しは、土台に流し直さないと効かない。**
          RLS はマイグレーションで作られるので、ファイルを書き換えただけでは
          いま動いている DB は古いポリシーのまま——**壊したつもりで何も壊れていない**
@@ -853,7 +915,8 @@ for (const m of targets) {
         problems.push(`[${m.id}] 壊したあと db reset が通らない: ${(reset.stderr || '').split('\n').slice(-3).join(' ')}`);
         continue;
       }
-    } else {
+    }
+    if (files.some((f) => !f.endsWith('.sql'))) {
       const built = run('node', ['scripts/build-dist.mjs']);
       if (built.status !== 0) {
         problems.push(`[${m.id}] 壊したあと build が通らない: ${(built.stderr || '').split('\n')[0]}`);
@@ -879,10 +942,12 @@ for (const m of targets) {
   } finally {
     if (restore) restore();
     /* 戻したら**土台にも流し直す**。次の壊し方が、前の壊しの残った DB で走らないように。 */
-    if (m.sql && !DRY) run('npx', ['supabase', 'db', 'reset']);
-    if (fingerprint(path.join(ROOT, m.file)) !== fpBefore) {
-      problems.push(`[${m.id}] **戻し切れていない**: ${m.file}（手で確かめること）`);
-    }
+    if ((m.sql || files.some((f) => f.endsWith('.sql'))) && !DRY) run('npx', ['supabase', 'db', 'reset']);
+    files.forEach((f, i) => {
+      if (fingerprint(path.join(ROOT, f)) !== fpBefore[i]) {
+        problems.push(`[${m.id}] **戻し切れていない**: ${f}（手で確かめること）`);
+      }
+    });
   }
 }
 

@@ -3,7 +3,10 @@
 
 実行: `node scripts/mutate-run.mjs`（**本物の土台が要る**——CI で走らせる）
 
-- 赤になった（その壊しを検出できた）: **106件**
+- 赤になった（その壊しを検出できた）: **107件**
+- 追記（2026-08-29・**手元で実測**）: `invitation-both-layers-open` を1件だけ別に走らせた回の
+  結果を、この一覧に手で足した（`5. 招待を消化する前は…` の1行）。その回の機械の記録は
+  `docs/ops/mutate-run-partial.md`。**次に全体を走らせると、この追記は機械の出力で上書きされる。**
 
 ## 赤になった（`- <検査の名前>` ← どの壊しで）
 
@@ -67,6 +70,7 @@
 - 4. 新規に 顧客アカウント作成 / ペットアカウント作成 が在る   ← admin-menu-title-lost / verify-admin.mjs
 - 4. 確認: 爪   ← settext-off / verify-report-roundtrip.mjs
 - 5. staff モジュールが載っている（boot を持つ）   ← edit-template-broken / verify-edit.mjs
+- 5. 招待を消化する前は、その犬を見られない   ← invitation-both-layers-open / verify-invitation.mjs
 - 5. 未ログインでログイン導線が出る   ← portal-login-panel-dead / verify-portal.mjs
 - 5. 確定すると下書きは残らない   ← draft-becomes-new-report / verify-draft.mjs
 - 5. 確認: 耳   ← settext-off / verify-report-roundtrip.mjs
