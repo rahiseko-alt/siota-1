@@ -16,8 +16,7 @@
 > `node scripts/guard/checkin.mjs` が実行時にこの行を画面へ出す。
 > `checkout.mjs` は、このセッションでこの行を更新したかを見る（更新が無ければ EXIT 1）。
 
-**いまやる番: C-1〜C-7・C-9〜C-12（11件）実装・検査・証明・screenshot・敵対検証まで完了。サブ3体は指摘1件（C-3の日付表示）を出し、その場で直して再検査 green まで確認した。コミット・PR・マージへ**
-（C-8 フォント統一のみ、マスターの画面提示待ちとして意図的に保留）
+**いまやる番: C-1〜C-7・C-9〜C-12（11件）は実装・検査・証明・screenshot・敵対検証・PR #36 マージまで完了。残るは C-8（フォント統一）のみ——`npm run walk` の絵をマスターへ提示済み、統一先の指示待ち。指示が来たら着手し、それまでは放置リストの巡回に戻る**
 
 ---
 
@@ -364,10 +363,11 @@ AI が発見した問題。ブロッカー以外の気づきは、原則すべ�
 | C-3 | 体重の時系列を来店日基準に（**マスター指示でクライアント優先・#33 を上書き**） | **完了（敵対検証で見つかった穴を直した）** | 来店日の入力欄（`#input-visit-date`）を新設し `data.date`/`isoDate` と `weights[].date` に使用。`report_date` は触っていない（migration 回避）。**サブ3体の検証2が発見**: `magazine-view.js` の日付表示が確定日を優先する並びのままで、⑥飼い主画面には来店日ではなく確定日が出ていた。優先順位を来店日優先に直し、`verify-report-roundtrip.mjs` の `3e./9e.` で証明済み（`proof-of-red.md` 25回目） | 不要（回避） |
 | C-8 | フォント統一 | **画面提示待ち（意図的に未着手）** | `npm run walk` で撮影済み（`.human/correct/`）。マスターへ提示し、統一先の指示を受けてから着手 | 不要 |
 
-**進捗（2026-08-29）**: C-1〜C-7・C-9〜C-12 の**11件が実装・検査・証明まで完了**。残る C-8（フォント統一）は
-マスターの指示待ちという**意図的な**未着手（受入条件・禁止事項に反しない）。
-`npm run build && npm run check && npm test` は EXIT 0、`verify:*` 全12本（206/206）green、
-`gate.mjs --end` / `delivery-ready.mjs` とも通過済み。
+**進捗（2026-08-29）**: C-1〜C-7・C-9〜C-12 の**11件が実装・検査・証明・敵対検証・PR #36 マージまで完了**。
+残る C-8（フォント統一）はマスターの指示待ちという**意図的な**未着手（受入条件・禁止事項に反しない）。
+`npm run build && npm run check && npm test` は EXIT 0、`verify:*` 全12本（208/208）green、
+`gate.mjs --end` / `delivery-ready.mjs` とも通過済み。サブ3体の敵対検証で1件（C-3の日付表示）の
+実害を発見し、その場で修正・再検査 green まで確認済み。
 
 **各項目で必ず触る4点セット**: ①`src/index.html` ②`src/js/ui.js: extractReport()` ③同 `applyReport()` ④`backend/js/magazine-view.js`（TEMPLATE ＋ renderMagazine）＋台帳 `docs/ops/key-parity-F3.md`。
 
