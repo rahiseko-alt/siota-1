@@ -30,6 +30,38 @@
 
 ---
 
+## 0-W. いちばん新しい（2026-08-29・その20）— **⚠️ デプロイ事故と応急ロールバック（`F-20260829-61`）。次のセッションは必読**
+
+**現在の真の状態**: `master` には `D-20260829-58`（次回のおすすめご来店時期）のコードがマージ済みだが、
+**本番 Worker はそのコードを含まない1つ前の版（`6ad1b3f`）にロールバック済み**。
+理由: この機能は新しい DB 列（`shops.default_revisit_days` / `pets.revisit_days_override`）を
+使うが、**本番の Supabase（hosted プロジェクト `bcodloqwnrhcuvevfguy`）にはこの migration が
+まだ当たっていない**。マージ直後にそれを確かめずデプロイしてしまい、犬の一覧・詳細のAPIが
+軒並み502になる事故を起こした（詳細は `docs/failures.md` の `F-20260829-61`）。
+
+**やったこと（応急）**:
+1. 事故に気づいた直後、`curl https://bcodloqwnrhcuvevfguy.supabase.co/rest/v1/shops?select=...` で
+   `42703 column does not exist` を実測して原因を特定
+2. `master` の1つ前のコミット（`6ad1b3f`）から一時ブランチ `rollback-pre-revisit` を切り、
+   `deploy.yml` を再起動して本番Workerをロールバック（`run #6`・成功）
+3. ロールバック後、同じ curl で `401`（未認証・正常）に戻ったことを確認——本番は復旧している
+
+**次のセッション・次の作業者へ（最優先）**:
+1. **マスターに、`supabase/migrations/202608290010_revisit_interval.sql` の中身を
+   本番 Supabase（`bcodloqwnrhcuvevfguy`）の SQL Editor で実行してもらうこと。**
+   Claude Code は本番 Supabase の認証情報を持たない（`A-1` に準ずる）ため、この一手だけは
+   マスターの手作業が要る
+2. 適用後、`curl https://bcodloqwnrhcuvevfguy.supabase.co/rest/v1/shops?select=id,default_revisit_days`
+   （認証無しで叩いてよい。`401` なら列は在る＝OK、`42703` ならまだ当たっていない）で確かめてから、
+   `deploy.yml` を `master`（`df7a51f` 以降）に対して再度起動し、`D-20260829-58` を正式に本番へ出す
+3. 一時ブランチ `rollback-pre-revisit` は役目を終えたら消してよい
+4. **恒久対策は未決**: `docs/failures.md` の `F-20260829-61`「How to prevent」にある2案
+   （`verify:prod` に本番スキーマの実測を足す／`supabase db push` を `deploy.yml` に機械化する）
+   をマスター判断で決めること。決まるまで、**DBスキーマを伴う変更のデプロイは、
+   migration適用を先に本番相手に確かめてから行う**
+
+---
+
 ## 0-V. いちばん新しい（2026-08-29・その19）— **第6章 `#3`「次回のおすすめご来店時期」を実装（`D-20260829-58`）**
 
 マスターが「デフォルトは30日後、別途修正できるようにする。修正はデフォルト自体の

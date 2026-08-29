@@ -16,7 +16,7 @@
 > `node scripts/guard/checkin.mjs` が実行時にこの行を画面へ出す。
 > `checkout.mjs` は、このセッションでこの行を更新したかを見る（更新が無ければ EXIT 1）。
 
-**いまやる番: 第6章 `#3`「次回のおすすめご来店時期」を実装完了（`D-20260829-58`）。migration・API・UI・`verify:revisit`（11/11）まで一式。次はこのPRのcommit/push/マージ・本番デプロイ（`D-20260829-57`により都度確認不要）。マージ後は残る5件（`#5` `#6` `#11` `#22` `#35`）を`AskUserQuestion`で改めて問うこと**
+**いまやる番: ⚠️ `#3`「次回のおすすめご来店時期」は`master`にマージ済みだが、本番デプロイで事故（`F-20260829-61`）を起こし応急ロールバック済み（本番Workerは1つ前の版のまま・データは無事）。次はマスターに本番Supabaseへのmigration適用（`supabase/migrations/202608290010_revisit_interval.sql`）を依頼し、適用確認後に`master`を再デプロイすること。詳細は`docs/handoff.md`の0-Wを読むこと。それが済んだら残る5件（`#5` `#6` `#11` `#22` `#35`）を`AskUserQuestion`で改めて問うこと**
 
 ---
 

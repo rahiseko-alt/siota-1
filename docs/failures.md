@@ -833,3 +833,15 @@
 
   `npm run build && npm run check && npm test`（EXIT 0）、`verify:*` 全12本（208/208 PASS）、`gate.mjs --end` / `delivery-ready.mjs` とも通過を確認
 - **How to prevent**: 仮データ（`window.DUMMY` 等）に、実データと同じ形のフィールド（とくに `id` のような「これがあれば本物」の判定軸に使われるもの）を持たせない。バックエンド接続後も仮データファイルは残り続ける設計（フォールバック用）なので、**仮データの「形」自体が本物と区別できることを、機械（`test/dummy-no-id.test.mjs`）で押さえた**
+
+### [F-20260829-61] 「次回のおすすめご来店時期」（`PR #46`）を本番デプロイした直後、犬の一覧・詳細が全滅した
+
+- **Date**: 2026-08-29
+- **Category**: process（デプロイ手順の抜け）
+- **Trigger/Context**: `D-20260829-58` の実装（`supabase/migrations/202608290010_revisit_interval.sql` で `shops.default_revisit_days`・`pets.revisit_days_override` を新設）をマージ後、`D-20260829-57`（デプロイの都度確認不要）に従い `deploy.yml` を起動して本番へ出した。`verify:prod` は緑だったため「デプロイ成功」と判断しかけた
+- **Failure**: 本番の**Cloudflare Worker だけ**が新コードに更新され、**本番の Supabase（hosted プロジェクト `bcodloqwnrhcuvevfguy`）にはこの migration が当たっていなかった**。新コードは `listPets`/`getPet`/`listPetsWithOwner`/`listOwnerPets`/`createPet`/`updatePet` の SELECT 列に無条件で `revisit_days_override` を含めており、その列が本番 DB に存在しないため、**犬に関するAPIが軒並み `42703 column does not exist` → 502** になる状態でデプロイされた。直接 `curl` で `https://bcodloqwnrhcuvevfguy.supabase.co/rest/v1/shops?select=...,default_revisit_days` を叩いて実測で確認した
+- **Root Cause**: このリポジトリには、Cloudflare Worker のデプロイ（`wrangler deploy`・GitHub Secrets 経由）に相当する**「migration を本番Supabaseへ適用する」自動化が存在しない**。過去の migration（`202607160001`〜`202608270009`）は、`docs/handoff.md` の記述からマスターが Supabase ダッシュボードで直接適用してきたと推測されるが、**その手順がどこにも明文化されておらず、`deploy.yml` にもその工程が無い**ため、今回「migrationのマージ→デプロイ」を「migration適用→デプロイ」だと錯覚した。`verify:prod` は本番のデータには一切触れない検査（配信物のバイト一致だけを見る）ため、この種の不整合を検出できない——検査の欠陥ではなく、**検査が保証しない範囲だとコメントに明記されている**とおり
+- **Fix（応急）**: 気づいた直後、`master` の1つ前のコミット（`6ad1b3f`）から一時ブランチ `rollback-pre-revisit` を切って `deploy.yml` を再度起動し、**本番Workerを新機能を含まない直前の版へロールバック**。ロールバック後に `https://bcodloqwnrhcuvevfguy.supabase.co/rest/v1/pets?select=id,name` へ再度アクセスし、`42703`（列が無い）ではなく通常の `401`（未認証）に戻ったことを確認——不整合の原因だった列参照が本番コードから消えたことの裏づけ
+- **Fix（本対応・要マスター）**: `supabase/migrations/202608290010_revisit_interval.sql` の中身を、本番 Supabase（`bcodloqwnrhcuvevfguy`）の SQL Editor で実行してもらう必要がある。Claude Code は本番 Supabase の認証情報を持たない（Cloudflare と同じ理由・`A-1` に準ずる）ため、**この一手だけはマスターの手作業が要る**。適用後に `D-20260829-58` の内容を再デプロイする
+- **実測**: ロールバック後 `deploy.yml` run #6（`rollback-pre-revisit`）成功。`curl https://bcodloqwnrhcuvevfguy.supabase.co/rest/v1/pets?select=id,name` の応答が `400 42703` → `401`（未認証・正常）に変化したことを確認
+- **How to prevent**: **DB スキーマを変える migration を含む変更は、`deploy.yml` を起動する前に「本番 Supabase に migration が当たっているか」を必ず本番相手に実測してから出す。** 恒久対策として、(a) migration の有無を本番へ実際に問い合わせて確かめる検査を `verify:prod` に追加する（例: 直近の migration が新設した列を1つ選び `SELECT` して `42703` が返らないことを見る）、または (b) Cloudflare と同じ形で `SUPABASE_ACCESS_TOKEN`/`SUPABASE_DB_PASSWORD` を GitHub Secrets に置き、`deploy.yml` に `supabase db push`（本番向け）の工程を機械化して足す、のいずれかをマスター判断で決める必要がある。いまはどちらも無いため、**DBスキーマを伴う変更のデプロイは、migration適用を先に本番相手に確かめるまでは行わない**
