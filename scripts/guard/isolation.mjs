@@ -20,7 +20,8 @@
  * 走査対象は `src/` を実際に読んで決める（固定リストにしない）。
  * 走査した件数を必ず出力する——対象を減らして 0 件にする逃げ道を塞ぐため（D-18 偽-2）。
  *
- * 未到達ファイルを逃がせるのは、`docs/deferred.md` に**番号付きで登録されているもの**だけ。
+ * 未到達ファイルを逃がせるのは、`docs/ops/plan.md`（第12章・放置リスト）に**番号付きで登録されているもの**だけ。
+ * **2026-08-29、`docs/deferred.md` はここへ統合された**（番号は維持）。
  * 無条件の例外リストは作らない（D-18 偽-3）。
  *
  *   node scripts/guard/isolation.mjs          src/ を見る
@@ -90,9 +91,9 @@ function reachableFrom(root, entry) {
   return seen;
 }
 
-/** docs/deferred.md に番号付きで登録されている名前（あと回しの記録・ルール⑤）。 */
+/** docs/ops/plan.md（第12章・放置リスト）に番号付きで登録されている名前（あと回しの記録・ルール⑤）。 */
 function deferredNames(repoRoot) {
-  const p = path.join(repoRoot, 'docs/deferred.md');
+  const p = path.join(repoRoot, 'docs/ops/plan.md');
   if (!fs.existsSync(p)) return new Map();
   const found = new Map();
   for (const line of fs.readFileSync(p, 'utf8').split('\n')) {
@@ -171,7 +172,7 @@ if (unregistered.length > 0) {
     `【条件A】${uiDir}/（起点 ${entries.join(' + ')}）からどこにも繋がっていないファイルが ${unregistered.length} 件あります。\n`
     + unregistered.map((f) => `    ${uiDir}/${f}`).join('\n')
     + `\n  UI として使われていないなら、${uiDir}/ に置いたままにしない。\n`
-    + `  いま消せない事情があるなら docs/deferred.md に**番号付きで**1行残す（ルール⑤）。\n`
+    + `  いま消せない事情があるなら docs/ops/plan.md の放置リストに**番号付きで**1行残す（ルール⑤）。\n`
     + `  ファイル名をその行に書くこと——書いていないものは、ここで逃がしません（D-18 偽-3）。`,
   );
 }

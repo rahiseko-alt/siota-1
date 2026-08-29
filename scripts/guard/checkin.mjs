@@ -9,6 +9,15 @@
  *   マスターから「緊急連絡、前回セッションがマージしてない状態でこのセッションを始めた」と
  *   言われて初めて分かり、ブランチを載せ替え直すことになった。
  *
+ * **2026-08-29 の追記（マスター指示「毎回全体計画を強制的に進捗の読み書きをする」）**:
+ * 引き継ぎだけでなく、**大計画（`docs/ops/plan.md`）を毎回強制的に読ませる**。
+ * 自動注入は `CLAUDE.md` 1枚だけで、大計画はそこに含まれない（`docs/failures.md`
+ * 「大計画が自動で読まれない」の事故）。ここで `npm run plan` の出力を必ず画面に出し、
+ * 読んだ印として `.plan-read`（gitignore 対象）を書く。**この印が無いと `npm run check`
+ * が EXIT 1** になる（`scripts/guard/run.mjs` から呼ぶ）——チェックインを踏まずに
+ * 作業を進められない。`.claude/settings.json` の SessionStart フックが、Claude Code
+ * ではこれを自動起動する（併用。フックにはルールを書かない・`AGENTS.md` D-15）。
+ *
  *   node scripts/guard/checkin.mjs
  */
 
@@ -75,6 +84,15 @@ for (const [label, f] of [['引き継ぎ', 'docs/handoff.md'], ['計画', 'docs/
   if (!exists) problems.push(`${f} が無い`);
 }
 
+/* ── 3.5 大計画を強制的に画面へ出す（`npm run plan`）。読んだ印を残す ── */
+try {
+  process.stdout.write(`\n${sh('node scripts/plan.mjs')}\n`);
+  fs.writeFileSync(path.join(ROOT, '.plan-read'), `${new Date().toISOString()}\n`);
+} catch (e) {
+  process.stdout.write(`\n  ❌ 大計画を読めなかった: ${e.message.split('\n')[0]}\n`);
+  problems.push('docs/ops/plan.md を読めない（壊れている可能性）');
+}
+
 /* ── 4. そのフェーズの作業場が開いているか ── */
 if (phase !== '(無し)') {
   const gate = quiet('node scripts/guard/gate.mjs src/index.html');
@@ -89,7 +107,7 @@ for (const [label, cmd] of [['npm run build', 'npm run build'], ['npm run check'
   if (code !== 0 && label === 'npm run build') problems.push('build が通らない');
 }
 
-process.stdout.write('\n  次に読むもの: docs/handoff.md の冒頭「## 0」\n');
+process.stdout.write('\n  次に読むもの: docs/handoff.md の冒頭「## 0」（上の「いまやる番」が指す作業の詳細）\n');
 if (problems.length === 0) {
   process.stdout.write('  始めてよい。\n\n');
   process.exit(0);

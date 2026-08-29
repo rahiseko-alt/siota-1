@@ -11,10 +11,57 @@
 > とくに `verify:m6 11/11` `verify:roundtrip 15/15` のような **PASS の数字は、
 > すべて 2026-08-23 以前の実測**。これらの検査は F1（UI とバックエンドの隔離）で
 > **削除済み**で、いま実行すると `npm error Missing script` で EXIT 1 になる。
-> 消した経緯と作り直す時期は `AGENTS.md` の STEP 5 と `docs/deferred.md` #8 に書いた。
+> 消した経緯と作り直す時期は `AGENTS.md` の STEP 5 と `docs/ops/plan.md`（放置リスト）#8 に書いた。
 >
 > **数字だけを見て「通っている」と読まないこと**（`F-20260821-21` の型）。
 > いま実行できるものと、その結果は、すぐ下の「## 0」に書いてある。
+
+> ## ⚠️ 大計画は `docs/ops/plan.md` 1本（2026-08-29 統合・マスター指示）
+>
+> **`docs/ops/delivery-plan.md` と `docs/deferred.md` は廃止した。** 中身はすべて
+> `docs/ops/plan.md` に統合済み（第9章 P-1〜P-3・第10章 C-1〜C-12・第12章 放置リスト）。
+> **セッション開始時は `node scripts/guard/checkin.mjs` を必ず実行すること**——
+> `npm run plan` の出力（進捗表・「いまやる番」）を画面に出し、読んだ印 `.plan-read` を書く。
+> **この印が無いと `npm run check` が EXIT 1 になる**（`scripts/guard/plan-read.mjs`）。
+> Claude Code では `.claude/settings.json` の SessionStart フックが自動でこれを起動する。
+>
+> **セッション終了時は、`docs/ops/plan.md` の「いまやる番」の行を必ず書き換えること。**
+> `checkout.mjs` の7項目目が、このセッションで変わったかを機械で見る。
+
+---
+
+## 0-Q. いちばん新しい（2026-08-29・その14）— **大計画を1本化し、読み書きを機械強制にした。クライアント指示12件を計画に載せた**
+
+### 背景（マスター指示）
+
+「毎回進まない。納品できない。致命的だ」という指摘を受けた。実測で原因を3つ特定した:
+①大計画は自動では一切読まれない（自動注入は `CLAUDE.md` 1枚だけ） ②大計画が2枚に
+割れていた（`plan.md` / `delivery-plan.md`） ③`scripts/plan.mjs` にバグがあり、
+`docs/ops/phase=F4` になった瞬間から**完了済みの F1〜F3 まで全部「未着手」と表示**していた
+——大計画の進捗表示そのものが嘘をついていた。
+
+### やったこと（詳細は `docs/ops/plan.md` 第8.5節）
+
+1. `docs/ops/delivery-plan.md`・`docs/deferred.md` を `plan.md` に統合し、旧2ファイルを廃止
+2. `scripts/plan.mjs` の進捗バグを直した（`test/plan.test.mjs` で赤→緑→戻して赤を実測）
+3. `plan.md` に「いまやる番」を新設。`checkin.mjs` が毎回強制表示し `.plan-read` を書く。
+   **無いと `npm run check` が EXIT 1**（`scripts/guard/plan-read.mjs`。CI では見ない）
+4. `checkout.mjs` に7項目目（「いまやる番」を更新したか）
+5. `.claude/settings.json` に SessionStart フック（`checkin.mjs` を自動起動するだけ）
+6. `AGENTS.md` D-21（ブロッカー規則）を新設、D-15 に `.claude/settings.json` の例外を追記
+7. **クライアント指示12件（C-1〜C-12）を `plan.md` 第10章に載せた**——体重の評価軸・ベスト体重・
+   耳の6段階と写真・コース選択・口の写真とお絵描き・フォント統一・カットスタイル削除 等。
+   実装はまだ**していない**（この PR には含まれない）。次のセッションはここから着手する
+
+### 検査（すべて EXIT 0）
+
+`npm run build` / `npm run check`（`plan-read` 含め15本）/ `npm test`（**110件**）/
+`gate.mjs --end` / `delivery-ready.mjs`。
+
+### 次にやること
+
+`docs/ops/plan.md` の「いまやる番」のとおり、**C-7 の確認から着手**し、続けて C-4〜C-12 を
+実装する。各項目の受入条件・敵対検証の設計は第10章に書いてある。
 
 ---
 

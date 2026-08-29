@@ -49,16 +49,17 @@ export const SCOPE = {
   },
   F4: {
     label: '棚卸しと納品の仕上げ',
-    /* F3 の範囲に **2ファイルだけ**足した（マスター判断 2026-08-27「進める」）。
-       広げたのは、F3 の範囲外で2回止められた実物だけ:
-         `.gitignore`     鍵3種を塞ぐ（`docs/deferred.md` #32。機械強制は済んでいる二重化）
-         `.env.example`   変数名を1行（`#18`。次の人が探せなかった）
+    /* F3 の範囲に少しずつ足してきた（マスター判断ごとに実物で理由が言えるものだけ）:
+         `.gitignore`         鍵3種を塞ぐ（放置リスト #32・2026-08-27）
+         `.env.example`       変数名を1行（#18・2026-08-27）
+         `.claude/`           SessionStart フックの置き場（`AGENTS.md` D-15 追記・2026-08-29。
+                              中身は `checkin.mjs` を呼ぶだけで、ルールは書かない）
        **「もう終わりだから全部触ってよい」にはしない**——範囲を広げる理由は
        いつでも実物で言えること（`D-18` 偽-3「無条件の免罪符を作らない」）。 */
     allow: [
       'src/', 'backend/', 'scripts/', 'test/', 'supabase/', 'worker/',
       'package.json', 'package-lock.json', '.github/',
-      '.gitignore', '.env.example',
+      '.gitignore', '.env.example', '.claude/',
     ],
   },
 };
@@ -93,7 +94,7 @@ export function checkPath(root, phase, target) {
   return `【逸脱監視】\`${r}\` は ${phase}（${label}）の範囲外です。\n`
     + `  ${phase} で触ってよい場所: ${allow.join(' / ')}\n`
     + `  直さないと次の画面へ行けないなら、マスターの判断を仰いでください。\n`
-    + `  そうでないなら docs/deferred.md に1行残して先へ進んでください（ルール④）。`;
+    + `  そうでないなら docs/ops/plan.md（放置リスト）に1行残して先へ進んでください（ルール④）。`;
 }
 
 /** 命令が範囲内なら null、範囲外なら理由の文字列。 */
@@ -102,7 +103,7 @@ export function checkCommand(root, phase, cmd) {
   if (INSTALL.test(cmd)) {
     return `【逸脱監視】新しい依存を足そうとしています。\n`
       + `  いまは ${phase}（${label}）。ルール①「現状あるものだけでフェーズを完成させる」に反します。\n`
-      + `  どうしても要るなら範囲外なので、docs/deferred.md に1行残して先へ進んでください。`;
+      + `  どうしても要るなら範囲外なので、docs/ops/plan.md（放置リスト）に1行残して先へ進んでください。`;
   }
   const MUTATE = /(^|[;&|]\s*)(rm|mv|cp|truncate|tee|touch|mkdir|chmod|chown|ln|dd|sed\s+-i|git\s+(rm|mv|checkout|restore|clean|reset))\b|>>?\s*\S/;
   if (!MUTATE.test(cmd)) return null;
