@@ -95,11 +95,21 @@ try {
      走らせると、比べる相手（origin/master）がもう自分の更新後の値になっており、
      何を書いても「変わっていない」としか出せない（`git show origin/master` を
      実行時に取り直しているため）。セッション開始の瞬間の値をここに固定して、
-     checkout.mjs には**これ**と比べさせる。 */
-  const planText = fs.readFileSync(path.join(ROOT, 'docs/ops/plan.md'), 'utf8');
-  const nextLine = (planText.match(/^\*\*いまやる番:\s*(.+?)\*\*\s*$/m) || [])[1];
-  if (nextLine !== undefined) {
-    fs.writeFileSync(path.join(ROOT, '.plan-next-baseline'), `${nextLine}\n`);
+     checkout.mjs には**これ**と比べさせる。
+
+     **既に在れば上書きしない。** `checkin.mjs` はセッション開始の1回だけでなく、
+     会話の圧縮・再開（compact）のたびに SessionStart フックから何度も呼ばれる
+     （実測: `F-20260830-62` の修正直後、同じセッション内で2回目の checkin が
+     走り、**自分がすでに書き換えた後の値**でこの印を上書きしてしまい、7項目目が
+     また「変わっていない」に戻った）。最初の1回の値を保てば、途中で何度
+     checkin が再実行されても比較の基準がずれない。 */
+  const baselinePath = path.join(ROOT, '.plan-next-baseline');
+  if (!fs.existsSync(baselinePath)) {
+    const planText = fs.readFileSync(path.join(ROOT, 'docs/ops/plan.md'), 'utf8');
+    const nextLine = (planText.match(/^\*\*いまやる番:\s*(.+?)\*\*\s*$/m) || [])[1];
+    if (nextLine !== undefined) {
+      fs.writeFileSync(baselinePath, `${nextLine}\n`);
+    }
   }
 } catch (e) {
   process.stdout.write(`\n  ❌ 大計画を読めなかった: ${e.message.split('\n')[0]}\n`);
