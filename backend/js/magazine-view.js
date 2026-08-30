@@ -608,10 +608,30 @@ export function renderMagazine(container, report, opts = {}) {
   const heroPhoto = firstNonEmpty(data.heroPhotos) || firstNonEmpty((data.trimming || {}).photos);
   setImage(container, 'hero-photo-frame', 'hero-photo', heroPhoto);
 
+  /* 次回のおすすめご来店時期（マスター指示 2026-08-29・D-20260829-58）。
+     日数 = 犬ごとの上書き（`report.revisitDaysOverride`）優先、無ければ店舗の既定
+     （`report.shopDefaultRevisitDays`）。どちらも渡ってこなければ空文字のまま。
+     ここで先に計算するのは、案内文（下の letter-section）に織り込むため。 */
+  const visitDateStr = data.isoDate || data.date || report.reportDate;
+  const overrideRaw = report.revisitDaysOverride;
+  const hasOverride = overrideRaw !== null && overrideRaw !== undefined && Number.isFinite(Number(overrideRaw));
+  const shopDefaultRaw = report.shopDefaultRevisitDays;
+  const revisitDays = hasOverride ? Number(overrideRaw) : Number(shopDefaultRaw);
+  const revisitDateText = Number.isFinite(revisitDays) && revisitDays > 0
+    ? addDaysToIsoLike(visitDateStr, revisitDays)
+    : '';
+
   const staffNote = esc(data.staffNote).trim();
+  /* 顧客ページ（編集欄が渡らない＝⑥飼い主側）の案内文には、次回のおすすめご来店時期を
+     一文添える（マスター指示: 「次回のおすすめ時期は顧客ページの案内文に表示しろ」）。
+     編集はスタッフ限定のままなので、この一文は⑤トリマー確認画面には出さない
+     （`opts.onRevisitDaysChange` の有無で分ける——編集欄の出し分けと同じ条件）。 */
+  const isCustomerView = typeof opts.onRevisitDaysChange !== 'function';
+  const revisitLine = isCustomerView && revisitDateText ? `次回のご来店は ${revisitDateText} 頃をおすすめします。` : '';
+  const noteDisplay = [staffNote, revisitLine].filter(Boolean).join('\n\n');
   const letterSection = container.querySelector('[data-view="letter-section"]');
-  if (letterSection) letterSection.hidden = staffNote === '';
-  setText(container, 'staff-note', staffNote);
+  if (letterSection) letterSection.hidden = noteDisplay === '';
+  setText(container, 'staff-note', noteDisplay);
 
   const skinCount = renderSkinRows(container, data.skin, true);
   setText(container, 'skin-pill', skinCount > 0 ? `記録 ${skinCount}件` : '記録なし');
@@ -671,21 +691,13 @@ export function renderMagazine(container, report, opts = {}) {
 
   renderTimeline(container, report);
 
-  /* 次回のおすすめご来店時期（マスター指示 2026-08-29・D-20260829-58）。
-     日数 = 犬ごとの上書き（`report.revisitDaysOverride`）優先、無ければ店舗の既定
-     （`report.shopDefaultRevisitDays`）。**どちらも渡ってこなければ節ごと隠す**
-     （D-10・持っていない値を出さない）。編集欄はスタッフ側だけ
-     （`opts.onRevisitDaysChange` が渡っているとき）出す——⑥飼い主画面には渡さない。 */
-  const visitDateStr = data.isoDate || data.date || report.reportDate;
-  const overrideRaw = report.revisitDaysOverride;
-  const hasOverride = overrideRaw !== null && overrideRaw !== undefined && Number.isFinite(Number(overrideRaw));
-  const shopDefaultRaw = report.shopDefaultRevisitDays;
-  const revisitDays = hasOverride ? Number(overrideRaw) : Number(shopDefaultRaw);
+  /* 次回のおすすめご来店時期の箱（マスター指示 2026-08-29・D-20260829-58）。
+     日数・日付テキストは冒頭（案内文を組み立てた箇所）で計算済みのものを使い回す。
+     **どちらも渡ってこなければ節ごと隠す**（D-10・持っていない値を出さない）。
+     編集欄はスタッフ側だけ（`opts.onRevisitDaysChange` が渡っているとき）出す
+     ——⑥飼い主画面には渡さない。 */
   const revisitBox = container.querySelector('[data-view="revisit-box"]');
   if (revisitBox) {
-    const revisitDateText = Number.isFinite(revisitDays) && revisitDays > 0
-      ? addDaysToIsoLike(visitDateStr, revisitDays)
-      : '';
     revisitBox.hidden = revisitDateText === '';
     setText(container, 'revisit-date', revisitDateText);
 

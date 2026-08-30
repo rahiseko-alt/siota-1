@@ -261,7 +261,7 @@ noauth : 赤 4 / 緑のまま 1
 - verify-report-roundtrip.mjs :: 5. 確認: 耳
 - verify-report-roundtrip.mjs :: 7. 確認: 体重
 - verify-report-roundtrip.mjs :: 9. 飼い主: 犬の名前
-- verify-report-roundtrip.mjs :: 10. 飼い主: 担当からの一言
+- verify-report-roundtrip.mjs :: 10. 飼い主: 担当からの一言（＋次回のおすすめご来店時期が末尾に付く）
 - verify-report-roundtrip.mjs :: 11. 飼い主: 爪（前足/後ろ足）
 - verify-report-roundtrip.mjs :: 12. 飼い主: 耳
 - verify-report-roundtrip.mjs :: 14. 飼い主: 体重
