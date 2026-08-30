@@ -76,6 +76,9 @@ yarn-debug.log*
 # 「いまやる番」を今回のセッションで読んだ印（checkin.mjs が書く・作業用）
 .plan-read
 
+# セッション開始時点の「いまやる番」の値（checkin.mjs が書く・checkout.mjs の7項目目が読む・作業用）
+.plan-next-baseline
+
 # 毒見を一部だけ走らせた回の記録（作業用）。全体の記録は poison-run-result*.md が正。
 docs/ops/poison-run-partial.md
 

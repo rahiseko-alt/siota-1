@@ -845,3 +845,14 @@
 - **Fix（本対応・要マスター）**: `supabase/migrations/202608290010_revisit_interval.sql` の中身を、本番 Supabase（`bcodloqwnrhcuvevfguy`）の SQL Editor で実行してもらう必要がある。Claude Code は本番 Supabase の認証情報を持たない（Cloudflare と同じ理由・`A-1` に準ずる）ため、**この一手だけはマスターの手作業が要る**。適用後に `D-20260829-58` の内容を再デプロイする
 - **実測**: ロールバック後 `deploy.yml` run #6（`rollback-pre-revisit`）成功。`curl https://bcodloqwnrhcuvevfguy.supabase.co/rest/v1/pets?select=id,name` の応答が `400 42703` → `401`（未認証・正常）に変化したことを確認
 - **How to prevent**: **DB スキーマを変える migration を含む変更は、`deploy.yml` を起動する前に「本番 Supabase に migration が当たっているか」を必ず本番相手に実測してから出す。** 恒久対策として、(a) migration の有無を本番へ実際に問い合わせて確かめる検査を `verify:prod` に追加する（例: 直近の migration が新設した列を1つ選び `SELECT` して `42703` が返らないことを見る）、または (b) Cloudflare と同じ形で `SUPABASE_ACCESS_TOKEN`/`SUPABASE_DB_PASSWORD` を GitHub Secrets に置き、`deploy.yml` に `supabase db push`（本番向け）の工程を機械化して足す、のいずれかをマスター判断で決める必要がある。いまはどちらも無いため、**DBスキーマを伴う変更のデプロイは、migration適用を先に本番相手に確かめるまでは行わない**
+
+### [F-20260830-62] `checkout.mjs` の7項目目が、正常な手順（マージ後に確認）では原理的に green にならなかった
+
+- **Date**: 2026-08-30
+- **Category**: ci（自前の関所スクリプトのバグ）
+- **Trigger/Context**: `F-20260829-61` の復旧報告後、マスターから「チェックアウト、次回は動作確認から」と指示され、`node scripts/guard/checkout.mjs` を実行。手順1〜6はすべて✅だったが、7項目目（「いまやる番」を今回のセッションで更新したか）だけ「セッション開始時点から変わっていない」として❌になった。実際には `docs/ops/plan.md` の当該行はこのセッション中に複数回書き換えていた（`git show <直前のマージ前コミット>:docs/ops/plan.md` で実測・差分あり）
+- **Failure**: 7項目目は「`origin/master` の値」と「手元の値」を実行時に比べる作りだった。ところが `checkout.mjs` の項目3（「master に取り込まれた」＝PRをマージ済みであること）を満たすには**先にマージしている必要がある**。マージした瞬間、`origin/master` の値はこのセッション自身が書いた最新の値そのものになる。手元の値もそれと同期させれば当然一致し、**「変わっていない」以外の判定を出せない**——どんな値を書いて、どんな順序でマージしても、項目3を満たした状態で項目7を実行時評価すると必ず一致してしまう構造的な欠陥だった
+- **Root Cause**: 項目7のコメントは「セッション開始時点（`origin/master`）の行」と書いており、**「セッション開始時点」と「実行時点の `origin/master`」が同じだという前提**に立っていた。だがこのセッションのように、そのセッション自身が該当行を更新してマージした後に `checkout.mjs` を走らせる（＝項目3を先に満たしてから項目7を見る、というごく普通の実行順序）と、その前提が崩れる。項目7が追加されたのは `2026-08-29` で、追加後に一度もこの構造で最後まで検証されていなかった（`docs/handoff.md` に残る過去の「✅」実績はすべて項目7新設より前のもの）
+- **Fix**: `checkin.mjs`（セッション開始時に必ず走る）が、その時点の `docs/ops/plan.md` から「いまやる番」の値を抜き出し、`.plan-next-baseline`（`.plan-read` と同じくgitignore対象の作業用ファイル）に書き残すようにした。`checkout.mjs` の項目7は、`origin/master` を実行時に取り直す代わりに、まずこのファイルがあればそれと比較する（無ければ従来どおり `origin/master` にフォールバック——`checkin.mjs` を通していない古い流れとの互換性のため）
+- **実測（`D-18` の3出力）**: 直す前、実際にこのセッションで `node scripts/guard/checkout.mjs` を走らせ、項目7が❌になることを確認（本記録の「Trigger/Context」に記載の実行）。直した後、`node scripts/guard/checkin.mjs` を実行して `.plan-next-baseline` に当時の値が書かれたことを確認し、`docs/ops/plan.md` の「いまやる番」を新しい値へ書き換えたうえで本記録をコミット・PR化・マージし、その後に改めて `node scripts/guard/checkout.mjs` を実行——結果は本記録末尾の「裏づけ」に追記する
+- **How to prevent**: 「セッション開始時点の値」を機械で扱う検査は、**実行時に別の場所（`origin/master` 等、自分自身が後から書き換えうる場所）を都度取り直す作りにしない。** 開始時点の1回だけ、専用のローカルファイルへ固定して残し、以後はそれとだけ比べる（`.plan-read` が「読んだこと」を同じ手法で残しているのと同じ考え方）
