@@ -1137,6 +1137,7 @@ const App = {
     const img = new Image();
     let strokes = [];
     let drawing = false;
+    let activePointerId = null;
 
     const redraw = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -1171,16 +1172,25 @@ const App = {
     };
     img.src = src;
 
+    /* ピンチ操作は2本の指がそれぞれ pointerdown/pointermove を発火させる。
+       pointerId で区別せず両方を描画に使うと、2本指の座標が同じ線に混ざって
+       暴れた線になる（マスター報告）。1本目の指だけを追跡し、2本目以降は無視する。 */
     canvas.addEventListener('pointerdown', (event) => {
+      if (drawing) return;
       drawing = true;
+      activePointerId = event.pointerId;
       strokes.push([pointFromEvent(event)]);
     });
     canvas.addEventListener('pointermove', (event) => {
-      if (!drawing) return;
+      if (!drawing || event.pointerId !== activePointerId) return;
       strokes[strokes.length - 1].push(pointFromEvent(event));
       redraw();
     });
-    const stopDrawing = () => { drawing = false; };
+    const stopDrawing = (event) => {
+      if (event && event.pointerId !== activePointerId) return;
+      drawing = false;
+      activePointerId = null;
+    };
     canvas.addEventListener('pointerup', stopDrawing);
     canvas.addEventListener('pointerleave', stopDrawing);
 
