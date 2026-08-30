@@ -88,6 +88,19 @@ for (const [label, f] of [['引き継ぎ', 'docs/handoff.md'], ['計画', 'docs/
 try {
   process.stdout.write(`\n${sh('node scripts/plan.mjs')}\n`);
   fs.writeFileSync(path.join(ROOT, '.plan-read'), `${new Date().toISOString()}\n`);
+  /* **「いまやる番」の値を、このセッション開始時点のものとして残す。**
+     `checkout.mjs` の7項目目（この行を今回のセッションで更新したか）は、
+     以前は `origin/master` の値と比べていた。だが**このセッション自身の
+     最後のマージが `origin/master` にその更新を運んだ後**に checkout.mjs を
+     走らせると、比べる相手（origin/master）がもう自分の更新後の値になっており、
+     何を書いても「変わっていない」としか出せない（`git show origin/master` を
+     実行時に取り直しているため）。セッション開始の瞬間の値をここに固定して、
+     checkout.mjs には**これ**と比べさせる。 */
+  const planText = fs.readFileSync(path.join(ROOT, 'docs/ops/plan.md'), 'utf8');
+  const nextLine = (planText.match(/^\*\*いまやる番:\s*(.+?)\*\*\s*$/m) || [])[1];
+  if (nextLine !== undefined) {
+    fs.writeFileSync(path.join(ROOT, '.plan-next-baseline'), `${nextLine}\n`);
+  }
 } catch (e) {
   process.stdout.write(`\n  ❌ 大計画を読めなかった: ${e.message.split('\n')[0]}\n`);
   problems.push('docs/ops/plan.md を読めない（壊れている可能性）');

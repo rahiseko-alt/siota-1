@@ -122,8 +122,13 @@ if (skipBuild) {
 /* ── 7. 「いまやる番」（docs/ops/plan.md）を、このセッションで更新したか ──
    マスター指示（2026-08-29）: 「毎回全体計画を強制的に進捗の読み書きをする」。
    `checkin.mjs` は読んだことを機械で確かめる。ここは**書いたこと**を機械で確かめる。
-   セッション開始時点（`origin/master`）の行と、いま手元にある行を比べるだけ——
-   同じままなら、進んでいないか、進んだのに書き忘れたかのどちらか。 */
+   比べる相手は `.plan-next-baseline`（`checkin.mjs` が**セッション開始時点**に書いた値）。
+   以前は `origin/master` を実行時に取り直して比べていたが、**このセッション自身の
+   最後のマージが既に origin/master にその更新を運んでいる**のが通常の実行順序
+   （`checkout.mjs` はマージの後に走らせる・項目3が要求する）ため、その時点の
+   origin/master は既に「このセッションが書いた後」の値になっており、**何を書いても
+   「変わっていない」としか出せなかった**（`F-20260830-62`）。セッション開始時点の
+   値を固定のファイルに残すことで、時点をずらさずに比べる。 */
 const NEXT_RE = /^\*\*いまやる番:\s*(.+?)\*\*\s*$/m;
 {
   let ok = false;
@@ -134,8 +139,16 @@ const NEXT_RE = /^\*\*いまやる番:\s*(.+?)\*\*\s*$/m;
     if (localNext === undefined) {
       detail = 'docs/ops/plan.md に「いまやる番」の行が無い（第0章の直下にあるはず）';
     } else {
+      const baselinePath = path.join(ROOT, '.plan-next-baseline');
       let baseNext = null;
-      try { baseNext = (sh('git show origin/master:docs/ops/plan.md').match(NEXT_RE) || [])[1]; } catch { /* origin/master にまだ無い＝初回 */ }
+      if (fs.existsSync(baselinePath)) {
+        baseNext = fs.readFileSync(baselinePath, 'utf8').trim();
+      } else {
+        /* 印が無い（`checkin.mjs` を通していない・古いセッションの続き等）。
+           次善として `origin/master` と比べる——このセッション自身がまだ
+           何もマージしていなければ、これでも正しく判定できる。 */
+        try { baseNext = (sh('git show origin/master:docs/ops/plan.md').match(NEXT_RE) || [])[1] ?? null; } catch { /* origin/master にまだ無い＝初回 */ }
+      }
       if (baseNext === null) {
         ok = true;
         detail = `新設: ${localNext}`;
