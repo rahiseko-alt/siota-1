@@ -206,6 +206,7 @@ try {
       reportDate: at('report-date'),
       courseBadge: at('course-badge'),
       staffNote: at('staff-note'),
+      revisitDate: at('revisit-date'),
       bcsText: at('bcs-text'),
       nailPill: at('nail-pill'),
       earPill: at('ear-pill'),
@@ -264,7 +265,16 @@ try {
   /* 飼い主側は `backend/js/supabase-auth.js :: renderReport()` が `report.report_date`
      （確定日・DB列）を渡す別経路なので、⑤とは独立に確かめる必要がある。 */
   check('9e. 飼い主: 来店日（確定日ではなく）', ownerView.reportDate, expectedDate);
-  check('10. 飼い主: 担当からの一言', ownerView.staffNote, INPUT.staffNote);
+  /* 顧客ページの案内文には、次回のおすすめご来店時期の一文が織り込まれる
+     （マスター指示「次回のおすすめ時期は顧客ページの案内文に表示しろ」）。
+     `INPUT.staffNote` が変わらず届いていることは prefix 一致で確かめ、
+     末尾に足された一文は実際に画面へ出た `revisit-date`（器が別に持つ、
+     この検査自身の実測値）と突き合わせる——期待値の日付計算を実装から
+     コピーしない（`D-9` と同じ理由：コピーは壊れても赤にならない）。 */
+  const expectedOwnerNote = ownerView.revisitDate
+    ? `${INPUT.staffNote}\n\n次回のご来店は ${ownerView.revisitDate} 頃をおすすめします。`
+    : INPUT.staffNote;
+  check('10. 飼い主: 担当からの一言（＋次回のおすすめご来店時期が末尾に付く）', ownerView.staffNote, expectedOwnerNote);
   check('11. 飼い主: 爪（前足/後ろ足）', ownerView.nailPill, `前 Lv.${INPUT.nailFront} / 後 Lv.${INPUT.nailRear}`);
   check('12. 飼い主: 耳', ownerView.earPill, `右 Lv.${INPUT.earRight} / 左 Lv.${INPUT.earLeft}`);
   check('13. 飼い主: 歯', ownerView.teethPill, INPUT.teeth);
