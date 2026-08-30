@@ -380,7 +380,7 @@ export const MUTATIONS = [
     id: 'letter-section-always-shown',
     why: '担当が何も書いていないのに、手紙の節が飼い主に出る（誰も書いていない空の手紙が届く）',
     file: 'backend/js/magazine-view.js',
-    find: "  if (letterSection) letterSection.hidden = staffNote === '';",
+    find: "  if (letterSection) letterSection.hidden = noteDisplay === '';",
     replace: '  if (letterSection) letterSection.hidden = false;',
     scripts: ['verify-edit.mjs'],
   },
