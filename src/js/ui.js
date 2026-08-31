@@ -440,10 +440,18 @@ const App = {
         +     '<span class="karte-card__badge-alert js-alert"></span>'
         +   '</div>'
         + '</div></div>'
+        /* 「選択」を先に置く（カードを開く操作は`btn-invite`と違って
+           `stopPropagation()`しないので、押しても押さなくても`card.onclick`まで
+           届く＝安全）。**サブエージェントによる敵対検証で発見**: 以前は
+           「初回登録QR」が先頭にあり、カードの幾何学的中心がちょうどこのボタンの
+           上に来ていた（実測: 390px幅で中心座標がBUTTON.btn-inviteに一致）。
+           `btn-invite`は自分の`onclick`で`stopPropagation()`するため、カードの
+           中央付近を押しただけのつもりが招待QRのモーダルへ吸い込まれ、
+           ④カルテ作成画面（使用オプションを含む）に一度も到達できていなかった。 */
         + '<div class="karte-card__actions">'
         +   '<button class="btn-clone-karte">前回を複製</button>'
-        +   '<button class="btn-invite" hidden>初回登録QR</button>'
         +   '<button class="boxbutton boxbutton--sm">選択</button>'
+        +   '<button class="btn-invite" hidden>初回登録QR</button>'
         + '</div>';
       /* 値は textContent で入れる。仮データでも、名前を HTML として解釈させない。 */
       card.querySelector('.karte-card__dog-name').textContent = dog.name;
