@@ -454,8 +454,20 @@ const App = {
       const alert = card.querySelector('.js-alert');
       if (dog.incomplete) alert.textContent = '⚠️ 未記入: ' + dog.incomplete;
       else alert.remove();
+      /* 「前回を複製」は仮データ（F2）専用のボタンで、実データの犬には出さない。
+         `cloneAndCreate()` は `selectKarte()` を直接呼ぶだけで、実際には
+         何も複製していない（アラート文言だけが「読み込みました」と主張する・
+         `D-12`違反）。加えて、実データの初期化（下書きの再開・使用オプションの
+         一覧取得）を丸ごと飛ばしてしまう——`verify-screens.mjs` が「実際にそれで
+         一度落ちた」と書いて避けてきた場所そのもの。カードそのもの・犬の名前を
+         押せば、同じ画面に正しい初期化つきで入れる（`openPet()`）ので、
+         実データではボタンごと消す（`btn-invite` と同じ判定基準）。 */
       const clone = card.querySelector('.btn-clone-karte');
-      clone.onclick = (e) => { e.stopPropagation(); this.cloneAndCreate(dog.name, dog); };
+      if (dog.id) {
+        clone.remove();
+      } else {
+        clone.onclick = (e) => { e.stopPropagation(); this.cloneAndCreate(dog.name, dog); };
+      }
       /* 初回登録（QR）の入口。**新規のお客様はこれを通らないと自分のカルテを
          永久に見られない**——飼い主側の RLS は `owner_users` 経由でしか通らず、
          そこへ行を入れられるのは `claim_invitation`（招待の消化）だけである。
