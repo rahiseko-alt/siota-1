@@ -30,8 +30,14 @@ export const updatePetSchema = z.object({
 ));
 
 export const updateShopSchema = z.object({
-  defaultRevisitDays: z.number().int().min(1).max(3650),
-}).strict();
+  defaultRevisitDays: z.number().int().min(1).max(3650).optional(),
+  /* 使用オプション（マスター指示・2026-08-31で復活）。店舗ごとに管理者が
+     追加・編集する一覧。DB 側の check 制約（30件・各40字以内）と同じ上限を
+     ここでも見る——上限超えは保存の手前で分かった方が親切（`D-10`）。 */
+  groomingOptions: z.array(z.string().trim().min(1).max(40)).max(30).optional(),
+}).strict().refine((value) => (
+  value.defaultRevisitDays !== undefined || value.groomingOptions !== undefined
+));
 
 export const createReportSchema = z.object({
   petId: uuidSchema,

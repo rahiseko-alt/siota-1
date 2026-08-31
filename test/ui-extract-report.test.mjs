@@ -100,7 +100,7 @@ test('⑥が読むキーの外は出さない（届かないキーを作らな�
   App.marks = [];
   App.form = {
     nail: { front: 1, rear: 1 }, ear: { right: 1, left: 2 }, teeth: 'ピカピカ✨', weight: 2.8,
-    bcs: 3, bestWeight: 3.5,
+    bcs: 3, bestWeight: 3.5, options: ['アメージング'],
   };
   App.photos = { trimming: [], ear: '', teeth: [] };
   for (const key of Object.keys(App.extractReport())) {

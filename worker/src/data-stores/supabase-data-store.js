@@ -108,11 +108,11 @@ export class SupabaseDataStore {
     return this.staffShopId;
   }
 
-  /** 「次回のおすすめご来店時期」の既定日数。店舗の管理者だけが書き換えられる（RLS `shops_admin_update`）。 */
+  /** 「次回のおすすめご来店時期」の既定日数・使用オプション一覧。店舗の管理者だけが書き換えられる（RLS `shops_admin_update`）。 */
   async getShop() {
     const shopId = await this.getStaffShopId();
     const rows = await this.request(
-      `/rest/v1/shops?select=id,name,slug,default_revisit_days,created_at&id=eq.${encodeURIComponent(shopId)}&limit=1`,
+      `/rest/v1/shops?select=id,name,slug,default_revisit_days,grooming_options,created_at&id=eq.${encodeURIComponent(shopId)}&limit=1`,
     );
     return this.one(rows);
   }
@@ -129,9 +129,16 @@ export class SupabaseDataStore {
 
   async updateShop(input) {
     const shopId = await this.getStaffShopId();
+    /* **渡されたキーだけ書く。** `defaultRevisitDays` と `groomingOptions` は別々の
+       画面から別々に保存される（`api-schemas.js` の `updateShopSchema` はどちらか
+       片方だけでも通す）。両方いつも送ると、片方だけ直したいときにもう片方を
+       意図せず上書きしてしまう。 */
+    const body = {};
+    if (input.defaultRevisitDays !== undefined) body.default_revisit_days = input.defaultRevisitDays;
+    if (input.groomingOptions !== undefined) body.grooming_options = input.groomingOptions;
     const rows = await this.request(
-      `/rest/v1/shops?id=eq.${encodeURIComponent(shopId)}&select=id,name,slug,default_revisit_days,created_at`,
-      { method: 'PATCH', body: { default_revisit_days: input.defaultRevisitDays }, prefer: 'return=representation' },
+      `/rest/v1/shops?id=eq.${encodeURIComponent(shopId)}&select=id,name,slug,default_revisit_days,grooming_options,created_at`,
+      { method: 'PATCH', body, prefer: 'return=representation' },
     );
     return this.one(rows);
   }

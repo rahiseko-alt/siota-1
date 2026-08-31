@@ -375,7 +375,14 @@ async function bootStaffPortal(PonchiApp) {
     petName: pet.petName,
   });
   if (route.name === 'pet') {
-    PonchiApp.show('archive', pet);
+    /* 使用オプション（マスター指示・2026-08-31で復活）を④カルテ作成に出すため、
+       店舗の一覧を先読みしておく。読めなくても犬の画面自体は出す
+       ——欄が空（選べるオプション無し）になるだけにする。 */
+    const shopBody = await readJson(client, '/api/shop').catch(() => null);
+    PonchiApp.show('archive', {
+      ...pet,
+      shopGroomingOptions: (shopBody && shopBody.shop && shopBody.shop.grooming_options) || [],
+    });
     return;
   }
 
@@ -384,8 +391,9 @@ async function bootStaffPortal(PonchiApp) {
       client,
       `/api/pets/${encodeURIComponent(route.petId)}/reports/${encodeURIComponent(route.reportId)}`,
     ),
-    /* 「次回のおすすめご来店時期」の既定日数（マスター指示 2026-08-29・D-20260829-58）。
-       読めなくても⑤の他の項目は表示する——欄が空になるだけにする。 */
+    /* 「次回のおすすめご来店時期」の既定日数・使用オプション一覧（マスター指示
+       2026-08-29・D-20260829-58 / 2026-08-31）。読めなくても⑤の他の項目は表示する
+       ——欄が空になるだけにする。 */
     readJson(client, '/api/shop').catch(() => null),
   ]);
   activeObjectUrls.forEach((url) => URL.revokeObjectURL(url));
@@ -400,6 +408,7 @@ async function bootStaffPortal(PonchiApp) {
     ...pet,
     reportId: route.reportId,
     shopDefaultRevisitDays: shopBody && shopBody.shop ? shopBody.shop.default_revisit_days : null,
+    shopGroomingOptions: (shopBody && shopBody.shop && shopBody.shop.grooming_options) || [],
   });
   if (globalThis.SaltyDogPonchi) globalThis.SaltyDogPonchi.applyReport(globalThis.__REPORT__);
 }

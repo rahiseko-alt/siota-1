@@ -101,3 +101,9 @@ $ sed -n '1749,1995p' src/index.html | grep -c "目標体重"
 - `` `trimming` `` — `comment`（カットの長さ・スタイル）を廃止（C-12）。`photos` のみ残す
 - `` `weights` `` — 各要素に `date`（来店日）を追加、`ym` も来店日から作る（C-3。
   未入力なら従来どおり確定日）
+
+## 追記（2026-08-31・使用オプションの復活）
+
+| 新しいキー | ④の出どころ | 状態 |
+|---|---|---|
+| `` `options` `` | `#options-grid` の複数選択チップ（新設・`renderOptionChips()`） | 旧デザイン試作（`design-samples/ponchi-v2.html`。F1で削除済み）にあった「今月の使用オプション」の復活（マスター指示）。選べる名前は店舗ごとに管理者が④店舗設定（`shops.grooming_options`）で追加・編集する。⑤⑥とも「カット」カードにタグとして表示（`renderOptionTags()`）。1件も選ばれていなければキーごと出さない |
