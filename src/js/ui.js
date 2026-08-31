@@ -26,7 +26,7 @@ const App = {
      `nail` は前足・後ろ足を分けて記録する（マスター指示 2026-08-29・C-5）。 */
   form: {
     nail: { front: 0, rear: 0 }, ear: { right: 0, left: 0 }, teeth: '', weight: 0,
-    bcs: 0, bestWeight: 0,
+    bcs: 0, bestWeight: 0, options: [],
   },
 
   /* 口の写真1枚あたりの上限枚数（マスター指示 2026-08-29・C-11）。 */
@@ -110,6 +110,10 @@ const App = {
   showPetKarte(pet) {
     this.selectKarte(pet.petName || '', pet.ownerName || '', '');
     this.renderPastReports(pet);
+    /* 使用オプションのボタンを、下書き読み込みより前に組み立てる。
+       `resumeDraft` が呼ぶ `applyReport` はボタンを探して押すので、
+       先に用意しておかないと選んでいたものが戻せない。 */
+    this.renderOptionChips(pet.shopGroomingOptions || []);
     this.resumeDraft(pet.id);
   },
 
@@ -292,10 +296,21 @@ const App = {
     const teeth = (data.teeth || {}).status;
     if (teeth) {
       /* 日本語はセレクタに連結しない。中身を読んで比べる（`D-9`）。
-         表示＝保存値なので、表示で探せる。 */
-      const btn = [...document.querySelectorAll('.teeth-pill-btn:not([data-level])')]
+         表示＝保存値なので、表示で探せる。**歯のグリッドに絞る**——使用オプション
+         のボタンも同じ `.teeth-pill-btn` を流用しており `data-level` も持たないため、
+         絞らないと名前が偶然一致したオプションを歯の状態として押してしまう。 */
+      const btn = [...document.querySelectorAll('#teeth-selector-grid .teeth-pill-btn')]
         .find((el) => ((el.querySelector('.name') || {}).textContent || '').trim() === teeth);
       if (btn) btn.click();
+    }
+    /* 使用オプション（マスター指示 2026-08-31）。名前が一致するボタンだけ押す
+       ——店舗の一覧から消えた名前は、無い値を推測で埋めない（`D-10`）ので触らない。 */
+    const options = Array.isArray(data.options) ? data.options : [];
+    if (options.length > 0) {
+      document.querySelectorAll('#options-grid .teeth-pill-btn').forEach((btn) => {
+        const name = ((btn.querySelector('.name') || {}).textContent || '').trim();
+        if (options.includes(name) && !btn.classList.contains('is-active')) btn.click();
+      });
     }
     /* **写真を戻す。** 下書きの再開でも「カルテ修正」でも、ここで戻さなければ
        次の確定で**落ちる**——飼い主に届いていた写真が消える。中身は
@@ -336,6 +351,8 @@ const App = {
       : null;
     if (reviseId && report) {
       this.selectKarte(pet.petName || '', pet.ownerName || '', '');
+      /* ここも `applyReport` の前に組み立てる（`showPetKarte` と同じ理由）。 */
+      this.renderOptionChips(pet.shopGroomingOptions || []);
       this.reviseReportId = reviseId;
       this.applyReport(report);
       this.goToStep(3);
@@ -736,6 +753,45 @@ const App = {
     this.form.teeth = ((name && name.textContent) || '').trim();
   },
 
+  /* 使用オプション（旧デザイン試作にあった「今月の使用オプション」の復活。
+     マスター指示 2026-08-31）。選べる名前は店舗ごとに管理者が④店舗設定で
+     追加・編集する（`shopGroomingOptions`）ので、ボタンはその場で組み立てる
+     ——歯の状態と同じ `.teeth-pill-btn` を流用するが、こちらは複数選択
+     （押すたびに on/off が切り替わるだけで、他のボタンを消さない）。
+     1件も無い店舗では帯ごと隠す（`D-10`・空の選択肢を出さない）。 */
+  renderOptionChips(names) {
+    const section = document.getElementById('sec-options');
+    const grid = document.getElementById('options-grid');
+    if (!section || !grid) return;
+    this.form.options = [];
+    grid.textContent = '';
+    const list = (names || []).filter((v) => typeof v === 'string' && v.trim() !== '');
+    section.hidden = list.length === 0;
+    for (const name of list) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'teeth-pill-btn';
+      btn.onclick = () => this.toggleOption(btn);
+      const label = document.createElement('span');
+      label.className = 'name';
+      /* `textContent` で入れる。店舗管理者が自由入力した文字列なので
+         `innerHTML` にすると細工が実行される（`D-11`）。 */
+      label.textContent = name;
+      btn.append(label);
+      grid.append(btn);
+    }
+  },
+
+  toggleOption(btn) {
+    btn.classList.toggle('is-active');
+    const name = ((btn.querySelector('.name') || {}).textContent || '').trim();
+    if (!name) return;
+    const set = new Set(this.form.options);
+    if (btn.classList.contains('is-active')) set.add(name);
+    else set.delete(name);
+    this.form.options = [...set];
+  },
+
   onWeightChange(val) {
     const w = parseFloat(val) || 0;
     this.form.weight = w;
@@ -934,6 +990,10 @@ const App = {
     if (this.photos.trimming.length > 0) {
       report.trimming = { photos: [...this.photos.trimming] };
     }
+
+    /* 使用オプション（マスター指示 2026-08-31で復活）。1件も選ばれていなければ
+       キーごと出さない（空の選択を「選んだ」ことにしない＝`D-10`）。 */
+    if (this.form.options.length > 0) report.options = [...this.form.options];
 
     /* 犬体図の印。**印が無ければキーごと出さない**（白紙の絵を「所見あり」にしない）。
        印が在るのに描き先が無ければ `exportBodyMarking()` が投げる——握らない。 */

@@ -1573,6 +1573,29 @@ FAIL  2. 検査用の犬を登録できた
 - verify-revisit-interval.mjs :: 8. 飼い主画面に編集欄が出ない（編集はスタッフ限定）
 - verify-revisit-interval.mjs :: 検査を最後まで実行できた
 
+### 使用オプションの復活（2026-08-31・マスター指示）で足した2件
+
+- verify-report-roundtrip.mjs :: 8b. 確認: 使用オプション
+- verify-report-roundtrip.mjs :: 16b. 飼い主: 使用オプション
+
+壊し方: `backend/js/magazine-view.js` の `renderOptionTags(container, data.options);`
+（`renderMagazine()` 内、⑤⑥共有の「カット」カードを描く箇所）を1行コメントアウトする
+——選んだオプションをタグとして描く呼び出しそのものを止める。
+
+出力（`npm run verify:roundtrip`。他34項目は無傷のまま、狙った2件だけが赤になった）:
+```
+FAIL  8b. 確認: 使用オプション
+        期待: "アメージング"
+        実際: ""
+...
+FAIL  16b. 飼い主: 使用オプション
+        期待: "アメージング"
+        実際: ""
+
+===== 往復: 32/34 =====
+```
+戻して緑（34/34）に戻ることも確認済み。
+
 ## F4 を閉じる範囲（マスター判断・2026-08-28）
 
 台帳を129件すべて埋めるのではなく、**客に当たる経路まで**で F4 を閉じる。

@@ -265,7 +265,7 @@ function screenHome() {
     },
     {
       title: '④ 店舗設定',
-      note: '「次回のおすすめご来店時期」の既定日数を変える',
+      note: '「次回のおすすめご来店時期」の既定日数・使用オプションの一覧を変える',
       testid: 'shop-settings',
       onSelect: screenShopSettings,
     },
@@ -314,6 +314,86 @@ function screenShopSettings() {
       setMessage(result, `保存できませんでした: ${error.message}`);
     } finally {
       button.disabled = false;
+    }
+  };
+
+  appendGroomingOptionsEditor(contentEl);
+}
+
+/* 使用オプション（旧デザイン試作の「今月の使用オプション」相当。マスター指示
+   2026-08-31で復活）。④カルテ作成でトリマーが選べる名前を、店舗ごとに
+   ここで追加・編集・削除する。DB は配列1本（`shops.grooming_options`）なので、
+   保存はいつも一覧を丸ごと送り直す。 */
+function appendGroomingOptionsEditor(root) {
+  root.append(el('p', 'admin-note', '④カルテ作成画面でトリマーが選べる「使用オプション」の一覧です。名前は自由に変更・追加・削除できます。'));
+  const list = el('div', 'admin-options-list');
+  root.append(list);
+  const addRow = el('div', 'admin-options-row');
+  const addInput = document.createElement('input');
+  addInput.type = 'text';
+  addInput.placeholder = 'オプション名を入力して追加';
+  addInput.maxLength = 40;
+  addRow.append(addInput);
+  const addButton = submitButton('＋ 追加', 'add-shop-option');
+  addRow.append(addButton);
+  root.append(addRow);
+  const saveButton = submitButton('使用オプションを保存する', 'save-shop-options');
+  const saveResult = el('p', 'admin-result');
+  root.append(saveButton, saveResult);
+
+  let names = [];
+
+  function renderRows() {
+    list.replaceChildren();
+    names.forEach((name, index) => {
+      const row = el('div', 'admin-options-row');
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.maxLength = 40;
+      input.value = name;
+      input.oninput = () => { names[index] = input.value; };
+      row.append(input);
+      const removeButton = el('button', 'admin-options-remove', '×');
+      removeButton.type = 'button';
+      removeButton.setAttribute('aria-label', `${name || `オプション${index + 1}`}を削除`);
+      removeButton.onclick = () => { names.splice(index, 1); renderRows(); };
+      row.append(removeButton);
+      list.append(row);
+    });
+  }
+
+  addButton.onclick = () => {
+    const value = addInput.value.trim();
+    if (!value) return;
+    names.push(value);
+    addInput.value = '';
+    renderRows();
+  };
+
+  api('/api/shop').then((body) => {
+    names = Array.isArray(body.shop && body.shop.grooming_options) ? [...body.shop.grooming_options] : [];
+    renderRows();
+  }).catch(() => {
+    setMessage(saveResult, '使用オプションの一覧を読み込めませんでした。');
+  });
+
+  saveButton.onclick = async () => {
+    const cleaned = names.map((v) => v.trim()).filter(Boolean);
+    if (cleaned.length > 30) {
+      setMessage(saveResult, 'オプションは30件までです。');
+      return;
+    }
+    saveButton.disabled = true;
+    setMessage(saveResult, '保存しています…');
+    try {
+      await api('/api/shop', { method: 'PATCH', body: JSON.stringify({ groomingOptions: cleaned }) });
+      names = cleaned;
+      renderRows();
+      setMessage(saveResult, '保存しました。');
+    } catch (error) {
+      setMessage(saveResult, `保存できませんでした: ${error.message}`);
+    } finally {
+      saveButton.disabled = false;
     }
   };
 }

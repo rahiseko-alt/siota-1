@@ -178,6 +178,7 @@ const TEMPLATE = `
       <svg class="wave-separator-svg" viewBox="0 0 1000 12" preserveAspectRatio="none"><path d="M0,6 Q250,12 500,6 T1000,6"/></svg>
       <div class="wave-card-body">
         <p style="margin-bottom:16px;font-size:13.5px;line-height:1.8" data-view="trimming-comment"></p>
+        <div class="options-tags" data-view="options-tags" hidden></div>
         <div class="gallery-mosaic-grid" data-view="trimming-gallery"></div>
         <p style="margin-top:16px;font-size:13.5px;line-height:1.8" data-view="body-language-comment"></p>
       </div>
@@ -286,6 +287,8 @@ const STYLE = `
 @media(min-width:768px){.wave-body-grid-2col{grid-template-columns:1fr 1fr}}
 .wave-body-img-frame{border:1px solid var(--border-subtle);background:var(--bg-paper);overflow:hidden}
 .wave-body-img-frame img{width:100% !important;height:auto;object-fit:cover;margin:0 !important;border:0 !important;background:none !important}
+.options-tags{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.option-tag{background:var(--bg-paper);border:1px solid var(--border-subtle);border-radius:20px;padding:5px 14px;font-size:12px;font-weight:700;color:var(--ink-primary)}
 .gallery-mosaic-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
 @media(min-width:768px){.gallery-mosaic-grid{grid-template-columns:repeat(4,1fr);gap:16px}}
 .gallery-mosaic-item{position:relative;aspect-ratio:1;overflow:hidden;background:var(--bg-muted);cursor:pointer}
@@ -464,6 +467,23 @@ function renderWeightGraph(root, weights, bestWeight) {
   current.textContent = `直近: ${last.ym} ${last.kg}kg${bestWeight ? `（目標 ${bestWeight}kg）` : ''}`;
   wrap.append(current);
   host.append(wrap);
+}
+
+/* 使用オプション（マスター指示 2026-08-31で復活）。選んだ名前をタグとして並べる。
+   1件も無ければ帯ごと隠す（`D-10`）。`textContent` で入れる——店舗管理者が
+   自由入力した名前なので `innerHTML` にすると細工が実行される（`D-9`/`verify:xss`）。 */
+function renderOptionTags(root, names) {
+  const host = root.querySelector('[data-view="options-tags"]');
+  if (!host) return;
+  host.replaceChildren();
+  const list = (names || []).filter((v) => typeof v === 'string' && v.trim() !== '');
+  list.forEach((name) => {
+    const tag = document.createElement('span');
+    tag.className = 'option-tag';
+    tag.textContent = name;
+    host.append(tag);
+  });
+  host.hidden = list.length === 0;
 }
 
 function renderGallery(root, photos, view = 'trimming-gallery') {
@@ -687,6 +707,7 @@ export function renderMagazine(container, report, opts = {}) {
   setText(container, 'cut-pill', cutPhotos.length > 0 ? `${cutPhotos.length}枚撮影` : '写真なし');
   setText(container, 'trimming-comment', esc(data.trimming && data.trimming.comment).trim());
   setText(container, 'body-language-comment', esc(data.bodyLanguage && data.bodyLanguage.comment).trim());
+  renderOptionTags(container, data.options);
   renderGallery(container, cutPhotos);
 
   renderTimeline(container, report);

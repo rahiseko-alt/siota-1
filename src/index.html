@@ -1999,7 +1999,7 @@ button, input, textarea, select {
               <span class="guide-diagram-box__caption">頭骨解剖図</span>
             </div>
 
-            <div class="teeth-selector-grid">
+            <div class="teeth-selector-grid" id="teeth-selector-grid">
               <button class="teeth-pill-btn is-active" onclick="App.selectTeeth(this)">
                 <span class="name">ピカピカ✨</span>
                 <span class="sub">歯石なし良好</span>
@@ -2084,10 +2084,21 @@ button, input, textarea, select {
             </div>
           </div>
 
+          <!-- 6b. 使用オプション（旧デザイン試作にあった「今月の使用オプション」の
+               復活。マスター指示 2026-08-31）。選べる名前は店舗ごとに管理者が
+               ④店舗設定で追加・編集する。1件も無ければ帯ごと出さない（`D-10`）。 -->
+          <div class="clinical-group" id="sec-options" hidden>
+            <div class="clinical-group__label">
+              <span>⑦ 使用オプション</span>
+              <span class="clinical-group__hint">今回使ったものを選択</span>
+            </div>
+            <div class="teeth-selector-grid" id="options-grid"></div>
+          </div>
+
           <!-- 7. Trimmer Personal Letter Message -->
           <div class="clinical-group">
             <div class="clinical-group__label">
-              <span>⑦ 担当トリマーからのメッセージ</span>
+              <span>⑧ 担当トリマーからのメッセージ</span>
               <span class="clinical-group__hint">音声入力対応</span>
             </div>
 

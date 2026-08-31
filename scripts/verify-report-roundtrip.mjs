@@ -40,6 +40,10 @@ const INPUT = {
   earLeft: 1,
   teeth: 'ちょっと付着💦',   /* 値が日本語。セレクタに連結しない（D-9） */
   weight: 3.42,
+  /* 使用オプション（マスター指示 2026-08-31で復活）。`shops.grooming_options` の
+     既定値（migration の初期9件）に含まれる名前を使う——店舗設定を変えていない
+     まっさらな環境でも通るように。 */
+  option: 'アメージング',
 };
 
 const results = [];
@@ -157,6 +161,14 @@ try {
       teethSaved = (typeof App !== 'undefined' && App.form || {}).teeth;
     }
 
+    /* 使用オプション（マスター指示 2026-08-31で復活）。名前で探す
+       （`.name` の表示＝保存値。D-9・日本語をセレクタに連結しない）。
+       店舗にオプションが1件も無ければ帯ごと隠れる（`sec-options` の `hidden`）ので、
+       見つからなければ「店舗設定が空」として欠落扱いにする。 */
+    const optionBtn = [...document.querySelectorAll('#options-grid .teeth-pill-btn')]
+      .find((el) => ((el.querySelector('.name') || {}).textContent || '').trim() === input.option);
+    if (!optionBtn) missing.push(`option=${input.option}`); else optionBtn.click();
+
     /* 犬体図に印を1つ付ける。押した所見が残る道はここしか無い（`#3`）。 */
     const canvas = document.getElementById('marking-canvas');
     if (!canvas) missing.push('#marking-canvas');
@@ -226,6 +238,10 @@ try {
       pageUrlImgs: [...document.querySelectorAll('img')]
         .map((el) => el.getAttribute('src') || '')
         .filter((src) => /^https?:\/\/[^/]+\/(edit|my)\//.test(src)).length,
+      /* 使用オプション（マスター指示 2026-08-31で復活）。「カット」カードの
+         タグとして届く（`renderOptionTags()`）。 */
+      optionTags: [...document.querySelectorAll('[data-view="options-tags"] .option-tag')]
+        .map((el) => el.textContent.trim()).join(','),
     };
   });
 
@@ -247,6 +263,7 @@ try {
   check('7. 確認: 体重', staffView.weightPill, `${INPUT.weight}kg`);
   check('8. 確認: 犬体図の印が画像として出ている',
     /^(blob:|data:image)/.test(staffView.skinImage) ? 'ok' : `src=${staffView.skinImage.slice(0, 40)}`, 'ok');
+  check('8b. 確認: 使用オプション', staffView.optionTags, INPUT.option);
 
   /* ── 飼い主側: 別のブラウザ文脈でログインし直し、`/my` で同じ値を見る ── */
   const ownerContext = await browser.newContext();
@@ -284,6 +301,7 @@ try {
   check('15. 飼い主: 犬体図の印が画像として届く',
     /^(blob:|data:image)/.test(ownerView.skinImage) ? 'ok' : `src=${ownerView.skinImage.slice(0, 40)}`, 'ok');
   check('16. 飼い主: 壊れた画像（ページURL）が出ていない', ownerView.pageUrlImgs, 0);
+  check('16b. 飼い主: 使用オプション', ownerView.optionTags, INPUT.option);
 
   /* 他人には見えないこと（RLS）。届くことだけを見て、届いてはいけない相手に
      届いていないかを見ないのは、検査として半分しかやっていない。 */

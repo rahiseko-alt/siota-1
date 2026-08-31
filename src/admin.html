@@ -309,6 +309,27 @@
     }
     .admin-note--danger { border-left-color: var(--accent-alert); color: var(--accent-alert); }
     .admin-result { font-size: 13px; margin-top: 12px; }
+    .admin-options-list { margin-bottom: 8px; }
+    .admin-options-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .admin-options-row input {
+      flex: 1;
+      padding: 10px 12px;
+      border: 1px solid var(--border-divider);
+      background: var(--bg-surface);
+      font-family: var(--font-sans);
+      font-size: 15px;
+      color: var(--ink-body);
+    }
+    .admin-options-remove {
+      flex: 0 0 auto;
+      width: 36px;
+      height: 36px;
+      border: 1px solid var(--border-divider);
+      background: var(--bg-surface);
+      color: var(--ink-secondary);
+      font-size: 16px;
+      cursor: pointer;
+    }
     [hidden] { display: none !important; }
   </style>
   <script src="/backend/js/supabase-vendor.js"></script>

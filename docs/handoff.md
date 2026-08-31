@@ -30,6 +30,80 @@
 
 ---
 
+## 0-AA. いちばん新しい（2026-08-31・その24）— **「使用オプション」を復活させた（マスター指示）。PRはまだドラフト・本番未反映**
+
+マスターより「以前あったオプション選択が消えているから復活させろ」との指示。調べたところ
+`design-samples/ponchi-v2.html`（F1で削除済みの古い試作。いまの src/ とは無関係）にあった
+「今月の使用オプション」トグルカード（アメージング／シセルリノ／ジュエルT／ジュエルM／
+NAMAKERA／キラトリ／グロスチャー／皮膚spa／被毛spa をON/OFFで選び、名前を追加もできる）
+と特定。`AskUserQuestion` で「これですか？」「どこに出すか」「一覧は店舗ごとに管理者が
+編集できるようにするか」を確認してから実装した（旧UIはいまのデータ構造に無いので作り直し）。
+
+**やったこと**:
+- 新規 migration（`202608310011_grooming_options.sql`）: `shops.grooming_options`
+  （`text[]`・既定は旧デザインの9件）を新設。CHECK制約はサブクエリを直接書けないため
+  `private.grooming_option_names_ok()` 関数に切り出した。**本番 Supabase にはまだ
+  当たっていない**（`A-1`。マスターの手作業が要る——`0-W`のデプロイ事故と同じ轍を踏まないため）
+- `worker/`: `updateShopSchema`・`getShop`/`updateShop` を拡張（`defaultRevisitDays`と
+  `groomingOptions`はどちらか片方だけでもPATCHできる。渡された列だけ書く）
+- `src/js/ui.js`（④）: 店舗の一覧からチップを動的に組み立て（`renderOptionChips`）、
+  複数選択トグル（`toggleOption`）。`applyReport`/`extractReport`にも配線
+- `backend/js/magazine-view.js`（⑤⑥共有）: 選んだ名前を「カット」カードにタグで表示
+  （`renderOptionTags`）
+- `backend/js/supabase-admin.js`（④店舗設定）: 一覧の追加・名前変更・削除・保存UI
+- `docs/ops/key-parity-F3.md`に`options`キーを追記、`verify-report-roundtrip.mjs`に
+  `8b.`/`16b.`を追加（STEP 5の指示どおり）。**実際に`renderOptionTags`呼び出しを
+  コメントアウトして赤になることを確認してから緑に戻した**証拠を`proof-of-red.md`に
+  記帳（**`## 証明済み`の節は`## F4を閉じる範囲`より前で終わる**——過去に複数回
+  踏まれた罠だが、今回も一度踏んで直した。次の人も同じ場所に足すこと）
+
+**検査（すべて実測・EXIT 0）**: `npm run build`/`check`/`test`。CIと同じ14本の`verify:*`
+（stack/portal/edit/xss/roundtrip/empty/screens/delete/draft/invitation/m6/admin/photo/revisit）
+を`db reset`直後に全部実行し全緑。`npm run walk`の絵で④の新しいチップ・⑤⑥のタグ表示・
+④店舗設定の編集UIを目視確認済み（管理者が1件追加→トリマーが選択→確定→⑤⑥両方に
+タグとして届くところまで、使い捨てスクリプトで実ブラウザ操作して確認、削除済み）。
+
+**まだやっていないこと（次のセッションへ）**:
+1. **本番 Supabase へのmigration適用はマスターの手作業が要る**（`A-1`）。適用前にデプロイ
+   すると`F-20260829-61`と同型の事故になるので、**migration適用を先に確認してから**
+   `deploy.yml`を起動すること
+2. マスターへの完了報告（日本語で）と、実際の見た目の確認・承認
+
+## 0-Z. いちばん新しい（2026-08-31・その23）— **`0-Y` の宿題（実ブラウザ目視確認）を、ローカル環境で代替実施。本番そのものの確認はまだ**
+
+このコンテナは Docker が使えた（`dockerd &` → `npx supabase start` で全マイグレーション
+適用込みの土台が上がった）。`0-Y` が次回に指示した2件を、**本番ではなくローカルの
+実データ相当の環境**で確認した。
+
+1. **`npm run verify:revisit`（11/11 PASS）・`npm run verify:roundtrip`（32/32 PASS）**
+   をクリーンな `supabase start` 直後に実測。`10.` 飼い主向けメッセージの末尾に
+   「次回のおすすめご来店時期」の一文が付くことも機械で確認済み。
+2. **`npm run walk` の絵**（`.human/correct/09-08_飼い主に届いたカルテ.png`）で、
+   案内文末尾の一文と、下の黒帯ボックス（revisit-box）が両方とも自然に表示されて
+   いることを目視確認した。
+3. **ピンチ誤動作の修正（`openAnnotate()` の pointerId 区別）は、実機の2本指ピンチが
+   無いので、使い捨てスクリプトで2本指を模した。** `App.photos.teeth` にダミー画像を
+   差し込み `openAnnotate('teeth', 0)` を呼び、`pointerId=1` で水平線を引きながら
+   同時に `pointerId=2` で縦方向へ大きく動かす `PointerEvent` を発火。結果:
+   キャンバスに描かれたのは水平線のみ（中央行に赤画素82、指2の経路上に混入0）。
+   スクリーンショットでも一直線であることを確認。修正は効いている。
+   （このスクリプトは使い捨てで、確認後に削除済み。恒久検査としては残していない
+   ——`verify-revisit`/`verify-roundtrip` と違い、正UIの動線からではなく `App` を
+   直接呼ぶ手当てのため、`AGENTS.md` D-9 等との整合を取ってから正式な検査に
+   するかはマスター判断とする）
+
+**まだ確認していないこと**: **本番そのもの**（`https://trimmer-system.kouheikosehira.com`）
+での⑤⑥実画面の目視確認。Claude Code は本番の認証情報を持たない（`A-1`）ため、
+ここだけはマスターの手作業が要る。上記1〜3で「コードは正しく動く」ことは
+強く裏付けられたが、「本番の実データ・実ブラウザで同じか」は別の確認である。
+
+### 次にやること
+
+マスターに本番で⑤⑥画面を一度見てもらい、問題なければ `docs/ops/plan.md` 第6章の
+残る5件（`#5` `#6` `#11` `#22` `#35`）を `AskUserQuestion` で改めて問う。
+
+---
+
 ## 0-Y. いちばん新しい（2026-08-30・その22）— **PR #52 マージ済み。2件のバグ修正・機能追加。実ブラウザでの目視確認はまだ**
 
 このセッションの作業（`claude/checkin-sjegvz` → `master`、squash merge、`cabfa5e`）:
