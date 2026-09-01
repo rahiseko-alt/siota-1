@@ -327,6 +327,7 @@ const App = {
       this.marks = data.__marks;
       this.resizeCanvas();
     }
+    this.updateCompletionStatus();
   },
 
   /* ⑤確認 — 実データのカルテを screen-4 に描く。
@@ -572,20 +573,14 @@ const App = {
     /* **犬種だけ。** 以前は見本の年齢と体重を全頭に付けていた（`#35`）。 */
     if (magSub) magSub.textContent = breed || '';
 
-    // 爪の未選択リセット & フッターを赤（未記入あり）にセット
+    // 爪の未選択リセット
     const nailWrap = document.getElementById('nail-stepper-wrap');
     if (nailWrap) {
       nailWrap.querySelectorAll('.stepper-btn').forEach(b => b.classList.remove('is-active'));
     }
-    const dock = document.getElementById('editor-bottom-dock');
-    const statusIcon = document.getElementById('dock-status-icon');
-    const statusText = document.getElementById('dock-status-text');
-    const gotoBtn = document.getElementById('btn-dock-goto');
-
-    if (dock) dock.classList.add('has-incomplete');
-    if (statusIcon) statusIcon.textContent = '⚠️';
-    if (statusText) statusText.textContent = '未記入: 爪のチェック';
-    if (gotoBtn) gotoBtn.style.display = 'inline-block';
+    /* フッターの帯は、爪だけでなく8項目の総ざらいで判定する（`updateCompletionStatus`）。
+       ここで固定文言を書くと、また「実態と違う帯」に戻る（`D-12`）。 */
+    this.updateCompletionStatus();
 
     this.goToStep(3);
   },
@@ -708,6 +703,7 @@ const App = {
       btn.classList.add('is-active');
     }
     this.form[type] = val;
+    this.updateCompletionStatus();
   },
 
   /* 前足/後ろ足の爪、左右の耳……**同じ形の段が2つ並ぶ項目**で使う。
@@ -724,26 +720,55 @@ const App = {
       if (group && side && this.form[group] && typeof this.form[group] === 'object') {
         const val = btn.querySelector('.val');
         this.form[group][side] = Number((val && val.textContent) || '') || 0;
-
-        /* 爪は前足・後ろ足の**両方**を選んで初めて完了扱いにする
-           （マスター指示 2026-08-29・C-5。以前は爪1系統を選んだ時点で完了にしていた）。
-           ⚠️ この帯が見ているのは爪のチェックだけ——耳・歯・体重・使用オプションなど
-           他の項目を1つも埋めていなくてもここは緑になる。以前の文言「全項目入力完了
-           (6/6)」は、まだC-1〜C-12や使用オプションが無かった頃の項目数を引きずった
-           まま**実際には無い「全部」を主張していた**（D-12違反・マスター指摘で発覚）。
-           爪以外の項目まで見て初めて緑にする仕組みは無いので、ここでは
-           「爪のチェックだけは終えた」という本当のことだけを言う。 */
-        if (group === 'nail' && this.form.nail.front && this.form.nail.rear) {
-          const dock = document.getElementById('editor-bottom-dock');
-          const statusIcon = document.getElementById('dock-status-icon');
-          const statusText = document.getElementById('dock-status-text');
-          const gotoBtn = document.getElementById('btn-dock-goto');
-          if (dock) dock.classList.remove('has-incomplete');
-          if (statusIcon) statusIcon.textContent = '✓';
-          if (statusText) statusText.textContent = '爪のチェック完了（他の項目も確認してください）';
-          if (gotoBtn) gotoBtn.style.display = 'none';
-        }
+        this.updateCompletionStatus();
       }
+    }
+  },
+
+  /* ④画面下部の帯（`editor-bottom-dock`）。**測定・評価項目**（コース・体重・
+     ベスト体重・BCS・爪・耳・歯・担当からのメッセージ）が全部埋まって初めて
+     「全項目入力完了」と名乗る（マスター指示 2026-09-01）。
+     写真・犬体図の印・使用オプションは、症状や追加サービスが無ければ元々ゼロが
+     正しいことがあるため、ここには含めない（同・マスター確認済み）。
+
+     ⚠️ 以前はここが爪のチェックだけを見て「全項目入力完了 (6/6)」と名乗っていた
+     ——C-1〜C-12や使用オプションで項目が増えるたびに数が古びていき、
+     ついに「全項目入力してないのに完了になる」とマスターから指摘された
+     （`D-12`違反）。この関数は、押されたボタンごとの個別更新ではなく、
+     **毎回すべての項目を読み直して**判定する——1箇所でも更新を足し忘れると
+     また同じ嘘に戻るため、足し算ではなく毎回の総ざらいにしてある。 */
+  updateCompletionStatus() {
+    const dock = document.getElementById('editor-bottom-dock');
+    const statusIcon = document.getElementById('dock-status-icon');
+    const statusText = document.getElementById('dock-status-text');
+    const gotoBtn = document.getElementById('btn-dock-goto');
+    if (!dock || !statusIcon || !statusText) return;
+
+    const courseEl = document.querySelector('[data-field="course"]');
+    const noteEl = document.querySelector('[data-field="staff-note"]');
+    const items = [
+      { label: 'コース', done: !!(courseEl && courseEl.value) },
+      { label: '体重', done: !!this.form.weight },
+      { label: 'ベスト体重', done: !!this.form.bestWeight },
+      { label: 'BCS', done: !!this.form.bcs },
+      { label: '爪のチェック', done: !!(this.form.nail.front && this.form.nail.rear) },
+      { label: '耳のチェック', done: !!(this.form.ear.right && this.form.ear.left) },
+      { label: '歯のチェック', done: !!this.form.teeth },
+      { label: '担当からのメッセージ', done: !!(noteEl && noteEl.value.trim()) },
+    ];
+    const missing = items.filter((i) => !i.done);
+    const total = items.length;
+
+    if (missing.length === 0) {
+      dock.classList.remove('has-incomplete');
+      statusIcon.textContent = '✓';
+      statusText.textContent = `全項目入力完了 (${total}/${total})`;
+      if (gotoBtn) gotoBtn.style.display = 'none';
+    } else {
+      dock.classList.add('has-incomplete');
+      statusIcon.textContent = '⚠️';
+      statusText.textContent = `未記入: ${missing.map((i) => i.label).join('・')}`;
+      if (gotoBtn) gotoBtn.style.display = 'inline-block';
     }
   },
 
@@ -759,6 +784,7 @@ const App = {
     if (side === 'right' || side === 'left') {
       this.form.ear[side] = Number(btn.dataset.level || '') || 0;
     }
+    this.updateCompletionStatus();
   },
 
   /* 歯の状態。**押されたボタンの表示そのものを保存値にする。**
@@ -777,6 +803,7 @@ const App = {
     }
     const name = btn.querySelector('.name');
     this.form.teeth = ((name && name.textContent) || '').trim();
+    this.updateCompletionStatus();
   },
 
   /* 使用オプション（旧デザイン試作にあった「今月の使用オプション」の復活。
@@ -827,6 +854,7 @@ const App = {
     if (badge && !this.currentDog.prevWeight) {
       badge.className = 'weight-diff-badge';
       badge.textContent = '前回の記録なし';
+      this.updateCompletionStatus();
       return;
     }
     const diff = Math.round((w - this.currentDog.prevWeight) * 1000);
@@ -839,12 +867,14 @@ const App = {
         badge.textContent = `${diff}g ▼`;
       }
     }
+    this.updateCompletionStatus();
   },
 
   /* ベスト体重（目標体重）。⑥側の受け手は既にあり、この値をそのまま渡すだけ
      （マスター指示 2026-08-29・C-4）。 */
   onBestWeightChange(val) {
     this.form.bestWeight = parseFloat(val) || 0;
+    this.updateCompletionStatus();
   },
 
   toggleEditorVoice() {
@@ -861,6 +891,7 @@ const App = {
         if (ta) {
           ta.value += (ta.value ? ' ' : '') + text;
           document.getElementById('mag-letter-content').textContent = ta.value;
+          this.updateCompletionStatus();
         }
         if (btn) btn.classList.remove('is-recording');
       };
@@ -871,6 +902,7 @@ const App = {
         if (ta) {
           ta.value += (ta.value ? ' ' : '') + '耳裏のブラッシングを丁寧に行いました。';
           document.getElementById('mag-letter-content').textContent = ta.value;
+          this.updateCompletionStatus();
         }
         if (btn) btn.classList.remove('is-recording');
       }, 1500);
