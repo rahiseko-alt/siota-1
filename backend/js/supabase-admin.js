@@ -342,6 +342,12 @@ function appendGroomingOptionsEditor(root) {
   root.append(saveButton, saveResult);
 
   let names = [];
+  /* 一覧の読み込みが終わるまで保存できないようにする。**サブエージェントによる敵対検証で
+     発見**: 以前は保存ボタンを最初から押せる状態にしており、`/api/shop` の応答が
+     まだ届いていない（＝`names` がまだ空の初期値のまま）うちに押すと、
+     店舗の一覧を空配列で丸ごと上書きしてしまっていた（読み込み失敗時も同様——
+     手元の状態が正しいか分からないまま上書きするのは危険）。 */
+  saveButton.disabled = true;
 
   function renderRows() {
     list.replaceChildren();
@@ -373,8 +379,11 @@ function appendGroomingOptionsEditor(root) {
   api('/api/shop').then((body) => {
     names = Array.isArray(body.shop && body.shop.grooming_options) ? [...body.shop.grooming_options] : [];
     renderRows();
+    saveButton.disabled = false;
   }).catch(() => {
-    setMessage(saveResult, '使用オプションの一覧を読み込めませんでした。');
+    /* 読み込めなかった＝手元の一覧（空のまま）が実際のものと合っている保証が無い。
+       ここで保存を許すと、読めなかっただけなのに店舗の一覧を空で上書きしてしまう。 */
+    setMessage(saveResult, '使用オプションの一覧を読み込めませんでした（保存はできません）。');
   });
 
   saveButton.onclick = async () => {
