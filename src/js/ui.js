@@ -726,7 +726,13 @@ const App = {
         this.form[group][side] = Number((val && val.textContent) || '') || 0;
 
         /* 爪は前足・後ろ足の**両方**を選んで初めて完了扱いにする
-           （マスター指示 2026-08-29・C-5。以前は爪1系統を選んだ時点で完了にしていた）。 */
+           （マスター指示 2026-08-29・C-5。以前は爪1系統を選んだ時点で完了にしていた）。
+           ⚠️ この帯が見ているのは爪のチェックだけ——耳・歯・体重・使用オプションなど
+           他の項目を1つも埋めていなくてもここは緑になる。以前の文言「全項目入力完了
+           (6/6)」は、まだC-1〜C-12や使用オプションが無かった頃の項目数を引きずった
+           まま**実際には無い「全部」を主張していた**（D-12違反・マスター指摘で発覚）。
+           爪以外の項目まで見て初めて緑にする仕組みは無いので、ここでは
+           「爪のチェックだけは終えた」という本当のことだけを言う。 */
         if (group === 'nail' && this.form.nail.front && this.form.nail.rear) {
           const dock = document.getElementById('editor-bottom-dock');
           const statusIcon = document.getElementById('dock-status-icon');
@@ -734,7 +740,7 @@ const App = {
           const gotoBtn = document.getElementById('btn-dock-goto');
           if (dock) dock.classList.remove('has-incomplete');
           if (statusIcon) statusIcon.textContent = '✓';
-          if (statusText) statusText.textContent = '全項目入力完了 (6/6)';
+          if (statusText) statusText.textContent = '爪のチェック完了（他の項目も確認してください）';
           if (gotoBtn) gotoBtn.style.display = 'none';
         }
       }
