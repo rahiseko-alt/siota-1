@@ -377,11 +377,27 @@ async function bootStaffPortal(PonchiApp) {
   if (route.name === 'pet') {
     /* 使用オプション（マスター指示・2026-08-31で復活）を④カルテ作成に出すため、
        店舗の一覧を先読みしておく。読めなくても犬の画面自体は出す
-       ——欄が空（選べるオプション無し）になるだけにする。 */
-    const shopBody = await readJson(client, '/api/shop').catch(() => null);
+       ——欄が空（選べるオプション無し）になるだけにする。
+
+       **ただし「読めなかった」と「1件も登録が無い」を同じ空にしない。**
+       以前は `.catch(() => null)` で失敗を丸ごと握り潰していたため、401 でも
+       409（2店舗に所属していて店舗を1つに決められない）でも 502 でも、画面は
+       どれも「帯が消えた④」になり、**どこを直せばよいか誰にも分からなかった**。
+       実際この形で5セッション原因を外し続けている。失敗したことだけは持ち回り、
+       トリマーの画面に出す（`D-2`「保存しましたと出たのに保存できていない」の型）。 */
+    let shopBody = null;
+    let shopUnavailable = null;
+    try {
+      shopBody = await readJson(client, '/api/shop');
+    } catch (error) {
+      shopUnavailable = error.status === 409
+        ? 'この端末のアカウントが複数の店舗に所属しているため、店舗を1つに決められません。'
+        : `店舗の設定を読み込めませんでした（${error.status || '通信できません'}）。`;
+    }
     PonchiApp.show('archive', {
       ...pet,
       shopGroomingOptions: (shopBody && shopBody.shop && shopBody.shop.grooming_options) || [],
+      shopOptionsUnavailable: shopUnavailable,
     });
     return;
   }
@@ -562,9 +578,20 @@ globalThis.TrimmerSupabaseStaff = {
   ),
   showStaffManager,
   boot(PonchiApp) {
-    bootStaffPortal(PonchiApp).catch(() => {
-      const target = document.querySelector('.owner-list');
-      if (target) target.innerHTML = '<p class="owner-error">表示できません。</p>';
+    /* **失敗を、必ず人に見える形で出す。**
+       ここは長らく `.owner-list` を探して書き込んでいたが、その名前の要素は
+       `src/index.html` に**1つも存在しない**（`grep -c owner-list src/index.html` → 0）。
+       つまり起動に失敗しても画面には何も出ず、トリマーには「犬が1頭も出ない」
+       「オプションの帯が無い」だけが見えていた。原因を5セッション追えなかったのは、
+       ここが黙っていたからでもある（`D-7`「気をつけるでは守れない」）。
+       器の名前に頼らず、必ず出るもので知らせる。 */
+    bootStaffPortal(PonchiApp).catch((error) => {
+      globalThis.alert(
+        'お店の画面を読み込めませんでした。\n\n'
+        + '通信が届いていないか、ログインが切れています。\n'
+        + '画面を上から下へ引いて読み込み直すか、一度ログインし直してください。\n\n'
+        + `（${(error && error.message) || '理由不明'}）`,
+      );
     });
   },
 };

@@ -63,6 +63,26 @@ const App = {
       globalThis.TrimmerSupabaseStaff.boot(this);
       return;
     }
+
+    /* **backend が載るはずの画面で載らなかったときは、黙って仮データに落ちない。**
+       `/edit` を配るとき Worker は `window.__REPORT__` を必ず注入する
+       （`worker/src/index.js` の `createAppStateScript`）。静的配信の `/` には無い。
+       だから**この印の有無**で「backend が載るはずだったか」が分かる
+       ——URL は見ない（上の判断と同じ理由）。
+       印が在るのに backend が居ないのは、通信が切れた・キャッシュが壊れた等で
+       モジュールが1本落ちた状態。ここで黙って仮データ（ポンチ・レオ・モカ・モモ）を
+       描くと、トリマーには「知らない犬が並び、⑦使用オプションが出ない」だけが見える。
+       `dummy.js` の注記にある「本番で実際に発生・マスター報告」がこれ。 */
+    if ('__REPORT__' in globalThis) {
+      globalThis.alert(
+        'お店のデータを読み込めませんでした。\n\n'
+        + '通信が届いていない可能性があります。\n'
+        + '電波を確かめて、画面を読み込み直してください。\n\n'
+        + '※ このまま操作しても、書いたものは保存されません。',
+      );
+      return;
+    }
+
     this.renderDogs();
   },
 
@@ -113,7 +133,7 @@ const App = {
     /* 使用オプションのボタンを、下書き読み込みより前に組み立てる。
        `resumeDraft` が呼ぶ `applyReport` はボタンを探して押すので、
        先に用意しておかないと選んでいたものが戻せない。 */
-    this.renderOptionChips(pet.shopGroomingOptions || []);
+    this.renderOptionChips(pet.shopGroomingOptions || [], pet.shopOptionsUnavailable);
     this.resumeDraft(pet.id);
   },
 
@@ -515,6 +535,29 @@ const App = {
        ——`D-12`「押せた ではなく 届いた」で見れば、これは届いていない。
        ②の穴（`verify:m6` が見つけたもの）とまったく同じ形。
        **黙って何もしないのは同じ罪**なので、何をすれば見られるかを器に出す。 */
+    /* **「03 カルテ作成」を、犬を選ばないまま開かない。**
+       段のタブは本番の動線として使う（マスター回答 2026-08-27・`#2`）。
+       ところが犬を選ばずにここを押すと、④の器は意匠のまま開くのに
+       `showPetKarte()` を通っていないので、**⑦使用オプションが一度も
+       組み立てられず帯ごと消える**（`sec-options` は HTML の既定が `hidden`）。
+       犬の名前も空のまま出る。「オプションが出ていない」というマスターの指摘を、
+       この経路で実際に再現した（2026-09-01・10パターン検証の②③⑥）。
+       `＋新規カルテを作成する`（`createNewKarte`）で塞いだのと同じ穴が、
+       段のタブにも空いていた——**入口が2つあり、1つしか塞いでいなかった**。
+       すぐ下の screen-4 の穴とまったく同じ形なので、同じ直し方をする。 */
+    /* 関所を掛けるのは**本番の画面のときだけ**。`/`（仮データ・`npm run walk` の
+       F2 経路）では従来どおり素通しする。見るのは `__REPORT__` の印であって
+       URL ではない（`init()` と同じ判定）。backend が落ちていて
+       `TrimmerSupabaseStaff` が居ないときも、印は在るので関所は効く。 */
+    if (stepNum === 3 && !this.karteReady && '__REPORT__' in globalThis) {
+      globalThis.alert(
+        '先に犬を選んでください。\n\n'
+        + '「02 カルテ検索」の一覧で犬のカードを押すと、その子のカルテ作成画面になります。',
+      );
+      this.goToStep(2);
+      return;
+    }
+
     if (stepNum === 4 && !this.magazineReady && globalThis.TrimmerSupabaseStaff) {
       const panel = document.getElementById('screen-4');
       if (panel) {
@@ -558,6 +601,10 @@ const App = {
   },
 
   selectKarte(dogName, ownerName, breed) {
+    /* **ここを通ったことが「犬が選ばれている」の印**（`goToStep(3)` の関所が見る）。
+       `magazineReady` と同じ立て付け。実データでは `showPetKarte()` からしか
+       来ないので、印が立っていれば `renderOptionChips()` も必ず走っている。 */
+    this.karteReady = true;
     this.currentDog.name = dogName;
     this.currentDog.owner = ownerName;
     this.currentDog.breed = breed;
@@ -826,13 +873,28 @@ const App = {
      ——歯の状態と同じ `.teeth-pill-btn` を流用するが、こちらは複数選択
      （押すたびに on/off が切り替わるだけで、他のボタンを消さない）。
      1件も無い店舗では帯ごと隠す（`D-10`・空の選択肢を出さない）。 */
-  renderOptionChips(names) {
+  renderOptionChips(names, unavailable) {
     const section = document.getElementById('sec-options');
     const grid = document.getElementById('options-grid');
     if (!section || !grid) return;
     this.form.options = [];
     grid.textContent = '';
     const list = (names || []).filter((v) => typeof v === 'string' && v.trim() !== '');
+
+    /* **読み込みに失敗したときは、帯を消さずに理由を出す。**
+       消してしまうと「この店はオプションを登録していない」と見分けが付かず、
+       トリマーもマスターも何が起きたか分からない（`D-10` は「書いていないことを
+       出すな」であって「失敗を隠せ」ではない）。 */
+    if (unavailable) {
+      section.hidden = false;
+      const note = document.createElement('p');
+      note.className = 'magazine-empty-note';
+      note.dataset.view = 'options-unavailable';
+      note.textContent = `${unavailable}この画面のオプションは選べません。`;
+      grid.append(note);
+      return;
+    }
+
     section.hidden = list.length === 0;
     for (const name of list) {
       const btn = document.createElement('button');
