@@ -539,11 +539,16 @@ export const MUTATIONS = [
   /* ── ここから F4 の続き（マスター判断・2026-08-28）: 客に当たる経路まで台帳を埋める ──
      1回目: verify-admin.mjs（`docs/ops/proof-of-red.md` の「## F4 を閉じる範囲」）。 */
   {
-    id: 'admin-redirect-off',
-    why: '**管理者が /my を開いても管理者画面へ送られない**——毎回自分で URL を打つ羽目になる',
-    file: 'backend/js/supabase-auth.js',
-    find: "    if ((session.memberships || []).some((m) => m.role === 'admin')) {",
-    replace: "    if (false && (session.memberships || []).some((m) => m.role === 'admin')) {",
+    /* 2026-09-02 に**中身を差し替えた**（マスター指示で仕様が変わったため。消していない）。
+       旧: `admin-redirect-off`「管理者が /my を開いても /admin へ送られない」。
+       その挙動そのものを**やめた**ので、旧の目印はもうコードに無い。
+       代わりに、いまの仕様（管理者にだけ「管理」の入口が出る）を守る形にする。
+       壊すと `verify-admin.mjs` の `1b`/`1c` が赤になる。 */
+    id: 'admin-link-hidden',
+    why: '**管理者にも「管理」の入口が出なくなる**——カルテ画面から管理画面へ行く道が1つも無くなる（今回マスターが実際に詰まった形）',
+    file: 'backend/js/supabase-staff.js',
+    find: '    if (adminLink) adminLink.hidden = false;',
+    replace: '    if (adminLink) adminLink.hidden = true;',
     extra: null,
     scripts: ['verify-admin.mjs'],
   },

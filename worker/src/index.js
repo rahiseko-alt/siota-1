@@ -405,6 +405,21 @@ async function handleSupabaseMode(request, env, url, cors) {
   if (path.startsWith('/p/') || path.startsWith('/o/')) {
     return new Response('Not Found', { status: 404 });
   }
+  /* **トップページを、本物の唯一の入口にする**（マスター指示 2026-09-02:
+     「入口は1つ、管理者ページが表示されるかされないかの差だけでいい」）。
+
+     ここは長らく素の HTML を配るだけで、載っている「Google でログイン」は
+     **ログインに繋がっていなかった**（押しても練習用の一覧へ進むだけ）。
+     結果、ホーム画面のアイコンやブックマークから開いた人は、実在しない犬
+     （ポンチ等）の画面に入り、本物のデータには一生たどり着けなかった。
+
+     載せるのは認証の2本**だけ**。`supabase-staff.js` は載せない——あれは
+     `/edit` 用で、`/` で起動すると即 `/edit` へ飛ばしてログイン画面が出ない。
+     `window.__REPORT__` も入れない（`ui.js` が「お店の画面のはずなのに
+     読めなかった」を判定する印であって、ここはお店の画面ではない）。 */
+  if (path === '/' || path === '') {
+    return renderLoginPage(env);
+  }
   if (path === '/edit' || path === '/edit/' || SUPABASE_EDIT_PATH_PATTERN.test(path)) {
     /* `backend` は**捨ててはいけない**——`window.__BACKEND__` のほうは読む側が無くて
        外したが（`deferred` #21）、この値は `renderAppPage` が
@@ -778,6 +793,34 @@ async function fetchAssetHtml(env, htmlPath) {
  */
 function createAppStateScript({ report = null }) {
   return `<script>window.__REPORT__=${safeJsonStr(report)};</script>`;
+}
+
+/**
+ * renderLoginPage(env) — トップページ（唯一の入口）を配る
+ *
+ * `renderAppPage` と器は同じ `index.html` だが、**載せるのは認証の2本だけ**。
+ * 理由は呼び出し側のコメントに書いた。
+ */
+async function renderLoginPage(env) {
+  const templateHtml = await fetchAssetHtml(env, '/index.html');
+  if (!templateHtml || !templateHtml.includes('</head>')) {
+    console.error('[renderLoginPage] valid template not found');
+    return new Response('Template Not Found', {
+      status: 502,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    });
+  }
+  /* `__ENTRY__` は「この HTML はログイン画面として配られた」の印。
+     `index.html` は `/edit` でも使い回すので、印が無いと `supabase-auth.js` が
+     `/edit` でもログイン画面として起動し、`/my` との往復ループになる。
+     古典スクリプトなので、後から走る ES モジュールより必ず先に立つ。 */
+  const scripts = '<script>window.__ENTRY__=true;</script>'
+    + '<script src="/backend/js/supabase-vendor.js"></script>'
+    + '<script type="module" src="/backend/js/supabase-auth.js"></script>';
+  return new Response(templateHtml.replace('</head>', `${scripts}\n</head>`), {
+    status: 200,
+    headers: HTML_HEADERS,
+  });
 }
 
 async function renderAppPage(env, state) {

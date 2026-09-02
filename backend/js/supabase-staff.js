@@ -12,6 +12,14 @@ const STAFF_ROUTES = [
 let activeMembership = null;
 let activeObjectUrls = [];
 
+/* いま画面を移ろうとしているか。移動中に打ち切られた通信を「故障」と
+   取り違えて人を驚かせないための印（`boot()` の失敗表示で使う）。 */
+let leavingPage = false;
+if (typeof globalThis.addEventListener === 'function') {
+  globalThis.addEventListener('pagehide', () => { leavingPage = true; });
+  globalThis.addEventListener('beforeunload', () => { leavingPage = true; });
+}
+
 export function parseStaffRoute(pathname) {
   for (const route of STAFF_ROUTES) {
     const match = pathname.match(route.pattern);
@@ -350,6 +358,15 @@ async function bootStaffPortal(PonchiApp) {
   }
   activeMembership = (session.memberships || [])[0] || null;
 
+  /* **管理者にだけ、管理画面への入口を出す**（マスター指示 2026-09-02）。
+     `my.html` の `data-staff-link` と同じ作り——隠しておいて、該当する人にだけ見せる。
+     これまで `/admin` へのリンクは画面に1つも無く、トリマー画面に居る管理者は
+     URL を手打ちしない限り管理画面へ行けなかった。 */
+  if ((session.memberships || []).some((m) => m.role === 'admin')) {
+    const adminLink = document.querySelector('[data-admin-link]');
+    if (adminLink) adminLink.hidden = false;
+  }
+
   const route = parseStaffRoute(location.pathname);
   if (!route) {
     location.replace('/edit');
@@ -586,6 +603,11 @@ globalThis.TrimmerSupabaseStaff = {
        ここが黙っていたからでもある（`D-7`「気をつけるでは守れない」）。
        器の名前に頼らず、必ず出るもので知らせる。 */
     bootStaffPortal(PonchiApp).catch((error) => {
+      /* **画面を移っている最中の打ち切りで驚かせない。**
+         次の画面へ進むと、まだ返ってきていない通信は `Failed to fetch` で
+         中断される。これは故障ではない。実測（`verify:admin` の 9）で
+         カルテ修正の正常な流れでも出ることを確認したので、移動中は黙る。 */
+      if (leavingPage) return;
       globalThis.alert(
         'お店の画面を読み込めませんでした。\n\n'
         + '通信が届いていないか、ログインが切れています。\n'
