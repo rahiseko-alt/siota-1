@@ -840,14 +840,16 @@ button, input, textarea, select {
   margin-bottom: 12px;
 }
 
+/* ボタンの帯は**折り返して画面に収める**（マスター指示 2026-09-02。
+   `D-20260827-50`「保留・このまま」を差し替える）。
+   以前は横スクロールで、右端のボタン（「フケ」「全部消す」）が画面の外に隠れ、
+   **そこに何かが在ることが見えなかった**。 */
 .body-marking-stamps {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 10px;
-  overflow-x: auto;
-  scrollbar-width: none;
 }
-.body-marking-stamps::-webkit-scrollbar { display: none; }
 
 .stamp-btn {
   padding: 6px 10px;
@@ -1631,7 +1633,9 @@ button, input, textarea, select {
   .teeth-pill-btn .sub {
     font-size: 9px;
   }
-  .stamp-btn {
+  .stamp-btn,
+  .mark-mode-btn,
+  .mark-undo-btn {
     padding: 4px 8px;
     font-size: 10px;
   }
