@@ -512,6 +512,33 @@ button, input, textarea, select {
   transition: all 0.2s ease;
 }
 
+/* 犬が1頭も居ないときの案内（`renderDogs`）。**行き止まりにしないための場所。**
+   ここが無いと、0件の店は「0件」とだけ出て、次に何をすればいいか分からない
+   （2026-09-02 に人と同じ操作で歩いて発見・`F-20260902-66`）。 */
+.karte-empty-note {
+  background: #ffffff;
+  border: 1px dashed var(--border-subtle);
+  padding: 22px 20px;
+  text-align: center;
+  line-height: 1.9;
+  font-size: 14px;
+}
+
+.karte-empty-note__title {
+  font-weight: 700;
+  margin: 0 0 6px;
+}
+
+.karte-empty-note p {
+  margin: 0 0 6px;
+}
+
+.karte-empty-note .boxbutton {
+  display: inline-block;
+  margin-top: 10px;
+  text-decoration: none;
+}
+
 .karte-card:hover {
   border-color: var(--ink-primary);
   transform: translateY(-2px);

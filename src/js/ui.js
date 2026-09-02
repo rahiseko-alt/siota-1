@@ -514,6 +514,41 @@ const App = {
     });
     const total = document.getElementById('karte-total-count');
     if (total) total.textContent = data.length + '件';
+
+    /* **1頭も居ないとき、行き止まりにしない。**
+       実測（2026-09-02・人と同じ操作で歩いた）: 犬が0件の店では、この画面は
+       「0件」とだけ出て、**次に何をすればいいかを一言も言わなかった**。
+       マスターは「＋新規カルテを作成する」を押し、そこから出る案内が
+       「②一覧の『初回登録QR』から」と言うのを読んだ——だが**初回登録QR は
+       犬のカードの中にしか無い**ので、0件のときは画面に存在しない。
+       **存在しない入口を案内していた**（`F-20260902-66`）。
+
+       ここに出すのは「いま押せる入口」だけ。管理者には「管理」がヘッダーに
+       出ているので、そこへ送る。出ていない人（一般スタッフ）は自分では
+       登録できないので、そう書く——できないことを「できる」と書かない。 */
+    if (data.length === 0 && globalThis.TrimmerSupabaseStaff) {
+      const note = document.createElement('div');
+      note.className = 'karte-empty-note';
+      note.dataset.view = 'karte-empty';
+      const adminLink = document.querySelector('[data-admin-link]');
+      const canAdmin = !!adminLink && !adminLink.hidden;
+      const title = document.createElement('p');
+      title.className = 'karte-empty-note__title';
+      title.textContent = 'まだ1頭も登録されていません。';
+      const body = document.createElement('p');
+      body.textContent = canAdmin
+        ? '上の「管理」→「② 新規」から、飼い主さんを登録し、そのあと犬を登録してください。'
+        : 'この画面からは登録できません。お店の管理者に、飼い主さんと犬の登録を頼んでください。';
+      note.append(title, body);
+      if (canAdmin) {
+        const go = document.createElement('a');
+        go.className = 'boxbutton';
+        go.href = '/admin';
+        go.textContent = '管理画面で登録する';
+        note.append(go);
+      }
+      box.appendChild(note);
+    }
   },
 
   goToStep(stepNum) {
@@ -652,7 +687,27 @@ const App = {
      入口をどう作り直すかは製品判断が要るため、ここでは踏み込まない
      （`docs/handoff.md` 参照）。 */
   createNewKarte() {
-    alert('新しい犬を登録するには、②一覧の「初回登録QR」から飼い主さんに登録してもらうか、管理画面の「②新規」から登録してください。');
+    /* **画面に無い入口を案内しない。**
+       ここは長らく「②一覧の『初回登録QR』から」と案内していたが、
+       **初回登録QR は犬のカードの中にしか無い**——犬が0件の店では画面に
+       存在しない。マスターが実際にこれを読み、存在しない入口を探した
+       （2026-09-02・`F-20260902-66`）。しかも「初回登録QR」は
+       **既に登録済みの犬を飼い主さんに繋ぐ**ためのもので、
+       **新しい犬を登録する道ではない**——用途からして案内先が間違っていた。
+
+       いま押せるものだけを言う。管理者かどうかは、ヘッダーの「管理」が
+       出ているかで決める（出す側の判定と同じものを見る）。 */
+    const adminLink = document.querySelector('[data-admin-link]');
+    const canAdmin = !!adminLink && !adminLink.hidden;
+    alert(canAdmin
+      ? '新しい犬を登録するには、画面の上にある「管理」を押し、'
+        + '「② 新規」から\n\n'
+        + '  ① 飼い主さんを登録する\n'
+        + '  ② その飼い主さんに犬を追加する\n\n'
+        + 'の順に登録してください。登録するとこの一覧に出てきます。'
+      : 'この画面からは新しい犬を登録できません。\n\n'
+        + 'お店の管理者に、飼い主さんと犬の登録を頼んでください。\n'
+        + '登録されると、この一覧に出てきます。');
   },
 
   filterKarte(query) {
