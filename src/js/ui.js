@@ -12,6 +12,16 @@ const App = {
     prevWeight: null
   },
   currentStamp: '赤み',
+  /* 犬体4面図の描き方。**本体はなぞる（フリーハンド）で、スタンプはその一部**
+     （マスター指示 2026-09-02）。以前はスタンプを置くことしかできず、
+     「ここからここまで赤い」のような**範囲**が書けなかった。
+     `'なぞる'` か `'スタンプ'` のどちらか。 */
+  markMode: 'なぞる',
+  /* 付けた印。1件は次のどちらか。
+       スタンプ … `{ x, y, type }`
+       なぞった線 … `{ type, points: [{ x, y }, …] }`
+     座標は 0〜1 の割合で持つ（画面の大きさが変わっても位置がずれない）。
+     **古い下書きにはスタンプしか入っていない**ので、`points` の有無で見分ける。 */
   marks: [],
   allWavesOpen: true,
 
@@ -1079,19 +1089,73 @@ const App = {
     window.addEventListener('resize', resize);
     setTimeout(resize, 100);
 
-    canvas.addEventListener('pointerdown', (e) => {
+    /* 指1本で「なぞる」か「スタンプを置く」。**2本目の指は無視する**——
+       写真の書き込み（`openAnnotate()`）と同じで、2本の座標が同じ線に混ざると
+       線が暴れる。ここは拡大を持たないので、2本目はただ捨てる。 */
+    let drawingPointerId = null;
+    const pointAt = (event) => {
       const rect = canvas.getBoundingClientRect();
-      const x = (e.clientX - rect.left) / rect.width;
-      const y = (e.clientY - rect.top) / rect.height;
-      this.marks.push({ x, y, type: this.currentStamp });
+      return {
+        x: (event.clientX - rect.left) / rect.width,
+        y: (event.clientY - rect.top) / rect.height,
+      };
+    };
+
+    canvas.addEventListener('pointerdown', (event) => {
+      if (drawingPointerId !== null) return;
+      const point = pointAt(event);
+      if (this.markMode === 'スタンプ') {
+        this.marks.push({ ...point, type: this.currentStamp });
+        this.drawCanvas();
+        return;
+      }
+      drawingPointerId = event.pointerId;
+      this.marks.push({ type: this.currentStamp, points: [point] });
       this.drawCanvas();
     });
+    canvas.addEventListener('pointermove', (event) => {
+      if (event.pointerId !== drawingPointerId) return;
+      const last = this.marks[this.marks.length - 1];
+      if (!last || !last.points) return;
+      last.points.push(pointAt(event));
+      this.drawCanvas();
+    });
+    /* 指を離す。**点1つだけの線は捨てる**——なぞらずに触れただけのとき、
+       画面には何も見えないのに「所見あり」の印が1件残ってしまう。
+       見えないものを飼い主に送らない（`#3` と同じ型）。 */
+    const stopStroke = (event) => {
+      if (event.pointerId !== drawingPointerId) return;
+      drawingPointerId = null;
+      const last = this.marks[this.marks.length - 1];
+      if (last && last.points && last.points.length < 2) {
+        this.marks.pop();
+        this.drawCanvas();
+      }
+    };
+    canvas.addEventListener('pointerup', stopStroke);
+    canvas.addEventListener('pointercancel', stopStroke);
+    canvas.addEventListener('pointerleave', stopStroke);
   },
 
   setStamp(type, btn) {
     this.currentStamp = type;
     document.querySelectorAll('.stamp-btn').forEach(b => b.classList.remove('is-active'));
-    btn.classList.add('is-active');
+    if (btn) btn.classList.add('is-active');
+  },
+
+  /* なぞる／スタンプの切り替え。種類（赤み・しこり…）はそのままで、
+     置き方だけを変える。 */
+  setMarkMode(mode, btn) {
+    this.markMode = mode;
+    document.querySelectorAll('.mark-mode-btn').forEach(b => b.classList.remove('is-active'));
+    if (btn) btn.classList.add('is-active');
+  },
+
+  /* 直前の1件だけ取り消す。**全部消すしか無いと、線を1本間違えただけで
+     最初からやり直しになる**（なぞる操作は1回が長い）。 */
+  undoMark() {
+    this.marks.pop();
+    this.drawCanvas();
   },
 
   clearCanvas() {
@@ -1583,15 +1647,27 @@ const App = {
     }
 
     this.marks.forEach(m => {
+      /* なぞった線。**スタンプと同じ色**で引く——色が所見の種類を表しているので、
+         置き方が変わっても意味が変わってはいけない。 */
+      if (Array.isArray(m.points)) {
+        if (m.points.length < 2) return;
+        ctx.beginPath();
+        ctx.moveTo(m.points[0].x * canvas.width, m.points[0].y * canvas.height);
+        for (const p of m.points.slice(1)) ctx.lineTo(p.x * canvas.width, p.y * canvas.height);
+        ctx.strokeStyle = this.markColor(m.type);
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+        return;
+      }
+
       const px = m.x * canvas.width;
       const py = m.y * canvas.height;
       ctx.beginPath();
       ctx.arc(px, py, 9, 0, Math.PI * 2);
 
-      if (m.type === '赤み') ctx.fillStyle = '#d32f2f';
-      else if (m.type === 'しこり/イボ') ctx.fillStyle = '#f57c00';
-      else if (m.type === '毛玉') ctx.fillStyle = '#1976d2';
-      else ctx.fillStyle = '#7b1fa2';
+      ctx.fillStyle = this.markColor(m.type);
 
       ctx.fill();
       ctx.lineWidth = 2;
@@ -1605,6 +1681,15 @@ const App = {
       ctx.textAlign = 'center';
       ctx.fillText(m.type.charAt(0), px, py + 3);
     });
+  },
+
+  /* 所見の種類ごとの色。**スタンプの丸と、なぞった線で同じものを使う**
+     ——ここが2か所に分かれると、同じ「赤み」が置き方によって別の色になる。 */
+  markColor(type) {
+    if (type === '赤み') return '#d32f2f';
+    if (type === 'しこり/イボ') return '#f57c00';
+    if (type === '毛玉') return '#1976d2';
+    return '#7b1fa2';
   },
 
   openLightbox(src) {

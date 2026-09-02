@@ -863,6 +863,23 @@ button, input, textarea, select {
 }
 .stamp-btn.is-active { background: var(--ink-primary); color: #ffffff; border-color: var(--ink-primary); }
 
+/* 置き方の切り替えと、取り消し。見た目は種類ボタンに揃えるが、**クラスは分ける**
+   ——`setStamp()` が `.stamp-btn` の選択を外して回るので、同じクラスにすると
+   種類を選び直すたびに「なぞる／スタンプ」の選択まで消える。 */
+.mark-mode-btn,
+.mark-undo-btn {
+  flex-shrink: 0;
+  border: 1px solid var(--border-subtle);
+  background: #ffffff;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.mark-mode-btn.is-active { background: var(--ink-primary); color: #ffffff; border-color: var(--ink-primary); }
+.mark-undo-btn { color: var(--ink-muted); }
+
 .canvas-container {
   position: relative;
   width: 100%;
@@ -2107,16 +2124,25 @@ button, input, textarea, select {
           <div class="clinical-group">
             <div class="clinical-group__label">
               <span>⑤ 皮膚・スパ・犬体4面図</span>
-              <span class="clinical-group__hint">タップでスタンプ配置</span>
+              <span class="clinical-group__hint">なぞって描く（スタンプも置ける）</span>
             </div>
 
             <div class="body-marking-tool">
+              <!-- 何の所見か（色を決める）。上の段。 -->
               <div class="body-marking-stamps">
                 <button class="stamp-btn is-active" onclick="App.setStamp('赤み', this)">🔴 赤み</button>
                 <button class="stamp-btn" onclick="App.setStamp('しこり/イボ', this)">🟡 しこり/イボ</button>
                 <button class="stamp-btn" onclick="App.setStamp('毛玉', this)">🔵 毛玉</button>
                 <button class="stamp-btn" onclick="App.setStamp('フケ', this)">⚪ フケ</button>
-                <button class="stamp-btn" onclick="App.clearCanvas()">✕ クリア</button>
+              </div>
+
+              <!-- どう置くか（マスター指示 2026-09-02）。**本体はなぞる**で、
+                   スタンプはその一部。以前はスタンプしか無く、範囲が書けなかった。 -->
+              <div class="body-marking-stamps">
+                <button class="mark-mode-btn is-active" onclick="App.setMarkMode('なぞる', this)">✏️ なぞる</button>
+                <button class="mark-mode-btn" onclick="App.setMarkMode('スタンプ', this)">📍 スタンプ</button>
+                <button class="mark-undo-btn" onclick="App.undoMark()">↩ 1つ戻す</button>
+                <button class="mark-undo-btn" onclick="App.clearCanvas()">✕ 全部消す</button>
               </div>
 
               <div class="canvas-container" id="canvas-wrapper">
