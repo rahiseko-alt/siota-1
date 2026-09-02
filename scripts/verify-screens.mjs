@@ -43,7 +43,12 @@ try {
   const topRes = await top.goto(`${BASE}/`, { waitUntil: 'networkidle' });
   const topView = await top.evaluate(() => ({
     screens: document.querySelectorAll('[id^="screen-"]').length,
-    steps: document.querySelectorAll('.btn-step').length,
+    /* **段のタブだけを数える。** ここは長らく `.btn-step` の個数を数えていたが、
+       同じ見た目を流用した別のもの（管理者にだけ出る「管理」・2026-09-02）を
+       足した瞬間に 5 になって落ちた。数えたいのは「01〜04 の段のタブ」であって
+       「その見た目を使っている要素」ではない。段であることの印は `data-step`。
+       判定を緩めたのではなく、**数える対象を正した**。 */
+    steps: document.querySelectorAll('.btn-step[data-step]').length,
     active: (document.querySelector('.screen-panel.is-active') || {}).id,
   }));
   check('1. `/` が配信される', topRes?.status() === 200, `status=${topRes?.status()}`);
