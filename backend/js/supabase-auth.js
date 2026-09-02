@@ -278,13 +278,16 @@ export async function bootProtectedPortal() {
       show(loginPanel, false);
       return;
     }
-    /* **管理者は毎回ここに入る**（マスター指示 2026-08-26）。飼い主にも紐付いて
-       いるかどうかを見ない——`D-20260823-06` のマスター自身がまさにその形で、
-       スタッフ判定より先に見ないと `/my` に留まってしまう。 */
-    if ((session.memberships || []).some((m) => m.role === 'admin')) {
-      location.replace('/admin');
-      return;
-    }
+    /* **管理者を `/admin` へ強制的に飛ばすのをやめた**（マスター指示 2026-09-02:
+       「入口は1つ、管理者ページが表示されるかされないかの差だけでいい」）。
+
+       以前はここで管理者だけ別の画面へ送っていた（マスター指示 2026-08-26）。
+       そのため**着く先が人によって変わり**、しかもトリマー画面から管理画面へ
+       戻る道が1つも無かった（`/admin` へのリンクは画面に0件だった）ので、
+       管理者は日々のカルテ画面と管理画面のどちらかにしか居られなかった。
+
+       いまは**着く先は全員同じ**。管理画面へは、カルテ画面のヘッダーに
+       管理者のときだけ出る「管理」から入る（`index.html` の `data-admin-link`）。 */
     if ((session.memberships || []).length > 0 && (session.ownerLinks || []).length === 0) {
       location.replace('/edit');
       return;
@@ -347,7 +350,11 @@ async function bootLoginPage() {
   const config = await response.json();
   if (config.backend !== 'supabase') return;
   const vendorScript = document.createElement('script');
-  vendorScript.src = '/js/supabase-vendor.js';
+  /* F1 で `/js/` → `/backend/js/` へ移した先。ここだけ参照が取り残されていて
+     **本番で 404** になっていた（実測: `/js/supabase-vendor.js` → 404）。
+     読み込みに失敗するとこの下の `await` が投げ、ログインボタンは
+     何も繋がれないまま終わる。 */
+  vendorScript.src = '/backend/js/supabase-vendor.js';
   await new Promise((resolve, reject) => {
     vendorScript.onload = resolve;
     vendorScript.onerror = reject;
@@ -370,5 +377,14 @@ async function bootLoginPage() {
 
 if (typeof document !== 'undefined') {
   if (document.body?.dataset.portal === 'customer') bootProtectedPortal();
-  else bootLoginPage();
+  /* **入口（`/`）のときだけログイン画面として起動する。**
+     `index.html` は `/` と `/edit` の**両方**で使い回されているので、
+     「`data-portal` が無い＝ログイン画面」という判定では `/edit` でも動いてしまう。
+     実際そうなり、`/edit` で「もうログイン済みだから `/my` へ」と送り返し、
+     `/my` が「お店の人だから `/edit` へ」と送り返す**往復ループ**になった
+     （2026-09-02 の実測で発見。それまでは `[data-entry-login]` が存在せず
+     この関数が即 return していたので、穴が表に出ていなかっただけ）。
+     どちらの役目で配られたかは Worker が知っているので、印で伝えてもらう
+     ——`renderLoginPage()` が `window.__ENTRY__` を立てる。 */
+  else if (globalThis.__ENTRY__) bootLoginPage();
 }

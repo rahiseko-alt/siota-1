@@ -1712,6 +1712,23 @@ button, input, textarea, select {
         <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
         HOME
       </button>
+      <!--
+        **管理画面への入口。管理者のときだけ出す。**
+        これまで `/admin` へのリンクは画面のどこにも無く（`grep` で0件）、
+        `/my` に着いたときに管理者を自動で飛ばす1箇所しか道が無かった。
+        そのためトリマー画面に居る管理者は、URL を手打ちしない限り
+        管理画面へ行けなかった——`my.html` の `data-staff-link`（逆向きの
+        同じ穴）とまったく同じ形。同じ直し方にする。
+        マスター指示 2026-09-02:「入口は1つ、管理者ページが表示されるか
+        されないかの差だけでいい」。
+
+        **置き場所は右の段のタブではなく、左の常に見える側。**
+        右の帯は `overflow-x: auto` で、スマホ幅では 04 の途中で切れる。
+        最初そちらに置いたところ、機械の `isVisible()` は true なのに
+        **指が届かない**状態になった（2026-09-02 のスクショで発覚。
+        今回ずっと問題になっている「機械は緑、人は届かない」と同じ形）。
+      -->
+      <a href="/admin" class="btn-step" data-admin-link hidden>管理</a>
       <span class="top-nav__divider">/</span>
       <span class="top-nav__brand" id="nav-brand-label">SALTY DOG カルテ</span>
     </div>
@@ -1746,7 +1763,15 @@ button, input, textarea, select {
         </div>
 
         <div class="auth-actions">
-          <button class="boxbutton boxbutton--hero boxbutton--full" onclick="App.goToStep(2)">
+          <!--
+            **ここが唯一の入口のログインボタン**（マスター指示 2026-09-02）。
+            `data-entry-login` は `backend/js/supabase-auth.js` の
+            `bootLoginPage()` が探す目印。この目印が付いていなかったため、
+            ボタンは**ログインに一度も繋がっていなかった**（`grep` で0件）。
+            以前の `onclick="App.goToStep(2)"` は、押すと練習用の一覧へ
+            進むだけの仮の配線だったので外した。
+          -->
+          <button class="boxbutton boxbutton--hero boxbutton--full" data-entry-login>
             <div style="display: flex; align-items: center; gap: 14px;">
               <svg width="22" height="22" viewBox="0 0 18 18">
                 <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.616z"/>

@@ -110,12 +110,49 @@ try {
   const dialogs = [];
   page.on('dialog', (d) => { dialogs.push(d.message()); d.dismiss().catch(() => {}); });
 
-  /* ── ① 管理者は毎回この画面に入る ── */
+  /* ── ① 管理者は、みんなと同じカルテ画面に着き、そこから管理画面へ入れる ──
+
+     **仕様が変わった**（マスター指示 2026-09-02:「入口は1つ、管理者ページが
+     表示されるかされないかの差だけでいい」）。以前ここは「管理者が `/my` を開くと
+     `/admin` へ送られる」を見ていた。その作りだと**着く先が人によって変わり**、
+     しかもカルテ画面から管理画面へ戻る道が1つも無く（`/admin` へのリンクは
+     画面に0件だった）、管理者はどちらか一方にしか居られなかった。
+
+     いまは**着く先は全員同じ**で、管理者にだけヘッダーに「管理」が出る。
+     検査もその**往復**を見る——着く／入口が出る／押すと着く、の3つ。
+     前の1問より見る範囲は広い（弱めていない）。 */
   await page.goto(`${BASE}/my`, { waitUntil: 'domcontentloaded' });
   await injectSession(page, FIXTURE.adminEmail);
   await page.goto(`${BASE}/my`, { waitUntil: 'domcontentloaded' });
+  await page.waitForURL(/\/edit$/, { timeout: 20_000 }).catch(() => {});
+  check('1. 管理者も、みんなと同じカルテ画面に着く',
+    new URL(page.url()).pathname === '/edit', `path=${new URL(page.url()).pathname}`);
+
+  /* **画面が起動しきるまで待つ。** 「管理」は `/api/session` の応答が返って
+     初めて出る。犬のカードが並んだ時点で、その応答は既に返っている。
+     待たずに見ると、起動中の DOM を掴んで「無い」と読む（実際に一度そうなった）。 */
+  await page.waitForSelector('.karte-card', { timeout: 30_000 }).catch(() => {});
+  const adminLink = page.locator('[data-admin-link]');
+  await adminLink.waitFor({ state: 'visible', timeout: 20_000 }).catch(() => {});
+  /* **`isVisible()` だけで合格にしない。** 最初これだけで見ていたら、
+     スマホ幅で右にはみ出して**指が届かない**のに true になった
+     （2026-09-02・スクショで発覚）。画面の幅の内側に入っているかまで見る
+     ——`D-14`「押せたではなく、人が届くか」。 */
+  const reach = await page.evaluate(() => {
+    const el = document.querySelector('[data-admin-link]');
+    if (!el || el.hidden) return { ok: false, why: '出ていない' };
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) return { ok: false, why: '大きさが0' };
+    if (r.left < 0 || r.right > window.innerWidth) {
+      return { ok: false, why: `画面の外（left=${Math.round(r.left)} right=${Math.round(r.right)} 幅=${window.innerWidth}）` };
+    }
+    return { ok: true, why: `left=${Math.round(r.left)} right=${Math.round(r.right)} 幅=${window.innerWidth}` };
+  });
+  check('1b. 管理者には「管理」の入口が見えていて、指が届く', reach.ok, reach.why);
+
+  await adminLink.click();
   await page.waitForURL(/\/admin$/, { timeout: 20_000 }).catch(() => {});
-  check('1. 管理者が /my を開くと管理者画面へ送られる',
+  check('1c. 「管理」を押すと管理画面に着く',
     new URL(page.url()).pathname === '/admin', `path=${new URL(page.url()).pathname}`);
 
   await page.waitForSelector('.admin-menu__item', { timeout: 20_000 });
