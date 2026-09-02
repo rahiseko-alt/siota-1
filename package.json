@@ -18,6 +18,7 @@
     "verify:roundtrip": "node scripts/build-dist.mjs && node scripts/verify-report-roundtrip.mjs",
     "verify:empty": "node scripts/build-dist.mjs && node scripts/verify-empty-pet.mjs",
     "verify:screens": "node scripts/build-dist.mjs && node scripts/verify-screens.mjs",
+    "verify:first-run": "node scripts/build-dist.mjs && node scripts/verify-first-run.mjs",
     "verify:delete": "node scripts/build-dist.mjs && node scripts/verify-delete.mjs",
     "verify:draft": "node scripts/build-dist.mjs && node scripts/verify-draft.mjs",
     "verify:invitation": "node scripts/build-dist.mjs && node scripts/verify-invitation.mjs",
