@@ -160,10 +160,24 @@ for (const urlPath of deletedUiPaths) {
   if (res.status === 200) stillAlive.push(`${urlPath} → HTTP 200 (${res.body.length}B)`);
 }
 
+/* **0本を「合格」にしない。** 走査の右辺は `git log` の履歴なので、**履歴が浅い
+   作業場（`git clone --depth` の容器・実際にこのリポジトリの開発容器がそう）では
+   1本も出ず、何も確かめないまま緑になっていた**（2026-09-02 に実測。CI は
+   `fetch-depth: 0` なので9本見えており、手元とCIで別のことを言っていた）。
+   件数が0のときは、それが「残骸が無い」なのか「履歴が見えていない」なのかを
+   区別してから答える。判定を緩めたのではなく、**空で緑になる穴を塞いだ**。 */
+const shallow = (() => {
+  try { return execSync('git rev-parse --is-shallow-repository', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim() === 'true'; } catch { return false; }
+})();
 check(
   `削除済みの旧UI が本番に残っていない（${deletedUiPaths.length} 本を確認）`,
-  stillAlive.length === 0,
-  stillAlive.length ? `\n        ${stillAlive.join('\n        ')}` : '',
+  stillAlive.length === 0 && deletedUiPaths.length > 0,
+  stillAlive.length
+    ? `\n        ${stillAlive.join('\n        ')}`
+    : deletedUiPaths.length === 0
+      ? `**1本も走査していない。**${shallow ? ' git の履歴が浅い（--depth つきの clone）ため、消えたファイルが見えない。' : ''}`
+        + '\n        全履歴のある場所で実行すること（CI は fetch-depth: 0）。'
+      : '',
 );
 
 /* ------------------------------------------------------------------
@@ -189,8 +203,25 @@ if (fs.existsSync(indexLocal)) {
      (b) の右辺は **worker のソースから抜く**。ここに書き写すと、
      写した側がズレたときに気づけない（`F-20260825-40` の型）。 */
   const workerSource = fs.readFileSync(path.join('worker', 'src', 'index.js'), 'utf8');
-  const injected = [...workerSource.matchAll(/<script[^>]*src="(\/backend\/js\/[^"]+)"/g)]
-    .map((m) => m[1]);
+
+  /** worker のソースから、**その関数が注入する分だけ**を抜く。
+
+      ここは長らくソース全体を走査していた。**注入する場所が1つしか無い間は
+      それで正しかった**が、2026-09-02 に `/` 用の `renderLoginPage` を足した
+      瞬間に壊れた——`/edit` 用の3本に `/` 用の2本が混ざって5本になり、
+      `/edit` が正しく3本を配っているのに落ちた（deploy が赤で止まった）。
+      **判定を緩めたのではなく、右辺を「どの画面の注入か」まで絞った。**
+      関数の中だけを見るので、注入場所がさらに増えても混ざらない。 */
+  const injectedBy = (fnName) => {
+    const start = workerSource.indexOf(`async function ${fnName}(`);
+    if (start === -1) return [];
+    /* 次の `\nasync function ` までを、その関数の本体とみなす（このファイルは
+       トップレベル関数が `async function` で並ぶ書き方に揃っている）。 */
+    const nextAt = workerSource.indexOf('\nasync function ', start + 1);
+    const body = workerSource.slice(start, nextAt === -1 ? undefined : nextAt);
+    return [...body.matchAll(/<script[^>]*src="(\/backend\/js\/[^"]+)"/g)].map((m) => m[1]);
+  };
+  const injected = injectedBy('renderAppPage');
 
   /** 順序を保った部分列か（間に別のものが挟まってよい）。 */
   const inOrder = (needles, haystack) => {
@@ -217,6 +248,30 @@ if (fs.existsSync(indexLocal)) {
         : `HTTP ${res.status}\n        手元: ${want.join(' ') || '(無し)'}`
           + `\n        注入（worker から）: ${injected.join(' ') || '(無し)'}`
           + `\n        本番: ${got.join(' ') || '(無し)'}`,
+  );
+
+  /* 5. **`/`（お客さんが最初に開く場所）が、本物の入口として配られているか**
+
+     ここを見ていなかったせいで、本番の `/` は**バックエンドの script が0本**の
+     まま配られ続けた。載っている「Google でログイン」は押してもログインせず、
+     ホーム画面のアイコンから開いた人は練習用の犬（ポンチ等）の画面に入り、
+     本物のデータには一生たどり着けなかった（`F-20260902-66`）。
+     上の `4.` は `/edit` しか見ておらず、`/` は誰も見ていなかった。 */
+  const topRes = await get('/');
+  const topGot = topRes.status === 200 ? scriptSources(topRes.body.toString('utf8')) : [];
+  const topWant = injectedBy('renderLoginPage');
+  const topBody = topRes.status === 200 ? topRes.body.toString('utf8') : '';
+  const topOk = topWant.length > 0 && inOrder(topWant, topGot) && /__ENTRY__\s*=\s*true/.test(topBody);
+  check(
+    `/ が本物の入口として配られている（注入 ${topWant.length} 本）`,
+    topOk,
+    topRes.error
+      ? topRes.error
+      : topOk
+        ? ''
+        : `HTTP ${topRes.status}\n        注入されるはず（worker から）: ${topWant.join(' ') || '(無し)'}`
+          + `\n        本番: ${topGot.join(' ') || '(無し)'}`
+          + `\n        __ENTRY__ の印: ${/__ENTRY__\s*=\s*true/.test(topBody) ? '在る' : '**無い**'}`,
   );
 }
 

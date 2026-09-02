@@ -34,6 +34,19 @@ zone_name = "kouheikosehira.com"
 directory = "../dist"
 binding = "ASSETS"
 
+# **`/` だけは Worker に先に通す。**
+#
+# `[assets]` は既定で「静的ファイルが在れば Worker を呼ばずに配る」。`/` は
+# `dist/index.html` に当たるため、**Worker の `fetch` は `/` について一度も
+# 走っていなかった**。2026-09-02 に「入口を1つにする」として Worker 側へ
+# `renderLoginPage` を足したが、この設定のせいで**到達不能なまま**で、
+# 本番の `/` は素の HTML（練習用の犬・ログインしないボタン）を配り続けた
+# （`F-20260902-66`）。コードを直しても設定がこれでは効かない。
+#
+# 配列で「この道だけ」を指定する。他は今までどおり静的ファイルが先なので、
+# 画像や js の配信コストは変わらない。
+run_worker_first = ["/"]
+
 [vars]
 DATA_BACKEND = "supabase"
 SUPABASE_REPORT_ASSETS_BUCKET = "report-assets"
