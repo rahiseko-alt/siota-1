@@ -706,8 +706,13 @@ button, input, textarea, select {
    写真1枚ごとの使い捨てオーバーレイをその場で作る。 */
 .annotate-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 999; display: flex; align-items: center; justify-content: center; padding: 16px; }
 .annotate-box { background: #ffffff; padding: 12px; max-width: 100%; max-height: 100%; display: flex; flex-direction: column; gap: 10px; }
-.annotate-canvas-wrap { max-width: 90vw; max-height: 70vh; overflow: auto; touch-action: none; }
-.annotate-canvas { display: block; touch-action: none; border: 1px solid var(--border-subtle); }
+/* 書き込み面は**アプリが指を全部受け取る**（`touch-action: none`）。ブラウザの
+   拡大に任せると1本指の書き込みが途中で持っていかれるため、拡大・移動は
+   `openAnnotate()` が2本指から自分で作る。枠は動かさず、中の canvas だけを
+   `transform` で動かすので、`overflow` は `hidden`。 */
+.annotate-canvas-wrap { width: min(86vw, 560px); overflow: hidden; touch-action: none; border: 1px solid var(--border-subtle); }
+.annotate-canvas { display: block; touch-action: none; transform-origin: 0 0; }
+.annotate-hint { font-size: 11px; color: var(--ink-muted); margin: 0; }
 .annotate-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .btn-inline { border: 1px solid var(--border-subtle); background: #ffffff; padding: 8px 14px; font-size: 12px; font-weight: 700; cursor: pointer; }
 .annotate-save { background: var(--ink-body); color: #ffffff; }

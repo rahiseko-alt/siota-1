@@ -1365,6 +1365,8 @@ const App = {
      複数の写真スロットには使えないため。フリーハンドで丸を描き、
      「保存」で元の写真に焼き込む（差し替え）。 */
   openAnnotate(kind, index) {
+    /* 寄れる上限。これ以上は写真の画素が伸びるだけで、見えるものが増えない。 */
+    const ANNOTATE_MAX_SCALE = 6;
     const src = this.photos[kind][index];
     if (!src || !src.startsWith('data:')) return;
 
@@ -1373,6 +1375,7 @@ const App = {
     overlay.innerHTML = `
       <div class="annotate-box">
         <div class="annotate-canvas-wrap"><canvas class="annotate-canvas"></canvas></div>
+        <p class="annotate-hint">1本指で書き込み、2本指で拡大・移動できます。</p>
         <div class="annotate-actions">
           <button type="button" class="btn-inline annotate-clear">やり直す</button>
           <button type="button" class="btn-inline annotate-cancel">キャンセル</button>
@@ -1382,11 +1385,18 @@ const App = {
     document.body.appendChild(overlay);
 
     const canvas = overlay.querySelector('.annotate-canvas');
+    const wrap = overlay.querySelector('.annotate-canvas-wrap');
     const ctx = canvas.getContext('2d');
     const img = new Image();
     let strokes = [];
     let drawing = false;
     let activePointerId = null;
+    /* 拡大の状態。`scale` 倍して `(x, y)` だけずらしたものを画面に出す。
+       画像そのもの（canvas の中身）は触らない——書き込んだ線の座標が
+       拡大の履歴で狂わないように、拡大は**見た目だけ**にする。 */
+    const view = { scale: 1, x: 0, y: 0 };
+    const pointers = new Map();
+    let pinch = null;
 
     const redraw = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -1412,36 +1422,117 @@ const App = {
       };
     };
 
+    /* 拡大の下限は「1枚まるごと見えている状態」。ここより引けないようにし、
+       寄ったときは枠の外に白地が出ないところまでしか動かせないようにする。 */
+    const applyView = () => {
+      const width = canvas.offsetWidth || 0;
+      const height = canvas.offsetHeight || 0;
+      view.scale = Math.min(ANNOTATE_MAX_SCALE, Math.max(1, view.scale));
+      if (width && height) {
+        view.x = Math.min(0, Math.max(width - width * view.scale, view.x));
+        view.y = Math.min(0, Math.max(height - height * view.scale, view.y));
+      }
+      canvas.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
+    };
+
+    /* 写真は枠に収まる大きさで出す。**canvas の画素数と表示の大きさを分ける**
+       ——書き込みの座標は `getBoundingClientRect()` から画素数へ換算するので、
+       表示だけ縮めても線はずれない。 */
+    const fitToWrap = () => {
+      const boxWidth = wrap.clientWidth || 0;
+      const boxHeight = Math.round((globalThis.innerHeight || 0) * 0.6);
+      if (!boxWidth || !canvas.width || !canvas.height) return;
+      const ratio = Math.min(boxWidth / canvas.width, (boxHeight || boxWidth) / canvas.height, 1);
+      canvas.style.width = `${Math.round(canvas.width * ratio)}px`;
+      canvas.style.height = `${Math.round(canvas.height * ratio)}px`;
+    };
+
     img.onload = () => {
       const long = Math.max(img.naturalWidth, img.naturalHeight) || 1;
       const scale = long > 900 ? 900 / long : 1;
       canvas.width = Math.round((img.naturalWidth || 1) * scale);
       canvas.height = Math.round((img.naturalHeight || 1) * scale);
+      fitToWrap();
+      applyView();
       redraw();
     };
     img.src = src;
 
-    /* ピンチ操作は2本の指がそれぞれ pointerdown/pointermove を発火させる。
-       pointerId で区別せず両方を描画に使うと、2本指の座標が同じ線に混ざって
-       暴れた線になる（マスター報告）。1本目の指だけを追跡し、2本目以降は無視する。 */
+    /* 指の使い分け。**1本なら書き込み、2本なら拡大・移動。**
+       ここは2度作り直している。最初は `pointerId` を区別せず2本の座標を同じ線に
+       混ぜて「線がバーってなる」状態、次は2本目を無視して線は落ち着いたが
+       **拡大が誰も実装していないので、ピンチしても何も起きない**状態だった
+       （マスター報告「ピンチできない」）。`touch-action: none` でブラウザの拡大は
+       止まっているため、2本指を受けたらここで拡大するしかない。 */
+    const spanOf = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    const centerOf = (a, b) => ({ x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 });
+
     canvas.addEventListener('pointerdown', (event) => {
-      if (drawing) return;
-      drawing = true;
-      activePointerId = event.pointerId;
-      strokes.push([pointFromEvent(event)]);
+      pointers.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY });
+      if (pointers.size === 1) {
+        drawing = true;
+        activePointerId = event.pointerId;
+        strokes.push([pointFromEvent(event)]);
+        return;
+      }
+      /* 2本目が触れた時点で「さっきのは書き込みではなくピンチの1本目だった」と分かる。
+         1本目が引きかけた線は**消してから**拡大に移る。残すと、拡大するたびに
+         写真に線が1本ずつ増えていく。 */
+      if (drawing) {
+        strokes.pop();
+        drawing = false;
+        activePointerId = null;
+        redraw();
+      }
+      if (pointers.size === 2) {
+        const [first, second] = [...pointers.values()];
+        pinch = {
+          span: spanOf(first, second),
+          center: centerOf(first, second),
+          scale: view.scale,
+          x: view.x,
+          y: view.y,
+        };
+      }
     });
+
     canvas.addEventListener('pointermove', (event) => {
+      if (!pointers.has(event.pointerId)) return;
+      pointers.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY });
+      if (pinch && pointers.size >= 2) {
+        const [first, second] = [...pointers.values()];
+        const span = spanOf(first, second);
+        if (!pinch.span) return;
+        const rect = wrap.getBoundingClientRect();
+        const center = centerOf(first, second);
+        /* 指の間に挟んだ点が、指の間から逃げないようにする。
+           拡大前に中心が指していた写真上の点を、拡大後も同じ指の位置に置く。 */
+        view.scale = Math.min(ANNOTATE_MAX_SCALE, Math.max(1, pinch.scale * (span / pinch.span)));
+        const ratio = view.scale / pinch.scale;
+        view.x = (center.x - rect.left) - ratio * (pinch.center.x - rect.left - pinch.x);
+        view.y = (center.y - rect.top) - ratio * (pinch.center.y - rect.top - pinch.y);
+        applyView();
+        return;
+      }
       if (!drawing || event.pointerId !== activePointerId) return;
       strokes[strokes.length - 1].push(pointFromEvent(event));
       redraw();
     });
-    const stopDrawing = (event) => {
-      if (event && event.pointerId !== activePointerId) return;
-      drawing = false;
-      activePointerId = null;
+
+    /* 指を離す。**2本指を離しても、残った1本で描き始めない**——
+       ピンチの途中で片方だけ離れたときに線が生えるのを防ぐ。
+       次の `pointerdown` が1本目になったときだけ、また書き込みが始まる。 */
+    const releasePointer = (event) => {
+      pointers.delete(event.pointerId);
+      if (pointers.size < 2) pinch = null;
+      if (event.pointerId === activePointerId) {
+        drawing = false;
+        activePointerId = null;
+      }
     };
-    canvas.addEventListener('pointerup', stopDrawing);
-    canvas.addEventListener('pointerleave', stopDrawing);
+    canvas.addEventListener('pointerup', releasePointer);
+    canvas.addEventListener('pointercancel', releasePointer);
+    canvas.addEventListener('pointerleave', releasePointer);
 
     const close = () => overlay.remove();
     overlay.querySelector('.annotate-cancel').onclick = close;
