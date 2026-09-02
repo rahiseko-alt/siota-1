@@ -1013,7 +1013,15 @@ export default {
     // 動線の入口: login(index.html) → ログイン → 犬の一覧（/edit）。search.html は F2 で撤去した。
     // 旧実装は /edit へ 302（index.html 不在時の暫定・A 残骸対策）。login ページ追加に伴い廃止。
     // dummy origin "http://assets" で Worker ルーティングへの再帰を避ける（fetchAssetHtml と同方針）。
-    if (path === '/' || path === '') {
+    //
+    /* **Supabase モードでは、ここで横取りしてはいけない。**
+       2026-09-02、`handleSupabaseMode` に「`/` を本物の入口にする」分岐
+       （`renderLoginPage`）を足したのに、**この行がその手前で `/` を
+       素の HTML のまま返していた**ため、足した入口は**一度も呼ばれなかった**
+       （到達不能な死んだコード・`A-5`）。本番で `/` にバックエンドの script が
+       0本のままだったのは、これが理由（`F-20260902-66`）。
+       KV モードには login ページの仕組みが無いので、そちらは素のまま配る。 */
+    if ((path === '/' || path === '') && env.DATA_BACKEND !== 'supabase') {
       return env.ASSETS.fetch(new Request('http://assets/index.html'));
     }
 

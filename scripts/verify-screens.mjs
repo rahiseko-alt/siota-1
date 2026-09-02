@@ -55,6 +55,23 @@ try {
   check('2. `/` に4画面が乗っている', topView.screens === 4, `screen=${topView.screens}`);
   check('3. `/` に段のタブが4つ在る', topView.steps === 4, `tab=${topView.steps}`);
   check('4. `/` はログイン画面から始まる', topView.active === 'screen-1', `active=${topView.active}`);
+
+  /* 4b: **`/` が「本物の入口」として配られていること。**
+     `1.`〜`4.` は**素の静的HTML でも全部通る**——4画面あって、段のタブが4つあって、
+     最初がログイン画面、というのは器の話でしかない。実際それで抜けた:
+     `handleSupabaseMode` に入口（`renderLoginPage`）を足したのに、上位の振り分けが
+     `/` を先に横取りしていて**一度も呼ばれず**、本番の `/` はバックエンドの script が
+     0本のまま——「Google でログイン」を押してもログインしない画面が配られ続けた
+     （`F-20260902-66`）。器ではなく**中身が載っているか**を見る。
+     `__ENTRY__` は worker が入口として配ったときにだけ立てる印。 */
+  const entry = await top.evaluate(() => ({
+    marker: '__ENTRY__' in globalThis,
+    auth: [...document.querySelectorAll('script[src]')]
+      .some((s) => s.getAttribute('src').includes('supabase-auth.js')),
+  }));
+  check('4b. `/` が本物の入口として配られている（ログインが繋がっている）',
+    entry.marker === true && entry.auth === true,
+    `__ENTRY__=${entry.marker} supabase-auth.js=${entry.auth}`);
   await top.close();
 
   /* ── ② スタッフかつ飼い主（本番のマスター自身と同じ形）が `/my` に留まったとき、
