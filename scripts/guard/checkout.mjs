@@ -55,10 +55,46 @@ try {
 add(pushed, `push した（${branch}）`,
   pushed ? `origin/${branch} と一致` : `origin/${branch} に無いか、手元が進んでいる → git push -u origin ${branch}`);
 
-/* ── 3. **master に取り込まれたか**（ここが本題） ── */
-const merged = quiet('git merge-base --is-ancestor HEAD origin/master') === 0;
+/* ── 3. **master に取り込まれたか**（ここが本題） ──
+
+   **系譜だけで見てはいけない。** ここは長らく
+   `git merge-base --is-ancestor HEAD origin/master` だけを見ていたが、
+   このリポジトリは **squash マージ**で運用している（master の `#54`〜`#60` が
+   すべてその形）。squash は新しいコミットを1本作るので、**中身が完全に
+   取り込まれていても HEAD は master の祖先にならない**。
+   つまりこの関所は、正しくマージした直後でも「まだマージされていない」と
+   言い続け、**D-19 の門が構造的に通れなかった**
+   （2026-09-02、PR #60 をマージした直後に実測して判明。
+   `git diff --name-only origin/master HEAD` は 0件なのに ❌ が出た）。
+   `checkin.mjs` が毎回「未マージのブランチがある」と誤警告していたのも同じ穴。
+
+   D-19 が本当に気にしているのは「次のセッションが master から始めたとき、
+   今回の成果がそこに在るか」——それは**系譜ではなく中身**で決まる。
+   だから2通りのどちらかで「取り込まれた」とする:
+     ① HEAD が origin/master の祖先（merge コミット運用ならこれで通る）
+     ② **このブランチが触った全ファイルが、master 側と1バイトも違わない**
+   ②は「差分が0」ではなく「**このブランチの変更分**が master に在るか」を見る。
+   master に別の PR が後から入っていても誤判定しないため。
+   どちらでもないときだけ「まだ」と言う——判定を緩めたのではなく、
+   **測る対象を、系譜から中身へ正した**。 */
+const isAncestor = quiet('git merge-base --is-ancestor HEAD origin/master') === 0;
+let contentInMaster = false;
+if (!isAncestor) {
+  try {
+    const base = sh('git merge-base origin/master HEAD');
+    const touched = sh(`git diff --name-only ${base} HEAD`).split('\n').filter(Boolean);
+    /* 1件も触っていないブランチを「取り込まれた」とは言わない（無を通さない）。 */
+    contentInMaster = touched.length > 0
+      && touched.every((f) => quiet(`git diff --quiet origin/master HEAD -- "${f}"`) === 0);
+  } catch { contentInMaster = false; }
+}
+const merged = isAncestor || contentInMaster;
 add(merged, 'master に取り込まれた（PR をマージした）',
-  merged ? 'HEAD は origin/master の祖先' : `**まだマージされていない。**\n`
+  merged
+    ? (isAncestor
+      ? 'HEAD は origin/master の祖先'
+      : 'squash マージ済み（このブランチが触った全ファイルが master 側と一致）')
+    : `**まだマージされていない。**\n`
     + `      次のセッションは別のコンテナで origin/master から始まるので、\n`
     + `      いまの作業は**次のセッションからは存在しない**ことになる。\n`
     + `      PR を ready にしてマージすること（draft のままではマージできない）。`);
