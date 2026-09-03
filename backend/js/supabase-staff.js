@@ -442,6 +442,9 @@ async function bootStaffPortal(PonchiApp) {
     reportId: route.reportId,
     shopDefaultRevisitDays: shopBody && shopBody.shop ? shopBody.shop.default_revisit_days : null,
     shopGroomingOptions: (shopBody && shopBody.shop && shopBody.shop.grooming_options) || [],
+    /* 体重の推移（マスター指示 2026-09-03）。⑤確認と⑥飼い主は同一レンダラなので、
+       同じものを渡さないと**スタッフの画面だけ点1つ**になる。 */
+    weightHistory: reportBody.report.weightHistory || null,
   });
   if (globalThis.SaltyDogPonchi) globalThis.SaltyDogPonchi.applyReport(globalThis.__REPORT__);
 }

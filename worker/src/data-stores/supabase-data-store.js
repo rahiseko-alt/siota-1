@@ -13,6 +13,34 @@ function normalizeBaseUrl(value) {
   return url.origin;
 }
 
+/** 確定カルテの行から、体重の推移を作る（マスター指示 2026-09-03）。
+
+    **1枚のカルテには、その回の体重が1件しか入っていない**（`extractReport()` が
+    `weights: [{ym, date, kg}]` を1件だけ作る）。⑥飼い主の「体重推移」は
+    カルテ1枚の `data.weights` を描いていたので、**点が1つしか乗らず、線が
+    一度も引かれていなかった**。横断して1本にするのがここ。
+
+    **量らなかった回は落とす。** 体重に触らずに確定した回は `weights` を持たない
+    （`D-10`「空の器を出さない」）。そこを 0kg として線に乗せると、**書いていない
+    体重が飼い主に届く**——グラフが谷まで落ちて見える。
+
+    保存形式は変えない。読み出すときに組み立てるだけなので、過去のカルテに
+    後から書き足す必要が無い。 */
+export function weightHistoryFromReports(rows) {
+  return (rows || [])
+    .map((row) => {
+      const point = (((row || {}).data || {}).weights || [])[0] || {};
+      const kg = Number(point.kg);
+      if (!Number.isFinite(kg) || kg <= 0) return null;
+      /* 月は**カルテの日付**から作る。`ym` が欠けている古い記録でも線に乗せられる。 */
+      const date = point.date || row.report_date || '';
+      const ym = point.ym || String(date).slice(0, 7);
+      if (!ym) return null;
+      return { ym, date, kg };
+    })
+    .filter(Boolean);
+}
+
 export class SupabaseDataStore {
   constructor({ supabaseUrl, publishableKey, accessToken, userId = null, fetchImpl = fetch }) {
     if (!publishableKey || !accessToken) throw new TypeError('Supabase credentials are required');
@@ -243,6 +271,18 @@ export class SupabaseDataStore {
     return this.request(
       `/rest/v1/reports?select=id,shop_id,pet_id,report_date,status,data,created_at,updated_at&pet_id=eq.${encodeURIComponent(petId)}&status=neq.deleting&order=report_date.desc,created_at.desc`,
     );
+  }
+
+  /** その犬の体重の推移。**確定した回だけ**を古い順に返す。
+
+      飼い主のトークンは RLS で `status='final'` しか読めないので、
+      ここに下書きが混ざることはない（スタッフのトークンでも `eq.final` で絞る
+      ——確定していない体重を推移に混ぜない）。 */
+  async listWeightHistory(petId) {
+    const rows = await this.request(
+      `/rest/v1/reports?select=report_date,data&pet_id=eq.${encodeURIComponent(petId)}&status=eq.final&order=report_date.asc`,
+    );
+    return weightHistoryFromReports(rows);
   }
 
   async getReport(petId, reportId) {

@@ -302,7 +302,26 @@ const App = {
       panel.addEventListener('change', mark, { once: true });
     }
 
-    staff.findDraft(petId).then((draft) => {
+    /* **前回の確定カルテは、下書きが在っても取る。**
+       引き継ぎ（`applyCarryOver`）は下書きが無いときだけだが、
+       **「前回比」は下書きの続きを書くときにも要る**（マスター指示 2026-09-03）。
+       ここを「下書きが無いときだけ」にしていたので、続きを書く回は前回比が
+       出なかった。取れなくても記入は続けられるので、失敗は飲む。 */
+    const previousPromise = staff.findLastFinalReport
+      ? staff.findLastFinalReport(petId).catch(() => null)
+      : Promise.resolve(null);
+
+    Promise.all([staff.findDraft(petId), previousPromise]).then(([draft, previous]) => {
+      /* 前回の体重を先に入れる。**引き継ぎより先**——`applyReport` が体重欄を
+         触ったときに、前回比が「記録なし」のまま描かれないように。 */
+      const previousKg = Number((((previous || {}).data || {}).weights || [])[0]?.kg);
+      if (Number.isFinite(previousKg) && previousKg > 0) this.currentDog.prevWeight = previousKg;
+      /* **前回が無かったときも必ず描き直す。** 描かないと、画面に出ている
+         「前回の記録なし」は HTML の初期値のままで、**一度も計算していない**のと
+         **計算して記録が無かった**のが区別できない。検査もそこを見分けられない
+         （`docs/watch.md` W-1 と同じ形）。 */
+      this.renderWeightDiff();
+
       if (draft) {
         /* **id は必ず引き継ぐ。** 引き継がないと、続きを書いたつもりが新しい
            下書きになって、同じ犬の下書きが2枚残る。 */
@@ -315,21 +334,15 @@ const App = {
           this.applyReport(draft.data || {});
         }
         this.watchDraft();
-        return null;
+        return;
       }
       /* **下書きが1枚も無い＝この犬の新しい1枚を、いまから書く。**
          前回の確定カルテから、変わらない項目だけを引き継いで始める
          （マスター指示 2026-09-03）。下書きが在るときは下書きが勝つ——
-         書きかけを前回の内容で上書きしない。 */
-      if (this.draftTouched || !staff.findLastFinalReport) {
-        this.watchDraft();
-        return null;
-      }
-      return staff.findLastFinalReport(petId).then((previous) => {
-        /* 往復のあいだに打たれていたら引き継がない（`D-20260824-30` の型）。 */
-        if (previous && !this.draftTouched) this.applyCarryOver(previous);
-        this.watchDraft();
-      });
+         書きかけを前回の内容で上書きしない。
+         往復のあいだに打たれていたら引き継がない（`D-20260824-30` の型）。 */
+      if (previous && !this.draftTouched) this.applyCarryOver(previous);
+      this.watchDraft();
     }).catch(() => {
       /* 読み込めなくても記入は続けられる。**続きから書けないことだけは伝える。** */
       const status = document.getElementById('dock-status-text');
@@ -515,6 +528,8 @@ const App = {
       /* 「次回のおすすめご来店時期」（マスター指示 2026-08-29・D-20260829-58）。 */
       revisitDaysOverride: pet.revisitDaysOverride ?? null,
       shopDefaultRevisitDays: pet.shopDefaultRevisitDays,
+      /* 体重の推移（マスター指示 2026-09-03）。⑥飼い主と同じものを渡す。 */
+      weightHistory: pet.weightHistory || null,
     }, {
       onRevisitDaysChange: (value) => globalThis.TrimmerStaffApi.request(
         `/api/pets/${encodeURIComponent(pet.id)}`,
@@ -1095,28 +1110,44 @@ const App = {
     this.form.options = [...set];
   },
 
+  /* 前回比のバッジを描く。**前回の体重が入ったときにも描き直せるように**
+     `onWeightChange()` から切り出した（マスター指示 2026-09-03）。
+     前回の体重は `resumeDraft()` が前回の確定カルテから入れる——それまでは
+     `null`＝「記録なし」で、見本の数字とは引き算しない（`D-10`）。
+
+     **`onWeightChange()` を呼んで描き直させない。** あれは `form.weight` を
+     書き換えるので、空の入力欄で呼ぶと「0kg を量った」ことになってしまう。 */
+  renderWeightDiff() {
+    const badge = document.getElementById('weight-diff-badge');
+    if (!badge) return;
+    const prev = Number(this.currentDog.prevWeight);
+    if (!Number.isFinite(prev) || prev <= 0) {
+      badge.className = 'weight-diff-badge';
+      badge.textContent = '前回の記録なし';
+      return;
+    }
+    const now = Number(this.form.weight);
+    /* **まだ量っていないときは、差ではなく前回の値を出す。** `0 - 4.4` を
+       「-4400g ▼」と出すと、痩せたように見える（書いていないことが見える）。 */
+    if (!Number.isFinite(now) || now <= 0) {
+      badge.className = 'weight-diff-badge';
+      badge.textContent = `前回 ${prev}kg`;
+      return;
+    }
+    const diff = Math.round((now - prev) * 1000);
+    if (diff >= 0) {
+      badge.className = 'weight-diff-badge is-up';
+      badge.textContent = `+${diff}g ▲`;
+    } else {
+      badge.className = 'weight-diff-badge is-down';
+      badge.textContent = `${diff}g ▼`;
+    }
+  },
+
   onWeightChange(val) {
     const w = parseFloat(val) || 0;
     this.form.weight = w;
-    const badge = document.getElementById('weight-diff-badge');
-    /* **前回の記録が無ければ、前回比は出さない。** 以前は見本の体重と
-       引き算していたので、初めての犬にも「+120g ▲」が出ていた。 */
-    if (badge && !this.currentDog.prevWeight) {
-      badge.className = 'weight-diff-badge';
-      badge.textContent = '前回の記録なし';
-      this.updateCompletionStatus();
-      return;
-    }
-    const diff = Math.round((w - this.currentDog.prevWeight) * 1000);
-    if (badge) {
-      if (diff >= 0) {
-        badge.className = 'weight-diff-badge is-up';
-        badge.textContent = `+${diff}g ▲`;
-      } else {
-        badge.className = 'weight-diff-badge is-down';
-        badge.textContent = `${diff}g ▼`;
-      }
-    }
+    this.renderWeightDiff();
     this.updateCompletionStatus();
   },
 

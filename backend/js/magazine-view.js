@@ -700,7 +700,15 @@ export function renderMagazine(container, report, opts = {}) {
   const bcs = Number(data.bcs) || 0;
   const bcsText = setText(container, 'bcs-text', bcs > 0 ? `BCS: ${bcs}（${bcsLabels[bcs] || ''}）` : '');
   if (bcsText) bcsText.hidden = bcs === 0;
-  renderWeightGraph(container, data.weights, data.bestWeight);
+  /* **推移が在るならそれを描く**（マスター指示 2026-09-03）。`data.weights` は
+     このカルテ1枚分（1回）しか持たないので、それだけを描いていたときは
+     「体重推移」と書いた箱に**点が1つ**しか乗らなかった——`polyline` は2点未満では
+     線を引けないので、推移は一度も飼い主に届いていない。`weightHistory` は
+     worker が確定カルテを横断して組み立てたもの。無い経路では今までどおりに落ちる。
+     **カルテの中身（`data`）からは読まない**——`key-parity` は `data` のプロパティを
+     ⑥が読むキーとして数えるので、ここは保存されるキーではないことを形でも示しておく
+     （実際に `report` 側から取っている）。 */
+  renderWeightGraph(container, report.weightHistory || data.weights, data.bestWeight);
 
   const cutPhotos = [...((data.trimming || {}).photos || []), ...((data.bodyLanguage || {}).photos || [])]
     .filter((src) => typeof src === 'string' && src.trim() !== '');

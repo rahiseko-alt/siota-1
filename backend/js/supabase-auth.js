@@ -159,6 +159,9 @@ async function renderReport(container, report, supabase, siblingReports) {
        編集は⑤スタッフ側だけ——ここには `onRevisitDaysChange` を渡さない。 */
     revisitDaysOverride: report.pet?.revisitDaysOverride ?? null,
     shopDefaultRevisitDays: report.shopDefaultRevisitDays,
+    /* 体重の推移（マスター指示 2026-09-03）。カルテ1枚には1回分しか入っていないので、
+       worker が確定カルテを横断して組み立てたものを渡す。 */
+    weightHistory: report.weightHistory,
   }, {
     onBack: () => { location.href = `/my/pets/${encodeURIComponent(report.pet_id || '')}`; },
     backLabel: 'このわんちゃんのカルテ一覧へ戻る',
