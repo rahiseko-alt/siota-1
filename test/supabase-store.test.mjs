@@ -576,3 +576,40 @@ test('getStaffShopId still reports 409 when the caller really belongs to two sho
   });
   await assert.rejects(() => store.getStaffShopId(), (e) => e instanceof StoreError && e.status === 409);
 });
+
+/* 体重の履歴を取るクエリの形。**`status=eq.final` は唯一の門**で、外すと
+   ⑤スタッフ確認のグラフに**下書きや削除待ちの体重**が混ざる。飼い主側は RLS
+   （`reports_customer_select` が `status = 'final'` を要求）が二重に守るが、
+   スタッフは `reports_staff_select` で店の全カルテが見えるので、**ここだけが門**。
+
+   見つけたきっかけ（2026-09-03・徹底調査）: この門を外して `npm test` と
+   `npm run check` を回すと**どちらも全部緑**だった。壊れても誰も気づけない。 */
+test('体重の履歴は、確定したカルテだけを、古い順に、体重の列だけ取る', async () => {
+  const calls = [];
+  const response = await worker.fetch(new Request(
+    'https://test.local/api/pets/30000000-0000-0000-0000-000000000001/reports/40000000-0000-0000-0000-000000000001',
+    { headers: { Authorization: 'Bearer staff-jwt' } },
+  ), supabaseEnv(async (url) => {
+    calls.push(url);
+    if (url.endsWith('/auth/v1/user')) {
+      return Response.json({ id: '20000000-0000-0000-0000-000000000002', email: 'staff@local.test' });
+    }
+    if (url.includes('/shop_memberships?')) {
+      return Response.json([{ shop_id: '10000000-0000-0000-0000-000000000001' }]);
+    }
+    if (url.includes('/reports?')) return Response.json([]);
+    if (url.includes('/pets?')) return Response.json([]);
+    return Response.json([]);
+  }));
+
+  /* **土台。** 経路そのものが通っていなければ、以下は何も見ていないことになる。 */
+  assert.ok(response.status < 500, `カルテ取得の経路が通っていない: ${response.status}`);
+  const weightCall = calls.find((url) => url.includes('/rest/v1/reports?') && url.includes('order='));
+  assert.ok(weightCall, `体重の履歴クエリが飛んでいない: ${JSON.stringify(calls)}`);
+  assert.ok(weightCall.includes('status=eq.final'),
+    `確定したカルテだけに絞っていない（下書きの体重が混ざる）: ${weightCall}`);
+  assert.ok(weightCall.includes('order=report_date.asc'),
+    `古い順に取っていない（線が前後する）: ${weightCall}`);
+  assert.ok(weightCall.includes('pet_id=eq.30000000-0000-0000-0000-000000000001'),
+    `この犬に絞っていない: ${weightCall}`);
+});

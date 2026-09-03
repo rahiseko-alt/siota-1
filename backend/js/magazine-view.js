@@ -592,6 +592,26 @@ function renderTimeline(root, report) {
 const EMPTY_HTML = '<p style="padding:28px 24px;color:#8c8c88;font-size:14px;line-height:2">'
   + 'このカルテはまだ表示できません。</p>';
 
+/** 体重グラフに何を渡すか。**空の配列は「無い」として扱う。**
+ *
+ *  `report.weightHistory || data.weights` と書いていたが、**`[]` は真**なので
+ *  `data.weights` へ落ちてこなかった。結果、確定カルテがまだ1枚も無い犬
+ *  （初回の子）では、**今日量った体重が捨てられて**「記録がありません。」になる。
+ *  実測: `weightHistory=[]` / `data.weights=[{kg:3.3,…}]` → 渡っていたのは `[]`。
+ *
+ *  直す前は、画面でも検査でも「まだ量っていない」と「量ったのに捨てた」が
+ *  同じ見た目だったので、誰も気づけなかった（`D-12`）。
+ *
+ *  `history` は worker が確定カルテを横断して組み立てたもの。取れなかった回は
+ *  `null` で来る（`worker/src/index.js` の `.catch(() => null)`）ので、
+ *  **「取れなかった」と「1件も無い」を同じ扱いにする**——どちらも、いま手元に
+ *  在るカルテ1枚分の体重を出すのが正しい。 */
+export function pickWeightSeries(report, data) {
+  const history = (report || {}).weightHistory;
+  if (Array.isArray(history) && history.length > 0) return history;
+  return (data || {}).weights;
+}
+
 export function renderMagazine(container, report, opts = {}) {
   if (!container) throw new Error('renderMagazine: 描画先の器がありません');
   if (!report) {
@@ -700,7 +720,20 @@ export function renderMagazine(container, report, opts = {}) {
   const bcs = Number(data.bcs) || 0;
   const bcsText = setText(container, 'bcs-text', bcs > 0 ? `BCS: ${bcs}（${bcsLabels[bcs] || ''}）` : '');
   if (bcsText) bcsText.hidden = bcs === 0;
-  renderWeightGraph(container, data.weights, data.bestWeight);
+  /* **推移が在るならそれを描く**（マスター指示 2026-09-03）。`data.weights` は
+     このカルテ1枚分（1回）しか持たないので、それだけを描いていたときは
+     「体重推移」と書いた箱に**点が1つ**しか乗らなかった——`polyline` は2点未満では
+     線を引けないので、推移は一度も飼い主に届いていない。`weightHistory` は
+     worker が確定カルテを横断して組み立てたもの。無い経路では今までどおりに落ちる。
+     **カルテの中身（`data`）からは読まない**——`key-parity` は `data` のプロパティを
+     ⑥が読むキーとして数えるので、ここは保存されるキーではないことを形でも示しておく
+     （実際に `report` 側から取っている）。 */
+  /* **空の配列は「無い」として扱う。** `report.weightHistory || …` と書いていたが
+     `[]` は真なので落ちてこず、**確定カルテがまだ1枚も無い犬では、今日量った体重が
+     捨てられていた**（実測: `weightHistory=[]` / `data.weights=[{kg:3.3}]` →
+     渡っていたのは `[]`。画面は「記録がありません。」）。直す前は「まだ量っていない」と
+     「今日量ったのに捨てた」が画面でも検査でも見分けられなかった。 */
+  renderWeightGraph(container, pickWeightSeries(report, data), data.bestWeight);
 
   const cutPhotos = [...((data.trimming || {}).photos || []), ...((data.bodyLanguage || {}).photos || [])]
     .filter((src) => typeof src === 'string' && src.trim() !== '');

@@ -183,6 +183,28 @@ try {
     backToEditor.tapped && backToEditor.header === `動線${stamp} カルテ入力`,
     `見出し="${backToEditor.header}" 期待="動線${stamp} カルテ入力"`);
 
+  /* **見出しだけ見て終わらない。** この段のタブは、確定後は関所に当たって②へ戻る
+     ——④は「次の1枚」として組み立て直しが要るためで、意図した動き
+     （2026-09-03・徹底調査。以前は組み立てていない④がそのまま開き、⑦使用オプションが
+     消え、引き継ぎも前回比も出なかった）。
+     見出しは `showReport()` が先に書いているので、**押した結果どこに着いたかを
+     見ないと、この検査は「押せた」だけで緑になる**（`D-12`）。 */
+  await page.waitForTimeout(800);
+  const landedAfterTab = await page.evaluate(() => {
+    const active = document.querySelector('.screen-panel.is-active');
+    const options = document.getElementById('sec-options');
+    return {
+      panel: active ? active.id : '(無し)',
+      /* ②に居るなら、犬を選び直せる一覧が実際に在ること。 */
+      cards: document.querySelectorAll('.karte-card').length,
+      optionsHidden: options ? options.hidden : null,
+    };
+  });
+  check('⑤c-2. 確定後に「03」を押すと、組み立てていない④を開かず②へ戻す',
+    landedAfterTab.panel === 'screen-2', JSON.stringify(landedAfterTab));
+  check('⑤c-3. 戻った②に、犬を選び直せる一覧が在る（押せただけで終わらせない）',
+    landedAfterTab.cards > 0, `カード=${landedAfterTab.cards}`);
+
   /* ── ⑥ 顧客ページ ── */
   const ownerContext = await browser.newContext();
   const ownerPage = await ownerContext.newPage();

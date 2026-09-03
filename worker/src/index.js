@@ -182,11 +182,15 @@ async function handleSupabaseApi(request, store, path, cors, env) {
       /* 「次回のおすすめご来店時期」（マスター指示 2026-08-29・D-20260829-58）。
          読めなくてもカルテ本体は返す——欄が空になるだけにする。 */
       const shopDefaultRevisitDays = await store.getShopDefaultRevisitDays(pet.shop_id).catch(() => null);
+      /* 体重の推移（マスター指示 2026-09-03）。**カルテ1枚には1回分しか入っていない**
+         ので、横断して1本にしたものを添える。読めなくてもカルテ本体は返す。 */
+      const weightHistory = await store.listWeightHistory(petId).catch(() => null);
       return json({
         report: {
           ...report,
           pet: { id: pet.id, name: pet.name, revisitDaysOverride: pet.revisit_days_override ?? null },
           shopDefaultRevisitDays,
+          weightHistory,
         },
       }, 200, cors);
     }
@@ -263,7 +267,16 @@ async function handleSupabaseApi(request, store, path, cors, env) {
       if (parts.length >= 5 && isUuid(parts[4])) {
         const reportId = parts[4];
         if (parts.length === 5) {
-          if (request.method === 'GET') return json({ report: await store.getReport(petId, reportId) }, 200, cors);
+          if (request.method === 'GET') {
+            /* ⑤確認も⑥飼い主と同じ「体重推移」を見る（同一レンダラ・マスター指定）。
+               **取れなくてもカルテ本体は返す**——グラフがその回の1点に戻るだけにする
+               （`shopDefaultRevisitDays` と同じ方針）。 */
+            const [report, weightHistory] = await Promise.all([
+              store.getReport(petId, reportId),
+              store.listWeightHistory(petId).catch(() => null),
+            ]);
+            return json({ report: { ...report, weightHistory } }, 200, cors);
+          }
           if (request.method === 'PATCH') {
             const parsed = await parseJson(request, updateReportSchema);
             if (!parsed.ok) return invalidJsonResult(parsed, cors);

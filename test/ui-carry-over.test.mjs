@@ -54,10 +54,11 @@ function fifthReport() {
 }
 
 /** 最小限の画面で `App` を読み込む。`commitReport()` は `globalThis` から
-    backend と文脈を取るので、**その `globalThis`（＝ sandbox）も返す**。 */
-function loadSandbox() {
+    backend と文脈を取るので、**その `globalThis`（＝ sandbox）も返す**。
+    `elements` に id を渡すと、その id だけ本物らしい要素を返す。 */
+function loadSandbox({ elements = {} } = {}) {
   const document = {
-    getElementById: () => null,
+    getElementById: (id) => elements[id] || null,
     querySelectorAll: () => [],
     querySelector: () => null,
     addEventListener: () => {},
@@ -231,4 +232,70 @@ test('直し（カルテ修正）でも __marks を載せて送る', async () =>
   assert.equal(sent.length, 1);
   assert.equal(sent[0].reportId, 'report-5');
   assert.equal(plain(sent[0].data.__marks).length, 1, '直しで印が落ちている');
+});
+
+/* ── ④の「前回比」──────────────────────────────────────────────────
+   `currentDog.prevWeight` に値が入る経路は仮データ（`src/js/dummy.js`）だけで、
+   実データでは常に `null` のままだった。つまり**確定カルテが5枚ある犬でも
+   「前回の記録なし」と出ていた**（マスター指示 2026-09-03「納品して問題あるなら直せ」）。
+
+   体重を毎回空で始める設計は「前回値は前回比で見える」ことを前提にしているので、
+   ここが空だと前提そのものが崩れる。 */
+
+function loadWithBadge() {
+  const badge = { className: '', textContent: '' };
+  const sandbox = loadSandbox({ elements: { 'weight-diff-badge': badge } });
+  return { App: sandbox.__App, badge };
+}
+
+test('前回の記録が無ければ「前回の記録なし」（見本の数字と引き算しない）', () => {
+  const { App, badge } = loadWithBadge();
+  App.currentDog.prevWeight = null;
+  App.form.weight = 4.6;
+  App.renderWeightDiff();
+  assert.equal(badge.textContent, '前回の記録なし');
+});
+
+test('前回が在り、まだ量っていないときは前回の値を出す（痩せたように見せない）', () => {
+  const { App, badge } = loadWithBadge();
+  App.currentDog.prevWeight = 4.4;
+  App.form.weight = 0;
+  App.renderWeightDiff();
+  assert.equal(badge.textContent, '前回 4.4kg');
+  assert.equal(badge.className, 'weight-diff-badge', '差でもないのに増減の色が付いている');
+});
+
+test('増えたら +200g ▲、減ったら -100g ▼', () => {
+  const up = loadWithBadge();
+  up.App.currentDog.prevWeight = 4.4;
+  up.App.form.weight = 4.6;
+  up.App.renderWeightDiff();
+  assert.equal(up.badge.textContent, '+200g ▲');
+  assert.equal(up.badge.className, 'weight-diff-badge is-up');
+
+  const down = loadWithBadge();
+  down.App.currentDog.prevWeight = 4.4;
+  down.App.form.weight = 4.3;
+  down.App.renderWeightDiff();
+  assert.equal(down.badge.textContent, '-100g ▼');
+  assert.equal(down.badge.className, 'weight-diff-badge is-down');
+});
+
+test('前回と同じなら +0g ▲（記録が在ることは示す）', () => {
+  const { App, badge } = loadWithBadge();
+  App.currentDog.prevWeight = 4.4;
+  App.form.weight = 4.4;
+  App.renderWeightDiff();
+  assert.equal(badge.textContent, '+0g ▲');
+});
+
+test('前回比を描き直しても、量っていない体重を 0 と書き込まない', () => {
+  const { App } = loadWithBadge();
+  App.currentDog.prevWeight = 4.4;
+  App.form.weight = 0;
+  App.renderWeightDiff();
+  assert.equal(App.form.weight, 0, '`form.weight` が書き換わっている');
+  App.form.weight = 4.6;
+  App.renderWeightDiff();
+  assert.equal(App.form.weight, 4.6, '描き直しが入力値を壊している');
 });

@@ -754,9 +754,11 @@ export const MUTATIONS = [
     id: 'm6-header-wrong-dog',
     why: '**確定後に④へ戻ると、別の犬の名前が見出しに出る**（`docs/deferred.md` #28 の再発）',
     file: 'src/js/ui.js',
-    find: "    this.selectKarte(pet.petName || '', pet.ownerName || '', '');\n"
+    /* `selectKarte()` から `setDogIdentity()` に分けた（2026-09-03・徹底調査）。
+       ⑤は「名前を合わせるだけ」で移動しない側を呼ぶ。狙う行はそちら。 */
+    find: "    this.setDogIdentity(pet.petName || '', pet.ownerName || '', '');\n"
       + '    /* **描いてから移る。**',
-    replace: "    /* MUTATED: this.selectKarte(pet.petName || '', pet.ownerName || '', ''); */\n"
+    replace: "    /* MUTATED: this.setDogIdentity(pet.petName || '', pet.ownerName || '', ''); */\n"
       + '    /* **描いてから移る。**',
     extra: null,
     scripts: ['verify-m6.mjs'],

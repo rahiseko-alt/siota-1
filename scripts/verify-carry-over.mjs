@@ -169,6 +169,15 @@ try {
   const weight = await page.inputValue('#input-weight');
   check('体重が空', weight === '', `value="${weight}"`);
 
+  /* ── 体重の「前回比」（マスター指示 2026-09-03「納品して問題あるなら直せ」）──
+     体重を毎回空で始める設計は「前回値は前回比で見える」ことを前提にしている。
+     ここが「前回の記録なし」だと、その前提が崩れる。 */
+  const diffBefore = (await page.locator('#weight-diff-badge').textContent() || '').trim();
+  check('前回比が「前回の記録なし」ではない（5枚目の体重を引けている）',
+    diffBefore !== '前回の記録なし', `badge="${diffBefore}"`);
+  check('まだ量っていないので、前回の体重を出している（痩せたように見せない）',
+    diffBefore === '前回 4.4kg', `badge="${diffBefore}"`);
+
   const activeOptions = await page.locator('#options-grid .teeth-pill-btn.is-active').count();
   check('⑦使用オプションが1つも選ばれていない', activeOptions === 0, `active=${activeOptions}`);
 
@@ -272,6 +281,10 @@ try {
     await page.selectOption('[data-field="course"]', first);
   });
   await page.fill('#input-weight', '4.6');
+  /* 4.4kg → 4.6kg。**入れた瞬間に増減が出ること。** */
+  const diffAfter = (await page.locator('#weight-diff-badge').textContent() || '').trim();
+  check('体重を入れると前回比が出る（4.4 → 4.6 で +200g ▲）',
+    diffAfter === '+200g ▲', `badge="${diffAfter}"`);
   await page.fill('[data-field="staff-note"]', '6枚目のメッセージ。今回書いたもの。');
 
   const optionCount = await page.locator('#options-grid .teeth-pill-btn').count();
@@ -328,6 +341,59 @@ try {
     Array.isArray(sixthData.__marks) && sixthData.__marks.length === 2,
     `marks=${(sixthData.__marks || []).length}`);
 
+  /* ── 飼い主に「体重推移」が届くか（マスター指示 2026-09-03）─────────
+     `data.weights` はこのカルテ1枚分（1回）しか持たない。それだけを描いていたときは
+     **「体重推移」と書いた箱に点が1つ**しか乗らず、`polyline` は2点未満では線を
+     引けないので推移が一度も届いていなかった。**確定カルテを横断した履歴**が
+     応答に載り、**線が実際に引かれている**ところまで見る。 */
+  const history = (sixthFull.report && sixthFull.report.weightHistory) || [];
+  check('カルテ1枚の応答に、確定カルテを横断した体重の履歴が載っている',
+    Array.isArray(history) && history.length >= 2, `点=${history.length}`);
+  check('履歴の最後が、いま入れた体重（4.6kg）',
+    history.length > 0 && Number(history[history.length - 1].kg) === 4.6,
+    `最後=${history.length > 0 ? history[history.length - 1].kg : 'なし'}kg`);
+
+  /* ⑤スタッフ確認の画面で、**実際に線が引かれているか**を数える。
+     ⑤と⑥は同一レンダラ（マスター指定）なので、ここで線が引ければ飼い主にも届く。 */
+  /* ⑤が描き終わるまで待つ。**描く前に読むと「線が無い」と読み違える。** */
+  await page.waitForSelector('[data-view="weight-graph"] svg', { timeout: 20_000 }).catch(() => {});
+  const graphPoints = await page.evaluate(() => {
+    const host = document.querySelector('[data-view="weight-graph"]');
+    if (!host) return { ok: false, points: 0, why: 'グラフの器そのものが無い' };
+    const line = host.querySelector('polyline');
+    if (!line) return { ok: false, points: 0, why: `線が無い（中身="${host.textContent.trim().slice(0, 40)}"）` };
+    const points = (line.getAttribute('points') || '').trim().split(/\s+/).filter(Boolean);
+    return { ok: points.length >= 2, points: points.length };
+  });
+  check('⑤の体重グラフに線が引かれている（点が2つ以上）',
+    graphPoints.ok, JSON.stringify(graphPoints));
+  /* **要素そのままの `screenshot()` は使わない。** ⑤の器は開いたあとも動いており、
+     Playwright が「静止した」と判断できずに待ち続ける（実測: 30秒でタイムアウト）。
+     位置を測って、画面をその範囲で切る。 */
+  /* **人と同じように、段を開いてから見る。** `#wave-weight` は既定で閉じている
+     （`magazine-view.js` の `wave-card` に `is-open` が無い）。閉じた段の中は
+     大きさ0なので、開かずに撮ると「グラフが無い」ことと区別できない。 */
+  await page.locator('[data-toggle="wave-weight"]').click({ timeout: 10_000 }).catch(() => {});
+  await page.waitForTimeout(500);
+  const graphRect = await page.evaluate(() => {
+    const el = document.querySelector('[data-view="weight-graph"]');
+    if (!el) return null;
+    el.scrollIntoView({ block: 'center' });
+    const r = el.getBoundingClientRect();
+    return { x: r.x, y: r.y, width: r.width, height: r.height, display: getComputedStyle(el).display };
+  });
+  await page.waitForTimeout(400);
+  if (graphRect && graphRect.width > 0 && graphRect.height > 0) {
+    const again = await page.evaluate(() => {
+      const r = document.querySelector('[data-view="weight-graph"]').getBoundingClientRect();
+      return { x: Math.max(0, r.x), y: Math.max(0, r.y), width: r.width, height: r.height };
+    });
+    await page.screenshot({ path: '.human/carry-over/8_体重推移_線が引かれている.png', clip: again })
+      .catch((e) => process.stdout.write(`      （絵が撮れなかった: ${String(e).slice(0, 100)}）\n`));
+  } else {
+    process.stdout.write(`      （グラフの位置が取れない: ${JSON.stringify(graphRect)}）\n`);
+  }
+
   /* ── 7枚目。6枚目から引き継げるか（線が次の回まで続くか）────────── */
   await page.goto(`${worker.base}/edit/p/${petId}`);
   await page.waitForSelector('#screen-3.is-active', { timeout: 20_000 });
@@ -343,6 +409,24 @@ try {
   check('7枚目に、6枚目で足した印まで引き継がれている', seventhMarks === 2, `marks=${seventhMarks}`);
   const seventhNote = await page.inputValue('[data-field="staff-note"]');
   check('7枚目のメッセージは空（6枚目の文が残っていない）', seventhNote === '', `value="${seventhNote.slice(0, 20)}"`);
+  const seventhDiff = (await page.locator('#weight-diff-badge').textContent() || '').trim();
+  check('7枚目の前回比は、6枚目で量った体重（4.6kg）を基準にする',
+    seventhDiff === '前回 4.6kg', `badge="${seventhDiff}"`);
+  await page.locator('.clinical-group:has(#input-weight)').first()
+    .screenshot({ path: '.human/carry-over/7_前回比.png' }).catch(() => {});
+
+  /* ── 作りすぎていないか。**1枚も確定していない犬**では前回比を出さない ──
+     引き継ぎも起きないので、帯も出ない。ここが緑でないと、
+     「初回の犬に前回の数字が見える」形になる（`D-10`）。 */
+  const fresh = await createPet(worker.base, headers, `${label}n`);
+  await page.goto(`${worker.base}/edit/p/${fresh.petId}`);
+  await page.waitForSelector('#screen-3.is-active', { timeout: 20_000 });
+  await page.waitForTimeout(2_000);
+  const freshDiff = (await page.locator('#weight-diff-badge').textContent() || '').trim();
+  check('カルテが1枚も無い犬では「前回の記録なし」のまま',
+    freshDiff === '前回の記録なし', `badge="${freshDiff}"`);
+  const freshBand = await page.locator('#carry-over-undo').isVisible();
+  check('カルテが1枚も無い犬では、引き継ぎの帯を出さない', freshBand === false);
 } finally {
   await page.screenshot({ path: '.human/carry-over-last.png' }).catch(() => {});
   await browser.close();
