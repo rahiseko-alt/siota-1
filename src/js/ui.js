@@ -138,6 +138,9 @@ const App = {
      カルテ作成（screen-3）に入り、その犬の**過去カルテを同じ画面に並べる**
      （`docs/deferred.md` #23・マスター指定 2026-08-26）。 */
   showPetKarte(pet) {
+    /* **印は `selectKarte()` より先に立てる。** `selectKarte()` はその場で
+       `goToStep(3)` を呼ぶので、後から立てると自分の関所に弾かれて②へ戻る。 */
+    this.karteInputReady = true;
     this.selectKarte(pet.petName || '', pet.ownerName || '', '');
     this.renderPastReports(pet);
     /* 使用オプションのボタンを、下書き読み込みより前に組み立てる。
@@ -238,6 +241,68 @@ const App = {
     return labels;
   },
 
+  /* 下書きを再開したとき、**まだ前回のままの項目**を名前で返す。
+     `carryOverLabels()` と組にして使う。
+
+     見つけた事故（2026-09-03・徹底調査）: 引き継いだ直後は帯で
+     「爪・耳・歯・BCS…を引き継ぎました」と出るが、**画面のどこかを1回触ると
+     下書きが1枚でき、次に開いたときは帯だけが消えて値だけが残る**。
+     下書き分岐は `applyCarryOver()` を通らないので、帯を出す場所に届かない。
+     実測では、そのまま残り2項目を埋めると完了バッジが「全項目入力完了 (8/8)」に
+     なり、**前回の所見が今回の所見として飼い主に届く**（`commitReport()` が
+     見るのはコースだけ）。`6fecedc` で消した「何もしていないのに読み込んだと言う」の
+     裏返しで、**何かしているのに何も言わない**（`D-12`）。
+
+     持ち回りの印は増やさない。**手元の前回のカルテと突き合わせて、いま同じものだけを
+     言う。** こうすると「引き継いだから同じ」でも「たまたま同じ値を入れた」でも
+     言っていることは正しい——どちらでも「前回と同じ」は事実。 */
+  carryOverStillSame(draftData, previous) {
+    const carried = this.carryOverReport((previous || {}).data);
+    const draft = draftData || {};
+    const still = {};
+    /* **キーの並び順で比べない。** `JSON.stringify` で突き合わせたら、
+       `{right, left}` と `{left, right}` が別物になり、耳と爪だけ名指しから
+       漏れた（実機で確認）。保存の形は `extractReport()` が決めるので、
+       並び順は約束のうちに入っていない。**値そのものを1つずつ見る。** */
+    const pair = (a, b, k1, k2) => !!a && !!b && a[k1] === b[k1] && a[k2] === b[k2];
+    if (pair(carried.nail, draft.nail, 'front', 'rear')) still.nail = carried.nail;
+    if (pair(carried.ear, draft.ear, 'right', 'left')) still.ear = carried.ear;
+    /* 歯は状態だけを引き継ぐので、**状態だけ**を突き合わせる（写真の有無で外さない）。 */
+    if (carried.teeth && carried.teeth.status
+      && carried.teeth.status === ((draft.teeth || {}).status)) still.teeth = carried.teeth;
+    if (carried.bcs !== undefined && carried.bcs === draft.bcs) still.bcs = carried.bcs;
+    if (carried.bestWeight !== undefined && carried.bestWeight === draft.bestWeight) {
+      still.bestWeight = carried.bestWeight;
+    }
+    const marks = carried.__marks;
+    const drawn = draft.__marks;
+    if (Array.isArray(marks) && Array.isArray(drawn) && marks.length === drawn.length
+      && marks.every((m, i) => m.x === drawn[i].x && m.y === drawn[i].y && m.type === drawn[i].type)) {
+      still.__marks = marks;
+    }
+    return this.carryOverLabels(still);
+  },
+
+  /* 下書きの続きを開いたときに、**前回のままの項目を名指しで出す。**
+     引き継ぎ直後の帯（`applyCarryOver`）と同じ場所を使うが、**「白紙にする」は出さない**
+     ——ここまでに今回の体重やコースが入っていることがあり、`clearCarryOver()` は
+     それも含めて初期値に戻すので、**人が入れたものを消してしまう**。項目そのものは
+     すぐ上に並んでいるので、直すのは1つずつでよい。 */
+  showStillSameBand(labels, previous) {
+    if (!labels || labels.length === 0) return false;
+    const text = document.getElementById('carry-over-text');
+    if (text) {
+      const when = (previous && previous.date) ? `${previous.date} のカルテ` : '前回のカルテ';
+      text.textContent = `${labels.join('・')} は ${when}のままです。`
+        + '今回見た結果に直してから確定してください。';
+    }
+    const clear = document.getElementById('carry-over-clear');
+    if (clear) clear.hidden = true;
+    const band = document.getElementById('carry-over-undo');
+    if (band) band.hidden = false;
+    return true;
+  },
+
   /* 前回の確定カルテから引き継いで、④を「続きから」の状態にする。
      **下書きが1件も無いときだけ**呼ばれる（`resumeDraft`）。
 
@@ -258,6 +323,10 @@ const App = {
       const when = (previous && previous.date) ? `${previous.date} のカルテ` : '前回のカルテ';
       text.textContent = `${when}から ${labels.join('・')} を引き継ぎました。日付・コース・体重・オプション・写真・メッセージは今回の分を入れてください。`;
     }
+    /* 引き継いだ直後は「白紙にする」を出す（まだ何も入っていないので安全）。
+       下書きを再開したときは出さない（`showStillSameBand`）。 */
+    const clear = document.getElementById('carry-over-clear');
+    if (clear) clear.hidden = false;
     const band = document.getElementById('carry-over-undo');
     if (band) band.hidden = false;
     return true;
@@ -306,9 +375,17 @@ const App = {
        引き継ぎ（`applyCarryOver`）は下書きが無いときだけだが、
        **「前回比」は下書きの続きを書くときにも要る**（マスター指示 2026-09-03）。
        ここを「下書きが無いときだけ」にしていたので、続きを書く回は前回比が
-       出なかった。取れなくても記入は続けられるので、失敗は飲む。 */
+       出なかった。取れなくても記入は続けられるので、**記入は止めない**。
+
+       ただし**黙って飲まない**（`D-12`・`docs/watch.md` W-1）。ここを
+       `.catch(() => null)` で握るだけにしていたので、「通信に失敗した」と
+       「前回の記録が本当に無い（初回の子）」が画面で**まったく同じ**に見えていた
+       ——トリマーは常連を初回と誤認し、前回比も引き継ぎも無いまま書き始める。
+       組み替える前（`origin/master`）は外側の `.catch` に落ちて一言出ていたので、
+       これは今回の組み替えで**失われた**もの。失敗した事実だけは持ち帰る。 */
+    let previousFailed = false;
     const previousPromise = staff.findLastFinalReport
-      ? staff.findLastFinalReport(petId).catch(() => null)
+      ? staff.findLastFinalReport(petId).catch(() => { previousFailed = true; return null; })
       : Promise.resolve(null);
 
     Promise.all([staff.findDraft(petId), previousPromise]).then(([draft, previous]) => {
@@ -321,6 +398,13 @@ const App = {
          **計算して記録が無かった**のが区別できない。検査もそこを見分けられない
          （`docs/watch.md` W-1 と同じ形）。 */
       this.renderWeightDiff();
+      /* **前回が読めなかったことを、必ず言う。** 言わないと、常連なのに
+         「初回の子」とまったく同じ画面になる（引き継ぎ無し・前回比「記録なし」）。
+         下の分岐がもっと急ぎの用件を書くことがあるので、**先に**置く。 */
+      if (previousFailed) {
+        const status = document.getElementById('dock-status-text');
+        if (status) status.textContent = '前回のカルテを読み込めませんでした（引き継ぎと前回比は出ません）';
+      }
 
       if (draft) {
         /* **id は必ず引き継ぐ。** 引き継がないと、続きを書いたつもりが新しい
@@ -332,6 +416,10 @@ const App = {
           if (status) status.textContent = '入力中のため、前回の続きは読み込みませんでした';
         } else {
           this.applyReport(draft.data || {});
+          /* **前回のままの項目を、名指しで言う。** 引き継いだ直後は帯が出るが、
+             画面を1回触れば下書きができ、次に開いたときは**帯だけが消えて値が残る**。
+             そのまま確定すると、前回の所見が今回の所見として飼い主に届く。 */
+          this.showStillSameBand(this.carryOverStillSame(draft.data, previous), previous);
         }
         this.watchDraft();
         return;
@@ -386,7 +474,9 @@ const App = {
     if (this.draftSaving) return;
     this.draftSaving = true;
     /* 印は PNG から戻せないので、**印そのもの**も一緒に置く（`__marks`）。
-       ⑥ は読まないキーなので、確定のときに落とす。 */
+       ⑥ は知らないキーを読まないので、飼い主に届くものは変わらない。
+       **確定でも落とさない**（`commitReport()` も同じ形で載せる・マスター指示
+       2026-09-03）——次の回に引き継ぐには印そのものが要るため。 */
     const data = { ...this.extractReport(), __marks: this.marks };
     staff.saveDraft(this.draftPetId, this.draftReportId, data, this.today())
       .then((id) => { this.draftReportId = id; this.draftSaving = false; })
@@ -503,11 +593,21 @@ const App = {
       ? pet.reportId
       : null;
     if (reviseId && report) {
+      /* **④の中身を実際に組み立てる経路**なので、印を立ててよい。
+         `selectKarte()` が `goToStep(3)` を呼ぶので、**その前に**立てる。 */
+      this.karteInputReady = true;
       this.selectKarte(pet.petName || '', pet.ownerName || '', '');
       /* ここも `applyReport` の前に組み立てる（`showPetKarte` と同じ理由）。 */
       this.renderOptionChips(pet.shopGroomingOptions || []);
       this.reviseReportId = reviseId;
       this.applyReport(report);
+      /* **「前回比」を、HTML の初期値のまま残さない。**
+         この経路は `resumeDraft()` を通らないので `currentDog.prevWeight` が入らず、
+         画面には `src/index.html` の初期値「前回の記録なし」がそのまま残っていた
+         ——確定カルテが8枚ある犬でもそう見える（2026-09-03・徹底調査で実機再現）。
+         「計算して記録が無かった」と「一度も計算していない」が区別できない形
+         （`docs/watch.md` W-1）。何を出すかは `renderWeightDiff()` が決める。 */
+      this.renderWeightDiff();
       this.goToStep(3);
       return;
     }
@@ -518,8 +618,9 @@ const App = {
        名前**が見える。`D-14` の問2 が ✕ になった唯一の原因で、絵で見つけた
        （`docs/ops/walk-D14-F3.md` / `docs/deferred.md` #28）。
        保存先は URL の petId なので書けば正しい子に入るが、**人はそれを見出しで
-       確かめる**ので、見えているものが違えば手が止まる。 */
-    this.selectKarte(pet.petName || '', pet.ownerName || '', '');
+       確かめる**ので、見えているものが違えば手が止まる。
+       **移動はしない**（ここは⑤確認へ行く経路）。 */
+    this.setDogIdentity(pet.petName || '', pet.ownerName || '', '');
     /* **描いてから移る。** 先に移ると、描画に失敗したときに空の器へ人を運ぶ。 */
     render(panel, report && {
       petName: pet.petName || '',
@@ -713,16 +814,34 @@ const App = {
        この経路で実際に再現した（2026-09-01・10パターン検証の②③⑥）。
        `＋新規カルテを作成する`（`createNewKarte`）で塞いだのと同じ穴が、
        段のタブにも空いていた——**入口が2つあり、1つしか塞いでいなかった**。
-       すぐ下の screen-4 の穴とまったく同じ形なので、同じ直し方をする。 */
+       すぐ下の screen-4 の穴とまったく同じ形なので、同じ直し方をする。
+
+       **入口は3つあった。** 見るのを `karteReady` にしていたので、⑤確認から
+       段のタブ「03」を押すと関所が効かなかった——`showReport()` が③の見出しを
+       直すために `selectKarte()` を呼び、それが `karteReady` を立てるため
+       （2026-09-03・徹底調査で実機再現）。確定すると必ず⑤に着くので、
+       **本番の動線でそのまま踏める**。開くのは `showPetKarte()` を通っていない ④ で、
+       ⑦使用オプションの帯ごと消え、引き継ぎも前回比も出ない——マスターが
+       「オプションが出ていない」と指摘したのと同じ画面。
+       1つの印に2つの意味（「犬の名前が分かっている」と「④を組み立てた」）を
+       持たせていたのが原因なので、**印を分ける**。 */
     /* 関所を掛けるのは**本番の画面のときだけ**。`/`（仮データ・`npm run walk` の
        F2 経路）では従来どおり素通しする。見るのは `__REPORT__` の印であって
        URL ではない（`init()` と同じ判定）。backend が落ちていて
        `TrimmerSupabaseStaff` が居ないときも、印は在るので関所は効く。 */
-    if (stepNum === 3 && !this.karteReady && '__REPORT__' in globalThis) {
-      globalThis.alert(
-        '先に犬を選んでください。\n\n'
-        + '「02 カルテ検索」の一覧で犬のカードを押すと、その子のカルテ作成画面になります。',
-      );
+    if (stepNum === 3 && !this.karteInputReady && '__REPORT__' in globalThis) {
+      /* **どちらの人に言っているのかで、文言を変える。**
+         犬を一度も選んでいない人（`karteReady` も立っていない）と、
+         ⑤確認まで来た人（この子は分かっているが、④は次の1枚の分として
+         組み立て直しが要る）とでは、次にすることが違う。
+         「先に犬を選んでください」だけだと、いま名前が出ている画面に居る人には
+         意味が通らない。 */
+      globalThis.alert(this.karteReady
+        ? `${this.currentDog.name} の次のカルテを書くときは、\n`
+          + '「02 カルテ検索」でもう一度この子を選んでください。\n\n'
+          + '前回の内容を引き継いだ、新しい1枚から始まります。'
+        : '先に犬を選んでください。\n\n'
+          + '「02 カルテ検索」の一覧で犬のカードを押すと、その子のカルテ作成画面になります。');
       this.goToStep(2);
       return;
     }
@@ -769,11 +888,12 @@ const App = {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   },
 
-  selectKarte(dogName, ownerName, breed) {
-    /* **ここを通ったことが「犬が選ばれている」の印**（`goToStep(3)` の関所が見る）。
-       `magazineReady` と同じ立て付け。実データでは `showPetKarte()` からしか
-       来ないので、印が立っていれば `renderOptionChips()` も必ず走っている。 */
-    this.karteReady = true;
+  /* **犬の名前まわりを合わせるだけ。移動はしない。**
+     ⑤確認（`showReport`）は③の見出しを直すためだけにこれを呼ぶ。以前は
+     `selectKarte()` をそのまま呼んでいたので、**④へ移ろうとして**いた上に
+     「犬が選ばれている」の印まで立ち、⑤から段のタブ「03」を押すと関所が効かなかった
+     （2026-09-03・徹底調査で実機再現）。**移る所と、名前を書く所を分ける。** */
+  setDogIdentity(dogName, ownerName, breed) {
     this.currentDog.name = dogName;
     this.currentDog.owner = ownerName;
     this.currentDog.breed = breed;
@@ -797,7 +917,15 @@ const App = {
     /* フッターの帯は、爪だけでなく8項目の総ざらいで判定する（`updateCompletionStatus`）。
        ここで固定文言を書くと、また「実態と違う帯」に戻る（`D-12`）。 */
     this.updateCompletionStatus();
+  },
 
+  /* ④カルテ作成へ入る。名前を合わせてから移る。 */
+  selectKarte(dogName, ownerName, breed) {
+    /* **ここを通ったことが「犬が選ばれている」の印。**
+       ただし `goToStep(3)` の関所が見るのは**こちらではない**——印が2つに
+       分かれている理由は `goToStep()` の関所の注記にある。 */
+    this.karteReady = true;
+    this.setDogIdentity(dogName, ownerName, breed);
     this.goToStep(3);
   },
 
@@ -1120,6 +1248,16 @@ const App = {
   renderWeightDiff() {
     const badge = document.getElementById('weight-diff-badge');
     if (!badge) return;
+    /* **過去のカルテを直しているときは、比べない。**
+       比べる相手は「いまの前回」ではなく「そのカルテの1つ前」なので、
+       手元にあるもので答えると嘘になる。取っていないものを推測で埋めない（`D-10`）。
+       ここに置くのは、体重を打ち直すたびに `onWeightChange()` から呼ばれるため
+       ——入口（`showReport()`）で1回書くだけでは、打ち直した瞬間に戻ってしまう。 */
+    if (this.reviseReportId) {
+      badge.className = 'weight-diff-badge';
+      badge.textContent = 'カルテ修正中（前回比は出しません）';
+      return;
+    }
     const prev = Number(this.currentDog.prevWeight);
     if (!Number.isFinite(prev) || prev <= 0) {
       badge.className = 'weight-diff-badge';

@@ -1935,7 +1935,7 @@ button, input, textarea, select {
                1枚も確定カルテが無い犬（初回）では帯ごと出ない。中身は `ui.js` が入れる。 -->
           <div class="carry-over" id="carry-over-undo" hidden>
             <span class="carry-over__text" id="carry-over-text"></span>
-            <button type="button" class="carry-over__clear" onclick="App.clearCarryOver()">引き継ぎをやめて白紙にする</button>
+            <button type="button" class="carry-over__clear" id="carry-over-clear" onclick="App.clearCarryOver()">引き継ぎをやめて白紙にする</button>
           </div>
 
           <!-- 0. 来店日・コース（マスター指示 2026-08-29）
@@ -2003,7 +2003,12 @@ button, input, textarea, select {
               <button class="stepper-btn" onclick="App.selectStepper(this, 'bcs', 2)">
                 <span class="val">2</span><span class="desc">やや細い</span>
               </button>
-              <button class="stepper-btn is-active" onclick="App.selectStepper(this, 'bcs', 3)">
+              <!-- **既定で点けない。** 点けても `App.form.bcs` は 0 のままで、確定しても
+                   `data.bcs` は書かれない（`extractReport()` は真の値だけ書く）。つまり
+                   「3 適正」が選ばれて見えるのに、飼い主へは何も届かない——トリマーが
+                   画面を信じて触らないほど記録が消える。ドックの「未記入: BCS」とも
+                   食い違っていた。選ばれるまで、どれも点けない（`D-12`）。 -->
+              <button class="stepper-btn" onclick="App.selectStepper(this, 'bcs', 3)">
                 <span class="val">3</span><span class="desc">適正</span>
               </button>
               <button class="stepper-btn" onclick="App.selectStepper(this, 'bcs', 4)">
@@ -2068,7 +2073,9 @@ button, input, textarea, select {
             <div>
               <div style="font-size: 11px; font-weight: 700; text-align: center; margin-bottom: 4px; background: var(--bg-paper); padding: 3px;">右耳 (R)</div>
               <div class="teeth-selector-grid" data-ear="right">
-                <button class="teeth-pill-btn is-active" data-level="1" onclick="App.selectEarLevel(this)"><span class="name">Lv.1 良好</span><span class="sub">問題なし</span></button>
+                <!-- 既定で点けない（BCS と同じ理由・`D-12`）。点いていても `App.form.ear` は 0 で、
+                     確定しても `data.ear` は書かれない。「Lv.1 良好」に見えるのに何も届かない。 -->
+                <button class="teeth-pill-btn" data-level="1" onclick="App.selectEarLevel(this)"><span class="name">Lv.1 良好</span><span class="sub">問題なし</span></button>
                 <button class="teeth-pill-btn" data-level="2" onclick="App.selectEarLevel(this)"><span class="name">Lv.2 やや汚れ</span><span class="sub">軽い汚れ</span></button>
                 <button class="teeth-pill-btn" data-level="3" onclick="App.selectEarLevel(this)"><span class="name">Lv.3 汚れあり</span><span class="sub">要清掃</span></button>
                 <button class="teeth-pill-btn" data-level="4" onclick="App.selectEarLevel(this)"><span class="name">Lv.4 赤み</span><span class="sub">軽い炎症</span></button>
@@ -2079,7 +2086,9 @@ button, input, textarea, select {
             <div style="margin-top: 10px;">
               <div style="font-size: 11px; font-weight: 700; text-align: center; margin-bottom: 4px; background: var(--bg-paper); padding: 3px;">左耳 (L)</div>
               <div class="teeth-selector-grid" data-ear="left">
-                <button class="teeth-pill-btn is-active" data-level="1" onclick="App.selectEarLevel(this)"><span class="name">Lv.1 良好</span><span class="sub">問題なし</span></button>
+                <!-- 既定で点けない（BCS と同じ理由・`D-12`）。点いていても `App.form.ear` は 0 で、
+                     確定しても `data.ear` は書かれない。「Lv.1 良好」に見えるのに何も届かない。 -->
+                <button class="teeth-pill-btn" data-level="1" onclick="App.selectEarLevel(this)"><span class="name">Lv.1 良好</span><span class="sub">問題なし</span></button>
                 <button class="teeth-pill-btn" data-level="2" onclick="App.selectEarLevel(this)"><span class="name">Lv.2 やや汚れ</span><span class="sub">軽い汚れ</span></button>
                 <button class="teeth-pill-btn" data-level="3" onclick="App.selectEarLevel(this)"><span class="name">Lv.3 汚れあり</span><span class="sub">要清掃</span></button>
                 <button class="teeth-pill-btn" data-level="4" onclick="App.selectEarLevel(this)"><span class="name">Lv.4 赤み</span><span class="sub">軽い炎症</span></button>
@@ -2114,7 +2123,8 @@ button, input, textarea, select {
             </div>
 
             <div class="teeth-selector-grid" id="teeth-selector-grid">
-              <button class="teeth-pill-btn is-active" onclick="App.selectTeeth(this)">
+              <!-- 既定で点けない（BCS・耳と同じ理由・`D-12`）。 -->
+              <button class="teeth-pill-btn" onclick="App.selectTeeth(this)">
                 <span class="name">ピカピカ✨</span>
                 <span class="sub">歯石なし良好</span>
               </button>
