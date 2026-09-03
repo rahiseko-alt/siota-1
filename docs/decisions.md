@@ -919,3 +919,41 @@
   画面外に切れるボタンが 0 件、ページ自体の横スクロールも無い**ことを実測
 - **Impact**: 「フケ」「全部消す」が画面の外に隠れなくなった。狭い画面向けの
   文字縮小（`@media`）は、新しい `.mark-mode-btn` / `.mark-undo-btn` にも効かせた
+
+### [D-20260902-62] 旧 KV 版 Worker と KV モードのコードを、全部削除する（第12章 `#22`）
+
+- **日付**: 2026-09-02
+- **決めた人**: マスター
+- **問い**: 旧 KV Worker（`saltydog-report-worker`）を、切り戻し用に残すか削除するか
+- **回答**: 「22は削除」→「全て削除」（Worker だけでなく KV 関連すべて、の意）
+- **決定**: **Supersedes `D-20260823-09`**（「切り戻せるように Worker は残す」）。
+  切り戻し先を持たない代わりに、**誰も通らない道に無認証の API が生き続ける状態**を
+  無くす。実際 2026-08-24 に、この Worker の workers.dev 経由で
+  `/api/customers` が誰でも 200 で読め、`DELETE /api/owners/{slug}` の
+  カスケード削除まで無認証で通ることが見つかっている（`docs/decisions.md` の
+  2026-08-24 の記述）。**設定で閉じているだけの無認証 API は、設定が戻れば開く。**
+- **消したもの**（リポジトリ側）:
+  - `worker/wrangler.toml`（KV 版 Worker の設定・唯一の切り戻し手順が書かれていた）
+  - `worker/src/index.js` の KV モード全経路（`/api/customers` `/api/owners`
+    `/api/reports`、`/p/*` `/o/*` `/edit/*` の KV 版、`readJSON`/`writeJSON` ほか
+    到達しなくなった26関数）。**1168行 → 507行**
+  - `worker/src/data-stores/kv-data-store.js` と `create-data-store.js`
+    （2つの backend を選び分ける工場。既定値が `'kv'` だったので、
+    `DATA_BACKEND` の設定漏れが**黙って KV に落ちる**造りでもあった）
+  - `DATA_BACKEND` 変数（3つの wrangler 設定から）とコード側の分岐
+  - KV→Supabase の移行ツール一式（`scripts/migrate-kv-to-supabase.mjs`、
+    `scripts/lib/kv-export-parser.mjs`、`scripts/lib/supabase-migration-target.mjs`、
+    `test/kv-migration.test.mjs`、`test/fixtures/kv-export.json`）。移行は完了済み
+  - `test/worker-unit.test.mjs`（5件・**全件が KV ルートの検査**）。
+    **検査を弱めて緑にしたのではない**（`A-4`）——検査していた機能そのものを、
+    マスターの決定で消したため。Supabase 側の検査は1本も減っていない
+- **まだ残っている作業**: **Cloudflare 上の Worker 実体の削除**。資格情報を私は
+  受け取らないので（`A-1`）、マスターが Cloudflare の画面で
+  `saltydog-report-worker` を削除する（Workers & Pages → 該当 Worker →
+  Settings → Delete）。リポジトリからは配れなくなっているので、
+  消し忘れても新たに更新されることはない
+- **裏づけ**: `npm run build` / `npm test`（199件）/ `npm run check` いずれも EXIT 0。
+  さらに**ローカルの実 Supabase を起動して `verify:*` を15本すべて実測**
+  （portal / edit / xss / roundtrip / empty / screens / delete / draft / invitation /
+  m6 / admin / photo / revisit / options / first-run）、**全部 PASS**。
+  つまり KV の経路を全部落としても、飼い主に届くところまで壊れていない

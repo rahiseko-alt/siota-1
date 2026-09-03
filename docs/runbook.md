@@ -154,11 +154,10 @@ node scripts/swap-image.mjs login-photo /path/to/新しい写真.png
 
 ### A. Worker をデプロイ
 
-> **⚠️ 2026-08-27 訂正。** 下の旧手順（`worker/` で `npx wrangler deploy`）は
-> **`wrangler.toml`＝KV 版（`saltydog-report-worker`）を配ってしまう。**
-> F6（2026-08-23）で独自ドメインは **Supabase 版（`shiota0823`）** に移っており、
-> KV 版はルートを外して残してあるだけ。旧手順を流しても**本番は変わらない**
-> （実測: 本番の `/api/config` は `backend:"supabase"` を返す）。
+> **⚠️ 2026-09-02。** 設定ファイルを指定しない `npx wrangler deploy` は使えない。
+> **`worker/wrangler.toml`（KV 版・`saltydog-report-worker`）は削除した**
+> （`D-20260902-62`）。配り先は **Supabase 版（`shiota0823`）** 1本だけなので、
+> 手元から出すときは `--config wrangler.supabase.toml` を必ず付けること。
 
 **出し方は2つある。** 手元にリポジトリが無いなら **A-1（GitHub の画面）**を使う。
 
@@ -198,17 +197,8 @@ npm run verify:prod
 - **合格の判定は `npm run verify:prod` が 4/4 PASS**。deploy が「成功」と出ても、
   配信物が手元と違えばここで落ちる（`D-12`「押せた ではなく 届いた で見る」）。
 - 切り戻しは、Cloudflare の画面でその Worker の1つ前の版に戻す（Deployments → Rollback）。
-
-<details><summary>旧手順（KV 版・参考）</summary>
-
-```powershell
-cd worker
-npx wrangler deploy
-```
-
-`wrangler.toml`（`saltydog-report-worker`）が参照される。**独自ドメインには出ない。**
-
-</details>
+  **KV 版 Worker への切り戻しはもう無い**（2026-09-02 に削除・`D-20260902-62`）。
+  戻せるのは `shiota0823` の過去の版だけ。
 
 ### B. Pages をデプロイ（dist の絶対パス指定）
 

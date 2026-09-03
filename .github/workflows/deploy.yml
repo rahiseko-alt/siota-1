@@ -14,7 +14,7 @@
 #
 # 出す先: **Supabase 版 Worker `shiota0823`**（`worker/wrangler.supabase.toml`）。
 #   独自ドメイン `trimmer-system.kouheikosehira.com` を配信しているのはこちら。
-#   `worker/wrangler.toml`（KV 版）を出しても本番は変わらない——`docs/runbook.md` の訂正を参照。
+#   2026-09-02 に旧 KV 版（`worker/wrangler.toml`）を削除したので、配り先はこれ1本。
 #
 # 必要な Secrets（Settings → Secrets and variables → Actions）:
 #   CLOUDFLARE_API_TOKEN   … 権限「Edit Cloudflare Workers」
