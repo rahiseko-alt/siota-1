@@ -957,3 +957,21 @@
   （portal / edit / xss / roundtrip / empty / screens / delete / draft / invitation /
   m6 / admin / photo / revisit / options / first-run）、**全部 PASS**。
   つまり KV の経路を全部落としても、飼い主に届くところまで壊れていない
+
+### [D-20260902-63] 未参照のアイコン5点は削除する（第12章 `#5`）
+
+- **日付**: 2026-09-02
+- **決めた人**: マスター
+- **問い**: `icon-ear/nail/skin/spa/weight.png`（各 512x512・計約 640KB）を、
+  ④カルテ入力の見出しに置くか、削除するか
+- **回答**: 「5個のアイコンはすべて削除」
+- **決定**: 削除する。**どの画面からも一度も参照されていない**まま、`dist/` へ
+  コピーされて本番で配信されていた（URL を知れば誰でも取れる）。
+  意匠モック `design/mock-4step.html` も番号の丸だけで、この5点は最初から未採用。
+  2026-08-24 に未参照の画像7件を消したのと同じ理由（`D-4`「出所未確認の素材を
+  外部公開物へ転載禁止」）。5点はいずれも `UNVERIFIED`（出所未確認）だった
+- **Impact**: `src/assets/` から `git rm`。`docs/ASSET-PROVENANCE.md` の
+  「`icon-*.png` は残存・使用中」という記載は**誤りだった**ので訂正した。
+  公開前の宿題（`UNVERIFIED` の出所確認）からも5件が外れ、残るは
+  `teeth-diagram.jpg` と `body-side.png` の2件。`body-side.png` は
+  画面に到達しているので残す。履歴からは戻せる
