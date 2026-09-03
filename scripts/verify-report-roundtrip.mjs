@@ -72,6 +72,36 @@ try {
   check('0. 検査用の犬を登録できた', petRes.status, 201);
   const pet = (await petRes.json()).pet;
 
+  /* **前回の来店を1回ぶん置く。** 体重の推移は確定カルテを横断して組み立てるので、
+     いま書く1枚だけでは点が1つしか乗らず、`polyline` は線を引けない。
+     ここを置かないと `14c.` は「線が無い」と「線を引く材料が無い」を区別できない
+     （`empty-pass` の型）。前回 3.20kg → 今回 `INPUT.weight` で線になる。
+
+     **`#46` を埋めるために足した**（2026-09-03・徹底調査）。それまで⑥飼い主の画面で
+     線が引かれることを見る検査は1本も無く、「⑤と⑥は同一レンダラだから飼い主にも
+     届く」という**推論**だけだった。実測: `supabase-auth.js` を
+     `weightHistory: null` に壊しても、この検査は 34/34 PASS のままだった。 */
+  const PREV_KG = 3.2;
+  const prevRes = await fetch(`${BASE}/api/pets/${pet.id}/reports`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({
+      petId: pet.id,
+      reportDate: '2026-07-01',
+      data: {
+        course: '前回のコース',
+        weights: [{ ym: '2026-07', date: '2026-07-01', kg: PREV_KG }],
+      },
+    }),
+  });
+  check('0b. 前回の来店を1回ぶん置けた（推移の線を引く材料）', prevRes.status, 201);
+  const prevReportId = (await prevRes.json()).report.id;
+  const prevFinal = await fetch(
+    `${BASE}/api/pets/${pet.id}/reports/${prevReportId}/finalize`,
+    { method: 'POST', headers: authHeaders },
+  );
+  check('0c. 前回のカルテを確定できた（確定分だけが推移に乗る）', prevFinal.status, 200);
+
   browser = await launchChromium();
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const pageErrors = [];
@@ -231,6 +261,17 @@ try {
          （`F-20260828-51`）。中の要素を数える（枠が在るだけでは通さない）。 */
       weightGraphNodes: (document.querySelector('[data-view="weight-graph"]') || {})
         .childElementCount ?? -1,
+      /* **枠の中に何か在るだけでは通さない。** `childElementCount > 0` は
+         **点1つでも緑**になるので、`weightHistory` が届かず今回の1件に落ちても
+         気づけなかった（`#46`・2026-09-03 の徹底調査）。
+         線そのもの（`polyline`）の点を数える。2点未満では線は引けない。 */
+      weightGraphPoints: (() => {
+        const host = document.querySelector('[data-view="weight-graph"]');
+        if (!host) return -1;
+        const line = host.querySelector('polyline');
+        if (!line) return 0;
+        return (line.getAttribute('points') || '').trim().split(/\s+/).filter(Boolean).length;
+      })(),
       /* 犬体図の印が**画像として**届いているか。`asset://` のままだと出ない。 */
       skinImage: (document.querySelector('[data-view="skin-image"]') || {}).getAttribute
         ? (document.querySelector('[data-view="skin-image"]').getAttribute('src') || '')
@@ -298,6 +339,17 @@ try {
   check('14. 飼い主: 体重', ownerView.weightPill, `${INPUT.weight}kg`);
   check('14b. 飼い主: 体重のグラフが描かれている（数字だけでなく）',
     ownerView.weightGraphNodes > 0 ? 'ok' : `中の要素=${ownerView.weightGraphNodes}`, 'ok');
+  /* **飼い主の画面で、線が実際に引かれているか。**
+     ここが `#46`。`14b.` は枠の中に要素が在るかしか見ないので点1つでも緑になり、
+     ⑥へ `weightHistory` を渡す配線を切っても 34/34 PASS のままだった（実測）。
+     前回 3.2kg ＋ 今回で2点。**⑤で見て⑥を推論する**のをやめ、飼い主の画面で数える。 */
+  check('14c. 飼い主: 体重推移に線が引かれている（点が2つ以上）',
+    ownerView.weightGraphPoints >= 2 ? 'ok' : `点=${ownerView.weightGraphPoints}`, 'ok');
+  /* **点の数はちょうど2**。この犬の確定カルテは前回と今回の2枚だけなので、
+     3以上なら別の犬の体重を混ぜているか、下書きを数えている（`status=eq.final` の門）。
+     1以下なら履歴が届いていない。`>= 2` だけだと、混ざったときに気づけない。 */
+  check('14d. 飼い主: 推移の点が、確定カルテの枚数（2枚）と合っている',
+    ownerView.weightGraphPoints, 2);
   check('15. 飼い主: 犬体図の印が画像として届く',
     /^(blob:|data:image)/.test(ownerView.skinImage) ? 'ok' : `src=${ownerView.skinImage.slice(0, 40)}`, 'ok');
   check('16. 飼い主: 壊れた画像（ページURL）が出ていない', ownerView.pageUrlImgs, 0);
