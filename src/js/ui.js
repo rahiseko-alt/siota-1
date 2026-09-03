@@ -188,6 +188,101 @@ const App = {
      しかも消えたことに気づけない（`D-20260824-30` の 1 と 7）。 */
 
   /** 前回の続きを読み込む。無ければ何もしない（新規のまま）。 */
+  /* 前回の確定カルテから、**次の回でも変わらない項目だけ**を取り出す
+     （マスター指示 2026-09-03）。入るのも出るのもただのオブジェクトで、
+     画面も通信も触らない——1項目ずつ検査できる形にしておく。
+
+     **空にするもの**（毎回変わる／確認せずに届くと事故になる）:
+       来店日・コース・トリマーからのメッセージ・体重・使用オプション・写真3種。
+       写真とメッセージは、撮り直さず書き直さずに確定すると
+       **前回のものが今回のカルテとして飼い主に届く**。
+
+     **引き継ぐもの**（急には変わらない所見）:
+       爪（前足・後ろ足）・耳（右・左）・歯の状態・BCS・ベスト体重・犬体図の印。
+
+     空になったキーは**キーごと出さない**（空の器を作らない＝`D-10`）。 */
+  carryOverReport(previous) {
+    const source = previous && typeof previous === 'object' ? previous : {};
+    const carried = {};
+
+    if (source.nail && (source.nail.front || source.nail.rear)) {
+      carried.nail = { front: source.nail.front, rear: source.nail.rear };
+    }
+    /* 耳は段だけ。`photo` は連れてこない。 */
+    if (source.ear && (source.ear.right || source.ear.left)) {
+      carried.ear = { right: source.ear.right, left: source.ear.left };
+    }
+    /* 歯も状態だけ。`photos` は連れてこない。 */
+    if (source.teeth && source.teeth.status) {
+      carried.teeth = { status: source.teeth.status };
+    }
+    if (source.bcs) carried.bcs = source.bcs;
+    if (source.bestWeight) carried.bestWeight = source.bestWeight;
+    /* 犬体図の印。**焼いた PNG（`bodyMarkingImage`）からは復元できない**ので、
+       確定カルテにも `__marks` を載せてある（`commitReport()`）。 */
+    if (Array.isArray(source.__marks) && source.__marks.length > 0) {
+      carried.__marks = source.__marks;
+    }
+    return carried;
+  },
+
+  /** 引き継いだものを、名前で言う。**引き継いでいないものを言わない。** */
+  carryOverLabels(carried) {
+    const labels = [];
+    if (carried.nail) labels.push('爪');
+    if (carried.ear) labels.push('耳');
+    if (carried.teeth) labels.push('歯');
+    if (carried.bcs) labels.push('BCS');
+    if (carried.bestWeight) labels.push('ベスト体重');
+    if (carried.__marks) labels.push('犬体図の印');
+    return labels;
+  },
+
+  /* 前回の確定カルテから引き継いで、④を「続きから」の状態にする。
+     **下書きが1件も無いときだけ**呼ばれる（`resumeDraft`）。
+
+     ここで嘘をつかないこと。以前の「前回を複製」（`cloneAndCreate`・`6fecedc` で削除）は
+     「過去カルテデータを読み込みました」と出しながら**何も複製していなかった**。
+     出す文言は、実際に引き継いだ項目だけを名指しする。 */
+  applyCarryOver(previous) {
+    const carried = this.carryOverReport(previous && previous.data);
+    const labels = this.carryOverLabels(carried);
+    if (labels.length === 0) return false;
+    this.applyReport(carried);
+    this.carriedOver = true;
+    /* **ドックの状態欄には書かない。** あそこは「未記入: 爪のチェック」を出す場所で、
+       次の打鍵で `updateCompletionStatus()` に上書きされる。引き継ぎの告知は
+       消えては困るので、専用の帯を持つ。 */
+    const text = document.getElementById('carry-over-text');
+    if (text) {
+      const when = (previous && previous.date) ? `${previous.date} のカルテ` : '前回のカルテ';
+      text.textContent = `${when}から ${labels.join('・')} を引き継ぎました。日付・コース・体重・オプション・写真・メッセージは今回の分を入れてください。`;
+    }
+    const band = document.getElementById('carry-over-undo');
+    if (band) band.hidden = false;
+    return true;
+  },
+
+  /* 引き継ぎをやめて白紙に戻す。**まだ何も保存していない**段階なので、
+     消えて困るものは無い（人が1つでも触れば `watchDraft()` が下書きを作る）。 */
+  clearCarryOver() {
+    /* 初期値の形は `App.form` の宣言と揃える（`0` / `''` / `[]`）。
+       ここだけ `null` にすると、`updateCompletionStatus()` の未記入判定が
+       別の見方をすることになる。 */
+    this.form = {
+      nail: { front: 0, rear: 0 }, ear: { right: 0, left: 0 }, teeth: '', weight: 0,
+      bcs: 0, bestWeight: 0, options: [],
+    };
+    this.marks = [];
+    document.querySelectorAll('#screen-3 .stepper-btn.is-active').forEach((el) => el.classList.remove('is-active'));
+    document.querySelectorAll('#screen-3 .teeth-pill-btn.is-active').forEach((el) => el.classList.remove('is-active'));
+    this.drawCanvas();
+    this.updateCompletionStatus();
+    this.carriedOver = false;
+    const band = document.getElementById('carry-over-undo');
+    if (band) band.hidden = true;
+  },
+
   resumeDraft(petId) {
     const staff = globalThis.TrimmerSupabaseStaff;
     if (!staff || !staff.findDraft || !petId) return;
@@ -219,8 +314,22 @@ const App = {
         } else {
           this.applyReport(draft.data || {});
         }
+        this.watchDraft();
+        return null;
       }
-      this.watchDraft();
+      /* **下書きが1枚も無い＝この犬の新しい1枚を、いまから書く。**
+         前回の確定カルテから、変わらない項目だけを引き継いで始める
+         （マスター指示 2026-09-03）。下書きが在るときは下書きが勝つ——
+         書きかけを前回の内容で上書きしない。 */
+      if (this.draftTouched || !staff.findLastFinalReport) {
+        this.watchDraft();
+        return null;
+      }
+      return staff.findLastFinalReport(petId).then((previous) => {
+        /* 往復のあいだに打たれていたら引き継がない（`D-20260824-30` の型）。 */
+        if (previous && !this.draftTouched) this.applyCarryOver(previous);
+        this.watchDraft();
+      });
     }).catch(() => {
       /* 読み込めなくても記入は続けられる。**続きから書けないことだけは伝える。** */
       const status = document.getElementById('dock-status-text');
@@ -1289,10 +1398,16 @@ const App = {
       clearTimeout(this.draftTimer);
       /* 直しているのか、新しく書いているのか。**ここを間違えると、直したつもりが
          2枚目のカルテになって飼い主に2通届く。** */
+      /* **確定にも `__marks` を載せる**（マスター指示 2026-09-03）。
+         犬体図の印は `bodyMarkingImage`（焼いた PNG）としてしか残っておらず、
+         **PNG からは印を復元できない**。次の回で引き継ぐには、印そのものが要る。
+         `saveDraft()` が下書きに載せているのと同じ形。⑥は知らないキーを読まないので、
+         飼い主に届くものは変わらない（`extractReport()` は⑥向けのまま触らない）。 */
+      const payload = { ...this.extractReport(), __marks: this.marks };
       const saved = this.reviseReportId
-        ? await staff.reviseReport(context.petId, this.reviseReportId, this.extractReport())
+        ? await staff.reviseReport(context.petId, this.reviseReportId, payload)
         : await staff.saveReport(
-          context.petId, this.extractReport(), this.today(), this.draftReportId,
+          context.petId, payload, this.today(), this.draftReportId,
         );
       /* **番号が入っているところまで確かめてから移る。** `encodeURIComponent` は
          `null`／`undefined` を**文字列**に変えてしまうので、欠けていても URL は

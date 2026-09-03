@@ -1034,6 +1034,32 @@ button, input, textarea, select {
 }
 .timeline-chips-tray::-webkit-scrollbar { display: none; }
 
+/* 前回からの引き継ぎの告知（マスター指示 2026-09-03）。 */
+.carry-over {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-paper);
+  padding: 8px 10px;
+  margin-bottom: 12px;
+}
+/* **`hidden` を CSS で潰さない。** `display: flex` を素で書くと
+   ブラウザ既定の `[hidden] { display: none }` を上書きしてしまい、
+   引き継ぎが起きていない犬（初回の子）にも空の帯が出る。 */
+.carry-over[hidden] { display: none; }
+.carry-over__text { font-size: 11px; line-height: 1.5; color: var(--ink-body); }
+.carry-over__clear {
+  border: 1px solid var(--border-subtle);
+  background: #ffffff;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
 .past-reports { margin: 0 0 18px; }
 .past-reports__label {
   font-size: 11px; font-weight: 700; letter-spacing: .08em;
@@ -1900,6 +1926,16 @@ button, input, textarea, select {
           <div class="past-reports" id="past-reports" hidden>
             <div class="past-reports__label">この子の過去カルテ</div>
             <div class="past-reports__list" id="past-reports-list"></div>
+          </div>
+
+          <!-- 前回からの引き継ぎ（マスター指示 2026-09-03）
+               常連の6枚目を「前回の続き」から書き始められるようにした。
+               **引き継いだ項目だけを名指しする。** 以前の「前回を複製」は
+               「読み込みました」と言いながら何も複製していなかった（`6fecedc` で削除）。
+               1枚も確定カルテが無い犬（初回）では帯ごと出ない。中身は `ui.js` が入れる。 -->
+          <div class="carry-over" id="carry-over-undo" hidden>
+            <span class="carry-over__text" id="carry-over-text"></span>
+            <button type="button" class="carry-over__clear" onclick="App.clearCarryOver()">引き継ぎをやめて白紙にする</button>
           </div>
 
           <!-- 0. 来店日・コース（マスター指示 2026-08-29）
