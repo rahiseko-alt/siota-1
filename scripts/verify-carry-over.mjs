@@ -215,7 +215,20 @@ try {
   });
   check('犬体図に前回の印が描かれている', marked.ok, JSON.stringify(marked));
 
-  await page.screenshot({ path: '.human/carry-over-06.png', fullPage: true }).catch(() => {});
+  /* **人が見て判定できる絵を残す**（マスター指示 2026-09-01:
+     「受け入れ条件は人間と同じ操作をしてスクショで画像確認できること」）。
+     全画面1枚は高さ13000pxを超えて人が読めないので、**判定できる単位で切る**。
+     この検査は合否も出すが、絵は絵で人が確かめられるようにしておく（`D-14`）。 */
+  const shot = async (name, selector) => {
+    await page.locator(selector).first().screenshot({ path: `.human/carry-over/${name}.png` })
+      .catch(() => {});
+  };
+  await shot('1_引き継ぎの帯', '.carry-over');
+  await shot('2_来店日とコース_空のまま', '.clinical-group:has(#input-visit-date)');
+  await shot('3_爪_前回から引き継ぎ', '.clinical-group:has([data-group="nail"])');
+  await shot('4_耳と歯_前回から引き継ぎ', '.clinical-group:has([data-ear="right"])');
+  await shot('5_体重とBCS_体重だけ空', '.clinical-group:has(#input-weight)');
+  await shot('6_犬体図_前回の印', '.body-marking-tool');
 
   /* ── 触らずに閉じたら、下書きは生えていないか ────────────────── */
   const drafts = await countDrafts(worker.base, headers, petId);

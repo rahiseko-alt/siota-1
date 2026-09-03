@@ -85,6 +85,13 @@
 
 <!-- 証拠を書いたら、下の「未証明」から1行ここへ移す。 -->
 
+### 管理者の入口 3件（2026-09-03・28回目の実測）
+
+- verify-admin.mjs :: 1. 管理者も、みんなと同じカルテ画面に着く
+- verify-admin.mjs :: 1b. 管理者には「管理」の入口が見えていて、指が届く
+- verify-admin.mjs :: 1c. 「管理」を押すと管理画面に着く
+
+
 ### 6枚目を前回の続きから始める 20件（2026-09-03・27回目の実測）
 
 - verify-carry-over.mjs :: 来店日が空
@@ -1933,6 +1940,55 @@ FAIL  引き継いだ印に、今回の印を足せる  marks=1
 
 **まだ見ていない20件**は下の「未証明」に名前で残す。
 
+### 28回目: 管理者の入口3件（2026-09-03・**手元で実測**）
+
+`0-AK`（2026-09-02）で仕様を「入口は1つ、管理者にだけ『管理』が出る」に作り替えたとき、
+`verify-admin.mjs` の `1.` `1b.` `1c.` を新設したが、**赤になるところを見ないまま**
+未証明に置いていた。`delivery-ready.mjs` / `gate.mjs --end` が閉じられない唯一の原因が
+これだったので、3件とも壊して赤を見た。
+
+壊し方を2つ足した（`admin-lands-elsewhere` / `admin-link-wrong-destination`）。
+`admin-link-hidden` は既にあったもの。**1件ごとに、狙った行だけが赤になる**ように
+分けてある——入口を消すと押した先まで届かないので、`1c.` は「押せるが行き先が違う」
+別の壊し方でないと測れない。
+
+**`admin-lands-elsewhere`: 管理者だけ着く先が変わる**（2026-08-26 まで実際にそうだった形）
+
+```
+supabase-auth.js: location.replace('/edit')
+  → location.replace(admin ? '/admin' : '/edit')
+
+FAIL  1. 管理者も、みんなと同じカルテ画面に着く  path=/admin
+FAIL  1b. 管理者には「管理」の入口が見えていて、指が届く  出ていない
+0/3 PASS
+```
+
+**`admin-link-hidden`: 管理者にも「管理」が出ない**（今回マスターが実際に詰まった形）
+
+```
+supabase-staff.js: adminLink.hidden = false → true
+
+PASS  1. 管理者も、みんなと同じカルテ画面に着く  path=/edit
+FAIL  1b. 管理者には「管理」の入口が見えていて、指が届く  出ていない
+1/3 PASS
+```
+
+**`admin-link-wrong-destination`: 押せるが、行き先が違う**（`D-12`「押せた ではなく 着いた」）
+
+```
+index.html: <a href="/admin" … data-admin-link> → href="/edit"
+
+PASS  1. 管理者も、みんなと同じカルテ画面に着く  path=/edit
+PASS  1b. 管理者には「管理」の入口が見えていて、指が届く  left=90 right=126 幅=390
+FAIL  1c. 「管理」を押すと管理画面に着く  path=/edit
+2/4 PASS
+```
+
+**注意**: `node scripts/mutate-run.mjs admin-link-wrong-destination` の要約は
+この3件を「1. と 1b. が赤」と**取り違えて出す**（実際は `1c.` だけが赤）。
+上の出力は `npm run verify:admin` を直接回して読んだもの。要約の取り違えは
+`docs/ops/plan.md` 第12章 `#44` へ。
+
 ## 未証明（**壊して赤になるところを、まだ見ていない**）
 
 - verify-carry-over.mjs :: 土台: 確定カルテが5枚ある犬を作った
@@ -1957,9 +2013,6 @@ FAIL  引き継いだ印に、今回の印を足せる  marks=1
 > 壊し方の台帳（`mutate-run.mjs`）も `admin-redirect-off` → `admin-link-hidden` に
 > 差し替えてあり、**件数は減らしていない**。
 
-- verify-admin.mjs :: 1. 管理者も、みんなと同じカルテ画面に着く
-- verify-admin.mjs :: 1b. 管理者には「管理」の入口が見えていて、指が届く
-- verify-admin.mjs :: 1c. 「管理」を押すと管理画面に着く
 
 - verify-stack.mjs :: seed のアカウントで実ログインできる #2
 - verify-stack.mjs :: マイグレーションと seed が当たっている（seed の犬 X を id で引ける） #2
