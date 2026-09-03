@@ -2,8 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { createPetSchema, parseJson } from '../worker/src/api-schemas.js';
-import { createDataStore } from '../worker/src/data-stores/create-data-store.js';
-import { KvDataStore } from '../worker/src/data-stores/kv-data-store.js';
 import { StoreError, SupabaseDataStore } from '../worker/src/data-stores/supabase-data-store.js';
 import worker from '../worker/src/index.js';
 
@@ -17,12 +15,6 @@ function supabaseEnv(fetchImpl) {
     FETCH: fetchImpl,
   };
 }
-
-test('factory defaults to the legacy KV store', () => {
-  const store = createDataStore({ REPORTS: {} }, null);
-  assert.ok(store instanceof KvDataStore);
-  assert.equal(store.backend, 'kv');
-});
 
 test('Zod parser rejects unknown fields and malformed UUIDs', async () => {
   const unknown = await parseJson(new Request('https://test.local', {

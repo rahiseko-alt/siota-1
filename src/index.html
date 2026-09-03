@@ -706,8 +706,13 @@ button, input, textarea, select {
    写真1枚ごとの使い捨てオーバーレイをその場で作る。 */
 .annotate-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 999; display: flex; align-items: center; justify-content: center; padding: 16px; }
 .annotate-box { background: #ffffff; padding: 12px; max-width: 100%; max-height: 100%; display: flex; flex-direction: column; gap: 10px; }
-.annotate-canvas-wrap { max-width: 90vw; max-height: 70vh; overflow: auto; touch-action: none; }
-.annotate-canvas { display: block; touch-action: none; border: 1px solid var(--border-subtle); }
+/* 書き込み面は**アプリが指を全部受け取る**（`touch-action: none`）。ブラウザの
+   拡大に任せると1本指の書き込みが途中で持っていかれるため、拡大・移動は
+   `openAnnotate()` が2本指から自分で作る。枠は動かさず、中の canvas だけを
+   `transform` で動かすので、`overflow` は `hidden`。 */
+.annotate-canvas-wrap { width: min(86vw, 560px); overflow: hidden; touch-action: none; border: 1px solid var(--border-subtle); }
+.annotate-canvas { display: block; touch-action: none; transform-origin: 0 0; }
+.annotate-hint { font-size: 11px; color: var(--ink-muted); margin: 0; }
 .annotate-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .btn-inline { border: 1px solid var(--border-subtle); background: #ffffff; padding: 8px 14px; font-size: 12px; font-weight: 700; cursor: pointer; }
 .annotate-save { background: var(--ink-body); color: #ffffff; }
@@ -835,14 +840,16 @@ button, input, textarea, select {
   margin-bottom: 12px;
 }
 
+/* ボタンの帯は**折り返して画面に収める**（マスター指示 2026-09-02。
+   `D-20260827-50`「保留・このまま」を差し替える）。
+   以前は横スクロールで、右端のボタン（「フケ」「全部消す」）が画面の外に隠れ、
+   **そこに何かが在ることが見えなかった**。 */
 .body-marking-stamps {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 10px;
-  overflow-x: auto;
-  scrollbar-width: none;
 }
-.body-marking-stamps::-webkit-scrollbar { display: none; }
 
 .stamp-btn {
   padding: 6px 10px;
@@ -857,6 +864,23 @@ button, input, textarea, select {
   gap: 4px;
 }
 .stamp-btn.is-active { background: var(--ink-primary); color: #ffffff; border-color: var(--ink-primary); }
+
+/* 置き方の切り替えと、取り消し。見た目は種類ボタンに揃えるが、**クラスは分ける**
+   ——`setStamp()` が `.stamp-btn` の選択を外して回るので、同じクラスにすると
+   種類を選び直すたびに「なぞる／スタンプ」の選択まで消える。 */
+.mark-mode-btn,
+.mark-undo-btn {
+  flex-shrink: 0;
+  border: 1px solid var(--border-subtle);
+  background: #ffffff;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.mark-mode-btn.is-active { background: var(--ink-primary); color: #ffffff; border-color: var(--ink-primary); }
+.mark-undo-btn { color: var(--ink-muted); }
 
 .canvas-container {
   position: relative;
@@ -1609,7 +1633,9 @@ button, input, textarea, select {
   .teeth-pill-btn .sub {
     font-size: 9px;
   }
-  .stamp-btn {
+  .stamp-btn,
+  .mark-mode-btn,
+  .mark-undo-btn {
     padding: 4px 8px;
     font-size: 10px;
   }
@@ -2102,16 +2128,25 @@ button, input, textarea, select {
           <div class="clinical-group">
             <div class="clinical-group__label">
               <span>⑤ 皮膚・スパ・犬体4面図</span>
-              <span class="clinical-group__hint">タップでスタンプ配置</span>
+              <span class="clinical-group__hint">なぞって描く（スタンプも置ける）</span>
             </div>
 
             <div class="body-marking-tool">
+              <!-- 何の所見か（色を決める）。上の段。 -->
               <div class="body-marking-stamps">
                 <button class="stamp-btn is-active" onclick="App.setStamp('赤み', this)">🔴 赤み</button>
                 <button class="stamp-btn" onclick="App.setStamp('しこり/イボ', this)">🟡 しこり/イボ</button>
                 <button class="stamp-btn" onclick="App.setStamp('毛玉', this)">🔵 毛玉</button>
                 <button class="stamp-btn" onclick="App.setStamp('フケ', this)">⚪ フケ</button>
-                <button class="stamp-btn" onclick="App.clearCanvas()">✕ クリア</button>
+              </div>
+
+              <!-- どう置くか（マスター指示 2026-09-02）。**本体はなぞる**で、
+                   スタンプはその一部。以前はスタンプしか無く、範囲が書けなかった。 -->
+              <div class="body-marking-stamps">
+                <button class="mark-mode-btn is-active" onclick="App.setMarkMode('なぞる', this)">✏️ なぞる</button>
+                <button class="mark-mode-btn" onclick="App.setMarkMode('スタンプ', this)">📍 スタンプ</button>
+                <button class="mark-undo-btn" onclick="App.undoMark()">↩ 1つ戻す</button>
+                <button class="mark-undo-btn" onclick="App.clearCanvas()">✕ 全部消す</button>
               </div>
 
               <div class="canvas-container" id="canvas-wrapper">

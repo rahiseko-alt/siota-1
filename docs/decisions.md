@@ -892,3 +892,86 @@
   最初に行うこと**（`docs/handoff.md` 0-X に詳細）
 - **Impact**: 次セッションの着手順が固定された。第6章の残り5件（`#5` `#6` `#11`
   `#22` `#35`）の質問は、動作確認の後に行う
+
+### [D-20260902-60] `konva.min.js` は削除する（第12章 `#6`）
+
+- **日付**: 2026-09-02
+- **決めた人**: マスター
+- **問い**: 未使用の `konva.min.js`（182KB）を、依存として残すか削除するか
+- **回答**: 「canvas じゃ無いと上手くいかないから コンバをやめた経緯」
+- **決定**: 削除する。描画は素の Canvas 2D で作ってあり、Konva に戻す予定は無い。
+  1度も読み込まれないまま本番へ配っていたので、2026-08-24 に未参照の画像7件を
+  消したのと同じ理由（`https://.../assets/konva.min.js` が誰でも取れる状態）で落とす
+- **Impact**: `src/assets/konva.min.js` を `git rm`。`docs/ASSET-PROVENANCE.md` の
+  「2. ライブラリ」は「同梱なし」になった。履歴からは戻せる
+
+### [D-20260902-61] 犬体図のボタンの帯は、折り返して画面に収める（第12章 `#11`）
+
+- **日付**: 2026-09-02
+- **決めた人**: マスター
+- **問い**: `.body-marking-stamps` が画面幅に収まらず横スクロールになる件
+- **回答**: 「ボタンの帯を変えれば良いだろ、画面に収まるように。しかし、他の崩れが
+  ないように先に調査して、崩れないようにやれ」
+- **決定**: 横スクロール（`overflow-x: auto`）をやめ、`flex-wrap: wrap` で折り返す。
+  **Supersedes `D-20260827-50`**（「保留・このまま」）
+- **裏づけ**: このクラスは⑤犬体4面図の2本の帯だけが使う（他画面に無いことを確認）。
+  実ブラウザで幅 320 / 390 / 768px を測り、3幅とも**横スクロールが消え、
+  画面外に切れるボタンが 0 件、ページ自体の横スクロールも無い**ことを実測
+- **Impact**: 「フケ」「全部消す」が画面の外に隠れなくなった。狭い画面向けの
+  文字縮小（`@media`）は、新しい `.mark-mode-btn` / `.mark-undo-btn` にも効かせた
+
+### [D-20260902-62] 旧 KV 版 Worker と KV モードのコードを、全部削除する（第12章 `#22`）
+
+- **日付**: 2026-09-02
+- **決めた人**: マスター
+- **問い**: 旧 KV Worker（`saltydog-report-worker`）を、切り戻し用に残すか削除するか
+- **回答**: 「22は削除」→「全て削除」（Worker だけでなく KV 関連すべて、の意）
+- **決定**: **Supersedes `D-20260823-09`**（「切り戻せるように Worker は残す」）。
+  切り戻し先を持たない代わりに、**誰も通らない道に無認証の API が生き続ける状態**を
+  無くす。実際 2026-08-24 に、この Worker の workers.dev 経由で
+  `/api/customers` が誰でも 200 で読め、`DELETE /api/owners/{slug}` の
+  カスケード削除まで無認証で通ることが見つかっている（`docs/decisions.md` の
+  2026-08-24 の記述）。**設定で閉じているだけの無認証 API は、設定が戻れば開く。**
+- **消したもの**（リポジトリ側）:
+  - `worker/wrangler.toml`（KV 版 Worker の設定・唯一の切り戻し手順が書かれていた）
+  - `worker/src/index.js` の KV モード全経路（`/api/customers` `/api/owners`
+    `/api/reports`、`/p/*` `/o/*` `/edit/*` の KV 版、`readJSON`/`writeJSON` ほか
+    到達しなくなった26関数）。**1168行 → 507行**
+  - `worker/src/data-stores/kv-data-store.js` と `create-data-store.js`
+    （2つの backend を選び分ける工場。既定値が `'kv'` だったので、
+    `DATA_BACKEND` の設定漏れが**黙って KV に落ちる**造りでもあった）
+  - `DATA_BACKEND` 変数（3つの wrangler 設定から）とコード側の分岐
+  - KV→Supabase の移行ツール一式（`scripts/migrate-kv-to-supabase.mjs`、
+    `scripts/lib/kv-export-parser.mjs`、`scripts/lib/supabase-migration-target.mjs`、
+    `test/kv-migration.test.mjs`、`test/fixtures/kv-export.json`）。移行は完了済み
+  - `test/worker-unit.test.mjs`（5件・**全件が KV ルートの検査**）。
+    **検査を弱めて緑にしたのではない**（`A-4`）——検査していた機能そのものを、
+    マスターの決定で消したため。Supabase 側の検査は1本も減っていない
+- **まだ残っている作業**: **Cloudflare 上の Worker 実体の削除**。資格情報を私は
+  受け取らないので（`A-1`）、マスターが Cloudflare の画面で
+  `saltydog-report-worker` を削除する（Workers & Pages → 該当 Worker →
+  Settings → Delete）。リポジトリからは配れなくなっているので、
+  消し忘れても新たに更新されることはない
+- **裏づけ**: `npm run build` / `npm test`（199件）/ `npm run check` いずれも EXIT 0。
+  さらに**ローカルの実 Supabase を起動して `verify:*` を15本すべて実測**
+  （portal / edit / xss / roundtrip / empty / screens / delete / draft / invitation /
+  m6 / admin / photo / revisit / options / first-run）、**全部 PASS**。
+  つまり KV の経路を全部落としても、飼い主に届くところまで壊れていない
+
+### [D-20260902-63] 未参照のアイコン5点は削除する（第12章 `#5`）
+
+- **日付**: 2026-09-02
+- **決めた人**: マスター
+- **問い**: `icon-ear/nail/skin/spa/weight.png`（各 512x512・計約 640KB）を、
+  ④カルテ入力の見出しに置くか、削除するか
+- **回答**: 「5個のアイコンはすべて削除」
+- **決定**: 削除する。**どの画面からも一度も参照されていない**まま、`dist/` へ
+  コピーされて本番で配信されていた（URL を知れば誰でも取れる）。
+  意匠モック `design/mock-4step.html` も番号の丸だけで、この5点は最初から未採用。
+  2026-08-24 に未参照の画像7件を消したのと同じ理由（`D-4`「出所未確認の素材を
+  外部公開物へ転載禁止」）。5点はいずれも `UNVERIFIED`（出所未確認）だった
+- **Impact**: `src/assets/` から `git rm`。`docs/ASSET-PROVENANCE.md` の
+  「`icon-*.png` は残存・使用中」という記載は**誤りだった**ので訂正した。
+  公開前の宿題（`UNVERIFIED` の出所確認）からも5件が外れ、残るは
+  `teeth-diagram.jpg` と `body-side.png` の2件。`body-side.png` は
+  画面に到達しているので残す。履歴からは戻せる

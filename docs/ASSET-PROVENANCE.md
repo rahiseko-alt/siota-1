@@ -45,13 +45,16 @@ Google Fonts への直リンクを外すにあたり、日本語4ファミリは
 
 ---
 
-## 2. ライブラリ — `VERIFIED`
+## 2. ライブラリ — 同梱なし
 
-| ファイル | 出所 | ライセンス |
-|---|---|---|
-| `konva.min.js` | Konva JavaScript Framework v10.3.0 / konvajs.org | MIT |
+**同梱しているライブラリは無い。**
 
-CDN からではなく同梱している（LEVEL D 準拠）。
+`konva.min.js`（Konva v10.3.0 / MIT）を置いていたが、**2026-09-02 に削除した**。
+描画は素の Canvas 2D で作ってあり、Konva では思うように動かなかったので使うのを
+やめた、というのが経緯（マスター回答 2026-09-02。`D-20260902-60`）。
+**1度も読み込まれないまま 182KB を本番へ配っていた**ので、
+2026-08-24 に未参照の画像7件を消したのと同じ理由で落とした。
+`git rm` なので履歴から戻せる。
 
 ---
 
@@ -89,7 +92,6 @@ CDN からではなく同梱している（LEVEL D 準拠）。
 | `guide-teeth-state.jpg` | 1321x1191 | 257KB | 歯の状態ガイド |
 | `teeth-diagram.jpg` | 700x1162 | 92KB | 歯式図 |
 | `body-side.png` | 390x417 | 9KB | 犬体図（側面） |
-| `icon-ear.png` / `icon-nail.png` / `icon-skin.png` / `icon-spa.png` / `icon-weight.png` | 512x512 | 各 106〜141KB | セクション見出しアイコン |
 
 ### 【2026-08-24 更新】未参照だった7件を削除した
 
@@ -112,7 +114,8 @@ URL を知っていれば誰でも取得でき、これは D-4「出所未確認
 | `photo-dog-paw-high.jpg` | 削除（2026-08-24）。参照ゼロ |
 | `photo-dog-pawpad.jpg` | 削除（2026-08-24）。参照ゼロ |
 | **`photo-trim-action.jpg`** | **残存・使用中・`VERIFIED`**（下記） |
-| `teeth-diagram.jpg` / `body-side.png` / `icon-*.png` | 残存・使用中（トリマー側の画面） |
+| `teeth-diagram.jpg` / `body-side.png` | 残存・使用中（トリマー側の画面） |
+| `icon-ear.png` / `icon-nail.png` / `icon-skin.png` / `icon-spa.png` / `icon-weight.png` | **削除（2026-09-02）。参照ゼロ**（`D-20260902-63`）。上の表の「使用中」は誤りだった——④の見出しに置く予定のまま、一度も画面に出ていない |
 
 削除は `git rm` なので**履歴から復元できる**。使いたくなったら戻せる。
 削除後に本番へデプロイし、上記7件が 404 になり、使用中の素材が 200 のままであることを確認済み。
@@ -156,9 +159,10 @@ URL を知っていれば誰でも取得でき、これは D-4「出所未確認
       （2026-08-27・実物を見せて確認）。`VERIFIED` に更新済み
 - [ ] AI 生成3件（`app-icon.png` / `body-marking.png` / `nail-diagram.png`。
       使用中のもののみ）について、生成したアカウントと当時の規約を確認する
-- [ ] 使用中の `UNVERIFIED`（`teeth-diagram.jpg` / `body-side.png` / `icon-*.png` 5件）の
+- [ ] 使用中の `UNVERIFIED`（`teeth-diagram.jpg` / `body-side.png`）の
       出所を確認する。トリマー側の画面にしか出ないので飼い主には配られないが、
       外部公開物であることに変わりはない
+      （`icon-*.png` 5件は 2026-09-02 に削除したので、この宿題から外れた）
 - [x] `nail-diagram.png` 6.1MB の圧縮 → **圧縮しない**（2026-08-27・`D-20260827-47`）。
       血管の位置を見て判定する図なので、画質は落とさない。重さへの手当ては
       `loading="lazy"` だけ（配るものは変えず、要るときまで落とさない）

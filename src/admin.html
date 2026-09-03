@@ -2,7 +2,10 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <!-- **拡大を禁止しない。** 動線が「管理」を通るようになり、スタッフはこの画面で
+       飼い主名・犬名・QR を読む。二本指で寄れないと小さい字が読めない（WCAG 1.4.4）。
+       `my.html` は同じ理由で 2026-08 に外してある。 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>管理者ページ | SALTY DOG</title>
   <link rel="icon" href="/assets/app-icon.png" type="image/png">
   <link rel="manifest" href="/manifest.json">

@@ -1,9 +1,9 @@
 # Supabase 版 Worker（shiota0823）。
 #
-# 独自ドメインには紐付けない。デプロイ先は workers.dev のサブドメインで、
-# 現行本番（wrangler.toml の trimmer-system.kouheikosehira.com / KV モード）とは
-# 完全に別物として並走する。production route、KV namespace、
-# service role key をこのファイルへ追加しない。
+# **本番はこの Worker 1本だけ。** 2026-09-02 に旧 KV 版 Worker
+# （saltydog-report-worker / wrangler.toml）を削除した（D-20260902-62）ので、
+# 並走していた片方は無い。KV namespace と service role key を
+# このファイルへ追加しない。
 #
 # ここに書く2つの値はどちらも公開情報である。SUPABASE_URL はブラウザの
 # 通信先として誰にでも見え、publishable key は「匿名で入れる」ことを前提に
@@ -22,9 +22,8 @@ main = "src/index.js"
 compatibility_date = "2025-01-01"
 
 # 独自ドメイン（F6・2026-08-23）。ここを処理していた KV 版 Worker
-# （saltydog-report-worker）はルートを外して残してある——切り戻せる状態を
-# 捨てない（docs/decisions.md D-20260823-09）。切り戻し手順は
-# worker/wrangler.toml のコメントに書いてある。
+# （saltydog-report-worker）は 2026-09-02 に削除した（D-20260902-62 が
+# D-20260823-09「切り戻せるように残す」を差し替える）。**切り戻し先はもう無い。**
 # 全パス（/*）を Worker が一本で処理する。静的アセットは [assets] fallthrough で配信。
 [[routes]]
 pattern = "trimmer-system.kouheikosehira.com/*"
@@ -47,8 +46,9 @@ binding = "ASSETS"
 # 画像や js の配信コストは変わらない。
 run_worker_first = ["/"]
 
+# `DATA_BACKEND` は KV 版と Supabase 版を選び分けるための変数だった。
+# 選ぶ相手が消えたので、コード側の分岐ごと外した（D-20260902-62）。
 [vars]
-DATA_BACKEND = "supabase"
 SUPABASE_REPORT_ASSETS_BUCKET = "report-assets"
 SUPABASE_URL = "https://bcodloqwnrhcuvevfguy.supabase.co"
 SUPABASE_PUBLISHABLE_KEY = "sb_publishable_jdfWplKTWyEEqNYn4gcBvQ_yvmoKIml"

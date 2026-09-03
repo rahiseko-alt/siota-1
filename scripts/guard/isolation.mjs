@@ -101,7 +101,7 @@ function deferredNames(repoRoot) {
     if (!no) continue;
     /* 拡張子は**長いものから**並べる。`js` を `json` より先に置くと
        `manifest.json` が `manifest.js` として拾われ、逃がすべきものが逃げない。
-       ファイル名側に `.` を許すのは `konva.min.js` のような名前のため。 */
+       ファイル名側に `.` を許すのは `xxx.min.js` のように点を含む名前のため。 */
     for (const name of line.match(/[\w.-]+\.(?:woff2?|json|jpe?g|html|webp|mjs|png|svg|css|js)/g) || []) {
       found.set(name, no[1]);
     }
