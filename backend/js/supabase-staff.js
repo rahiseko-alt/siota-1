@@ -516,6 +516,36 @@ async function findDraft(petId) {
   return { id: draft.id, data: (full.report && full.report.data) || {} };
 }
 
+/** その犬の、いちばん新しい確定カルテを1件返す（1枚も無ければ null）。
+
+    6枚目のカルテを「前回の続き」から書き始めるために使う（マスター指示 2026-09-03）。
+    `findDraft()` と同じ形——一覧で1件に絞ってから、その id で全文を取り直す。
+
+    **`asset://` は解決しない。** 引き継ぐのは爪・耳・歯・BCS・体格・犬体図の印だけで、
+    写真は引き継がない（撮り直さずに確定すると、前回の写真が今回のカルテとして
+    飼い主に届く）。見える URL へ直す必要が無いので、余計な往復もしない。 */
+async function findLastFinalReport(petId) {
+  const api = globalThis.TrimmerStaffApi && globalThis.TrimmerStaffApi.request;
+  if (typeof api !== 'function' || !petId) return null;
+  const body = await api(`/api/pets/${encodeURIComponent(petId)}/reports`);
+  /* 日付の新しい順。同じ日に2枚あるときは、後から作られた方（id の大きい方）を採る
+     ——一覧の並び順に頼らない（`D-9`「見た目の順に依存しない」）。 */
+  const finals = (body.reports || [])
+    .filter((report) => report.status === 'final')
+    .sort((a, b) => String(b.report_date || '').localeCompare(String(a.report_date || ''))
+      || String(b.id || '').localeCompare(String(a.id || '')));
+  const latest = finals[0];
+  if (!latest) return null;
+  const full = await api(
+    `/api/pets/${encodeURIComponent(petId)}/reports/${encodeURIComponent(latest.id)}`,
+  );
+  return {
+    id: latest.id,
+    date: latest.report_date || '',
+    data: (full.report && full.report.data) || {},
+  };
+}
+
 async function saveReport(petId, reportData, reportDate, draftId) {
   const client = globalThis.TrimmerAuth && globalThis.TrimmerAuth.client;
   const api = globalThis.TrimmerStaffApi && globalThis.TrimmerStaffApi.request;
@@ -589,6 +619,7 @@ globalThis.TrimmerSupabaseStaff = {
   reviseReport,
   saveDraft,
   findDraft,
+  findLastFinalReport,
   isAdmin: () => activeMembership?.role === 'admin',
   showOwnerInvitation: (ownerId, ownerName) => showInvitationDialog(
     { invitationType: 'owner', ownerId }, ownerName || '飼い主',

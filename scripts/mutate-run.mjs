@@ -553,6 +553,31 @@ export const MUTATIONS = [
     scripts: ['verify-admin.mjs'],
   },
   {
+    /* 管理者だけ着く先が変わる形（2026-08-26 まで実際にそうだった）。
+       トリマー画面から管理画面へ戻る道が無かった時代の再現で、
+       壊すと `verify-admin.mjs` の `1.` が赤になる。 */
+    id: 'admin-lands-elsewhere',
+    why: '**管理者だけ、みんなと違う画面に着く**——日々のカルテ画面と管理画面のどちらかにしか居られなくなる（2026-08-26 まで実際に起きていた形）',
+    file: 'backend/js/supabase-auth.js',
+    find: `    if ((session.memberships || []).length > 0 && (session.ownerLinks || []).length === 0) {
+      location.replace('/edit');`,
+    replace: `    if ((session.memberships || []).length > 0 && (session.ownerLinks || []).length === 0) {
+      location.replace((session.memberships || []).some((m) => m.role === 'admin') ? '/admin' : '/edit');`,
+    extra: null,
+    scripts: ['verify-admin.mjs'],
+  },
+  {
+    /* `admin-link-hidden` は入口ごと消すので、押した先を見る `1c` まで届かない
+       （検査がそこで死ぬ）。**押せるが行き先が違う**形を別に用意する。 */
+    id: 'admin-link-wrong-destination',
+    why: '**「管理」を押しても管理画面に着かない**——入口は見えていて押せるのに、別の画面へ飛ぶ（「押せた」と「着いた」の違い・`D-12`）',
+    file: 'src/index.html',
+    find: '<a href="/admin" class="btn-step" data-admin-link hidden>管理</a>',
+    replace: '<a href="/edit" class="btn-step" data-admin-link hidden>管理</a>',
+    extra: null,
+    scripts: ['verify-admin.mjs'],
+  },
+  {
     id: 'admin-menu-title-lost',
     why: '**管理者ページの一覧の見出しが読めなくなる**——リピーター／新規／削除のどれを押したか区別できない',
     file: 'backend/js/supabase-admin.js',
