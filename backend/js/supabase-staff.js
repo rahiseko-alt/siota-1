@@ -347,19 +347,47 @@ async function bootStaffPortal(PonchiApp) {
 
   const { data, error } = await client.auth.getSession();
   if (error || !data.session) {
+    /* **入口は `/` の1本**（マスター指示 2026-09-04「そもそも管理者と顧客の入口を
+       分けるな。認証で振り分ける経路にしろ」）。ここは長らく `/my`（飼い主の画面）へ
+       送っていたが、**スタッフが自分の画面の URL を開いて飼い主の画面に着く**のは
+       役割と食い違う。戻り先は積んであるので、ログインすれば元の URL に戻る。 */
     sessionStorage.setItem('post_auth_return', location.pathname + location.search);
-    location.replace('/my');
+    location.replace('/');
     return;
   }
   const session = await readJson(client, '/api/session');
   if ((session.memberships || []).length === 0) {
+    /* スタッフ権限が無い人は飼い主の画面へ。**役割で振り分けるのはここと
+       `supabase-auth.js` の2か所だけ**にする（`D-20260904-66`）。 */
     location.replace('/my');
     return;
   }
   activeMembership = (session.memberships || [])[0] || null;
 
+  /* **入口の道具を、スタッフの画面から外す。**
+     `index.html` は `/` と `/edit` で使い回すので、`/edit` には「01 ログイン」タブと
+     その先の screen-1 が残っていた。screen-1 の「Google でログイン」は
+     `bootLoginPage()`（`__ENTRY__` のときだけ起動）が配線するものなので、
+     ここでは**押しても何も起きない**（2026-09-04・実機で再現）。
+     押せるのに仕事をしないものは、置かない（`D-12`）。 */
+  document.querySelectorAll('[data-entry-only]').forEach((el) => { el.hidden = true; });
+  const entryPanel = document.getElementById('screen-1');
+  if (entryPanel) entryPanel.remove();
+
+  /* **ログアウトを出す。** これが無かったので、`/edit` に着いた人は
+     別のアカウントに切り替える手段が1つも無かった（`/` に戻っても送り返される）。
+     押したら入口へ戻す——次に来る人は、そこからログインし直せる。 */
+  const signOut = document.querySelector('[data-sign-out]');
+  if (signOut) {
+    signOut.hidden = false;
+    signOut.onclick = async () => {
+      try { await client.auth.signOut(); } catch { /* 消せなくても入口へは戻す */ }
+      location.replace('/');
+    };
+  }
+
   /* **管理者にだけ、管理画面への入口を出す**（マスター指示 2026-09-02）。
-     `my.html` の `data-staff-link` と同じ作り——隠しておいて、該当する人にだけ見せる。
+     隠しておいて、該当する人にだけ見せる（下のログアウトと同じ立て付け）。
      これまで `/admin` へのリンクは画面に1つも無く、トリマー画面に居る管理者は
      URL を手打ちしない限り管理画面へ行けなかった。 */
   if ((session.memberships || []).some((m) => m.role === 'admin')) {

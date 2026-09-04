@@ -559,9 +559,9 @@ export const MUTATIONS = [
     id: 'admin-lands-elsewhere',
     why: '**管理者だけ、みんなと違う画面に着く**——日々のカルテ画面と管理画面のどちらかにしか居られなくなる（2026-08-26 まで実際に起きていた形）',
     file: 'backend/js/supabase-auth.js',
-    find: `    if ((session.memberships || []).length > 0 && (session.ownerLinks || []).length === 0) {
+    find: `    if ((session.memberships || []).length > 0) {
       location.replace('/edit');`,
-    replace: `    if ((session.memberships || []).length > 0 && (session.ownerLinks || []).length === 0) {
+    replace: `    if ((session.memberships || []).length > 0) {
       location.replace((session.memberships || []).some((m) => m.role === 'admin') ? '/admin' : '/edit');`,
     extra: null,
     scripts: ['verify-admin.mjs'],

@@ -291,18 +291,22 @@ export async function bootProtectedPortal() {
 
        いまは**着く先は全員同じ**。管理画面へは、カルテ画面のヘッダーに
        管理者のときだけ出る「管理」から入る（`index.html` の `data-admin-link`）。 */
-    if ((session.memberships || []).length > 0 && (session.ownerLinks || []).length === 0) {
+    /* **振り分けは「スタッフ権限を持つか / 持たないか」の1本**
+       （マスター判断 2026-09-04・`D-20260904-66`）。
+
+       以前は `ownerLinks === 0` も条件にしていた。**スタッフ権限を持ちながら、
+       この店の顧客としても登録されている人**（兼務アカウント）だけを `/my` に
+       留めるためで、`D-20260823-06` で私がそう作った形が前提だった。
+       マスター判断は「レアケースだから想定する必要なし。別のアカウントを発行するから
+       仕組みとして用意しない」——**1ログインアカウント＝1役割**。
+       条件を足すほど、着く先が人によって変わって説明できなくなる。 */
+    if ((session.memberships || []).length > 0) {
       location.replace('/edit');
       return;
     }
-    /* スタッフかつ飼い主のアカウントは上の分岐を外れて /my に留まる。ところが
-       `/` にも `/my` にも `/edit` へのリンクが1つも無く、**URL を手打ちしない限り
-       トリマー画面に行けなかった**。ログイン後の着地はここなので、ここに入口を出す。
-       （D-20260823-06 で管理者を飼い主にも紐付けた結果、いちばん現実に使う
-       アカウントだけがこの穴に落ちていた。） */
-    if ((session.memberships || []).length > 0) {
-      show(document.querySelector('[data-staff-link]'), true);
-    }
+    /* **兼務者の救済は無くした**（`D-20260904-66`）。上の分岐で、スタッフ権限を
+       持つ人は必ず作業画面へ行くので、ここへは**持たない人しか来ない**。
+       持たない人に「カルテを書く」を出すのは嘘になる。 */
     await loadProtectedResource(supabase, route, content);
     sessionStorage.removeItem('auth_reload_once');
     show(loginPanel, false);

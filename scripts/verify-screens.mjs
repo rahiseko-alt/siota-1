@@ -74,35 +74,53 @@ try {
     `__ENTRY__=${entry.marker} supabase-auth.js=${entry.auth}`);
   await top.close();
 
-  /* ── ② スタッフかつ飼い主（本番のマスター自身と同じ形）が `/my` に留まったとき、
-        自分の作業画面へ行けること。**過去に行き止まりになっていた場所。** ── */
+  /* ── ② スタッフ権限を持つ人は、どの入口から来ても作業画面に着くこと ──
+
+     **前はここが「スタッフ兼飼い主は `/my` に留まる」だった。**
+     マスター判断（2026-09-04・`D-20260904-66`）で **1ログインアカウント＝1役割**に
+     決まったので、兼務者を `/my` に留めて `[data-staff-link]` を出す救済は無くした。
+     振り分けは「スタッフ権限を持つか / 持たないか」の1本。
+
+     見るのは**着く先**と、**そこから出られること**。着いたきり
+     ログアウトも切り替えもできなかったのが、マスターの「ログインできない」の
+     正体だった（2026-09-04・実機で再現）。 */
   const both = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await both.goto(`${BASE}/my`);
   await injectSession(both, FIXTURE.staffOwnerEmail);
-  await both.goto(`${BASE}/my`, { waitUntil: 'networkidle' });
-  await both.waitForSelector('[data-sign-out]:not([hidden])', { timeout: 20_000 });
+  await both.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+  await both.waitForURL(/\/edit\/?$/, { timeout: 20_000 }).catch(() => { /* 下の check が落とす */ });
+  await both.waitForSelector('.karte-card', { timeout: 20_000 }).catch(() => {});
   const bothView = await both.evaluate(() => {
-    const link = document.querySelector('[data-staff-link]');
+    const vis = (el) => !!el && el.getClientRects().length > 0;
     return {
       path: location.pathname,
-      staffLinkVisible: !!link && !link.hidden,
-      staffLinkHref: link ? link.getAttribute('href') : null,
-      signOutVisible: !!document.querySelector('[data-sign-out]:not([hidden])'),
+      cards: document.querySelectorAll('.karte-card').length,
+      signOutVisible: vis(document.querySelector('[data-sign-out]')),
+      /* 入口の道具が、作業画面に残っていないこと。押しても何も起きない
+         「01 ログイン」→「Google でログイン」がここに在った。 */
+      loginTab: vis(document.querySelector('[data-entry-only]')),
+      loginButton: vis(document.querySelector('[data-entry-login]')),
+      entryPanel: !!document.getElementById('screen-1'),
     };
   });
-  check('5. スタッフ兼飼い主は `/my` に留まる', bothView.path === '/my', `path=${bothView.path}`);
-  check('6. その人に作業画面（`/edit`）への入口が出ている',
-    bothView.staffLinkVisible === true && bothView.staffLinkHref === '/edit',
-    `visible=${bothView.staffLinkVisible} href=${bothView.staffLinkHref}`);
-  check('7. サインアウトの入口も出ている', bothView.signOutVisible === true);
+  check('5. スタッフ権限を持つ人は `/` から作業画面に着く',
+    bothView.path === '/edit', `path=${bothView.path}`);
+  check('6. 着いた作業画面に、犬の一覧が出ている（器だけ運ばない）',
+    bothView.cards > 0, `card=${bothView.cards}`);
+  check('7. 作業画面にログアウトが出ている（別のアカウントに切り替えられる）',
+    bothView.signOutVisible === true);
+  check('8. 作業画面に、押しても何も起きないログインの入口が残っていない',
+    bothView.loginTab === false && bothView.loginButton === false && bothView.entryPanel === false,
+    `タブ=${bothView.loginTab} ボタン=${bothView.loginButton} 画面=${bothView.entryPanel}`);
 
-  /* 押したら本当に着くか。**在るだけでは足りない。** */
+  /* 押したら本当に入口へ戻るか。**在るだけでは足りない。** */
   await Promise.all([
-    both.waitForURL(/\/edit\/?$/, { timeout: 20_000 }),
-    both.click('[data-staff-link]'),
+    both.waitForURL(/\/$/, { timeout: 20_000 }).catch(() => {}),
+    both.click('[data-sign-out]'),
   ]);
-  await both.waitForSelector('.karte-card', { timeout: 20_000 });
-  check('8. その入口を押すと、犬の一覧に着く', true, `url=${new URL(both.url()).pathname}`);
+  await both.waitForTimeout(2_000);
+  check('8b. ログアウトを押すと入口（`/`）に戻る',
+    new URL(both.url()).pathname === '/', `url=${new URL(both.url()).pathname}`);
   await both.close();
 
   /* ── ③ 飼い主だけの人に、作業画面の入口を出していないこと ── */
@@ -131,12 +149,16 @@ try {
        この検査の役目なので、在るふりも無いふりもしない（`#17`・`D-20260824-29`）。 */
     invites: document.querySelectorAll('.btn-invite:not([hidden])').length,
     search: !!document.getElementById('dir-search-input'),
+    /* **押しても何もしないボタンが残っていないこと。**
+       `＋新規カルテを作成する`（`createNewKarte`）は案内を出すだけで、
+       犬を登録できるのは管理画面だけだった。マスター指示（2026-09-04）で外した。 */
     newKarte: [...document.querySelectorAll('[onclick]')]
       .some((el) => (el.getAttribute('onclick') || '').includes('createNewKarte')),
   }));
   check('11. ②一覧に犬のカードが並んでいる', listView.cards > 0, `card=${listView.cards}`);
   check('12. ②一覧に探す手段が在る', listView.search === true);
-  check('13. ②一覧から新規カルテを作れる入口が在る', listView.newKarte === true);
+  check('13. ②一覧に、押しても何もしない「新規カルテ」ボタンが残っていない',
+    listView.newKarte === false, `残っている=${listView.newKarte}`);
   check('13c. ②一覧に初回登録（QR）の入口が在る', listView.invites > 0, `${listView.invites}件`);
 
   /* **犬の名前を押す。** カードそのものの中心を押すと、`.karte-card__actions` に並ぶ

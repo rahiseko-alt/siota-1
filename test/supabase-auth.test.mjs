@@ -191,10 +191,10 @@ test('my.html carries every DOM hook bootProtectedPortal looks up', () => {
   const hooks = [...bootSource.matchAll(/document\.querySelector\('\[([\w-]+)\]'\)/g)].map((m) => m[1]);
   assert.deepEqual(
     hooks,
-    ['data-portal-status', 'data-login-panel', 'data-portal-content', 'data-google-login', 'data-sign-out',
-      /* スタッフかつ飼い主のときだけ出す、トリマー画面への入口。これが無いと、
-         その人は /my に留まったまま自分の作業画面へ行けない（D-20260824-37）。 */
-      'data-staff-link'],
+    /* `data-staff-link`（スタッフかつ飼い主のときだけ出したトリマー画面への入口）は
+       外した。**1ログインアカウント＝1役割**（`D-20260904-66`・マスター判断 2026-09-04)
+       なので、スタッフ権限を持つ人はここへ来ない——来ない人に出す入口は嘘になる。 */
+    ['data-portal-status', 'data-login-panel', 'data-portal-content', 'data-google-login', 'data-sign-out'],
   );
   for (const hook of hooks) {
     assert.ok(hasAttribute(portalHtml, hook), `src/my.html に ${hook} が無い`);
@@ -274,18 +274,56 @@ test('my.html ships no sample report content of its own', () => {
    /my に留まる。ところが / にも /my にも /edit へのリンクが1つも無く、
    URL を手打ちしない限り仕事を始められなかった。
    ══════════════════════════════════════════════════════════════ */
-test('スタッフには /my からトリマー画面への入口を出す', () => {
+/* **振り分けは「スタッフ権限を持つか / 持たないか」の1本**
+   （マスター判断 2026-09-04・`D-20260904-66`「レアケースだから想定する必要なし。
+     別のアカウントを発行するから仕組みとして用意しない」）。
+
+   前はここが「スタッフかつ飼い主なら `/my` に留めて入口を出す」を要求していた。
+   その救済が在ったせいで**着く先が人によって変わり**、しかも `/edit` には
+   ログアウトが無かったので、そこに着いた人は**別のアカウントに切り替えられなかった**
+   （2026-09-04・実機で再現）。条件を1つに減らす。 */
+test('ログイン後の振り分けは、スタッフ権限の有無だけで決まる', () => {
   const auto = bootSource.indexOf("location.replace('/edit')");
-  const link = bootSource.indexOf('[data-staff-link]');
-  assert.ok(auto > 0, 'スタッフ専用アカウントの自動遷移が無い');
-  assert.ok(link > auto, '自動遷移を外れた人（スタッフかつ飼い主）への入口が無い');
-  /* 出す条件は「スタッフであること」だけ。ownerLinks を条件に混ぜると、
-     まさに穴に落ちていた組み合わせがまた漏れる。 */
-  const guard = bootSource.slice(bootSource.lastIndexOf('if (', link), link);
+  assert.ok(auto > 0, 'スタッフを作業画面へ送る分岐が無い');
+  const guard = bootSource.slice(bootSource.lastIndexOf('if (', auto), auto);
   assert.match(guard, /memberships \|\| \[\]\)\.length > 0/, 'スタッフ判定になっていない');
-  assert.doesNotMatch(guard, /ownerLinks/, '飼い主かどうかを条件に混ぜている（穴が再発する）');
-  assert.match(portalHtml, /data-staff-link[^>]*hidden/, '既定で隠れていない（飼い主に見えてしまう）');
-  assert.match(portalHtml, /href="\/edit"[^>]*data-staff-link|data-staff-link[^>]*href="\/edit"/, '/edit を指していない');
+  assert.doesNotMatch(guard, /ownerLinks/,
+    '飼い主かどうかを条件に混ぜている（着く先が人によって変わる・D-20260904-66）');
+});
+
+test('兼務アカウントの救済（/my にトリマー画面への入口）は残っていない', () => {
+  /* **土台**: 本文を読めていなければ、以下の「無いこと」は何も見ていない。 */
+  assert.ok(bootSource.length > 0, 'bootProtectedPortal の本文を切り出せていない');
+  assert.doesNotMatch(bootSource, /data-staff-link/,
+    '救済が残っている（`D-20260904-66` で仕組みごと無くした）');
+  assert.doesNotMatch(portalHtml, /data-staff-link/, 'src/my.html に器が残っている');
+});
+
+/* **作業画面（`/edit`）から出られること。**
+   ログアウトが無かったので、`/edit` に着いた人は `/` に戻っても
+   `location.replace('/edit')` で送り返され、**ログイン画面に永久に戻れなかった**。
+   マスターの「スタッフ用→ログインできない」「Home に戻るとその後ログインできない」の
+   両方がこれ（2026-09-04・実機で再現）。 */
+test('作業画面にログアウトが在り、押すと入口へ戻す', () => {
+  const staffSource = fs.readFileSync(new URL('../backend/js/supabase-staff.js', import.meta.url), 'utf8');
+  assert.match(staffSource, /\[data-sign-out\]/, 'スタッフ画面がログアウトを探していない');
+  assert.match(staffSource, /signOut\.hidden = false/, 'ログアウトを出していない');
+  assert.match(staffSource, /auth\.signOut\(\)/, '押しても実際にサインアウトしない');
+  const editHtml = fs.readFileSync(new URL('../src/index.html', import.meta.url), 'utf8');
+  assert.match(editHtml, /data-sign-out/, 'src/index.html にログアウトの器が無い');
+});
+
+/* **押しても何も起きない入口を、作業画面に置かない。**
+   `/edit` には「01 ログイン」タブと screen-1 が残っており、「Google でログイン」まで
+   見えるのに `bootLoginPage()` は `__ENTRY__` が無いと起動しないので**配線されて
+   いなかった**（実測: 押す前後で URL が変わらない）。 */
+test('作業画面では、入口の道具（01 ログイン・screen-1）を外す', () => {
+  const staffSource = fs.readFileSync(new URL('../backend/js/supabase-staff.js', import.meta.url), 'utf8');
+  assert.match(staffSource, /\[data-entry-only\]/, '入口専用の印を外していない');
+  assert.match(staffSource, /getElementById\('screen-1'\)/, 'ログイン画面を外していない');
+  const editHtml = fs.readFileSync(new URL('../src/index.html', import.meta.url), 'utf8');
+  assert.match(editHtml, /data-step="1"[^>]*data-entry-only|data-entry-only[^>]*data-step="1"/,
+    '「01 ログイン」タブに入口専用の印が付いていない');
 });
 
 test('検査用の fixture に「スタッフかつ飼い主」が居る', async () => {
