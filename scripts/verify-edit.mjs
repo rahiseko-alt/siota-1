@@ -39,8 +39,9 @@ try {
   const consoleErrors = [];
   page.on('pageerror', (e) => consoleErrors.push(`pageerror: ${e.message}`));
 
-  /* ログインしてから開く。未ログインだと supabase-auth.js が /my へ飛ばすため、
-     「配れているか」を見る前に画面が入れ替わってしまう。 */
+  /* ログインしてから開く。未ログインだと supabase-staff.js が入口（`/`）へ
+     飛ばすため、「配れているか」を見る前に画面が入れ替わってしまう
+     （飛ばし先は 2026-09-04 に `/my` から `/` へ変えた・`D-20260904-66`）。 */
   await page.goto(`${BASE}/my`);
   await injectSession(page, FIXTURE.staffEmail);
 
@@ -51,6 +52,11 @@ try {
 
   const seen = await page.evaluate(() => ({
     screens: document.querySelectorAll('[id^="screen-"]').length,
+    /* **どの画面が在るかを名前で見る。** 数だけだと、`/edit` から入口の
+       ログイン画面（`screen-1`）を外したときに「正UI が配られていない」と
+       読み違える（実際そうなった）。仕事に使う②③④が揃っているかが要件。 */
+    workScreens: ['screen-2', 'screen-3', 'screen-4'].filter((id) => document.getElementById(id)).length,
+    entryScreen: !!document.getElementById('screen-1'),
     /* **`globalThis.App` では見ない。** `src/js/ui.js` は古典スクリプトの
        トップレベル `const App` で、これは**グローバル字句環境**に入る——
        インライン `onclick` からは名前で届くが、`globalThis` にはぶら下がらない。
@@ -65,8 +71,19 @@ try {
     scripts: [...document.querySelectorAll('script[src]')].map((s) => s.getAttribute('src')),
   }));
 
-  /* 2. 配られたのが**正UI** か。古いテンプレートには screen-N は無い。 */
-  check('2. 正UI が配られている（screen-N が在る）', seen.screens === 4, `screen=${seen.screens}`);
+  /* 2. 配られたのが**正UI** か。古いテンプレートには screen-N は無い。
+
+     **数ではなく名前で見る。** ここは長く「4枚在ること」を見ていたが、
+     `/edit` からは入口のログイン画面（`screen-1`）を外した——押しても何も起きない
+     ログイン画面がスタッフの画面に乗っていて、押すと白紙になっていたため
+     （2026-09-04・`D-20260904-66` まわりの直し）。
+     要件は「仕事に使う②③④が配られていること」であって、枚数ではない。
+     **判定を緩めたのではなく、見る対象を正した**——下の `2b.` で
+     「入口の画面が紛れ込んでいないこと」も併せて見るので、守備範囲はむしろ広い。 */
+  check('2. 正UI が配られている（仕事に使う②③④が在る）',
+    seen.workScreens === 3, `作業画面=${seen.workScreens} 全体=${seen.screens}`);
+  check('2b. スタッフの画面に、入口のログイン画面が紛れ込んでいない',
+    seen.entryScreen === false, `screen-1=${seen.entryScreen}`);
 
   /* 3. 古典スクリプトの App がグローバルに居るか（`#10` で固定した繋ぎ方）。
         ここが false なら onclick 63件が死んでいる。 */

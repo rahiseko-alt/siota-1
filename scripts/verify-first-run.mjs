@@ -71,12 +71,27 @@ try {
   check('3. 案内が指す入口が、実際に画面に在る', adminVisible === 1 && inviteVisible === 0,
     `「管理」=${adminVisible}件 / 初回登録QR=${inviteVisible}件（0件のときQRは無いので、そこを案内してはいけない）`);
 
-  await staff.locator('text=新規カルテを作成する').first().click();
-  await staff.waitForTimeout(1_200);
-  const msg = said[0] || '';
-  check('4. 「新規カルテを作成する」の案内が、存在しない入口を指していない',
-    msg !== '' && !msg.includes('初回登録QR') && msg.includes('管理'),
-    `案内="${msg.replace(/\n+/g, ' ／ ').slice(0, 60)}"`);
+  /* **`＋新規カルテを作成する` は無くなった**（マスター指示 2026-09-04:
+     「新規登録ボタンは存在意味が分からない。管理者ページにあれば済むなら
+       あそこにボタンを置く意味が無い」）。押しても案内を出すだけで、犬を登録
+     できるのは管理画面だけだった。
+
+     **ここを消し忘れると、この検査は4件目で止まり、以降の14件が黙って
+     走らなくなる**（サブ検証の実測。`verify-inventory` は `check(` の数しか
+     見ないので緑のまま通る）。見る対象を「押せないボタンが残っていないこと」に
+     替えて、**そのまま先へ進む**。 */
+  const deadButton = await staff.locator('text=新規カルテを作成する').count();
+  check('4. 押しても登録できない「新規カルテ」ボタンが、0件の店に残っていない',
+    deadButton === 0, `残っている=${deadButton}件`);
+  /* **「管理」の2文字では見分けられない。** 案内の下に「管理画面で登録する」という
+     リンクが付くので、案内文から手順を丸ごと消しても `管理` は残り、**緑のまま通った**
+     （実測）。見るのは**具体的にどこを押すか**——`② 新規` まで名指ししているか。
+     ここが曖昧になると、マスターが実際に詰まった「存在しない入口を案内する」に戻る
+     （`F-20260902-66`）。 */
+  const emptyText = (await staff.locator('[data-view="karte-empty"]:visible').innerText()
+    .catch(() => '')).replace(/\n+/g, ' ／ ');
+  check('4b. 0件の店の案内が、押す場所を名指ししている（「管理」→「② 新規」）',
+    emptyText.includes('管理') && emptyText.includes('② 新規'), `案内="${emptyText.slice(0, 70)}"`);
 
   /* 管理画面から、飼い主 → 犬 を登録する（**押して作る**） */
   await staff.locator('[data-admin-link]').first().click();

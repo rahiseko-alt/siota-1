@@ -347,19 +347,51 @@ async function bootStaffPortal(PonchiApp) {
 
   const { data, error } = await client.auth.getSession();
   if (error || !data.session) {
+    /* **入口は `/` の1本**（マスター指示 2026-09-04「そもそも管理者と顧客の入口を
+       分けるな。認証で振り分ける経路にしろ」）。ここは長らく `/my`（飼い主の画面）へ
+       送っていたが、**スタッフが自分の画面の URL を開いて飼い主の画面に着く**のは
+       役割と食い違う。戻り先は積んであるので、ログインすれば元の URL に戻る。 */
     sessionStorage.setItem('post_auth_return', location.pathname + location.search);
-    location.replace('/my');
+    location.replace('/');
     return;
   }
   const session = await readJson(client, '/api/session');
   if ((session.memberships || []).length === 0) {
+    /* スタッフ権限が無い人は飼い主の画面へ。
+
+       **役割で行き先を決める場所は3つある**（数え落とすと、次に触る人が
+       3つ目を開かない・サブ検証 2026-09-04 の指摘）:
+         1. `backend/js/supabase-auth.js`  ログイン直後の振り分け（`/` と `/my`）
+         2. ここ                            スタッフ権限が無い人を `/my` へ
+         3. `backend/js/supabase-admin.js`  管理者でない人を `/edit` か `/my` へ
+       判定はすべて `memberships` の有無だけで揃える（`D-20260904-66`）。
+       `worker/src/index.js` は**意図的に見ない**（器を配るだけの経路に認可を
+       書くと、二重に判定する場所ができて食い違う）。 */
     location.replace('/my');
     return;
   }
   activeMembership = (session.memberships || [])[0] || null;
 
+  /* 入口の道具（`01 ログイン` タブ・`HOME`・`screen-1`）は、**Worker が配る時点で
+     落としている**（`worker/src/index.js` の `stripEntryMarkup`）。
+     ここで実行時に隠していたが、**起動の途中で 401 に当たると隠す処理まで進めず、
+     死んだログイン画面が復活した**——マスターが最初に報告した画面そのもの。
+     文書に無ければ、どの失敗経路でも復活しない。 */
+
+  /* **ログアウトを出す。** これが無かったので、`/edit` に着いた人は
+     別のアカウントに切り替える手段が1つも無かった（`/` に戻っても送り返される）。
+     押したら入口へ戻す——次に来る人は、そこからログインし直せる。 */
+  const signOut = document.querySelector('[data-sign-out]');
+  if (signOut) {
+    signOut.hidden = false;
+    signOut.onclick = async () => {
+      try { await client.auth.signOut(); } catch { /* 消せなくても入口へは戻す */ }
+      location.replace('/');
+    };
+  }
+
   /* **管理者にだけ、管理画面への入口を出す**（マスター指示 2026-09-02）。
-     `my.html` の `data-staff-link` と同じ作り——隠しておいて、該当する人にだけ見せる。
+     隠しておいて、該当する人にだけ見せる（下のログアウトと同じ立て付け）。
      これまで `/admin` へのリンクは画面に1つも無く、トリマー画面に居る管理者は
      URL を手打ちしない限り管理画面へ行けなかった。 */
   if ((session.memberships || []).some((m) => m.role === 'admin')) {
@@ -642,6 +674,25 @@ globalThis.TrimmerSupabaseStaff = {
          中断される。これは故障ではない。実測（`verify:admin` の 9）で
          カルテ修正の正常な流れでも出ることを確認したので、移動中は黙る。 */
       if (leavingPage) return;
+      /* **ログインが切れているなら、入口へ返す。**
+         ここが無かったので、起動の途中で 401 に当たると
+         `/edit` の起動が途中で止まり、**ログアウトも出ないまま人が取り残されて**いた
+         （2026-09-05・サブ検証で実機再現）。自力で抜ける手はアドレスバーに `/` を
+         打つことしか無かった。
+         （入口の器そのものは、いまは Worker が配る前に落としている。）
+
+         **鍵を捨ててから返す。** 捨てずに返すと、入口が「セッションが在る」と見て
+         送り返し、往復になる（`supabase-auth.js` の `catch` と同じ形）。
+         `signOut()` は既定で他の端末のセッションも失効させるので、
+         **店で iPad とスマホを併用していれば日常的に起きる**経路である。 */
+      if (/authentication required|401/.test((error && error.message) || '')) {
+        sessionStorage.setItem('post_auth_return', location.pathname + location.search);
+        const auth = globalThis.TrimmerAuth && globalThis.TrimmerAuth.client;
+        Promise.resolve(auth ? auth.auth.signOut() : null)
+          .catch(() => { /* 消せなくても入口へは返す */ })
+          .then(() => { location.replace('/'); });
+        return;
+      }
       globalThis.alert(
         'お店の画面を読み込めませんでした。\n\n'
         + '通信が届いていないか、ログインが切れています。\n'

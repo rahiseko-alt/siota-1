@@ -859,6 +859,20 @@ const App = {
       }
     }
 
+    /* **行き先の画面が無いときは、いまの画面を残す。**
+       以前はここで全部の `is-active` を外してから行き先を探していたので、
+       行き先が無いと**どの画面も出ない＝真っ白**になった。実際に起きた:
+       スタッフの画面では `screen-1`（ログイン）を外してあるのに、左上の HOME が
+       `goToStep(1)` を呼んでいて、押すとナビ帯だけが残った白紙になった
+       （2026-09-04・サブ検証の実機で再現）。
+       入口を消すたびに同じ穴が開くので、**外す前に行き先を確かめる**。
+       黙って何もしないのではなく、**いま見えているものを壊さない**のがここの役目
+       （呼び出し側の入口を消すのが本筋の直し。これはその取りこぼしの受け皿）。 */
+    const targetPanel = document.getElementById(`screen-${stepNum}`);
+    /* **何も書き換えないうちに帰る。** 段の見出しや `currentStep` を先に
+       書き換えてから帰ると、**画面と印が食い違う**（`D-12`）。 */
+    if (!targetPanel) return;
+
     this.currentStep = stepNum;
 
     document.querySelectorAll('.btn-step').forEach(btn => {
@@ -868,8 +882,7 @@ const App = {
     document.querySelectorAll('.screen-panel').forEach(panel => {
       panel.classList.remove('is-active');
     });
-    const targetPanel = document.getElementById(`screen-${stepNum}`);
-    if (targetPanel) targetPanel.classList.add('is-active');
+    targetPanel.classList.add('is-active');
 
     const brandLabel = document.getElementById('nav-brand-label');
     if (brandLabel) {
@@ -934,43 +947,14 @@ const App = {
     this.selectKarte(dogName, (dog && dog.owner) || '', (dog && dog.breed) || '');
   },
 
-  /* **F2（仮データ）時代の入口で、実データには繋がっていない。**
-     押すと `selectKarte('新規わんちゃん', ...)` で④へ進んでいたが、実在しない犬
-     （`petId` 無し）を作っているだけで、確定しても保存できない
-     ——④画面下部の「使用オプション」は `pet.shopGroomingOptions` を経由して
-     `showPetKarte()` からしか渡らないため、この経路だけ**常に空扱いで帯ごと
-     非表示**になる。「オプションが出てない」というマスターの指摘を、実際に
-     ローカル実機で①この経路だけ再現できた（②実在の犬を選ぶ経路は再現しない）。
-
-     実在の犬を新規で登録する経路は既にある（②一覧の「初回登録QR」・admin側の
-     「②新規」）ので、ここは**壊れた入口を偽って進めない**ことだけ直す
-     （`D-10`・`D-12`）。ボタン自体を消す・入口の作り直しは、`verify-screens.mjs`
-     13. が「②一覧から新規カルテを作れる入口が在る」ことを要求しており、
-     入口をどう作り直すかは製品判断が要るため、ここでは踏み込まない
-     （`docs/handoff.md` 参照）。 */
-  createNewKarte() {
-    /* **画面に無い入口を案内しない。**
-       ここは長らく「②一覧の『初回登録QR』から」と案内していたが、
-       **初回登録QR は犬のカードの中にしか無い**——犬が0件の店では画面に
-       存在しない。マスターが実際にこれを読み、存在しない入口を探した
-       （2026-09-02・`F-20260902-66`）。しかも「初回登録QR」は
-       **既に登録済みの犬を飼い主さんに繋ぐ**ためのもので、
-       **新しい犬を登録する道ではない**——用途からして案内先が間違っていた。
-
-       いま押せるものだけを言う。管理者かどうかは、ヘッダーの「管理」が
-       出ているかで決める（出す側の判定と同じものを見る）。 */
-    const adminLink = document.querySelector('[data-admin-link]');
-    const canAdmin = !!adminLink && !adminLink.hidden;
-    alert(canAdmin
-      ? '新しい犬を登録するには、画面の上にある「管理」を押し、'
-        + '「② 新規」から\n\n'
-        + '  ① 飼い主さんを登録する\n'
-        + '  ② その飼い主さんに犬を追加する\n\n'
-        + 'の順に登録してください。登録するとこの一覧に出てきます。'
-      : 'この画面からは新しい犬を登録できません。\n\n'
-        + 'お店の管理者に、飼い主さんと犬の登録を頼んでください。\n'
-        + '登録されると、この一覧に出てきます。');
-  },
+  /* `createNewKarte()` は**関数ごと削除した**（マスター指示 2026-09-04:
+     「新規登録ボタンは存在意味が分からない。管理者ページにあれば済むなら
+       あそこにボタンを置く意味が無い」）。
+     押しても「管理画面の『② 新規』から登録してください」と案内を出すだけで、
+     **何もしない関数**だった。呼ぶ場所（②一覧のボタン）も `src/index.html` から
+     外したので、残すと死んだコードになる（`AGENTS.md` A-5）。
+     犬を登録する道は管理画面の「② 新規」の1本。管理者にはヘッダーの「管理」から
+     入れる（`data-admin-link`）。 */
 
   filterKarte(query) {
     const q = (query || '').trim().toLowerCase();

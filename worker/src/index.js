@@ -460,10 +460,93 @@ async function renderLoginPage(env) {
   const scripts = '<script>window.__ENTRY__=true;</script>'
     + '<script src="/backend/js/supabase-vendor.js"></script>'
     + '<script type="module" src="/backend/js/supabase-auth.js"></script>';
-  return new Response(templateHtml.replace('</head>', `${scripts}\n</head>`), {
+  /* **業務の器は、入口には配らない。**
+     `index.html` は `/`（入口）と `/edit`（スタッフの画面）で使い回している。
+     そのため入口には**②カルテ検索・③カルテ作成・④顧客カルテの3画面と段のタブが
+     まるごと載っており、未ログインの誰でも押して中へ入れた**
+     ——犬のカード5件（架空の顧客名）とカルテの入力欄8個が、そのまま見えていた
+     （2026-09-05・実機で確認）。
+
+     `goToStep()` の関所は `__REPORT__` が在るときだけ効く。入口には注入しないので、
+     **本物の入口では関所が1つも効いていない**。
+
+     `/edit` から入口の道具を落としたのと**逆向き**に、入口からは業務の器を落とす。
+     文書に無ければ、押しようがない（マスター指示 2026-09-05:
+     「ふさぐというか、削除しろよ…消せば済むだろ」）。 */
+  const entryOnly = stripAppMarkup(templateHtml);
+  return new Response(entryOnly.replace('</head>', `${scripts}\n</head>`), {
     status: 200,
     headers: HTML_HEADERS,
   });
+}
+
+/**
+ * 業務の器を落とす。入口（`/`）に配る `index.html` から、`/edit` 専用の器を消す。
+ *
+ * **消すのは2つだけ**——`screen-2` `screen-3` `screen-4` の3画面と、
+ * そこへ連れて行く段のタブ（`data-step` が 2 以上）。
+ * `screen-1`（ログイン）と `HOME`、`01 ログイン` タブは入口のものなので残す。
+ * 目印が見つからなければ**何もしない**（黙って別のものを削らない・`D-10`）。
+ */
+export function stripAppMarkup(html) {
+  let out = html;
+  for (const id of ['screen-2', 'screen-3', 'screen-4']) {
+    const start = out.indexOf(`id="${id}"`);
+    if (start < 0) continue;
+    const open = out.lastIndexOf('<section', start);
+    if (open < 0) continue;
+    /* `screen-3` は中に `<section>` を持つので、対応する閉じを数えて探す。 */
+    let depth = 0;
+    let i = open;
+    let close = -1;
+    while (i < out.length) {
+      const nextOpen = out.indexOf('<section', i + 1);
+      const nextClose = out.indexOf('</section>', i + 1);
+      if (nextClose < 0) break;
+      if (nextOpen >= 0 && nextOpen < nextClose) { depth += 1; i = nextOpen; continue; }
+      if (depth === 0) { close = nextClose; break; }
+      depth -= 1;
+      i = nextClose;
+    }
+    if (close < 0) continue;
+    out = out.slice(0, open) + out.slice(close + '</section>'.length);
+  }
+  /* 段のタブ。`01 ログイン` は入口のものなので残す。 */
+  for (let guard = 0; guard < 6; guard += 1) {
+    const start = out.search(/<button[^>]*\sdata-step="[2-9]"/);
+    if (start < 0) break;
+    const end = out.indexOf('</button>', start);
+    if (end < 0) break;
+    out = out.slice(0, start) + out.slice(end + '</button>'.length);
+  }
+  return out;
+}
+
+/**
+ * 入口の器を落とす。`/edit` に配る `index.html` から、`/` 専用の道具を消す。
+ *
+ * **消すのは3つだけ**——`data-entry-only` が付いた押しどころ（`01 ログイン` タブと
+ * `HOME`）と、その行き先の `screen-1`。ほかは触らない。
+ * 目印が見つからなければ**何もしない**（黙って別のものを削らない・`D-10`）。
+ */
+export function stripEntryMarkup(html) {
+  let out = html;
+  /* `<button ... data-entry-only ...>…</button>` を、開始から対応する `</button>` まで。 */
+  for (let guard = 0; guard < 4; guard += 1) {
+    const start = out.search(/<button[^>]*\sdata-entry-only[\s>]/);
+    if (start < 0) break;
+    const end = out.indexOf('</button>', start);
+    if (end < 0) break;
+    out = out.slice(0, start) + out.slice(end + '</button>'.length);
+  }
+  /* `<section ... id="screen-1" ...>…</section>` を丸ごと。
+     入れ子の `</section>` が無いことは `src/index.html` で確認している。 */
+  const secStart = out.search(/<section[^>]*\sid="screen-1"[\s>]/);
+  if (secStart >= 0) {
+    const secEnd = out.indexOf('</section>', secStart);
+    if (secEnd >= 0) out = out.slice(0, secStart) + out.slice(secEnd + '</section>'.length);
+  }
+  return out;
 }
 
 async function renderAppPage(env, state) {
@@ -488,6 +571,20 @@ async function renderAppPage(env, state) {
     });
   }
 
+  /* **入口の器は、スタッフの画面には配らない。**
+     `index.html` は `/`（入口）と `/edit`（スタッフの画面）で使い回している。
+     入口の道具——`01 ログイン` タブ・`HOME`・`screen-1`（「Google でログイン」）——は
+     `/edit` では**押しても何も起きない**（配線するのは `bootLoginPage()` で、
+     それは `__ENTRY__` のときしか走らない）。
+
+     はじめ、これを**画面側で実行時に隠していた**。ところが起動の途中で 401 に
+     当たると隠す処理まで進めず、**死んだログイン画面が復活**した
+     ——マスターが最初に報告した画面そのもの（2026-09-05・実機で再現）。
+     隠すのをやめて、**配る時点で消す**。文書に無ければ、どの失敗経路でも復活しない
+     （マスター指示 2026-09-05:「ふさぐというか、削除しろよ。お前がつくらなければ
+       この世に存在していないのだから、消せば済むだろ」）。 */
+  const withoutEntry = stripEntryMarkup(templateHtml);
+
   const injection = createAppStateScript(state);
   const supabaseScripts = state.backend === 'supabase'
     /* 置き場所は F1 で `src/js/` → `backend/js/` へ移った。
@@ -497,7 +594,7 @@ async function renderAppPage(env, state) {
       '<script type="module" src="/backend/js/supabase-auth.js"></script>' +
       '<script type="module" src="/backend/js/supabase-staff.js"></script>'
     : '';
-  const injectedHtml = templateHtml.replace('</head>', `${injection}${supabaseScripts}\n</head>`);
+  const injectedHtml = withoutEntry.replace('</head>', `${injection}${supabaseScripts}\n</head>`);
   return new Response(injectedHtml, { status: 200, headers: HTML_HEADERS });
 }
 

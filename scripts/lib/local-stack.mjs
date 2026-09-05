@@ -50,8 +50,12 @@ export const FIXTURE = {
   ownerBEmail: 'owner-b@local.test',
   ownerBOwnerId: '30000000-0000-0000-0000-0000000000b1',
   uninvitedEmail: 'uninvited@local.test',
-  /* スタッフかつ飼い主。本番のマスター自身がこの形（D-20260823-06）。
-     この組み合わせだけが /my に留まるので、導線の穴はここでしか出ない。 */
+  /* スタッフかつ飼い主。**この形はもう本番の前提ではない**——`D-20260904-66`
+     （マスター判断 2026-09-04）で**1ログインアカウント＝1役割**に決まり、
+     兼務は別アカウントを発行することになった。`/my` に留める救済も削除済み。
+     それでも fixture を残しているのは、**「スタッフ権限があれば必ず作業画面へ」を
+     試すのに、いちばんきつい形だから**（飼い主リンクも持つ人で確かめる）。
+     `verify:screens` の 5〜8b がこの口座を使う。 */
   staffOwnerEmail: 'staff-owner@local.test',
   petX: '40000000-0000-0000-0000-0000000000a1', // owner-a
   petY: '40000000-0000-0000-0000-0000000000a2', // owner-a
@@ -113,34 +117,92 @@ export async function passwordLogin(email, password = LOCAL_PASSWORD) {
 }
 
 /**
- * 対象ページに実ログインを注入する。ページは `window.TrimmerAuth.setSession` を
- * 公開している状態（`supabase-auth.js`/`supabase-staff.js` の boot 完了後）まで待つ。
- * 呼び出し側で `page.reload()` して起動分岐をやり直させること。
+ * 対象ページに実ログインを注入する。
+ *
+ * **注入は入口（`/`）で行う。** 以前は「未ログインの `/my` を開いてから注入する」
+ * 前提だったが、`/my` は未ログインだと入口へ出ていくようになったので、そこで
+ * `evaluate` すると転送で実行文脈ごと消える（`Execution context was destroyed`）。
+ * 入口は未ログインの人が居られる唯一の画面で、`bootLoginPage()` が
+ * `TrimmerAuth.setSession` を公開している。
+ *
+ * 呼び出し側は、注入のあと目的の画面へ `goto` すること（`page.reload()` ではなく）。
  */
 export async function injectSession(page, email, password = LOCAL_PASSWORD) {
   const session = await passwordLogin(email, password);
-  await page.evaluate((s) => new Promise((resolve) => {
+  /* **入口へ移ってから注入する。** 既にセッションが在るときは入口が `/my` へ
+     送るが、下の `waitForFunction` は転送後の文書で評価し直されるので、
+     どちらに居ても `TrimmerAuth` を掴める。転送と `goto` が競合しても
+     行き先は同じなので飲む。 */
+  /* **どこも開いていない頁では行き先を作れない。** `about:blank` のまま呼ばれると
+     `new URL('/', 'about:blank')` が投げる（実測: `Invalid URL`）。
+     何が足りないかを言って落とす——「Invalid URL」だけでは誰も追えない。 */
+  const here = page.url();
+  if (!/^https?:/.test(here)) {
+    throw new Error(
+      `セッションを注入できない: まだどのドメインも開いていない（現在地 "${here}"）。`
+      + '注入は入口（/）で行うので、先に page.goto(`${BASE}/`) してから呼ぶこと。',
+    );
+  }
+  await page.goto(new URL('/', here).href, { waitUntil: 'domcontentloaded' })
+    .catch(() => { /* 転送と競合しても、下の待ちが結果を見る */ });
+  /* **転送が飛び終わるまで待つ。** 呼び出し側が先に `/my` を開いていると、
+     そこから入口への `location.replace('/')` が**まだ飛んでいる最中**に
+     ここへ来ることがある。その状態で `evaluate` すると
+     `Execution context was destroyed` で落ちる（実測: `verify:delete`）。
+     行き先は入口なので、そこに落ち着くまで待てばよい。 */
+  await page.waitForURL((url) => new URL(url).pathname === '/', { timeout: 20_000 })
+    .catch(() => { /* 着いていなければ下の待ちが「公開していない」で落とす */ });
+  /* それでも転送と競合したときのために、文脈が消えたときだけ1回やり直す。 */
+  const put = () => page.evaluate((s) => new Promise((resolve, reject) => {
+    /* **待ち続けない。** 以前はここに時間切れが無く、`TrimmerAuth` を公開しない
+       画面で呼ぶと**永久に待った**——CI では `verify:m6` がそこで固まり、
+       15分後にジョブごとキャンセルされた（2026-09-05・実測）。
+       **ハングは、赤より悪い**。何が足りなかったかを言って落ちる。 */
+    const deadline = Date.now() + 20_000;
     const wait = () => {
       if (window.TrimmerAuth && typeof window.TrimmerAuth.setSession === 'function') {
-        window.TrimmerAuth.setSession({ access_token: s.access_token, refresh_token: s.refresh_token }).then(resolve);
-      } else {
-        setTimeout(wait, 100);
+        window.TrimmerAuth.setSession({ access_token: s.access_token, refresh_token: s.refresh_token })
+          .then(resolve, reject);
+        return;
       }
+      if (Date.now() > deadline) {
+        reject(new Error(
+          `セッションを注入できない: ${location.pathname} が TrimmerAuth を公開していない。`
+          + '（注入は入口 / で行う。そこで公開されないなら、bootLoginPage() が'
+          + ' /api/config か supabase-vendor.js の読み込みで失敗している）',
+        ));
+        return;
+      }
+      setTimeout(wait, 100);
     };
     wait();
   }), session);
+  await put().catch(async (error) => {
+    if (!/Execution context was destroyed/.test(String(error))) throw error;
+    await page.waitForTimeout(1_000);
+    await put();
+  });
+  /* **覚えた戻り先は捨てる。**
+     入口へ来る途中で `/my` などを開いていると `post_auth_return` が積まれる。
+     ここはログイン画面を人が押す代わりに**セッションを直に入れている**ので、
+     その戻り先は検査の意図ではない——**意図は、この直後に呼び出し側が開く URL**。
+     捨てないと、`restoreProtectedRoute` が覚えた先へ送り、狙った画面に着かない
+     （実測: `verify:roundtrip` の飼い主側が `.magazine-container` を待って時間切れ）。
+     招待（`pending_invitation`）は消さない——アプリが消化するのを見る検査が在る。 */
+  await page.evaluate(() => sessionStorage.removeItem('post_auth_return'));
 }
 
 /**
  * スタッフとしてログインし、トリマー画面（/edit 配下）を開く。
  *
  * 未ログインのまま /edit を開いてからセッションを注入すると、`bootStaffPortal()` が
- * 「セッションが無い」と判断して /my へ飛ばす処理と、こちらの注入がレースする。
- * どちらが先に走るかで結果が変わる不安定な検査になるため、先に /my でセッションを
+ * 「セッションが無い」と判断して入口へ飛ばす処理と、こちらの注入がレースする。
+ * どちらが先に走るかで結果が変わる不安定な検査になるため、先に入口でセッションを
  * 作ってから目的の画面へ入る（ログインを省いているわけではない。順序を決めているだけ）。
  */
 export async function openStaffPage(page, base, path = '/edit', email = 'staff@local.test') {
-  await page.goto(`${base}/my`);
+  /* 入口を開いてから注入する（`injectSession` の注記）。 */
+  await page.goto(`${base}/`, { waitUntil: 'domcontentloaded' });
   await injectSession(page, email);
   await page.goto(`${base}${path}`);
 }

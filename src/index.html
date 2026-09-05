@@ -1049,6 +1049,13 @@ button, input, textarea, select {
    ブラウザ既定の `[hidden] { display: none }` を上書きしてしまい、
    引き継ぎが起きていない犬（初回の子）にも空の帯が出る。 */
 .carry-over[hidden] { display: none; }
+
+/* `data-entry-only` の印が付いたものは、**Worker が `/edit` に配る時点で
+   丸ごと落とす**（`worker/src/index.js` の `stripEntryMarkup`）。
+   はじめ `hidden` で実行時に隠していたが、`.btn-home` は `display: inline-flex` を
+   持つのでブラウザ既定の `[hidden]` を上書きして消えなかった。
+   それ以前に、**起動が途中で失敗すると隠す処理まで進まない**——
+   だから隠すのをやめ、配る前に消すことにした。ここに CSS は要らない。 */
 .carry-over__text { font-size: 11px; line-height: 1.5; color: var(--ink-body); }
 .carry-over__clear {
   border: 1px solid var(--border-subtle);
@@ -1787,7 +1794,14 @@ button, input, textarea, select {
 <nav class="top-nav">
   <div class="top-nav__container">
     <div class="top-nav__left">
-      <button class="btn-home" onclick="App.goToStep(1)">
+      <!-- **HOME も入口専用。** これを押すと `goToStep(1)` で screen-1 へ行くが、
+           スタッフの画面では screen-1 を外してあるので、**画面が真っ白になる**
+           （2026-09-04・サブ検証の実機で再現。`04` などのタブは残るが、
+           白紙を見た人がそこから戻れると気づける根拠は画面に無い）。
+           直す前は「押しても何も起きない死んだログイン画面」が出ていた場所で、
+           **同じボタンの同じ穴**——`01 ログイン` タブだけ塞いで、こちらを見落としていた。
+           スタッフにとっての「家」は ②カルテ検索 なので、そちらのタブが担う。 -->
+      <button class="btn-home" data-entry-only onclick="App.goToStep(1)">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
         HOME
       </button>
@@ -1796,8 +1810,9 @@ button, input, textarea, select {
         これまで `/admin` へのリンクは画面のどこにも無く（`grep` で0件）、
         `/my` に着いたときに管理者を自動で飛ばす1箇所しか道が無かった。
         そのためトリマー画面に居る管理者は、URL を手打ちしない限り
-        管理画面へ行けなかった——`my.html` の `data-staff-link`（逆向きの
-        同じ穴）とまったく同じ形。同じ直し方にする。
+        管理画面へ行けなかった。`my.html` にも逆向きの同じ穴が在り、同じ直し方を
+        したが、そちらは `D-20260904-66`（1アカウント＝1役割）で仕組みごと不要に
+        なったので削除済み——**ここに残っているのは、管理者への入口だけ**。
         マスター指示 2026-09-02:「入口は1つ、管理者ページが表示されるか
         されないかの差だけでいい」。
 
@@ -1808,12 +1823,25 @@ button, input, textarea, select {
         今回ずっと問題になっている「機械は緑、人は届かない」と同じ形）。
       -->
       <a href="/admin" class="btn-step" data-admin-link hidden>管理</a>
+      <!-- **ログアウトを、スタッフの画面にも置く。**
+           これが無かったので、`/edit` に着いた人は**別のアカウントに切り替える手段が
+           1つも無かった**——`/` に戻っても `supabase-auth.js` が即 `/edit` へ送り返す。
+           マスターの「スタッフ用→ログインできない」「Home に戻るとその後ログインできない」の
+           両方がこれ（2026-09-04・実機で再現）。`my.html:278` と同じ印を使う。 -->
+      <button type="button" class="btn-step" data-sign-out hidden>ログアウト</button>
       <span class="top-nav__divider">/</span>
       <span class="top-nav__brand" id="nav-brand-label">SALTY DOG カルテ</span>
     </div>
     
     <div class="top-nav__steps">
-      <button class="btn-step is-active" data-step="1" onclick="App.goToStep(1)">01 ログイン</button>
+      <!-- **本番のスタッフ画面では出さない。**
+           `index.html` は `/`（入口）と `/edit`（スタッフ画面）で使い回している。
+           `/edit` でこれを押すと screen-1 が出て「Google でログイン」ボタンまで見えるが、
+           `bootLoginPage()` は `__ENTRY__` が無いと起動しないので**配線されておらず、
+           押しても何も起きない**（2026-09-04・実機で再現。押す前後で URL が変わらない）。
+           押せるのに仕事をしない入口は置かない（`D-12`）。
+           隠すのは `supabase-staff.js` の起動時＝スタッフの画面と分かったとき。 -->
+      <button class="btn-step is-active" data-step="1" data-entry-only onclick="App.goToStep(1)">01 ログイン</button>
       <button class="btn-step" data-step="2" onclick="App.goToStep(2)">02 カルテ検索</button>
       <button class="btn-step" data-step="3" onclick="App.goToStep(3)">03 カルテ作成</button>
       <button class="btn-step" data-step="4" onclick="App.goToStep(4)">04 顧客カルテ</button>
@@ -1894,11 +1922,15 @@ button, input, textarea, select {
 
       <div class="karte-cards-grid" id="karte-cards-container"><!-- /js/ui.js が仮データから描く --></div>
 
-      <div style="margin-top: 28px;">
-        <button class="boxbutton boxbutton--white boxbutton--full" onclick="App.createNewKarte()">
-          <span>＋ 新規カルテを作成する</span>
-        </button>
-      </div>
+      <!-- **`＋ 新規カルテを作成する` は外した**（マスター指示 2026-09-04:
+           「新規登録ボタンは存在意味が分からない。管理者ページにあれば済むなら
+             あそこにボタンを置く意味が無い」）。
+
+           このボタンは押しても**何もしない**——`createNewKarte()` は
+           「管理画面の『② 新規』から登録してください」と案内を出すだけだった。
+           犬を登録できるのは管理画面だけで、管理者にはヘッダーの「管理」から
+           入る道が既に在る。管理者でない人にはそもそも登録の権限が無い。
+           **押せるのに仕事をしない入口は置かない**（`D-12`）。 -->
 
     </div>
   </section>

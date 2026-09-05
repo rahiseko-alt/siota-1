@@ -64,7 +64,15 @@ export async function signInWithGoogle(
   returnPath,
   { storage = globalThis.sessionStorage, origin = globalThis.location?.origin } = {},
 ) {
-  storage?.setItem('post_auth_return', safeReturnPath(returnPath));
+  /* **先に積まれた戻り先を潰さない。**
+     未ログインで `/edit/p/{petId}` を開くと `supabase-staff.js` がその URL を
+     `post_auth_return` に積んで `/` へ送る。ところがここで無条件に上書きしていたので、
+     入口の「Google でログイン」を押した瞬間に `/my` に化け、**ログインしても
+     深い URL に戻れなかった**（2026-09-04・サブ検証の実機で再現）。
+     `supabase-staff.js` のコメントが約束していたことが、実際には成立していなかった。
+     既に積まれているなら、それが人の意図した行き先なので残す。 */
+  const pending = storage?.getItem('post_auth_return');
+  if (!pending) storage?.setItem('post_auth_return', safeReturnPath(returnPath));
   return supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
@@ -210,32 +218,24 @@ async function loadProtectedResource(supabase, route, content) {
 
 export async function bootProtectedPortal() {
   const status = document.querySelector('[data-portal-status]');
-  const loginPanel = document.querySelector('[data-login-panel]');
   const content = document.querySelector('[data-portal-content]');
-  const loginButton = document.querySelector('[data-google-login]');
   const signOutButton = document.querySelector('[data-sign-out]');
   captureInvitationToken(location.search);
   let supabase;
 
-  /* **ログインパネルを出して、押せる状態にする。**
-     signed-out の分岐と、セッションが失効した／飼い主リンクを外された後に
-     catch へ落ちたときの**両方**から呼ぶ。以前は結線が signed-out 分岐にしか無く、
-     「Googleでログインしてください」と出るのに**押すものが画面に無かった**
-     （飼い主はほぼ空白の画面で手が無くなる）。 */
-  const openLoginPanel = (message, returnPath) => {
-    show(loginPanel, true);
-    show(content, false);
-    setMessage(status, message);
-    if (!loginButton) return;
-    loginButton.disabled = false;
-    loginButton.onclick = async () => {
-      loginButton.disabled = true;
-      const { error } = await signInWithGoogle(supabase, returnPath);
-      if (error) {
-        loginButton.disabled = false;
-        setMessage(status, 'ログインを完了できませんでした。もう一度お試しください');
-      }
-    };
+  /* **ログインできる画面は入口（`/`）の1つだけ**（マスター指示 2026-09-04
+     「そもそも管理者と顧客の入り口を分けるな。認証で振り分ける経路にしろ。
+       指示は１つ。入り口を1つにしろ」）。
+
+     ここは長く**自前のログインパネル**を出していた。押せば本当にログインが
+     始まるので、これは飾りではなく**2つ目の入口**だった（`/admin` に3つ目が在る）。
+     入口を1つにするとは、この画面がログインを受け付けるのをやめること。
+
+     出ていくときは**必ず戻り先を積む**。積まないと、飼い主が招待リンクや
+     カルテの共有URLから来たときに、ログイン後そこへ帰れない（`D-12`）。 */
+  const goToEntry = (returnPath) => {
+    sessionStorage.setItem('post_auth_return', safeReturnPath(returnPath));
+    location.replace('/');
   };
 
   try {
@@ -247,7 +247,7 @@ export async function bootProtectedPortal() {
     const restored = await restoreProtectedRoute(supabase);
     if (restored.state === 'signed-out') {
       sessionStorage.removeItem('auth_reload_once');
-      openLoginPanel('Googleでログインしてください', restored.returnPath);
+      goToEntry(restored.returnPath);
       return;
     }
     if (restored.state === 'error') throw new Error(restored.message);
@@ -278,7 +278,6 @@ export async function bootProtectedPortal() {
     const session = await sessionResponse.json();
     if ((session.ownerLinks || []).length === 0 && (session.memberships || []).length === 0) {
       setMessage(status, invitationMessage || '登録されたお客様情報が見つかりません');
-      show(loginPanel, false);
       return;
     }
     /* **管理者を `/admin` へ強制的に飛ばすのをやめた**（マスター指示 2026-09-02:
@@ -291,27 +290,32 @@ export async function bootProtectedPortal() {
 
        いまは**着く先は全員同じ**。管理画面へは、カルテ画面のヘッダーに
        管理者のときだけ出る「管理」から入る（`index.html` の `data-admin-link`）。 */
-    if ((session.memberships || []).length > 0 && (session.ownerLinks || []).length === 0) {
+    /* **振り分けは「スタッフ権限を持つか / 持たないか」の1本**
+       （マスター判断 2026-09-04・`D-20260904-66`）。
+
+       以前は `ownerLinks === 0` も条件にしていた。**スタッフ権限を持ちながら、
+       この店の顧客としても登録されている人**（兼務アカウント）だけを `/my` に
+       留めるためで、`D-20260823-06` で私がそう作った形が前提だった。
+       マスター判断は「レアケースだから想定する必要なし。別のアカウントを発行するから
+       仕組みとして用意しない」——**1ログインアカウント＝1役割**。
+       条件を足すほど、着く先が人によって変わって説明できなくなる。 */
+    if ((session.memberships || []).length > 0) {
       location.replace('/edit');
       return;
     }
-    /* スタッフかつ飼い主のアカウントは上の分岐を外れて /my に留まる。ところが
-       `/` にも `/my` にも `/edit` へのリンクが1つも無く、**URL を手打ちしない限り
-       トリマー画面に行けなかった**。ログイン後の着地はここなので、ここに入口を出す。
-       （D-20260823-06 で管理者を飼い主にも紐付けた結果、いちばん現実に使う
-       アカウントだけがこの穴に落ちていた。） */
-    if ((session.memberships || []).length > 0) {
-      show(document.querySelector('[data-staff-link]'), true);
-    }
+    /* **兼務者の救済は無くした**（`D-20260904-66`）。上の分岐で、スタッフ権限を
+       持つ人は必ず作業画面へ行くので、ここへは**持たない人しか来ない**。
+       持たない人に「カルテを書く」を出すのは嘘になる。 */
     await loadProtectedResource(supabase, route, content);
     sessionStorage.removeItem('auth_reload_once');
-    show(loginPanel, false);
     show(content, true);
     show(signOutButton, true);
     setMessage(status, invitationMessage);
     signOutButton.onclick = async () => {
       await supabase.auth.signOut();
-      location.replace('/my');
+      /* **入口へ返す。** `/my` に留めると、飼い主の画面でログイン画面が出る形になり、
+         「入口は `/` の1本」（マスター指示 2026-09-04）とちぐはぐになる。 */
+      location.replace('/');
     };
   } catch (error) {
     /* セッション確認後（restored.state === 'signed-in'）にトークンが失効するなどして
@@ -328,13 +332,17 @@ export async function bootProtectedPortal() {
     }
     sessionStorage.removeItem('auth_reload_once');
     /* **2回目以降と、認証以外の失敗。** 前者は再読み込みでは抜けられないので、
-       ここでログインパネルを出して押せるようにする（出さないと詰む）。
-       後者は押しても直らないので、パネルは出さずに次の一手だけ伝える。 */
+       入口へ返して押せるようにする（返さないと詰む）。
+       後者は押しても直らないので、次の一手だけ伝えてここに留まる。
+
+       **鍵を捨ててから返すこと。** 捨てずに返すと、入口は「セッションが在る」と
+       見て `/my` へ送り返し、`/my` は 401 でまた入口へ返す——**往復**になる
+       （2026-09-02 に一度起きた形）。 */
     if (error.message === 'authentication required') {
-      openLoginPanel('Googleでログインしてください', `${location.pathname}${location.search}`);
+      try { await supabase?.auth.signOut(); } catch { /* 消せなくても入口へは返す */ }
+      goToEntry(`${location.pathname}${location.search}`);
       return;
     }
-    show(loginPanel, false);
     show(content, false);
     setMessage(status, '表示できません。少し時間をおいて、このページを開き直してください');
   }
@@ -364,6 +372,16 @@ async function bootLoginPage() {
     document.head.append(vendorScript);
   });
   const supabase = await createAuthClient();
+  /* **入口でもセッションを入れられるようにする。**
+     `/my` `/edit` `/admin` は起動時にこれを公開しており、検査（`injectSession`）は
+     それを掴んでセッションを作る。`/my` が未ログインのとき入口へ出ていくように
+     したので、**未ログインの人が居られる画面が入口しか無くなる**——ここが
+     公開していないと、検査はセッションを作る場所を失う。
+     公開するのは `setSession` だけ。画面の振る舞いは変えない。 */
+  globalThis.TrimmerAuth = {
+    client: supabase,
+    setSession: (session) => supabase.auth.setSession(session),
+  };
   const { data } = await supabase.auth.getSession();
   if (data.session) {
     location.replace('/my');

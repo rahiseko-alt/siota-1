@@ -54,12 +54,32 @@ try {
   /* ── ① URLを開く ── */
   const first = await page.goto(`${BASE}/edit`, { waitUntil: 'networkidle' });
   check('①. URL を開ける', first?.status() === 200, `status=${first?.status()}`);
-  /* 未ログインなら `/my` のログイン画面へ落ちる。**行き止まりにならない**こと。 */
-  await page.waitForTimeout(1_500);
-  check('②a. 未ログインならログインの画面に導かれる',
-    new URL(page.url()).pathname === '/my', `path=${new URL(page.url()).pathname}`);
+  /* 未ログインなら**入口（`/`）**のログイン画面へ落ちる。**行き止まりにならない**こと。
 
-  /* ── ② ログイン ── */
+     ここは長く `/my`（飼い主の画面）を期待していたが、**スタッフが自分の画面の URL を
+     開いて飼い主の画面に着く**のは役割と食い違う。マスター指示 2026-09-04
+     「そもそも管理者と顧客の入り口を分けるな。認証で振り分ける経路にしろ」に合わせて
+     `/` へ変えた（`D-20260904-66`）。
+     **着いたことだけで終わらせない**——そこに押せるログインが在り、
+     開こうとした URL を覚えているところまで見る（覚えていないとブックマークが死ぬ）。 */
+  await page.waitForTimeout(2_000);
+  const led = await page.evaluate(() => ({
+    path: location.pathname,
+    login: (document.querySelector('[data-entry-login]') || {}).getClientRects
+      ? document.querySelector('[data-entry-login]').getClientRects().length > 0 : false,
+    ret: sessionStorage.getItem('post_auth_return'),
+  })).catch((e) => ({ path: '(読めず)', login: false, ret: String(e).slice(0, 40) }));
+  check('②a. 未ログインなら入口のログイン画面に導かれる',
+    led.path === '/' && led.login === true, JSON.stringify(led));
+  check('②b. 開こうとした URL を覚えている（ログイン後に戻れる）',
+    led.ret === '/edit', `覚えた先=${led.ret}`);
+
+  /* ── ② ログイン ──
+     **注入する前に `/my` を開く。** セッションを入れる口（`TrimmerAuth`）を公開するのは
+     `/my` と `/edit` の起動処理だけで、いま居る入口（`/`）は公開しない。
+     ここを飛ばすと、注入が延々と待つ（`local-stack.mjs` の注記・2026-09-05 に実測）。
+     `openStaffPage()` が同じ順序を踏んでいるのと同じ理由。 */
+  await page.goto(`${BASE}/my`, { waitUntil: 'domcontentloaded' });
   await injectSession(page, FIXTURE.staffEmail);
   await page.goto(`${BASE}/edit`, { waitUntil: 'networkidle' });
   await page.waitForSelector('.karte-card', { timeout: 20_000 }).catch(() => {});

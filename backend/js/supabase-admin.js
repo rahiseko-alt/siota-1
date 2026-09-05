@@ -23,7 +23,7 @@
  * 写真が誰からも取れない置き去りになる。
  */
 
-import { createAuthClient, signInWithGoogle, authorizedFetch } from './supabase-auth.js';
+import { createAuthClient, authorizedFetch } from './supabase-auth.js';
 import { deleteReportAssets, purgePetAssets, purgeOwnerAssets } from './supabase-storage.js';
 
 let supabase = null;
@@ -730,8 +730,6 @@ function pickReportForDelete(pet) {
 export async function bootAdminPortal() {
   statusEl = document.querySelector('[data-portal-status]');
   contentEl = document.querySelector('[data-portal-content]');
-  const loginPanel = document.querySelector('[data-login-panel]');
-  const loginButton = document.querySelector('[data-google-login]');
   const signOutButton = document.querySelector('[data-sign-out]');
 
   try {
@@ -744,17 +742,17 @@ export async function bootAdminPortal() {
 
     const { data } = await supabase.auth.getSession();
     if (!data || !data.session) {
-      show(loginPanel, true);
-      show(contentEl, false);
-      setMessage(statusEl, 'Googleでログインしてください');
-      loginButton.onclick = async () => {
-        loginButton.disabled = true;
-        const { error } = await signInWithGoogle(supabase, '/admin');
-        if (error) {
-          loginButton.disabled = false;
-          setMessage(statusEl, 'ログインを完了できませんでした。もう一度お試しください');
-        }
-      };
+      /* **ログインできる画面は入口（`/`）の1つだけ**（マスター指示 2026-09-04
+         「そもそも管理者と顧客の入り口を分けるな。指示は１つ。入り口を1つにしろ」）。
+         ここは自前のログインパネルを出していた——**3つ目の入口**だった。
+
+         **戻り先は積まない。** `safeReturnPath()` は `/my` と `/edit` しか通さないので、
+         `/admin` を積んでも `/my` に潰れる「覚えたふり」になる（`D-10`）。
+         実際、直す前の `signInWithGoogle(supabase, '/admin')` は**押せるのに
+         `/admin` へ帰って来ない**入口だった。
+         管理者は入口でログインすれば `/edit` に着き、ヘッダーの「管理」から
+         ここへ入れる（`D-20260904-66` の形）。 */
+      location.replace('/');
       return;
     }
 
@@ -765,7 +763,6 @@ export async function bootAdminPortal() {
          行き止まりにもしない——その人が使える画面へ送る（`D-14` の問1）。 */
       const hasStaff = (session.memberships || []).length > 0;
       setMessage(statusEl, '管理者のアカウントではありません。');
-      show(loginPanel, false);
       show(contentEl, true);
       clear();
       contentEl.append(menuItem({
@@ -777,21 +774,34 @@ export async function bootAdminPortal() {
       show(signOutButton, true);
       signOutButton.onclick = async () => {
         await supabase.auth.signOut();
-        location.replace('/my');
+        /* **入口へ返す**（マスター指示 2026-09-04「入口を分けるな」）。
+           `/my` に返すと、飼い主の画面がもう1つのログイン画面になってしまう。 */
+        location.replace('/');
       };
       return;
     }
 
-    show(loginPanel, false);
     show(contentEl, true);
     show(signOutButton, true);
     setMessage(statusEl, '');
     signOutButton.onclick = async () => {
       await supabase.auth.signOut();
-      location.replace('/my');
+      /* 上と同じ。ログアウトの行き先は3画面とも入口（`/`）で揃える。 */
+      location.replace('/');
     };
     screenHome();
   } catch (error) {
+    /* **ログインが切れているなら、入口へ返す。**
+       ここは生の JSON（`401 {"error":"authentication required"}`）を人に見せたうえで、
+       ログアウトも入口も出さない**行き止まり**だった（2026-09-05・サブ検証で実機再現）。
+       未ログイン分岐は入口へ送るように直したのに、**失効の経路だけ守られていなかった**。
+       鍵を捨ててから返す（残すと入口が送り返して往復する）。 */
+    if (/authentication required|401/.test((error && error.message) || '')) {
+      Promise.resolve(supabase ? supabase.auth.signOut() : null)
+        .catch(() => { /* 消せなくても入口へは返す */ })
+        .then(() => { location.replace('/'); });
+      return;
+    }
     setMessage(statusEl, `管理者ページを開けませんでした: ${error.message}`);
   }
 }
