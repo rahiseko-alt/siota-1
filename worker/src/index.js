@@ -460,10 +460,66 @@ async function renderLoginPage(env) {
   const scripts = '<script>window.__ENTRY__=true;</script>'
     + '<script src="/backend/js/supabase-vendor.js"></script>'
     + '<script type="module" src="/backend/js/supabase-auth.js"></script>';
-  return new Response(templateHtml.replace('</head>', `${scripts}\n</head>`), {
+  /* **業務の器は、入口には配らない。**
+     `index.html` は `/`（入口）と `/edit`（スタッフの画面）で使い回している。
+     そのため入口には**②カルテ検索・③カルテ作成・④顧客カルテの3画面と段のタブが
+     まるごと載っており、未ログインの誰でも押して中へ入れた**
+     ——犬のカード5件（架空の顧客名）とカルテの入力欄8個が、そのまま見えていた
+     （2026-09-05・実機で確認）。
+
+     `goToStep()` の関所は `__REPORT__` が在るときだけ効く。入口には注入しないので、
+     **本物の入口では関所が1つも効いていない**。
+
+     `/edit` から入口の道具を落としたのと**逆向き**に、入口からは業務の器を落とす。
+     文書に無ければ、押しようがない（マスター指示 2026-09-05:
+     「ふさぐというか、削除しろよ…消せば済むだろ」）。 */
+  const entryOnly = stripAppMarkup(templateHtml);
+  return new Response(entryOnly.replace('</head>', `${scripts}\n</head>`), {
     status: 200,
     headers: HTML_HEADERS,
   });
+}
+
+/**
+ * 業務の器を落とす。入口（`/`）に配る `index.html` から、`/edit` 専用の器を消す。
+ *
+ * **消すのは2つだけ**——`screen-2` `screen-3` `screen-4` の3画面と、
+ * そこへ連れて行く段のタブ（`data-step` が 2 以上）。
+ * `screen-1`（ログイン）と `HOME`、`01 ログイン` タブは入口のものなので残す。
+ * 目印が見つからなければ**何もしない**（黙って別のものを削らない・`D-10`）。
+ */
+export function stripAppMarkup(html) {
+  let out = html;
+  for (const id of ['screen-2', 'screen-3', 'screen-4']) {
+    const start = out.indexOf(`id="${id}"`);
+    if (start < 0) continue;
+    const open = out.lastIndexOf('<section', start);
+    if (open < 0) continue;
+    /* `screen-3` は中に `<section>` を持つので、対応する閉じを数えて探す。 */
+    let depth = 0;
+    let i = open;
+    let close = -1;
+    while (i < out.length) {
+      const nextOpen = out.indexOf('<section', i + 1);
+      const nextClose = out.indexOf('</section>', i + 1);
+      if (nextClose < 0) break;
+      if (nextOpen >= 0 && nextOpen < nextClose) { depth += 1; i = nextOpen; continue; }
+      if (depth === 0) { close = nextClose; break; }
+      depth -= 1;
+      i = nextClose;
+    }
+    if (close < 0) continue;
+    out = out.slice(0, open) + out.slice(close + '</section>'.length);
+  }
+  /* 段のタブ。`01 ログイン` は入口のものなので残す。 */
+  for (let guard = 0; guard < 6; guard += 1) {
+    const start = out.search(/<button[^>]*\sdata-step="[2-9]"/);
+    if (start < 0) break;
+    const end = out.indexOf('</button>', start);
+    if (end < 0) break;
+    out = out.slice(0, start) + out.slice(end + '</button>'.length);
+  }
+  return out;
 }
 
 /**

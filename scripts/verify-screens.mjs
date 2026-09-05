@@ -52,9 +52,38 @@ try {
     active: (document.querySelector('.screen-panel.is-active') || {}).id,
   }));
   check('1. `/` が配信される', topRes?.status() === 200, `status=${topRes?.status()}`);
-  check('2. `/` に4画面が乗っている', topView.screens === 4, `screen=${topView.screens}`);
-  check('3. `/` に段のタブが4つ在る', topView.steps === 4, `tab=${topView.steps}`);
-  check('4. `/` はログイン画面から始まる', topView.active === 'screen-1', `active=${topView.active}`);
+  /* **入口には、ログインの画面しか配らない。**
+     ここは長く「4画面と段のタブ4つが在ること」を要求していた。ところが
+     `index.html` は `/` と `/edit` で使い回しているので、それは
+     **未ログインの誰でも②③④に入れる**ことを要求していたのと同じだった
+     ——実測で、犬のカード5件（架空の顧客名）とカルテの入力欄8個が見えていた
+     （2026-09-05）。`goToStep()` の関所は `__REPORT__` が在るときだけ効き、
+     入口には注入しないので**1つも効いていなかった**。
+     判定を緩めたのではなく、**要求そのものが間違っていた**ので正した。 */
+  check('2. 入口には、ログインの画面しか配られていない',
+    topView.screens === 1 && topView.active === 'screen-1', `screen=${topView.screens}`);
+  check('3. 入口に、業務の画面へ連れて行く段のタブが無い',
+    topView.steps === 1, `tab=${topView.steps}`);
+  /* **押しても業務の画面へ行けないこと。** 器が無ければ行けないはずだが、
+     「無い」ことは押して確かめる（`D-12`「押せた ではなく 届いた」の裏返し）。 */
+  const pressed = [];
+  for (const step of [2, 3, 4]) {
+    await top.evaluate((n) => {
+      const btn = document.querySelector(`.btn-step[data-step="${n}"]`);
+      if (btn) btn.click();
+      else if (globalThis.App) App.goToStep(n);
+    }, step).catch(() => {});
+    await top.waitForTimeout(400);
+    pressed.push(await top.evaluate(() => ({
+      active: (document.querySelector('.screen-panel.is-active') || {}).id,
+      cards: document.querySelectorAll('.karte-card').length,
+      inputs: document.querySelectorAll('#screen-3 input, #screen-3 textarea').length,
+    })));
+  }
+  check('4. 入口で段を押しても、業務の画面に入れない',
+    pressed.length === 3
+    && pressed.every((r) => r.active === 'screen-1' && r.cards === 0 && r.inputs === 0),
+    JSON.stringify(pressed));
 
   /* 4b: **`/` が「本物の入口」として配られていること。**
      `1.`〜`4.` は**素の静的HTML でも全部通る**——4画面あって、段のタブが4つあって、
