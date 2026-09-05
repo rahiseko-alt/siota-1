@@ -145,7 +145,15 @@ export async function injectSession(page, email, password = LOCAL_PASSWORD) {
   }
   await page.goto(new URL('/', here).href, { waitUntil: 'domcontentloaded' })
     .catch(() => { /* 転送と競合しても、下の待ちが結果を見る */ });
-  await page.evaluate((s) => new Promise((resolve, reject) => {
+  /* **転送が飛び終わるまで待つ。** 呼び出し側が先に `/my` を開いていると、
+     そこから入口への `location.replace('/')` が**まだ飛んでいる最中**に
+     ここへ来ることがある。その状態で `evaluate` すると
+     `Execution context was destroyed` で落ちる（実測: `verify:delete`）。
+     行き先は入口なので、そこに落ち着くまで待てばよい。 */
+  await page.waitForURL((url) => new URL(url).pathname === '/', { timeout: 20_000 })
+    .catch(() => { /* 着いていなければ下の待ちが「公開していない」で落とす */ });
+  /* それでも転送と競合したときのために、文脈が消えたときだけ1回やり直す。 */
+  const put = () => page.evaluate((s) => new Promise((resolve, reject) => {
     /* **待ち続けない。** 以前はここに時間切れが無く、`TrimmerAuth` を公開しない
        画面で呼ぶと**永久に待った**——CI では `verify:m6` がそこで固まり、
        15分後にジョブごとキャンセルされた（2026-09-05・実測）。
@@ -169,6 +177,11 @@ export async function injectSession(page, email, password = LOCAL_PASSWORD) {
     };
     wait();
   }), session);
+  await put().catch(async (error) => {
+    if (!/Execution context was destroyed/.test(String(error))) throw error;
+    await page.waitForTimeout(1_000);
+    await put();
+  });
   /* **覚えた戻り先は捨てる。**
      入口へ来る途中で `/my` などを開いていると `post_auth_return` が積まれる。
      ここはログイン画面を人が押す代わりに**セッションを直に入れている**ので、
