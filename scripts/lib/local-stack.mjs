@@ -117,16 +117,27 @@ export async function passwordLogin(email, password = LOCAL_PASSWORD) {
 }
 
 /**
- * 対象ページに実ログインを注入する。ページは `window.TrimmerAuth.setSession` を
- * 公開している状態（`supabase-auth.js`/`supabase-staff.js` の boot 完了後）まで待つ。
- * 呼び出し側で `page.reload()` して起動分岐をやり直させること。
+ * 対象ページに実ログインを注入する。
+ *
+ * **注入は入口（`/`）で行う。** 以前は「未ログインの `/my` を開いてから注入する」
+ * 前提だったが、`/my` は未ログインだと入口へ出ていくようになったので、そこで
+ * `evaluate` すると転送で実行文脈ごと消える（`Execution context was destroyed`）。
+ * 入口は未ログインの人が居られる唯一の画面で、`bootLoginPage()` が
+ * `TrimmerAuth.setSession` を公開している。
+ *
+ * 呼び出し側は、注入のあと目的の画面へ `goto` すること（`page.reload()` ではなく）。
  */
 export async function injectSession(page, email, password = LOCAL_PASSWORD) {
   const session = await passwordLogin(email, password);
+  /* **入口へ移ってから注入する。** 既にセッションが在るときは入口が `/my` へ
+     送るが、下の `waitForFunction` は転送後の文書で評価し直されるので、
+     どちらに居ても `TrimmerAuth` を掴める。転送と `goto` が競合しても
+     行き先は同じなので飲む。 */
+  await page.goto(new URL('/', page.url()).href, { waitUntil: 'domcontentloaded' })
+    .catch(() => { /* 転送と競合しても、下の待ちが結果を見る */ });
   await page.evaluate((s) => new Promise((resolve, reject) => {
-    /* **待ち続けない。** `TrimmerAuth` を公開するのは `/my` と `/edit` の起動処理だけで、
-       入口（`/`）の `bootLoginPage()` は公開しない。以前はここに時間切れが無く、
-       入口で呼ぶと**永久に待った**——CI では `verify:m6` がそこで固まり、
+    /* **待ち続けない。** 以前はここに時間切れが無く、`TrimmerAuth` を公開しない
+       画面で呼ぶと**永久に待った**——CI では `verify:m6` がそこで固まり、
        15分後にジョブごとキャンセルされた（2026-09-05・実測）。
        **ハングは、赤より悪い**。何が足りなかったかを言って落ちる。 */
     const deadline = Date.now() + 20_000;
@@ -138,9 +149,9 @@ export async function injectSession(page, email, password = LOCAL_PASSWORD) {
       }
       if (Date.now() > deadline) {
         reject(new Error(
-          `セッションを注入できない: ${location.pathname} は TrimmerAuth を公開しない。`
-          + '（公開するのは /my と /edit の起動処理だけ。入口 / では注入できないので、'
-          + '先に /my を開いてから注入すること）',
+          `セッションを注入できない: ${location.pathname} が TrimmerAuth を公開していない。`
+          + '（注入は入口 / で行う。そこで公開されないなら、bootLoginPage() が'
+          + ' /api/config か supabase-vendor.js の読み込みで失敗している）',
         ));
         return;
       }
@@ -154,12 +165,13 @@ export async function injectSession(page, email, password = LOCAL_PASSWORD) {
  * スタッフとしてログインし、トリマー画面（/edit 配下）を開く。
  *
  * 未ログインのまま /edit を開いてからセッションを注入すると、`bootStaffPortal()` が
- * 「セッションが無い」と判断して /my へ飛ばす処理と、こちらの注入がレースする。
- * どちらが先に走るかで結果が変わる不安定な検査になるため、先に /my でセッションを
+ * 「セッションが無い」と判断して入口へ飛ばす処理と、こちらの注入がレースする。
+ * どちらが先に走るかで結果が変わる不安定な検査になるため、先に入口でセッションを
  * 作ってから目的の画面へ入る（ログインを省いているわけではない。順序を決めているだけ）。
  */
 export async function openStaffPage(page, base, path = '/edit', email = 'staff@local.test') {
-  await page.goto(`${base}/my`);
+  /* 入口を開いてから注入する（`injectSession` の注記）。 */
+  await page.goto(`${base}/`, { waitUntil: 'domcontentloaded' });
   await injectSession(page, email);
   await page.goto(`${base}${path}`);
 }

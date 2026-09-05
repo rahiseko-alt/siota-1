@@ -99,9 +99,10 @@ try {
   check('10. アプリ由来のコンソールエラーが無い（ログイン前）', consoleErrors.length === 0, consoleErrors.join(' | '));
 
   // ── 11〜: ログイン後（F5で追加）──
-  await page.goto(`${BASE}/my`, { waitUntil: 'networkidle' });
+  /* **注入は入口で行われる**（`injectSession` が自分で `/` へ移る）。
+     戻ってくるので `reload()` ではなく、行きたい画面を名指しで開く。 */
   await injectSession(page, FIXTURE.ownerAEmail);
-  await page.reload();
+  await page.goto(`${BASE}/my`, { waitUntil: 'networkidle' });
   await page.waitForSelector('.pet-card', { timeout: 15000 });
   // 繰り返し実行で犬が増えていく前提（DBは検査間で毎回リセットしない）なので、
   // 「自分の犬(X/Y/Z)は出る」「他人の犬(Q)は出ない」だけを見る。件数固定では見ない。

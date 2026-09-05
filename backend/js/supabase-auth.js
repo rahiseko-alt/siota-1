@@ -378,6 +378,16 @@ async function bootLoginPage() {
     document.head.append(vendorScript);
   });
   const supabase = await createAuthClient();
+  /* **入口でもセッションを入れられるようにする。**
+     `/my` `/edit` `/admin` は起動時にこれを公開しており、検査（`injectSession`）は
+     それを掴んでセッションを作る。`/my` が未ログインのとき入口へ出ていくように
+     したので、**未ログインの人が居られる画面が入口しか無くなる**——ここが
+     公開していないと、検査はセッションを作る場所を失う。
+     公開するのは `setSession` だけ。画面の振る舞いは変えない。 */
+  globalThis.TrimmerAuth = {
+    client: supabase,
+    setSession: (session) => supabase.auth.setSession(session),
+  };
   const { data } = await supabase.auth.getSession();
   if (data.session) {
     location.replace('/my');
