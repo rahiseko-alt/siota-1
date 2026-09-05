@@ -169,6 +169,14 @@ export async function injectSession(page, email, password = LOCAL_PASSWORD) {
     };
     wait();
   }), session);
+  /* **覚えた戻り先は捨てる。**
+     入口へ来る途中で `/my` などを開いていると `post_auth_return` が積まれる。
+     ここはログイン画面を人が押す代わりに**セッションを直に入れている**ので、
+     その戻り先は検査の意図ではない——**意図は、この直後に呼び出し側が開く URL**。
+     捨てないと、`restoreProtectedRoute` が覚えた先へ送り、狙った画面に着かない
+     （実測: `verify:roundtrip` の飼い主側が `.magazine-container` を待って時間切れ）。
+     招待（`pending_invitation`）は消さない——アプリが消化するのを見る検査が在る。 */
+  await page.evaluate(() => sessionStorage.removeItem('post_auth_return'));
 }
 
 /**

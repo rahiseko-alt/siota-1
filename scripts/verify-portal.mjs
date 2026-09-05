@@ -109,10 +109,6 @@ try {
   /* **注入は入口で行われる**（`injectSession` が自分で `/` へ移る）。
      戻ってくるので `reload()` ではなく、行きたい画面を名指しで開く。 */
   await injectSession(page, FIXTURE.ownerAEmail);
-  /* **覚えた戻り先を捨ててから一覧を開く。** 上の `9.` で `/my/pets/{petX}` を
-     覚えさせたので、そのままだと `restoreProtectedRoute` がその犬の頁へ送る
-     ——正しい動きだが、ここで見たいのは一覧。 */
-  await page.evaluate(() => sessionStorage.removeItem('post_auth_return'));
   await page.goto(`${BASE}/my`, { waitUntil: 'networkidle' });
   await page.waitForSelector('.pet-card', { timeout: 15000 });
   // 繰り返し実行で犬が増えていく前提（DBは検査間で毎回リセットしない）なので、
