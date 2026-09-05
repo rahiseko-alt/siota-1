@@ -123,13 +123,28 @@ export async function passwordLogin(email, password = LOCAL_PASSWORD) {
  */
 export async function injectSession(page, email, password = LOCAL_PASSWORD) {
   const session = await passwordLogin(email, password);
-  await page.evaluate((s) => new Promise((resolve) => {
+  await page.evaluate((s) => new Promise((resolve, reject) => {
+    /* **待ち続けない。** `TrimmerAuth` を公開するのは `/my` と `/edit` の起動処理だけで、
+       入口（`/`）の `bootLoginPage()` は公開しない。以前はここに時間切れが無く、
+       入口で呼ぶと**永久に待った**——CI では `verify:m6` がそこで固まり、
+       15分後にジョブごとキャンセルされた（2026-09-05・実測）。
+       **ハングは、赤より悪い**。何が足りなかったかを言って落ちる。 */
+    const deadline = Date.now() + 20_000;
     const wait = () => {
       if (window.TrimmerAuth && typeof window.TrimmerAuth.setSession === 'function') {
-        window.TrimmerAuth.setSession({ access_token: s.access_token, refresh_token: s.refresh_token }).then(resolve);
-      } else {
-        setTimeout(wait, 100);
+        window.TrimmerAuth.setSession({ access_token: s.access_token, refresh_token: s.refresh_token })
+          .then(resolve, reject);
+        return;
       }
+      if (Date.now() > deadline) {
+        reject(new Error(
+          `セッションを注入できない: ${location.pathname} は TrimmerAuth を公開しない。`
+          + '（公開するのは /my と /edit の起動処理だけ。入口 / では注入できないので、'
+          + '先に /my を開いてから注入すること）',
+        ));
+        return;
+      }
+      setTimeout(wait, 100);
     };
     wait();
   }), session);
