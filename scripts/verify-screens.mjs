@@ -113,6 +113,27 @@ try {
     bothView.loginTab === false && bothView.loginButton === false && bothView.entryPanel === false,
     `タブ=${bothView.loginTab} ボタン=${bothView.loginButton} 画面=${bothView.entryPanel}`);
 
+  /* **左上の HOME を押しても、画面が白紙にならないこと。**
+     `screen-1` を作業画面から外したとき、HOME だけ `goToStep(1)` を呼んだままで、
+     押すと**ナビ帯以外が全部消えた**（2026-09-04・サブ検証の実機で再現）。
+     直す前は「押しても何も起きない死んだログイン画面」が出ていた同じボタンで、
+     `01 ログイン` タブだけ塞いで**こちらを見落としていた**。 */
+  const homeBtn = both.locator('.btn-home');
+  const homeVisible = await homeBtn.first().isVisible().catch(() => false);
+  check('8c. 作業画面に、白紙へ連れて行く HOME を出していない', homeVisible === false);
+  /* 見えていなくても、呼ばれたら壊れないこと（入口を消すたびに同じ穴が開くので、
+     受け皿そのものを見る）。 */
+  const afterHome = await both.evaluate(() => {
+    /* `App` は古典スクリプトの `const` 宣言なので `globalThis` には載らない。
+       素の名前で呼ぶ（画面の `onclick` と同じ届き方）。 */
+    App.goToStep(1);
+    const active = document.querySelector('.screen-panel.is-active');
+    return { active: active ? active.id : null,
+      text: (document.querySelector('.main-wrapper') || {}).textContent?.trim().length || 0 };
+  });
+  check('8d. `goToStep(1)` を呼んでも、いまの画面が消えない',
+    afterHome.active !== null && afterHome.text > 0, JSON.stringify(afterHome));
+
   /* 押したら本当に入口へ戻るか。**在るだけでは足りない。** */
   await Promise.all([
     both.waitForURL(/\/$/, { timeout: 20_000 }).catch(() => {}),
@@ -122,6 +143,46 @@ try {
   check('8b. ログアウトを押すと入口（`/`）に戻る',
     new URL(both.url()).pathname === '/', `url=${new URL(both.url()).pathname}`);
   await both.close();
+
+  /* ── ②b 未ログインでスタッフの深い URL を開いたとき、ログイン後にそこへ戻れること ──
+
+     ブックマークや共有リンクで `/edit/p/{petId}` を直に開く人が居る。
+     未ログインなら入口（`/`）へ送るが、**戻り先を覚えていないと、ログインしても
+     一覧に落ちるだけ**でその犬に戻れない。
+     実際そうなっていた: 送る側は戻り先を積んでいたのに、入口の
+     「Google でログイン」が `post_auth_return` を `/my` で**上書きして潰していた**
+     （2026-09-04・サブ検証の実機で再現）。押す前後の両方を見る。 */
+  const deep = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const deepPath = `/edit/p/${FIXTURE.petX}`;
+  await deep.goto(`${BASE}${deepPath}`, { waitUntil: 'domcontentloaded' });
+  await deep.waitForURL(/\/$/, { timeout: 20_000 }).catch(() => {});
+  await deep.waitForTimeout(2_000);
+  const beforeClick = await deep.evaluate(() => ({
+    path: location.pathname,
+    ret: sessionStorage.getItem('post_auth_return'),
+    login: !!document.querySelector('[data-entry-login]'),
+  }));
+  check('8e. 未ログインでスタッフの深い URL を開くと、入口へ送られる',
+    beforeClick.path === '/', `path=${beforeClick.path}`);
+  check('8f. そのとき、開こうとした URL を覚えている',
+    beforeClick.ret === deepPath, `覚えた先=${beforeClick.ret}`);
+  /* **押したあとも覚えていること。** ここが潰れていた。
+     **認可画面へは行かせない**——出て行くと別のドメインになり、`sessionStorage` は
+     もう読めない（実測: `null` が返る）。見たいのは「押した瞬間に消えないか」なので、
+     Google へ出る所で止めて、この画面のまま中身を読む。 */
+  await deep.route('**/auth/v1/authorize**', (route) => route.abort());
+  await deep.locator('[data-entry-login]').click({ timeout: 10_000 }).catch(() => {});
+  /* 中断した先はドメインの無い頁になり、そこでは `sessionStorage` を読むと
+     `SecurityError` になる（実測）。**同じ入口へ戻ってから読む**——
+     `sessionStorage` はタブとドメインの組に残っているので、これで読める。 */
+  await deep.waitForTimeout(1_500);
+  await deep.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+  await deep.waitForTimeout(1_500);
+  const afterClick = await deep.evaluate(() => sessionStorage.getItem('post_auth_return'))
+    .catch(() => '(読めず)');
+  check('8g. ログインを押しても、戻り先が入口の既定で上書きされない',
+    afterClick === deepPath, `押した後=${afterClick}`);
+  await deep.close();
 
   /* ── ③ 飼い主だけの人に、作業画面の入口を出していないこと ── */
   const owner = await browser.newPage({ viewport: { width: 390, height: 844 } });

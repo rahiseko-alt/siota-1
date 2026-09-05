@@ -64,7 +64,15 @@ export async function signInWithGoogle(
   returnPath,
   { storage = globalThis.sessionStorage, origin = globalThis.location?.origin } = {},
 ) {
-  storage?.setItem('post_auth_return', safeReturnPath(returnPath));
+  /* **先に積まれた戻り先を潰さない。**
+     未ログインで `/edit/p/{petId}` を開くと `supabase-staff.js` がその URL を
+     `post_auth_return` に積んで `/` へ送る。ところがここで無条件に上書きしていたので、
+     入口の「Google でログイン」を押した瞬間に `/my` に化け、**ログインしても
+     深い URL に戻れなかった**（2026-09-04・サブ検証の実機で再現）。
+     `supabase-staff.js` のコメントが約束していたことが、実際には成立していなかった。
+     既に積まれているなら、それが人の意図した行き先なので残す。 */
+  const pending = storage?.getItem('post_auth_return');
+  if (!pending) storage?.setItem('post_auth_return', safeReturnPath(returnPath));
   return supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
@@ -315,7 +323,9 @@ export async function bootProtectedPortal() {
     setMessage(status, invitationMessage);
     signOutButton.onclick = async () => {
       await supabase.auth.signOut();
-      location.replace('/my');
+      /* **入口へ返す。** `/my` に留めると、飼い主の画面でログイン画面が出る形になり、
+         「入口は `/` の1本」（マスター指示 2026-09-04）とちぐはぐになる。 */
+      location.replace('/');
     };
   } catch (error) {
     /* セッション確認後（restored.state === 'signed-in'）にトークンが失効するなどして

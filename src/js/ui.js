@@ -859,6 +859,20 @@ const App = {
       }
     }
 
+    /* **行き先の画面が無いときは、いまの画面を残す。**
+       以前はここで全部の `is-active` を外してから行き先を探していたので、
+       行き先が無いと**どの画面も出ない＝真っ白**になった。実際に起きた:
+       スタッフの画面では `screen-1`（ログイン）を外してあるのに、左上の HOME が
+       `goToStep(1)` を呼んでいて、押すとナビ帯だけが残った白紙になった
+       （2026-09-04・サブ検証の実機で再現）。
+       入口を消すたびに同じ穴が開くので、**外す前に行き先を確かめる**。
+       黙って何もしないのではなく、**いま見えているものを壊さない**のがここの役目
+       （呼び出し側の入口を消すのが本筋の直し。これはその取りこぼしの受け皿）。 */
+    const targetPanel = document.getElementById(`screen-${stepNum}`);
+    /* **何も書き換えないうちに帰る。** 段の見出しや `currentStep` を先に
+       書き換えてから帰ると、**画面と印が食い違う**（`D-12`）。 */
+    if (!targetPanel) return;
+
     this.currentStep = stepNum;
 
     document.querySelectorAll('.btn-step').forEach(btn => {
@@ -868,8 +882,7 @@ const App = {
     document.querySelectorAll('.screen-panel').forEach(panel => {
       panel.classList.remove('is-active');
     });
-    const targetPanel = document.getElementById(`screen-${stepNum}`);
-    if (targetPanel) targetPanel.classList.add('is-active');
+    targetPanel.classList.add('is-active');
 
     const brandLabel = document.getElementById('nav-brand-label');
     if (brandLabel) {

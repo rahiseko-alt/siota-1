@@ -1049,6 +1049,14 @@ button, input, textarea, select {
    ブラウザ既定の `[hidden] { display: none }` を上書きしてしまい、
    引き継ぎが起きていない犬（初回の子）にも空の帯が出る。 */
 .carry-over[hidden] { display: none; }
+
+/* **入口専用の道具は、隠したら本当に消えること。**
+   `.btn-home` は `display: inline-flex` を持っているので、`hidden` を付けても
+   ブラウザ既定の `[hidden] { display: none }` を**上書きして出たままになる**
+   （上の `.carry-over` と同じ罠。2026-09-04・サブ検証の実機で再現）。
+   `.btn-step` は `display` を持たないので効いていた——**同じ印を付けたのに
+   片方だけ消えない**という、いちばん気づきにくい形だった。 */
+[data-entry-only][hidden] { display: none; }
 .carry-over__text { font-size: 11px; line-height: 1.5; color: var(--ink-body); }
 .carry-over__clear {
   border: 1px solid var(--border-subtle);
@@ -1787,7 +1795,14 @@ button, input, textarea, select {
 <nav class="top-nav">
   <div class="top-nav__container">
     <div class="top-nav__left">
-      <button class="btn-home" onclick="App.goToStep(1)">
+      <!-- **HOME も入口専用。** これを押すと `goToStep(1)` で screen-1 へ行くが、
+           スタッフの画面では screen-1 を外してあるので、**画面が真っ白になる**
+           （2026-09-04・サブ検証の実機で再現。`04` などのタブは残るが、
+           白紙を見た人がそこから戻れると気づける根拠は画面に無い）。
+           直す前は「押しても何も起きない死んだログイン画面」が出ていた場所で、
+           **同じボタンの同じ穴**——`01 ログイン` タブだけ塞いで、こちらを見落としていた。
+           スタッフにとっての「家」は ②カルテ検索 なので、そちらのタブが担う。 -->
+      <button class="btn-home" data-entry-only onclick="App.goToStep(1)">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
         HOME
       </button>
