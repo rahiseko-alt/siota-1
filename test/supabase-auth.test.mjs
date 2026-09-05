@@ -321,13 +321,27 @@ test('作業画面にログアウトが在り、押すと入口へ戻す', () =>
    `/edit` には「01 ログイン」タブと screen-1 が残っており、「Google でログイン」まで
    見えるのに `bootLoginPage()` は `__ENTRY__` が無いと起動しないので**配線されて
    いなかった**（実測: 押す前後で URL が変わらない）。 */
-test('作業画面では、入口の道具（01 ログイン・screen-1）を外す', () => {
+/* **入口の道具は、隠すのではなく配る前に落とす。**
+   ここは長く「画面側が実行時に隠していること」を見ていたが、
+   **起動が途中で 401 に当たると隠す処理まで進まず、死んだログイン画面が復活した**
+   ——マスターが最初に報告した画面そのもの（2026-09-05・サブ検証で実機再現）。
+   マスター指示「ふさぐというか、削除しろよ」に従い、Worker が配る時点で落とす形にした。
+   **見る対象が「隠しているか」から「配っていないか」に変わった。** */
+test('作業画面に配る HTML から、入口の道具を落としている', () => {
+  const workerSource = fs.readFileSync(new URL('../worker/src/index.js', import.meta.url), 'utf8');
+  assert.match(workerSource, /function stripEntryMarkup\(/, '落とす仕組みが無い');
+  assert.match(workerSource, /stripEntryMarkup\(templateHtml\)/,
+    '作業画面を組み立てるときに使っていない');
+  /* **画面側で隠す形に戻していないこと。** 戻すと同じ穴が開く。 */
   const staffSource = fs.readFileSync(new URL('../backend/js/supabase-staff.js', import.meta.url), 'utf8');
-  assert.match(staffSource, /\[data-entry-only\]/, '入口専用の印を外していない');
-  assert.match(staffSource, /getElementById\('screen-1'\)/, 'ログイン画面を外していない');
+  assert.doesNotMatch(staffSource, /querySelectorAll\('\[data-entry-only\]'\)/,
+    '実行時に隠す形に戻っている（起動が失敗すると復活する）');
+  /* 落とす目印が、器の側に付いていること。 */
   const editHtml = fs.readFileSync(new URL('../src/index.html', import.meta.url), 'utf8');
   assert.match(editHtml, /data-step="1"[^>]*data-entry-only|data-entry-only[^>]*data-step="1"/,
     '「01 ログイン」タブに入口専用の印が付いていない');
+  assert.match(editHtml, /class="btn-home"[^>]*data-entry-only/,
+    'HOME に入口専用の印が付いていない（押すと白紙になる）');
 });
 
 test('検査用の fixture に「スタッフかつ飼い主」が居る', async () => {
