@@ -128,11 +128,24 @@ try {
   await page.waitForSelector('[data-sign-out]:not([hidden])', { timeout: 15000 });
   await page.click('[data-sign-out]');
   await page.waitForTimeout(1000);
-  const signedOutState = await page.evaluate(() => ({
-    loginVisible: !document.querySelector('[data-login-panel]').hidden,
-    path: location.pathname,
-  }));
-  check('14. サインアウトでログイン画面に戻る', signedOutState.loginVisible === true && signedOutState.path === '/my', JSON.stringify(signedOutState));
+  /* **サインアウトの行き先は入口（`/`）**（マスター指示 2026-09-04
+     「そもそも管理者と顧客の入り口を分けるな。認証で振り分ける経路にしろ」）。
+     ここは長く「`/my` に留まってログイン画面が出る」を要求していたが、それだと
+     飼い主の画面がもう1つの入口になる。3画面（`/edit` `/my` `/admin`）とも
+     入口へ返すように揃えた。**着いた先で、実際にログインし直せるところまで見る。** */
+  await page.waitForTimeout(1_500);
+  const signedOutState = await page.evaluate(() => {
+    const vis = (el) => !!el && el.getClientRects().length > 0;
+    return {
+      path: location.pathname,
+      loginVisible: vis(document.querySelector('[data-entry-login]')),
+      /* 出て行ったあと、鍵が残っていないこと。 */
+      tokenLeft: Object.keys(localStorage).some((k) => k.includes('auth-token')),
+    };
+  });
+  check('14. サインアウトすると入口に戻り、そこでログインし直せる',
+    signedOutState.path === '/' && signedOutState.loginVisible === true
+    && signedOutState.tokenLeft === false, JSON.stringify(signedOutState));
 
   /* ── 15: **詰まないこと。**
      セッションは残っているのに `/api/session` が 401 を返す状況
