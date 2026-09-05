@@ -235,6 +235,7 @@ export async function bootProtectedPortal() {
      カルテの共有URLから来たときに、ログイン後そこへ帰れない（`D-12`）。 */
   const goToEntry = (returnPath) => {
     sessionStorage.setItem('post_auth_return', safeReturnPath(returnPath));
+    location.replace('/');
   };
 
   try {
