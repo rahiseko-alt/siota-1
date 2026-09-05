@@ -466,6 +466,33 @@ async function renderLoginPage(env) {
   });
 }
 
+/**
+ * 入口の器を落とす。`/edit` に配る `index.html` から、`/` 専用の道具を消す。
+ *
+ * **消すのは3つだけ**——`data-entry-only` が付いた押しどころ（`01 ログイン` タブと
+ * `HOME`）と、その行き先の `screen-1`。ほかは触らない。
+ * 目印が見つからなければ**何もしない**（黙って別のものを削らない・`D-10`）。
+ */
+export function stripEntryMarkup(html) {
+  let out = html;
+  /* `<button ... data-entry-only ...>…</button>` を、開始から対応する `</button>` まで。 */
+  for (let guard = 0; guard < 4; guard += 1) {
+    const start = out.search(/<button[^>]*\sdata-entry-only[\s>]/);
+    if (start < 0) break;
+    const end = out.indexOf('</button>', start);
+    if (end < 0) break;
+    out = out.slice(0, start) + out.slice(end + '</button>'.length);
+  }
+  /* `<section ... id="screen-1" ...>…</section>` を丸ごと。
+     入れ子の `</section>` が無いことは `src/index.html` で確認している。 */
+  const secStart = out.search(/<section[^>]*\sid="screen-1"[\s>]/);
+  if (secStart >= 0) {
+    const secEnd = out.indexOf('</section>', secStart);
+    if (secEnd >= 0) out = out.slice(0, secStart) + out.slice(secEnd + '</section>'.length);
+  }
+  return out;
+}
+
 async function renderAppPage(env, state) {
   /* 正UI（`src/index.html`）を配る。
 
@@ -488,6 +515,20 @@ async function renderAppPage(env, state) {
     });
   }
 
+  /* **入口の器は、スタッフの画面には配らない。**
+     `index.html` は `/`（入口）と `/edit`（スタッフの画面）で使い回している。
+     入口の道具——`01 ログイン` タブ・`HOME`・`screen-1`（「Google でログイン」）——は
+     `/edit` では**押しても何も起きない**（配線するのは `bootLoginPage()` で、
+     それは `__ENTRY__` のときしか走らない）。
+
+     はじめ、これを**画面側で実行時に隠していた**。ところが起動の途中で 401 に
+     当たると隠す処理まで進めず、**死んだログイン画面が復活**した
+     ——マスターが最初に報告した画面そのもの（2026-09-05・実機で再現）。
+     隠すのをやめて、**配る時点で消す**。文書に無ければ、どの失敗経路でも復活しない
+     （マスター指示 2026-09-05:「ふさぐというか、削除しろよ。お前がつくらなければ
+       この世に存在していないのだから、消せば済むだろ」）。 */
+  const withoutEntry = stripEntryMarkup(templateHtml);
+
   const injection = createAppStateScript(state);
   const supabaseScripts = state.backend === 'supabase'
     /* 置き場所は F1 で `src/js/` → `backend/js/` へ移った。
@@ -497,7 +538,7 @@ async function renderAppPage(env, state) {
       '<script type="module" src="/backend/js/supabase-auth.js"></script>' +
       '<script type="module" src="/backend/js/supabase-staff.js"></script>'
     : '';
-  const injectedHtml = templateHtml.replace('</head>', `${injection}${supabaseScripts}\n</head>`);
+  const injectedHtml = withoutEntry.replace('</head>', `${injection}${supabaseScripts}\n</head>`);
   return new Response(injectedHtml, { status: 200, headers: HTML_HEADERS });
 }
 

@@ -115,6 +115,48 @@ try {
   check('4d. 配られた HTML でログインを始められるのは入口だけ',
     served['/'] === 1 && served['/my'] === 0 && served['/admin'] === 0, JSON.stringify(served));
 
+  /* **鍵が古いときも、入口は1つのままか。**
+     `8.` は「起動が成功したあと入口の道具が残っていないこと」しか見ておらず、
+     **起動が途中で失敗する経路を素通りしていた**（2026-09-05・サブ検証が発見）。
+     実際、サーバが 401 を返すと `/edit` は入口の道具を外す処理まで進めず、
+     **押しても何も起きないログイン画面が復活**していた——マスターが最初に
+     報告した画面そのもの。しかもログアウトも出ないので、自力で抜ける手が
+     アドレスバーに `/` を打つことしか無かった。
+
+     `signOut()` は既定で**他の端末のセッションも失効させる**ので、
+     店で iPad とスマホを併用していれば日常的に起きる。 */
+  const stalePages = [];
+  for (const [label, email, door] of [
+    ['スタッフ', FIXTURE.staffEmail, '/edit'],
+    ['管理者', FIXTURE.adminEmail, '/admin'],
+    ['飼い主', FIXTURE.ownerAEmail, '/my'],
+  ]) {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+    await injectSession(page, email);
+    /* **鍵を古くする。** サーバは知らない鍵になるので 401 が返る。 */
+    await page.route('**/api/session', (route) => route.fulfill({
+      status: 401, contentType: 'application/json', body: '{"error":"authentication required"}',
+    }));
+    await page.goto(`${BASE}${door}`, { waitUntil: 'domcontentloaded' });
+    await page.waitForURL((url) => new URL(url).pathname === '/', { timeout: 20_000 }).catch(() => {});
+    await page.waitForTimeout(1_500);
+    stalePages.push({
+      label,
+      path: await page.evaluate(() => location.pathname).catch(() => '(読めず)'),
+      /* 押せる口が入口のものか、死んだものか。 */
+      deadLogin: await page.evaluate(() => {
+        const el = document.querySelector('[data-entry-login]');
+        return !!el && el.getClientRects().length > 0 && !('__ENTRY__' in globalThis);
+      }).catch(() => true),
+    });
+    await page.unroute('**/api/session');
+    await page.close();
+  }
+  check('4e. 鍵が古いときも入口は1つ（死んだログイン画面を復活させない）',
+    stalePages.length === 3 && stalePages.every((s) => s.path === '/' && s.deadLogin === false),
+    JSON.stringify(stalePages));
+
 
 
   /* ── ② スタッフ権限を持つ人は、どの入口から来ても作業画面に着くこと ──

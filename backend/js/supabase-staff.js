@@ -372,15 +372,11 @@ async function bootStaffPortal(PonchiApp) {
   }
   activeMembership = (session.memberships || [])[0] || null;
 
-  /* **入口の道具を、スタッフの画面から外す。**
-     `index.html` は `/` と `/edit` で使い回すので、`/edit` には「01 ログイン」タブと
-     その先の screen-1 が残っていた。screen-1 の「Google でログイン」は
-     `bootLoginPage()`（`__ENTRY__` のときだけ起動）が配線するものなので、
-     ここでは**押しても何も起きない**（2026-09-04・実機で再現）。
-     押せるのに仕事をしないものは、置かない（`D-12`）。 */
-  document.querySelectorAll('[data-entry-only]').forEach((el) => { el.hidden = true; });
-  const entryPanel = document.getElementById('screen-1');
-  if (entryPanel) entryPanel.remove();
+  /* 入口の道具（`01 ログイン` タブ・`HOME`・`screen-1`）は、**Worker が配る時点で
+     落としている**（`worker/src/index.js` の `stripEntryMarkup`）。
+     ここで実行時に隠していたが、**起動の途中で 401 に当たると隠す処理まで進めず、
+     死んだログイン画面が復活した**——マスターが最初に報告した画面そのもの。
+     文書に無ければ、どの失敗経路でも復活しない。 */
 
   /* **ログアウトを出す。** これが無かったので、`/edit` に着いた人は
      別のアカウントに切り替える手段が1つも無かった（`/` に戻っても送り返される）。
@@ -678,6 +674,25 @@ globalThis.TrimmerSupabaseStaff = {
          中断される。これは故障ではない。実測（`verify:admin` の 9）で
          カルテ修正の正常な流れでも出ることを確認したので、移動中は黙る。 */
       if (leavingPage) return;
+      /* **ログインが切れているなら、入口へ返す。**
+         ここが無かったので、起動の途中で 401 に当たると
+         `/edit` の起動が途中で止まり、**ログアウトも出ないまま人が取り残されて**いた
+         （2026-09-05・サブ検証で実機再現）。自力で抜ける手はアドレスバーに `/` を
+         打つことしか無かった。
+         （入口の器そのものは、いまは Worker が配る前に落としている。）
+
+         **鍵を捨ててから返す。** 捨てずに返すと、入口が「セッションが在る」と見て
+         送り返し、往復になる（`supabase-auth.js` の `catch` と同じ形）。
+         `signOut()` は既定で他の端末のセッションも失効させるので、
+         **店で iPad とスマホを併用していれば日常的に起きる**経路である。 */
+      if (/authentication required|401/.test((error && error.message) || '')) {
+        sessionStorage.setItem('post_auth_return', location.pathname + location.search);
+        const auth = globalThis.TrimmerAuth && globalThis.TrimmerAuth.client;
+        Promise.resolve(auth ? auth.auth.signOut() : null)
+          .catch(() => { /* 消せなくても入口へは返す */ })
+          .then(() => { location.replace('/'); });
+        return;
+      }
       globalThis.alert(
         'お店の画面を読み込めませんでした。\n\n'
         + '通信が届いていないか、ログインが切れています。\n'

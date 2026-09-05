@@ -1050,13 +1050,12 @@ button, input, textarea, select {
    引き継ぎが起きていない犬（初回の子）にも空の帯が出る。 */
 .carry-over[hidden] { display: none; }
 
-/* **入口専用の道具は、隠したら本当に消えること。**
-   `.btn-home` は `display: inline-flex` を持っているので、`hidden` を付けても
-   ブラウザ既定の `[hidden] { display: none }` を**上書きして出たままになる**
-   （上の `.carry-over` と同じ罠。2026-09-04・サブ検証の実機で再現）。
-   `.btn-step` は `display` を持たないので効いていた——**同じ印を付けたのに
-   片方だけ消えない**という、いちばん気づきにくい形だった。 */
-[data-entry-only][hidden] { display: none; }
+/* `data-entry-only` の印が付いたものは、**Worker が `/edit` に配る時点で
+   丸ごと落とす**（`worker/src/index.js` の `stripEntryMarkup`）。
+   はじめ `hidden` で実行時に隠していたが、`.btn-home` は `display: inline-flex` を
+   持つのでブラウザ既定の `[hidden]` を上書きして消えなかった。
+   それ以前に、**起動が途中で失敗すると隠す処理まで進まない**——
+   だから隠すのをやめ、配る前に消すことにした。ここに CSS は要らない。 */
 .carry-over__text { font-size: 11px; line-height: 1.5; color: var(--ink-body); }
 .carry-over__clear {
   border: 1px solid var(--border-subtle);

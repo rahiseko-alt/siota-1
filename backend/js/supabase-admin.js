@@ -791,6 +791,17 @@ export async function bootAdminPortal() {
     };
     screenHome();
   } catch (error) {
+    /* **ログインが切れているなら、入口へ返す。**
+       ここは生の JSON（`401 {"error":"authentication required"}`）を人に見せたうえで、
+       ログアウトも入口も出さない**行き止まり**だった（2026-09-05・サブ検証で実機再現）。
+       未ログイン分岐は入口へ送るように直したのに、**失効の経路だけ守られていなかった**。
+       鍵を捨ててから返す（残すと入口が送り返して往復する）。 */
+    if (/authentication required|401/.test((error && error.message) || '')) {
+      Promise.resolve(supabase ? supabase.auth.signOut() : null)
+        .catch(() => { /* 消せなくても入口へは返す */ })
+        .then(() => { location.replace('/'); });
+      return;
+    }
     setMessage(statusEl, `管理者ページを開けませんでした: ${error.message}`);
   }
 }
