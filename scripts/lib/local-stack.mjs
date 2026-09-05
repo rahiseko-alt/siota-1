@@ -133,7 +133,17 @@ export async function injectSession(page, email, password = LOCAL_PASSWORD) {
      送るが、下の `waitForFunction` は転送後の文書で評価し直されるので、
      どちらに居ても `TrimmerAuth` を掴める。転送と `goto` が競合しても
      行き先は同じなので飲む。 */
-  await page.goto(new URL('/', page.url()).href, { waitUntil: 'domcontentloaded' })
+  /* **どこも開いていない頁では行き先を作れない。** `about:blank` のまま呼ばれると
+     `new URL('/', 'about:blank')` が投げる（実測: `Invalid URL`）。
+     何が足りないかを言って落とす——「Invalid URL」だけでは誰も追えない。 */
+  const here = page.url();
+  if (!/^https?:/.test(here)) {
+    throw new Error(
+      `セッションを注入できない: まだどのドメインも開いていない（現在地 "${here}"）。`
+      + '注入は入口（/）で行うので、先に page.goto(`${BASE}/`) してから呼ぶこと。',
+    );
+  }
+  await page.goto(new URL('/', here).href, { waitUntil: 'domcontentloaded' })
     .catch(() => { /* 転送と競合しても、下の待ちが結果を見る */ });
   await page.evaluate((s) => new Promise((resolve, reject) => {
     /* **待ち続けない。** 以前はここに時間切れが無く、`TrimmerAuth` を公開しない

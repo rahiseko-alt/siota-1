@@ -218,32 +218,23 @@ async function loadProtectedResource(supabase, route, content) {
 
 export async function bootProtectedPortal() {
   const status = document.querySelector('[data-portal-status]');
-  const loginPanel = document.querySelector('[data-login-panel]');
   const content = document.querySelector('[data-portal-content]');
-  const loginButton = document.querySelector('[data-google-login]');
   const signOutButton = document.querySelector('[data-sign-out]');
   captureInvitationToken(location.search);
   let supabase;
 
-  /* **ログインパネルを出して、押せる状態にする。**
-     signed-out の分岐と、セッションが失効した／飼い主リンクを外された後に
-     catch へ落ちたときの**両方**から呼ぶ。以前は結線が signed-out 分岐にしか無く、
-     「Googleでログインしてください」と出るのに**押すものが画面に無かった**
-     （飼い主はほぼ空白の画面で手が無くなる）。 */
-  const openLoginPanel = (message, returnPath) => {
-    show(loginPanel, true);
-    show(content, false);
-    setMessage(status, message);
-    if (!loginButton) return;
-    loginButton.disabled = false;
-    loginButton.onclick = async () => {
-      loginButton.disabled = true;
-      const { error } = await signInWithGoogle(supabase, returnPath);
-      if (error) {
-        loginButton.disabled = false;
-        setMessage(status, 'ログインを完了できませんでした。もう一度お試しください');
-      }
-    };
+  /* **ログインできる画面は入口（`/`）の1つだけ**（マスター指示 2026-09-04
+     「そもそも管理者と顧客の入り口を分けるな。認証で振り分ける経路にしろ。
+       指示は１つ。入り口を1つにしろ」）。
+
+     ここは長く**自前のログインパネル**を出していた。押せば本当にログインが
+     始まるので、これは飾りではなく**2つ目の入口**だった（`/admin` に3つ目が在る）。
+     入口を1つにするとは、この画面がログインを受け付けるのをやめること。
+
+     出ていくときは**必ず戻り先を積む**。積まないと、飼い主が招待リンクや
+     カルテの共有URLから来たときに、ログイン後そこへ帰れない（`D-12`）。 */
+  const goToEntry = (returnPath) => {
+    sessionStorage.setItem('post_auth_return', safeReturnPath(returnPath));
   };
 
   try {
@@ -255,7 +246,7 @@ export async function bootProtectedPortal() {
     const restored = await restoreProtectedRoute(supabase);
     if (restored.state === 'signed-out') {
       sessionStorage.removeItem('auth_reload_once');
-      openLoginPanel('Googleでログインしてください', restored.returnPath);
+      goToEntry(restored.returnPath);
       return;
     }
     if (restored.state === 'error') throw new Error(restored.message);
@@ -286,7 +277,6 @@ export async function bootProtectedPortal() {
     const session = await sessionResponse.json();
     if ((session.ownerLinks || []).length === 0 && (session.memberships || []).length === 0) {
       setMessage(status, invitationMessage || '登録されたお客様情報が見つかりません');
-      show(loginPanel, false);
       return;
     }
     /* **管理者を `/admin` へ強制的に飛ばすのをやめた**（マスター指示 2026-09-02:
@@ -317,7 +307,6 @@ export async function bootProtectedPortal() {
        持たない人に「カルテを書く」を出すのは嘘になる。 */
     await loadProtectedResource(supabase, route, content);
     sessionStorage.removeItem('auth_reload_once');
-    show(loginPanel, false);
     show(content, true);
     show(signOutButton, true);
     setMessage(status, invitationMessage);
@@ -342,13 +331,17 @@ export async function bootProtectedPortal() {
     }
     sessionStorage.removeItem('auth_reload_once');
     /* **2回目以降と、認証以外の失敗。** 前者は再読み込みでは抜けられないので、
-       ここでログインパネルを出して押せるようにする（出さないと詰む）。
-       後者は押しても直らないので、パネルは出さずに次の一手だけ伝える。 */
+       入口へ返して押せるようにする（返さないと詰む）。
+       後者は押しても直らないので、次の一手だけ伝えてここに留まる。
+
+       **鍵を捨ててから返すこと。** 捨てずに返すと、入口は「セッションが在る」と
+       見て `/my` へ送り返し、`/my` は 401 でまた入口へ返す——**往復**になる
+       （2026-09-02 に一度起きた形）。 */
     if (error.message === 'authentication required') {
-      openLoginPanel('Googleでログインしてください', `${location.pathname}${location.search}`);
+      try { await supabase?.auth.signOut(); } catch { /* 消せなくても入口へは返す */ }
+      goToEntry(`${location.pathname}${location.search}`);
       return;
     }
-    show(loginPanel, false);
     show(content, false);
     setMessage(status, '表示できません。少し時間をおいて、このページを開き直してください');
   }

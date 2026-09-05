@@ -73,6 +73,49 @@ try {
     entry.marker === true && entry.auth === true,
     `__ENTRY__=${entry.marker} supabase-auth.js=${entry.auth}`);
   await top.close();
+  /* ── ①b **入口は1つ**（マスター指示「そもそも管理者と顧客の入り口を分けるな。
+        指示は１つ。入り口を1つにしろ」・`D-20260905-67`）──
+
+     以前はログインを始められる画面が3つあった（`/` `/my` `/admin`）。
+     `/edit` にも押しても何も起きない4つ目が乗っていた。
+     **人が「ここから入る」と分かる場所は1つでなければならない。**
+     実機の転送と、配られた HTML の中身の**両面**から見る——片面だけだと
+     「転送は正しいが器にログインが載っている」（スクリプトが落ちた日に
+     第2の入口が出る）を見逃す（`docs/watch.md` W-1 の型）。 */
+  const doors = ['/my', `/my/pets/${FIXTURE.petX}`, '/admin', '/edit', `/edit/p/${FIXTURE.petX}`];
+  const landed = [];
+  for (const door of doors) {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await page.goto(`${BASE}${door}`, { waitUntil: 'domcontentloaded' });
+    await page.waitForURL(/\/$/, { timeout: 20_000 }).catch(() => { /* 下の check が落とす */ });
+    await page.waitForTimeout(1_200);
+    landed.push({ door, path: await page.evaluate(() => location.pathname).catch(() => '(読めず)') });
+    await page.close();
+  }
+  /* **`landed.length === doors.length` を錨に置く。** これが無いと、5枚とも
+     開けなかったとき空の配列が `every` を素通りして緑になる（`empty-pass` の型）。 */
+  check('4c. 未ログインでどの画面を開いても、入口（`/`）に集まる',
+    landed.length === doors.length && landed.every((s) => s.path === '/'),
+    JSON.stringify(landed.filter((s) => s.path !== '/')));
+
+  /* **配られた HTML そのものを見る。** `/edit` は `index.html` を `/` と使い回すので
+     HTML には `data-entry-login` が載っている——そちらは起動時に外していることを
+     `8.` が見るので、ここでは数えない（同じことを二重に判定しない）。 */
+  const served = {};
+  for (const door of ['/', '/my', '/admin']) {
+    const html = await (await fetch(`${BASE}${door}`)).text();
+    /* **コメントは数えない。** 「なぜここに在るか」を書いた注記まで数えると、
+       説明を書き足しただけで赤くなる（実測: `/` が 2 件になった）。
+       数えたいのは**実際に押せる口**だけ。 */
+    const markup = html.replace(/<!--[\s\S]*?-->/g, '');
+    served[door] = (markup.match(/data-(?:entry-login|google-login)/g) || []).length;
+  }
+  /* **`/` が 1 であることを同じ条件に入れる。** 入れないと、取得に失敗して
+     全部 0 になったときに緑になる。 */
+  check('4d. 配られた HTML でログインを始められるのは入口だけ',
+    served['/'] === 1 && served['/my'] === 0 && served['/admin'] === 0, JSON.stringify(served));
+
+
 
   /* ── ② スタッフ権限を持つ人は、どの入口から来ても作業画面に着くこと ──
 

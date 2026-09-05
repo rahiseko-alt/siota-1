@@ -84,6 +84,28 @@ try {
 
   /* ── 新規のお客様が、その URL からカルテを見られるようになるまで ── */
   const invitePath = new URL(artifact.url).pathname + new URL(artifact.url).search;
+
+  /* **招待リンクを開くのは、まだログインしていない人。**
+     未ログインの `/my` は入口（`/`）へ出ていくようになった（`D-20260905-67`）。
+     その途中で**招待と戻り先を落とすと、飼い主は自分の犬に一生たどり着けない**
+     ——しかも画面には何も出ないので、誰も気づけない。この変更で唯一
+     「静かに壊れる」経路なので、ここで見る。 */
+  const inviteToken = new URL(artifact.url).searchParams.get('invite');
+  const cold = await browser.newContext();
+  const coldPage = await cold.newPage();
+  await coldPage.goto(`${BASE}${invitePath}`, { waitUntil: 'domcontentloaded' });
+  await coldPage.waitForURL(/\/$/, { timeout: 20_000 }).catch(() => { /* 下の check が落とす */ });
+  await coldPage.waitForTimeout(1_500);
+  const carried = await coldPage.evaluate(() => ({
+    path: location.pathname,
+    token: sessionStorage.getItem('pending_invitation'),
+    back: sessionStorage.getItem('post_auth_return'),
+  })).catch((e) => ({ path: '(読めず)', token: null, back: String(e).slice(0, 40) }));
+  /* **発行したトークンと突き合わせる。** `!= null` では、別の値が入っていても緑になる。 */
+  check('4b. 未ログインで招待リンクを開くと、入口へ送られても招待と戻り先を落とさない',
+    carried.path === '/' && carried.token === inviteToken && carried.back === '/my',
+    JSON.stringify(carried));
+  await cold.close();
   const guest = await browser.newContext();
   const guestPage = await guest.newPage();
   await guestPage.goto(`${BASE}/my`);
@@ -118,7 +140,9 @@ try {
   await secondPage.goto(`${BASE}/my`);
   await injectSession(secondPage, FIXTURE.ownerBEmail);
   await secondPage.goto(`${BASE}${invitePath}`, { waitUntil: 'domcontentloaded' });
-  await secondPage.waitForSelector('[data-portal-content]:not([hidden]), [data-login-panel]:not([hidden])', { timeout: 30_000 })
+  /* `[data-login-panel]` は器ごと外した（入口は `/` の1つだけ・`D-20260905-67`）。
+     残すと**永久に一致しない条件を30秒待つ**だけになる。 */
+  await secondPage.waitForSelector('[data-portal-content]:not([hidden])', { timeout: 30_000 })
     .catch(() => { /* 何も出ないのも「見えていない」なので、下の check で判定する */ });
   await secondPage.waitForTimeout(2_000);
   const reuse = await secondPage.evaluate(() => document.body.textContent);

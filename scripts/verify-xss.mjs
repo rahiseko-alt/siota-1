@@ -114,8 +114,10 @@ try {
     }
 
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
-    /* **注入は入口で行われる**（`injectSession` が自分で `/` へ移る）。
-       戻ってくるので `reload()` ではなく、見たいカルテを名指しで開く。 */
+    /* **先に入口を開いてから注入する。** `injectSession` は「いま居るドメインの
+       `/`」へ移るので、まだどこも開いていない頁（`about:blank`）で呼ぶと
+       行き先を作れない（実測: `Invalid URL`）。 */
+    await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
     await injectSession(page, FIXTURE.ownerAEmail);
     await page.goto(`${BASE}/my/pets/${pet.id}/reports/${report.id}`);
     await page.waitForSelector('.magazine-container', { timeout: 20_000 });

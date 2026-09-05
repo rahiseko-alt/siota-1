@@ -56,44 +56,51 @@ try {
   const response = await page.goto(`${BASE}/my`, { waitUntil: 'networkidle' });
   check('1. /my が配信される', response?.status() === 200, `status=${response?.status()}`);
 
-  /* bootProtectedPortal() は DOMContentLoaded 後に非同期で走る。 */
-  await page.waitForTimeout(800);
+  /* bootProtectedPortal() は DOMContentLoaded 後に非同期で走り、
+     **未ログインなら入口（`/`）へ出ていく**（`D-20260905-67`「入口を1つにしろ」）。
+     ここは長く「`/my` でログインパネルが出る」を見ていたが、そのパネルは
+     **押せば本当にログインが始まる2つ目の入口**だったので器ごと外した。 */
+  await page.waitForURL(/\/$/, { timeout: 20_000 }).catch(() => { /* 下の check が落とす */ });
+  await page.waitForTimeout(1_200);
 
   const state = await page.evaluate(() => {
     const q = (selector) => document.querySelector(selector);
+    const vis = (el) => !!el && el.getClientRects().length > 0;
     return {
-      flavor: document.body.dataset.portal,
-      status: q('[data-portal-status]')?.textContent?.trim() ?? null,
-      loginVisible: q('[data-login-panel]') ? !q('[data-login-panel]').hidden : null,
-      contentVisible: q('[data-portal-content]') ? !q('[data-portal-content]').hidden : null,
-      signOutVisible: q('[data-sign-out]') ? !q('[data-sign-out]').hidden : null,
-      loginHandled: typeof q('[data-google-login]')?.onclick === 'function',
-      vendorReady: typeof globalThis.TrimmerSupabaseVendor?.createClient === 'function',
-      portalBooted: typeof globalThis.TrimmerAuth?.client === 'object' && globalThis.TrimmerAuth.client !== null,
+      path: location.pathname,
+      entryLogin: vis(q('[data-entry-login]')),
+      back: sessionStorage.getItem('post_auth_return'),
       images: document.querySelectorAll('img').length,
     };
   });
 
-  check('2. 起動分岐が立っている', state.flavor === 'customer', `data-portal=${state.flavor}`);
-  check('3. Supabase vendor が読めている', state.vendorReady === true);
-  check('4. ポータルが起動している', state.portalBooted === true, 'window.TrimmerAuth.client');
-  check('5. 未ログインでログイン導線が出る', state.loginVisible === true && state.status === 'Googleでログインしてください', `status=${JSON.stringify(state.status)}`);
-  check('6. ログインボタンが押せる', state.loginHandled === true);
-  check('7. 未ログインで中身とログアウトは隠れている', state.contentVisible === false && state.signOutVisible === false);
-  check('8. 見本画像を出していない', state.images === 0, `img=${state.images}`);
+  check('5. 未ログインの `/my` は入口へ送られ、そこに押せるログインが在る',
+    state.path === '/' && state.entryLogin === true,
+    `path=${state.path} ログイン=${state.entryLogin}`);
+  check('6. そのとき、開こうとした URL を覚えている（ログイン後に戻れる）',
+    state.back === '/my', `覚えた先=${state.back}`);
+  /* **`/my` に配られた HTML そのものを見る。** ここは長く「いま見えている画像の数」を
+     数えていたが、未ログインの `/my` は入口へ出ていくようになり、数えていたのは
+     入口の画像（14枚）だった。見たい性質は「**飼い主の器に見本が埋まっていない**」
+     （`D-10`）なので、器を直接見る。`mutate-run` の `portal-sample-image` は
+     `src/my.html` に `<img>` を注ぐので、この形でも捕まる。 */
+  const myHtml = await (await fetch(`${BASE}/my`)).text();
+  const myImages = (myHtml.match(/<img\b/g) || []).length;
+  check('8. 見本画像を出していない', myImages === 0, `img=${myImages}`);
 
-  /* 犬やカルテを直接指す URL でも、未ログインなら同じログイン導線に落ちること。
-     ここで /my へ飛ばしてしまうと、ログイン後に元の URL へ戻れなくなる。 */
-  await page.goto(`${BASE}/my/pets/${FIXTURE.petX}`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(800);
+  /* 犬やカルテを直接指す URL でも、未ログインなら同じ入口に落ちること。
+     **その URL を覚えていなければブックマークが死ぬ**——ここが生命線。 */
+  await page.goto(`${BASE}/my/pets/${FIXTURE.petX}`, { waitUntil: 'domcontentloaded' });
+  await page.waitForURL(/\/$/, { timeout: 20_000 }).catch(() => {});
+  await page.waitForTimeout(1_200);
   const deep = await page.evaluate(() => ({
     path: location.pathname,
-    loginVisible: !document.querySelector('[data-login-panel]').hidden,
+    back: sessionStorage.getItem('post_auth_return'),
   }));
   check(
-    '9. 犬を直接指す URL でもログイン導線が出る',
-    deep.loginVisible === true && deep.path === `/my/pets/${FIXTURE.petX}`,
-    `path=${deep.path}`,
+    '9. 犬を直接指す URL でも入口へ送られ、その URL を覚えている',
+    deep.path === '/' && deep.back === `/my/pets/${FIXTURE.petX}`,
+    `path=${deep.path} 覚えた先=${deep.back}`,
   );
 
   check('10. アプリ由来のコンソールエラーが無い（ログイン前）', consoleErrors.length === 0, consoleErrors.join(' | '));
@@ -102,6 +109,10 @@ try {
   /* **注入は入口で行われる**（`injectSession` が自分で `/` へ移る）。
      戻ってくるので `reload()` ではなく、行きたい画面を名指しで開く。 */
   await injectSession(page, FIXTURE.ownerAEmail);
+  /* **覚えた戻り先を捨ててから一覧を開く。** 上の `9.` で `/my/pets/{petX}` を
+     覚えさせたので、そのままだと `restoreProtectedRoute` がその犬の頁へ送る
+     ——正しい動きだが、ここで見たいのは一覧。 */
+  await page.evaluate(() => sessionStorage.removeItem('post_auth_return'));
   await page.goto(`${BASE}/my`, { waitUntil: 'networkidle' });
   await page.waitForSelector('.pet-card', { timeout: 15000 });
   // 繰り返し実行で犬が増えていく前提（DBは検査間で毎回リセットしない）なので、
@@ -113,6 +124,18 @@ try {
 
   const signOutVisibleAfterLogin = await page.evaluate(() => !document.querySelector('[data-sign-out]').hidden);
   check('12. ログイン後はログアウトボタンが出る', signOutVisibleAfterLogin);
+
+  /* **測る位置をログイン後へ移した**（文言は変えていない）。未ログインの `/my` は
+     入口へ出ていくようになったので、そこでは器の起動を測れない。
+     見る性質は同じ——この画面が正しく起動しているか。 */
+  const booted = await page.evaluate(() => ({
+    flavor: document.body.dataset.portal,
+    vendorReady: typeof globalThis.TrimmerSupabaseVendor?.createClient === 'function',
+    portalBooted: typeof globalThis.TrimmerAuth?.client === 'object' && globalThis.TrimmerAuth.client !== null,
+  }));
+  check('2. 起動分岐が立っている', booted.flavor === 'customer', `data-portal=${booted.flavor}`);
+  check('3. Supabase vendor が読めている', booted.vendorReady === true);
+  check('4. ポータルが起動している', booted.portalBooted === true, 'window.TrimmerAuth.client');
 
   // 他人の犬（Q）を直接指すURLは見えない（全体受け入れ条件3の前倒し確認）
   await page.goto(`${BASE}/my/pets/${FIXTURE.petQ}`, { waitUntil: 'networkidle' });
@@ -162,19 +185,23 @@ try {
   await page.evaluate(() => sessionStorage.setItem('auth_reload_once', '1'));
   await page.reload({ waitUntil: 'networkidle' });
   await page.waitForTimeout(1500);
+  /* **入口へ返って、そこで入り直せること。**
+     **鍵を捨ててから返す**のが要点——捨てずに返すと、入口は「セッションが在る」と
+     見て `/my` へ送り返し、`/my` は 401 でまた入口へ返す（往復して詰む）。 */
+  await page.waitForURL(/\/$/, { timeout: 20_000 }).catch(() => { /* 下の check が落とす */ });
+  await page.waitForTimeout(1_500);
   const stuck = await page.evaluate(() => {
-    const panel = document.querySelector('[data-login-panel]');
-    const button = document.querySelector('[data-google-login]');
+    const button = document.querySelector('[data-entry-login]');
     return {
-      panelVisible: !!panel && !panel.hidden,
-      buttonVisible: !!button && !button.hidden && button.offsetParent !== null,
+      path: location.pathname,
+      buttonVisible: !!button && button.getClientRects().length > 0,
       buttonEnabled: !!button && !button.disabled,
-      status: (document.querySelector('[data-portal-status]') || {}).textContent?.trim() || '',
+      tokenLeft: Object.keys(localStorage).some((k) => k.includes('auth-token')),
     };
   });
   await page.unroute('**/api/session');
   check('15. 失効・リンク解除のあとでも、ログインボタンが出て押せる（詰まない）',
-    stuck.panelVisible && stuck.buttonVisible && stuck.buttonEnabled,
+    stuck.path === '/' && stuck.buttonVisible && stuck.buttonEnabled && stuck.tokenLeft === false,
     JSON.stringify(stuck));
 } catch (error) {
   check('検査を最後まで実行できた', false, error.message);

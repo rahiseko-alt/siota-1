@@ -135,28 +135,6 @@
     }
     .portal-status:empty { margin-bottom: 0; }
 
-    .login-panel {
-      background: var(--bg-paper);
-      border: 1px solid var(--border-subtle);
-      border-left: 3px solid var(--ink-primary);
-      padding: 28px 24px;
-      margin-bottom: 32px;
-    }
-    .login-panel[hidden] { display: none; }
-    .login-panel__title {
-      font-family: var(--font-serif);
-      font-size: 18px;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      margin-bottom: 10px;
-    }
-    .login-panel__lead {
-      font-size: 13.5px;
-      line-height: 2;
-      color: var(--ink-body);
-      margin-bottom: 20px;
-    }
-
     .portal-content[hidden] { display: none; }
 
     /* 以下は supabase-auth.js の renderPets / renderPet / renderReport が生成する DOM に当たる。
@@ -294,16 +272,10 @@
       <p class="portal-status">このページの表示にはJavaScriptが必要です。</p>
     </noscript>
 
-    <section class="login-panel" data-login-panel hidden>
-      <h2 class="login-panel__title">飼い主さまログイン</h2>
-      <p class="login-panel__lead">
-        ご登録いただいたGoogleアカウントでログインすると、
-        お預かりした子のカルテをご覧いただけます。
-      </p>
-      <button type="button" class="boxbutton" data-google-login>
-        <span>Googleでログイン</span>
-      </button>
-    </section>
+    <!-- **ログインパネルは外した**（マスター指示・`D-20260905-67`
+         「そもそも管理者と顧客の入り口を分けるな。指示は１つ。入り口を1つにしろ」）。
+         押せば本当にログインが始まる画面だったので、これは飾りではなく入口だった。
+         未ログインでここへ来た人は、開こうとした URL を覚えたうえで `/` へ送る。 -->
 
     <!-- 中身は supabase-auth.js の renderPets / renderPet / renderReport が入れる。
          犬の一覧 → 犬 → カルテ の3段（/my → /my/pets/{id} → /my/pets/{id}/reports/{id}）。 -->

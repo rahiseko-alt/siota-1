@@ -303,10 +303,13 @@ export const MUTATIONS = [
   /* ── 11回目: 未ログインの /my（2026-08-28・手元で実測） ── */
   {
     id: 'portal-content-shown-logged-out',
-    why: '**ログインしていない人に、中身の器が開いたまま出る**（守りの前提が崩れている）',
+    why: '**ログインしていない人が、飼い主の画面に留まる**（入口へ送らず、中身の器が出たまま）',
+    /* 元は `show(loginPanel, true)` を狙っていたが、そのパネルは
+       「入口を1つにする」（`D-20260905-67`）で無くなった。**守る性質は同じ**
+       ——未ログインの人をここに留めない——ので、狙いを転送そのものに移した。 */
     file: 'backend/js/supabase-auth.js',
-    find: '    show(loginPanel, true);\n    show(content, false);',
-    replace: '    show(loginPanel, true);\n    show(content, true);',
+    find: "    sessionStorage.setItem('post_auth_return', safeReturnPath(returnPath));\n    location.replace('/');",
+    replace: "    sessionStorage.setItem('post_auth_return', safeReturnPath(returnPath));\n    show(content, true);",
     scripts: ['verify-portal.mjs'],
   },
   {
@@ -723,13 +726,18 @@ export const MUTATIONS = [
      portal 1〜4・7・8・10・12 など——で、後の回にまとめて回す）。 */
   {
     id: 'portal-login-panel-dead',
-    why: '**飼い主のログインパネルが一切出なくなる**——新規も、失効後も、押すものが画面に無い',
+    why: '**飼い主が入口へ送られなくなる**——新規も、失効後も、ログインを始める場所に辿り着けない',
+    /* 元は `openLoginPanel()` を黙らせる壊し方だった。そのパネルは
+       「入口を1つにする」（`D-20260905-67`）で無くなったので、**守る性質は同じ**
+       ——押すものに辿り着けること——のまま、狙いを入口への転送に移した。
+       `goToEntry` を何もしない関数にすると、未ログインの人は飼い主の画面に
+       置き去りになる。 */
     file: 'backend/js/supabase-auth.js',
-    find: '  const openLoginPanel = (message, returnPath) => {\n',
-    replace: '  const openLoginPanel = (message, returnPath) => {\n',
+    find: '  const goToEntry = (returnPath) => {\n',
+    replace: '  const goToEntry = (returnPath) => {\n',
     extra: null,
-    injectAfter: '  const openLoginPanel = (message, returnPath) => {\n',
-    inject: '    if (message) return;\n',
+    injectAfter: '  const goToEntry = (returnPath) => {\n',
+    inject: '    if (returnPath !== undefined) return;\n',
     scripts: ['verify-portal.mjs'],
   },
   {

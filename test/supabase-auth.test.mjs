@@ -191,10 +191,13 @@ test('my.html carries every DOM hook bootProtectedPortal looks up', () => {
   const hooks = [...bootSource.matchAll(/document\.querySelector\('\[([\w-]+)\]'\)/g)].map((m) => m[1]);
   assert.deepEqual(
     hooks,
-    /* `data-staff-link`（スタッフかつ飼い主のときだけ出したトリマー画面への入口）は
-       外した。**1ログインアカウント＝1役割**（`D-20260904-66`・マスター判断 2026-09-04)
-       なので、スタッフ権限を持つ人はここへ来ない——来ない人に出す入口は嘘になる。 */
-    ['data-portal-status', 'data-login-panel', 'data-portal-content', 'data-google-login', 'data-sign-out'],
+    /* 落としたもの2つ:
+       - `data-staff-link`（兼務者にだけ出したトリマー画面への入口）——`D-20260904-66`
+         で1アカウント＝1役割になり、スタッフ権限を持つ人はここへ来なくなった
+       - `data-login-panel` / `data-google-login`（自前のログイン）——**入口を1つに
+         した**（`D-20260905-67`）。押せば本当にログインが始まる画面だったので、
+         これは飾りではなく2つ目の入口だった。未ログインの人は入口へ送る */
+    ['data-portal-status', 'data-portal-content', 'data-sign-out'],
   );
   for (const hook of hooks) {
     assert.ok(hasAttribute(portalHtml, hook), `src/my.html に ${hook} が無い`);
@@ -219,8 +222,9 @@ test('my.html loads the Supabase vendor before the portal module', () => {
   assert.match(portalHtml, /<script type="module" src="\/backend\/js\/supabase-auth\.js"><\/script>/);
 });
 
-test('my.html hides the login panel, the content and the sign-out until boot decides', () => {
-  for (const hook of ['data-login-panel', 'data-portal-content', 'data-sign-out']) {
+test('my.html hides the content and the sign-out until boot decides', () => {
+  /* `data-login-panel` は器ごと外した（入口は `/` の1つだけ・`D-20260905-67`）。 */
+  for (const hook of ['data-portal-content', 'data-sign-out']) {
     assert.match(
       portalHtml,
       new RegExp(`${hook}[^>]*\\shidden`),
