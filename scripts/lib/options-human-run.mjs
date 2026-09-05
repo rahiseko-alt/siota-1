@@ -70,9 +70,11 @@ export const PATTERNS = [
   },
   {
     id: '06-new-karte-button',
-    title: '⑥②一覧の「＋新規カルテを作成する」を押す（前回直した入口）',
-    why: 'いまは知らせが出るだけで画面が動かない。'
-      + 'そこから人は上の帯の「03 カルテ作成」を押す＝②の経路に合流する',
+    title: '⑥②一覧に「＋新規カルテを作成する」が無い状態で、人が次にどうするか',
+    why: 'ボタンは 2026-09-04 に削除した（押しても案内を出すだけで、犬を登録できるのは'
+      + '管理画面だけだった・マスター指示）。**無くなったあと、人が詰まらないか**を見る。'
+      + '0件の店では案内が「管理」を指す（`verify:first-run` の 4b.）。'
+      + 'ここは犬が居る店なので、上の帯の「03 カルテ作成」に合流できるかを撮る',
     routes: {},
     nav: 'new-karte-button',
   },
@@ -220,16 +222,13 @@ async function runOne(browser, base, pattern) {
       await page.locator('.karte-card').first().waitFor({ state: 'visible', timeout: 15000 });
       steps.push('/edit を開いた（②一覧）');
       page.on('dialog', (d) => { steps.push(`お知らせが出た: ${d.message().slice(0, 60)}`); d.accept(); });
-      const btn = page.locator('button', { hasText: '新規カルテを作成' }).first();
-      if (await btn.count() > 0) {
-        await btn.click();
-        steps.push('「＋新規カルテを作成する」を押した');
-        await page.waitForTimeout(1500);
-        await page.locator('.btn-step[data-step="3"]').click();
-        steps.push('画面が動かないので「03 カルテ作成」を押した');
-      } else {
-        steps.push('「＋新規カルテを作成する」のボタンが見つからない');
-      }
+      /* **ボタンはもう無い。**「見つからない」と書いて終わるのではなく、
+         **無いことを確かめてから、人が実際に取る次の手を撮る**
+         ——else 側に落ちて何も試さないシナリオになっていた（サブ検証 2026-09-04）。 */
+      const btn = page.locator('button', { hasText: '新規カルテを作成' });
+      steps.push(`「＋新規カルテを作成する」は ${await btn.count()} 件（削除済みなので 0 が正しい）`);
+      await page.locator('.btn-step[data-step="3"]').click();
+      steps.push('人は上の帯の「03 カルテ作成」を押す');
     } else if (pattern.nav === 'backend-fail') {
       await page.goto(`${base}/edit`, { waitUntil: 'domcontentloaded' });
       steps.push('/edit を開いた（backend のモジュールが1本落ちる状態）');

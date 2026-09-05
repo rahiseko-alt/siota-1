@@ -777,7 +777,9 @@ export async function bootAdminPortal() {
       show(signOutButton, true);
       signOutButton.onclick = async () => {
         await supabase.auth.signOut();
-        location.replace('/my');
+        /* **入口へ返す**（マスター指示 2026-09-04「入口を分けるな」）。
+           `/my` に返すと、飼い主の画面がもう1つのログイン画面になってしまう。 */
+        location.replace('/');
       };
       return;
     }
@@ -788,7 +790,8 @@ export async function bootAdminPortal() {
     setMessage(statusEl, '');
     signOutButton.onclick = async () => {
       await supabase.auth.signOut();
-      location.replace('/my');
+      /* 上と同じ。ログアウトの行き先は3画面とも入口（`/`）で揃える。 */
+      location.replace('/');
     };
     screenHome();
   } catch (error) {

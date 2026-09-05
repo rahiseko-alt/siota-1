@@ -190,11 +190,19 @@ try {
   await injectSession(owner, FIXTURE.ownerAEmail);
   await owner.goto(`${BASE}/my`, { waitUntil: 'networkidle' });
   await owner.waitForSelector('[data-sign-out]:not([hidden])', { timeout: 20_000 });
-  const ownerView = await owner.evaluate(() => {
-    const link = document.querySelector('[data-staff-link]');
-    return { staffLinkVisible: !!link && !link.hidden, pets: document.querySelectorAll('.pet-card').length };
-  });
-  check('9. 飼い主だけの人に作業画面の入口を出していない', ownerView.staffLinkVisible === false);
+  const ownerView = await owner.evaluate(() => ({
+    path: location.pathname,
+    /* **もう `[data-staff-link]` は見ない。** その属性は消したので、
+       「無いこと」を見ても**再導入されたときしか捕まらない**——
+       いま危ないのは属性の有無ではなく、**振り分けが飼い主を `/edit` へ
+       送ってしまうこと**（サブ検証 2026-09-04 の指摘）。行き先そのものを見る。 */
+    editLinks: [...document.querySelectorAll('a[href^="/edit"]')]
+      .filter((a) => a.getClientRects().length > 0).length,
+    pets: document.querySelectorAll('.pet-card').length,
+  }));
+  check('9. 飼い主だけの人は、飼い主の画面に留まる', ownerView.path === '/my', `path=${ownerView.path}`);
+  check('9b. 飼い主だけの人に、作業画面への入口を1つも出していない',
+    ownerView.editLinks === 0, `入口=${ownerView.editLinks}件`);
   check('10. 飼い主には自分の犬が並んでいる', ownerView.pets > 0, `pet=${ownerView.pets}`);
   await owner.close();
 
@@ -266,8 +274,12 @@ try {
     `viewport="${viewport}"`);
 
   process.stdout.write(
-    `\n【画面に在る入口】犬の選択・新規カルテ・初回登録QR（${listView.invites}件）・`
-    + '確定 ／ **削除は管理者画面（③削除）に在る**（正UI 側の導線は docs/deferred.md #25）\n',
+    /* **合格させた内容と食い違うことを書かない。** ここは長く「新規カルテ」を
+       在るものとして並べていたが、`13.` は同じ実行で「無い」と合格させている
+       ——人が読む要約が検査と正反対だった（サブ検証 2026-09-04 の指摘・`D-10`）。 */
+    `\n【画面に在る入口】犬の選択・初回登録QR（${listView.invites}件）・確定`
+    + ' ／ **新しい犬の登録と削除は管理者画面（② 新規／③ 削除）に在る**'
+    + '（正UI 側の導線は docs/ops/plan.md #25）\n',
   );
   await staff.close();
 } catch (error) {

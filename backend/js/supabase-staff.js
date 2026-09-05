@@ -357,8 +357,16 @@ async function bootStaffPortal(PonchiApp) {
   }
   const session = await readJson(client, '/api/session');
   if ((session.memberships || []).length === 0) {
-    /* スタッフ権限が無い人は飼い主の画面へ。**役割で振り分けるのはここと
-       `supabase-auth.js` の2か所だけ**にする（`D-20260904-66`）。 */
+    /* スタッフ権限が無い人は飼い主の画面へ。
+
+       **役割で行き先を決める場所は3つある**（数え落とすと、次に触る人が
+       3つ目を開かない・サブ検証 2026-09-04 の指摘）:
+         1. `backend/js/supabase-auth.js`  ログイン直後の振り分け（`/` と `/my`）
+         2. ここ                            スタッフ権限が無い人を `/my` へ
+         3. `backend/js/supabase-admin.js`  管理者でない人を `/edit` か `/my` へ
+       判定はすべて `memberships` の有無だけで揃える（`D-20260904-66`）。
+       `worker/src/index.js` は**意図的に見ない**（器を配るだけの経路に認可を
+       書くと、二重に判定する場所ができて食い違う）。 */
     location.replace('/my');
     return;
   }

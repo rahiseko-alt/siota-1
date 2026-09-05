@@ -39,8 +39,9 @@ try {
   const consoleErrors = [];
   page.on('pageerror', (e) => consoleErrors.push(`pageerror: ${e.message}`));
 
-  /* ログインしてから開く。未ログインだと supabase-auth.js が /my へ飛ばすため、
-     「配れているか」を見る前に画面が入れ替わってしまう。 */
+  /* ログインしてから開く。未ログインだと supabase-staff.js が入口（`/`）へ
+     飛ばすため、「配れているか」を見る前に画面が入れ替わってしまう
+     （飛ばし先は 2026-09-04 に `/my` から `/` へ変えた・`D-20260904-66`）。 */
   await page.goto(`${BASE}/my`);
   await injectSession(page, FIXTURE.staffEmail);
 
