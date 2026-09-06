@@ -41,10 +41,13 @@ insert into public.shops (id, name, slug)
 values ('10000000-0000-0000-0000-000000000001', 'Local SALTY DOG', 'local-salty-dog')
 on conflict (id) do nothing;
 
-insert into public.shop_memberships (shop_id, user_id, role) values
-  ('10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', 'admin'),
-  ('10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000002', 'staff'),
-  ('10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-0000000000c1', 'staff')
+/* 権限は「お店の人か / 飼い主か」の2つだけ（`D-20260906-68`）。
+   `admin` と `staff` の区別は無いので、3人とも同じ「お店の人」。
+   アカウント名の `admin@` `staff@` は**歴史的な名前**で、権限の差ではない。 */
+insert into public.shop_memberships (shop_id, user_id) values
+  ('10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001'),
+  ('10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000002'),
+  ('10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-0000000000c1')
 on conflict (shop_id, user_id) do nothing;
 
 insert into public.owners (id, shop_id, name, legacy_slug) values

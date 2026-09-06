@@ -49,9 +49,10 @@ insert into public.shops (id, name, slug) values
   ('bb000000-0000-0000-0000-000000000001', 'RLS Shop A', 'rls-shop-a'),
   ('bb000000-0000-0000-0000-000000000002', 'RLS Shop B', 'rls-shop-b');
 
-insert into public.shop_memberships (shop_id, user_id, role) values
-  ('bb000000-0000-0000-0000-000000000001', 'aa000000-0000-0000-0000-000000000001', 'admin'),
-  ('bb000000-0000-0000-0000-000000000002', 'aa000000-0000-0000-0000-000000000002', 'admin');
+/* 権限は「お店の人か / 飼い主か」の2つだけ（`D-20260906-68`）。役割の列は無い。 */
+insert into public.shop_memberships (shop_id, user_id) values
+  ('bb000000-0000-0000-0000-000000000001', 'aa000000-0000-0000-0000-000000000001'),
+  ('bb000000-0000-0000-0000-000000000002', 'aa000000-0000-0000-0000-000000000002');
 
 insert into public.owners (id, shop_id, name) values
   ('cc000000-0000-0000-0000-00000000000a', 'bb000000-0000-0000-0000-000000000001', 'RLS Owner A'),

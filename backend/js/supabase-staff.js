@@ -269,26 +269,27 @@ async function buildOwnerLinkSection(ownerId, label) {
 }
 
 async function showStaffManager() {
-  if (activeMembership?.role !== 'admin') return;
+  /* **権限は「お店の人か / 飼い主か」の2つだけ**（マスター判断 2026-09-06・`D-20260906-68`）。
+     以前は管理者だけがこの画面を開け、招待も「管理者を招待 / スタッフを招待」の
+     2種類あった。区別は DB ごと削除したので、招待も1種類・行に役割の欄も無い。
+     ここへ来るのはお店の人だけ（`bootStaffPortal` で振り分け済み）。 */
   const dialog = newDialog('スタッフ管理');
   const intro = document.createElement('p');
-  intro.textContent = '管理者だけがスタッフ招待・権限変更・利用停止を行えます。';
+  intro.textContent = 'お店の方を招待する・利用を止める。権限の区別はありません。';
   const inviteActions = document.createElement('div');
   inviteActions.className = 'supabase-dialog-actions';
-  for (const role of ['staff', 'admin']) {
-    const invite = document.createElement('button');
-    invite.type = 'button';
-    invite.textContent = role === 'admin' ? '管理者を招待' : 'スタッフを招待';
-    invite.onclick = async () => {
-      invite.disabled = true;
-      try {
-        await showInvitationDialog({ invitationType: 'staff', staffRole: role }, invite.textContent);
-      } finally {
-        invite.disabled = false;
-      }
-    };
-    inviteActions.append(invite);
-  }
+  const invite = document.createElement('button');
+  invite.type = 'button';
+  invite.textContent = 'お店の方を招待';
+  invite.onclick = async () => {
+    invite.disabled = true;
+    try {
+      await showInvitationDialog({ invitationType: 'staff' }, invite.textContent);
+    } finally {
+      invite.disabled = false;
+    }
+  };
+  inviteActions.append(invite);
   const list = document.createElement('div');
   const response = await globalThis.TrimmerStaffApi.request('/api/staff');
   for (const membership of response.staff || []) {
@@ -296,14 +297,6 @@ async function showStaffManager() {
     row.className = 'supabase-staff-row';
     const user = document.createElement('code');
     user.textContent = membership.user_id;
-    const role = document.createElement('select');
-    for (const value of ['staff', 'admin']) {
-      const option = document.createElement('option');
-      option.value = value;
-      option.textContent = value === 'admin' ? '管理者' : 'スタッフ';
-      option.selected = membership.role === value;
-      role.append(option);
-    }
     const active = document.createElement('input');
     active.type = 'checkbox';
     active.checked = membership.active;
@@ -317,15 +310,15 @@ async function showStaffManager() {
         await globalThis.TrimmerStaffApi.request(`/api/staff/${encodeURIComponent(membership.user_id)}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ role: role.value, active: active.checked }),
+          body: JSON.stringify({ active: active.checked }),
         });
         save.textContent = '保存済み';
-      } catch (error) {
+      } catch {
         save.disabled = false;
-        save.textContent = error.status === 409 ? '最後の管理者は停止不可' : '再試行';
+        save.textContent = '再試行';
       }
     };
-    row.append(user, role, active, save);
+    row.append(user, active, save);
     list.append(row);
   }
   const closeActions = document.createElement('div');
@@ -363,7 +356,7 @@ async function bootStaffPortal(PonchiApp) {
        3つ目を開かない・サブ検証 2026-09-04 の指摘）:
          1. `backend/js/supabase-auth.js`  ログイン直後の振り分け（`/` と `/my`）
          2. ここ                            スタッフ権限が無い人を `/my` へ
-         3. `backend/js/supabase-admin.js`  管理者でない人を `/edit` か `/my` へ
+         3. `backend/js/supabase-admin.js`  お店の人でない人を `/my` へ
        判定はすべて `memberships` の有無だけで揃える（`D-20260904-66`）。
        `worker/src/index.js` は**意図的に見ない**（器を配るだけの経路に認可を
        書くと、二重に判定する場所ができて食い違う）。 */
@@ -390,14 +383,11 @@ async function bootStaffPortal(PonchiApp) {
     };
   }
 
-  /* **管理者にだけ、管理画面への入口を出す**（マスター指示 2026-09-02）。
-     隠しておいて、該当する人にだけ見せる（下のログアウトと同じ立て付け）。
-     これまで `/admin` へのリンクは画面に1つも無く、トリマー画面に居る管理者は
-     URL を手打ちしない限り管理画面へ行けなかった。 */
-  if ((session.memberships || []).some((m) => m.role === 'admin')) {
-    const adminLink = document.querySelector('[data-admin-link]');
-    if (adminLink) adminLink.hidden = false;
-  }
+  /* **お店の人には全員、管理画面への入口を出す**（マスター判断 2026-09-06・`D-20260906-68`
+     「管理者とスタッフは同一で良い」）。以前は `role === 'admin'` の人にだけ出していたが、
+     その区別は DB ごと削除した。ここへ来るのはスタッフ権限を持つ人だけ（上で振り分け済み）。 */
+  const adminLink = document.querySelector('[data-admin-link]');
+  if (adminLink) adminLink.hidden = false;
 
   const route = parseStaffRoute(location.pathname);
   if (!route) {
@@ -655,7 +645,6 @@ globalThis.TrimmerSupabaseStaff = {
   saveDraft,
   findDraft,
   findLastFinalReport,
-  isAdmin: () => activeMembership?.role === 'admin',
   showOwnerInvitation: (ownerId, ownerName) => showInvitationDialog(
     { invitationType: 'owner', ownerId }, ownerName || '飼い主',
   ),

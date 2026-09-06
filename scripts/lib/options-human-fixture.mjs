@@ -138,7 +138,7 @@ const BASE_PETS = [
 function defaultRoutes() {
   return {
     '/api/config': () => ({ status: 200, body: { backend: 'supabase', supabaseUrl: 'http://127.0.0.1:0', publishableKey: 'sb_publishable_harness' } }),
-    '/api/session': () => ({ status: 200, body: { memberships: [{ shop_id: 'shop-1', role: 'admin', active: true }] } }),
+    '/api/session': () => ({ status: 200, body: { memberships: [{ shop_id: 'shop-1', active: true }] } }),
     '/api/pets': () => ({ status: 200, body: { pets: BASE_PETS } }),
     '/api/shop': () => ({ status: 200, body: { shop: { id: 'shop-1', name: 'テスト店', slug: 'test', default_revisit_days: 30, grooming_options: NINE_OPTIONS } } }),
     pet: (id) => ({ status: 200, body: { pet: BASE_PETS.find((p) => p.id === id) || BASE_PETS[0] } }),
