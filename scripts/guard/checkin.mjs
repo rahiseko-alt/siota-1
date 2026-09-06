@@ -151,7 +151,12 @@ try {
   } else {
     const mark = readDoingMark();
     const key = sessionKey();
-    const mine = mark && (key ? mark.session === key : true) && items.some((i) => i.id === mark.id);
+    /* **閉じた一手は握り続けない。** 割り当てた1件が `[x]`／`[-]` になったら、
+       次の未了へ進む——マスター指示が途中で入り、いちばん上に足された場合もここで拾う。
+       （閉じていない間は上書きしない・`F-20260830-62`。閉じた後だけ進むので、
+       項目9 が見る「割り当てた1件」は常に閉じたものか、いま抱えているものになる。） */
+    const held = mark && items.find((i) => i.id === mark.id);
+    const mine = mark && (key ? mark.session === key : true) && held && !held.done && !held.dropped;
     doing = mine ? mark : null;
     if (!doing) {
       const top = topOpen(items);
@@ -169,6 +174,31 @@ try {
   process.stdout.write(`  ❌ 「次の一手」を読めなかった: ${e.message.split('\n')[0]}\n`);
   problems.push('「次の一手」を読めない');
 }
+
+/* ── 3.7 このセッションで**訊かずにやる**工程を、毎回目の前に出す ──
+   マスター指示（2026-09-06・2回目）:「なぜまた質問する？」。
+
+   1回目は「どの一手をやるか」をマスターに選ばせた（`F-20260906-73`）。
+   2回目は**マージの許可**を訊いた——`AGENTS.md` の Out 規約は「PR を ready にして
+   マージする」と決めており、`checkout.mjs` の項目3が**マージしていなければ EXIT 1**
+   にする。**機械が既に要求している工程は、質問の対象ではない**（`D-25`）。
+
+   ここは `AGENTS.md` の Out 規約の表を**そのまま**読んで出す（写さない。
+   写すと2か所になって食い違う・`D-15`）。 */
+try {
+  const agents = fs.readFileSync(path.join(ROOT, 'AGENTS.md'), 'utf8');
+  const rows = agents.split('\n')
+    .filter((l) => /^\|\s*\d+\s*\|/.test(l))
+    .map((l) => l.split('|').filter((c) => c.trim() !== ''))
+    .filter((c) => c.length === 2)
+    .map((c) => `${c[0].trim()}. ${c[1].trim().replace(/\*\*/g, '')}`);
+  if (rows.length > 0) {
+    process.stdout.write('\n  このセッションで**訊かずにやる**工程（AGENTS.md の Out 規約・機械が要求する）:\n');
+    for (const r of rows) process.stdout.write(`    ${r}\n`);
+    process.stdout.write('    → 決まっている工程の可否をマスターに訊かない（`D-25`）。'
+      + '訊いてよいのは、一手の**中身**が決まらないときだけ。\n');
+  }
+} catch { /* 出せなくてもチェックイン自体は止めない（表示だけの段） */ }
 
 /* ── 4. そのフェーズの作業場が開いているか ── */
 if (phase !== '(無し)') {
