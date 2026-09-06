@@ -25,6 +25,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import { ROADMAP, writePlanReadMark } from './plan-read-mark.mjs';
 
 const ROOT = process.env.REPO_ROOT || process.cwd();
 const sh = (cmd) => execSync(cmd, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
@@ -78,7 +79,12 @@ if (hasMaster) {
 const phasePath = path.join(ROOT, 'docs/ops/phase');
 const phase = fs.existsSync(phasePath) ? fs.readFileSync(phasePath, 'utf8').trim() : '(無し)';
 process.stdout.write(`  📖 現在フェーズ: ${phase}\n`);
-for (const [label, f] of [['引き継ぎ', 'docs/handoff.md'], ['計画', 'docs/ops/plan.md'], ['ルール', 'AGENTS.md']]) {
+for (const [label, f] of [
+  ['大計画', 'docs/ops/roadmap.md'],
+  ['引き継ぎ', 'docs/handoff.md'],
+  ['計画', 'docs/ops/plan.md'],
+  ['ルール', 'AGENTS.md'],
+]) {
   const exists = fs.existsSync(path.join(ROOT, f));
   process.stdout.write(`  ${exists ? '📖' : '❌'} ${label}: ${f}${exists ? '' : ' が無い'}\n`);
   if (!exists) problems.push(`${f} が無い`);
@@ -86,8 +92,16 @@ for (const [label, f] of [['引き継ぎ', 'docs/handoff.md'], ['計画', 'docs/
 
 /* ── 3.5 大計画を強制的に画面へ出す（`npm run plan`）。読んだ印を残す ── */
 try {
-  process.stdout.write(`\n${sh('node scripts/plan.mjs')}\n`);
-  fs.writeFileSync(path.join(ROOT, '.plan-read'), `${new Date().toISOString()}\n`);
+  /* **大計画（`docs/ops/roadmap.md`）そのものを画面に出す。**
+     ここは長く `npm run plan` だけを出していたが、`plan.mjs` が出すのは
+     「いまやる番」と**地図への案内1行**（`詳しい地図: docs/ops/roadmap.md`）だけで、
+     **地図の中身は一度も画面に出ていなかった**。そのため「大計画を読んだ」の印が
+     立っても、実際には全体像を一度も見ないまま作業できた（2026-09-06・実測）。
+     案内ではなく**現物を出す**。 */
+  process.stdout.write(`\n${'='.repeat(60)}\n【大計画】docs/ops/roadmap.md\n${'='.repeat(60)}\n`);
+  process.stdout.write(`${fs.readFileSync(path.join(ROOT, ROADMAP), 'utf8')}\n`);
+  process.stdout.write(`${sh('node scripts/plan.mjs')}\n`);
+  writePlanReadMark();
   /* **「いまやる番」の値を、このセッション開始時点のものとして残す。**
      `checkout.mjs` の7項目目（この行を今回のセッションで更新したか）は、
      以前は `origin/master` の値と比べていた。だが**このセッション自身の

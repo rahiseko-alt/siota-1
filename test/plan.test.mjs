@@ -74,3 +74,85 @@ test('放置リストの数え方は、他の章の番号付き表（C-1・1-1 �
   const { total } = countDeferred(fakeplan);
   assert.equal(total, 1, '放置リスト以外の表の行を数えてしまっている');
 });
+
+/* ────────────────────────────────────────────────────────────────
+   大計画をセッション開始時に必ず見る（三重の見逃し防止・`D-20260906-71`）
+
+   マスター指示（2026-09-06）: 「大計画をセッション開始時に絶対に見る様に、
+   チェックインスキルに組み込め。claude.md にも念のため @参照とファイル名でもかけ。
+   三重で見逃し防止体制にしろ」。
+
+   **実際に素通りできていた。** 印（`.plan-read`）は時刻1行で、関所は
+   ファイルの有無しか見ていなかったため、**前日のセッションが残した印で
+   その日のセッションが通っていた**。しかも `checkin.mjs` は大計画
+   （`docs/ops/roadmap.md`）を一度も画面に出しておらず、出していたのは
+   「詳しい地図: docs/ops/roadmap.md」という**案内1行**だけだった。
+
+   3層それぞれに1本ずつ置く。**1層だけ外しても赤になる**ようにするため。
+   ──────────────────────────────────────────────────────────────── */
+
+test('層1: チェックインのスキルが、大計画を最初に読ませる', () => {
+  const skill = fs.readFileSync(
+    path.join(ROOT, '.agents/skills/session-checkin/SKILL.md'), 'utf8',
+  );
+  assert.match(skill, /docs\/ops\/roadmap\.md/,
+    'session-checkin の手順に大計画（docs/ops/roadmap.md）が無い');
+  assert.match(skill, /scripts\/guard\/checkin\.mjs/,
+    '印を書く手順（checkin.mjs の実行）が無い');
+  /* **手順の1番目であること。** 下の方に足しただけでは、指示を1つずつ
+     処理するうちに読み飛ばされる。 */
+  const steps = skill.slice(skill.indexOf('## 手順'));
+  assert.ok(steps.indexOf('roadmap.md') < steps.indexOf('handoff.md'),
+    '大計画が handoff より後ろに置かれている（最初に読ませること）');
+});
+
+test('層2: CLAUDE.md に大計画への @参照 が在る', () => {
+  const claudeMd = fs.readFileSync(path.join(ROOT, 'CLAUDE.md'), 'utf8');
+  assert.match(claudeMd, /@docs\/ops\/roadmap\.md/,
+    'CLAUDE.md に @docs/ops/roadmap.md が無い');
+  assert.match(claudeMd, /@docs\/ops\/phase/, 'CLAUDE.md に @docs/ops/phase が無い');
+});
+
+test('層2b: ルールの正（AGENTS.md）にも大計画が入っている', () => {
+  const agents = fs.readFileSync(path.join(ROOT, 'AGENTS.md'), 'utf8');
+  const inSection = agents.slice(agents.indexOf('### セッション開始 (In)'));
+  assert.match(inSection, /docs\/ops\/roadmap\.md/,
+    'AGENTS.md のセッション開始規約に大計画が無い（CLAUDE.md は案内、正はこちら）');
+});
+
+test('層3: 関所が「このセッションが大計画を読んだか」を見る', async () => {
+  const { judgePlanReadMark, readPlanReadMark, ROADMAP, MAX_AGE_MS } =
+    await import('../scripts/guard/plan-read-mark.mjs');
+  const now = Date.parse('2026-09-06T12:00:00.000Z');
+  const fresh = (over) => ({
+    at: new Date(now - 1000).toISOString(), session: 'S1', shown: [ROADMAP], ...over,
+  });
+
+  assert.equal(judgePlanReadMark(fresh(), { env: { CLAUDE_CODE_SESSION_ID: 'S1' }, now }).ok,
+    true, 'このセッションの印を弾いてはいけない');
+  assert.equal(judgePlanReadMark(fresh(), { env: { CLAUDE_CODE_SESSION_ID: 'S2' }, now }).ok,
+    false, '別セッションの印を通してはいけない（これが実際に起きた穴）');
+  assert.equal(judgePlanReadMark(fresh({ shown: ['docs/ops/plan.md'] }), { env: {}, now }).ok,
+    false, '大計画を出していないチェックインの印を通してはいけない');
+  assert.equal(judgePlanReadMark(null, { env: {}, now }).ok,
+    false, '印が無いのに通してはいけない');
+  /* 鍵の取れない AI 向けの受け皿。**前日の印では通さない。** */
+  assert.equal(judgePlanReadMark(fresh(), { env: {}, now }).ok,
+    true, '鍵が無い環境でも、新しい印は通す');
+  assert.equal(
+    judgePlanReadMark(
+      fresh({ at: new Date(now - MAX_AGE_MS - 1000).toISOString() }), { env: {}, now },
+    ).ok,
+    false, '鍵が無い環境で、古い印を通してはいけない',
+  );
+  /* 旧い形（時刻1行）は通さない——通すと入れ替えた意味が無い。 */
+  assert.equal(readPlanReadMark('2026-09-05T08:09:23.576Z\n'), null,
+    '旧い形式の印を有効として読んではいけない');
+});
+
+test('層3b: チェックインが大計画そのものを画面に出す（案内1行で済ませない）', () => {
+  const checkin = fs.readFileSync(path.join(ROOT, 'scripts/guard/checkin.mjs'), 'utf8');
+  assert.match(checkin, /readFileSync\(path\.join\(ROOT, ROADMAP\), 'utf8'\)/,
+    'checkin.mjs が roadmap.md の中身を読んで出していない');
+  assert.match(checkin, /writePlanReadMark\(\)/, '印を書いていない');
+});
