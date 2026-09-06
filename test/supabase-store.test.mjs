@@ -407,61 +407,44 @@ test('invitation listing requests only safe columns and never token material', a
   assert.equal(listCall.url.includes('raw_token'), false);
 });
 
-/* 権限は「お店の人 / 飼い主」の2つだけ（`D-20260906-68`）。
-   スタッフ管理で変えられるのは**使えるか / 使えないか**だけで、役割は無い。
-   以前ここは「役割の変更」と「最後の管理者は停止不可（409）」を要求していたが、
-   その仕組みは DB ごと削除した。 */
-test('staff changes carry only active — no role travels to the RPC', async () => {
-  const calls = [];
-  const response = await worker.fetch(new Request(
+/* スタッフ管理の画面を削除した（マスター指示 2026-09-06）。
+   `D-20260823-05`「とりあえず残す」のまま、**押す場所が1つも無い**状態で残っていた。
+   画面と一緒に `/api/staff` も落としたので、**その口が本当に閉じたこと**を見る
+   ——残っていると、誰も呼ばないのに membership を書き換えられる口になる。 */
+test('the staff-management endpoints are gone (no way in)', async () => {
+  const seen = [];
+  const env = () => supabaseEnv(async (url) => {
+    seen.push(url);
+    if (url.endsWith('/auth/v1/user')) {
+      return Response.json({ id: '20000000-0000-0000-0000-000000000001', email: 'staff@local.test' });
+    }
+    if (url.includes('/shop_memberships?')) {
+      return Response.json([{ shop_id: '10000000-0000-0000-0000-000000000001' }]);
+    }
+    return Response.json({}, { status: 500 });
+  });
+
+  const list = await worker.fetch(new Request('https://test.local/api/staff', {
+    headers: { Authorization: 'Bearer staff-jwt' },
+  }), env());
+  const patch = await worker.fetch(new Request(
     'https://test.local/api/staff/20000000-0000-0000-0000-000000000001',
     {
       method: 'PATCH',
       headers: { Authorization: 'Bearer staff-jwt', 'Content-Type': 'application/json' },
       body: JSON.stringify({ active: false }),
     },
-  ), supabaseEnv(async (url, options) => {
-    calls.push({ url, body: options?.body });
-    if (url.endsWith('/auth/v1/user')) {
-      return Response.json({ id: '20000000-0000-0000-0000-000000000001', email: 'staff@local.test' });
-    }
-    if (url.includes('/shop_memberships?')) {
-      return Response.json([{ shop_id: '10000000-0000-0000-0000-000000000001' }]);
-    }
-    if (url.includes('/rpc/update_staff_membership')) {
-      return Response.json({ shop_id: '10000000-0000-0000-0000-000000000001', active: false });
-    }
-    return Response.json({}, { status: 500 });
-  }));
+  ), env());
 
-  assert.equal(response.status, 200);
-  const rpc = calls.find((call) => call.url.includes('/rpc/update_staff_membership'));
-  assert.ok(rpc, 'update_staff_membership が呼ばれていない');
-  const sent = JSON.parse(rpc.body);
-  assert.equal(sent.new_active, false);
-  assert.equal('new_role' in sent, false, '役割は送らない');
+  assert.equal(list.status, 404, 'GET /api/staff がまだ在る');
+  assert.equal(patch.status, 404, 'PATCH /api/staff/{id} がまだ在る');
+  assert.equal(
+    seen.some((url) => url.includes('update_staff_membership')),
+    false,
+    'membership を書き換える RPC が呼ばれた',
+  );
 });
 
-test('a role in the request body is refused (the field does not exist any more)', async () => {
-  const response = await worker.fetch(new Request(
-    'https://test.local/api/staff/20000000-0000-0000-0000-000000000001',
-    {
-      method: 'PATCH',
-      headers: { Authorization: 'Bearer staff-jwt', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role: 'admin', active: true }),
-    },
-  ), supabaseEnv(async (url) => {
-    if (url.endsWith('/auth/v1/user')) {
-      return Response.json({ id: '20000000-0000-0000-0000-000000000001', email: 'staff@local.test' });
-    }
-    if (url.includes('/shop_memberships?')) {
-      return Response.json([{ shop_id: '10000000-0000-0000-0000-000000000001' }]);
-    }
-    return Response.json({}, { status: 500 });
-  }));
-
-  assert.equal(response.status, 400);
-});
 
 test('asset metadata rejects client storage paths and derives them inside the database RPC', async () => {
   const petId = '40000000-0000-0000-0000-0000000000a1';

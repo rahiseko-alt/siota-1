@@ -22,7 +22,6 @@ import {
   createReportSchema,
   parseJson,
   updateOwnerSchema,
-  updateMembershipSchema,
   updatePetSchema,
   updateReportSchema,
   updateShopSchema,
@@ -143,15 +142,6 @@ async function handleSupabaseApi(request, store, path, cors, env) {
     && isUuid(parts[2]) && parts[3] === 'revoke' && request.method === 'POST'
   ) {
     return json(await store.revokeInvitation(parts[2]), 200, cors);
-  }
-
-  if (path === '/api/staff' && request.method === 'GET') {
-    return json({ staff: await store.listStaff() }, 200, cors);
-  }
-  if (parts.length === 3 && parts[0] === 'api' && parts[1] === 'staff' && isUuid(parts[2]) && request.method === 'PATCH') {
-    const parsed = await parseJson(request, updateMembershipSchema);
-    if (!parsed.ok) return invalidJsonResult(parsed, cors);
-    return json({ membership: await store.updateStaff(parts[2], parsed.data) }, 200, cors);
   }
 
   /* 「次回のおすすめご来店時期」の既定日数・使用オプション一覧。書き換えは RLS
