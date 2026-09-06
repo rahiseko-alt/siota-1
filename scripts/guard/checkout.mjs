@@ -203,6 +203,65 @@ const NEXT_RE = /^\*\*いまやる番:\s*(.+?)\*\*\s*$/m;
   add(ok, '「いまやる番」（docs/ops/plan.md）を今回のセッションで更新した', detail);
 }
 
+/* ── 8. 大計画（docs/ops/roadmap.md）の進捗が、いまの実態と合っているか ──
+   マスター指示（2026-09-06）:「大計画の書き込みもチェックアウトスキルに組み込め」。
+
+   `checkin.mjs` は**読んだこと**を、項目7は「いまやる番」を**書いたこと**を見る。
+   ここは**地図そのものの現在地**を見る。
+
+   **実際に古くなっていた。** 2026-09-06 の時点で `docs/ops/phase` は `F4` なのに、
+   地図は「いま居るのは『棚卸し』の入口」「本番はまだ古い版のまま。いま作ったものは
+   一度も出していない」と書いたままだった——**その時点で本番へは2回出していた**。
+   地図が嘘をつくと、次に来た人が「まだ何も出ていない」と思って動く。
+
+   見るのは2つだけ:
+     ①`scripts/plan.mjs` の `STAGES` の**全段が地図の表に在る**こと
+       （F4 が抜けていて `npm run plan` が全段「未着手」と出した事故と同じ型）
+     ②現在地より**前は ✅**・**現在地は ▶**・**後ろに ✅ や ▶ が無い**こと
+
+   **中身の正しさは見ていない**（それは人が書く）。ここが見るのは、
+   **地図が現在地について嘘をついていないか**だけ。 */
+{
+  let ok = false;
+  let detail;
+  try {
+    const { STAGES, stageIndex } = await import(pathToFileURL(path.join(ROOT, 'scripts/plan.mjs')).href);
+    const roadmap = fs.readFileSync(path.join(ROOT, 'docs/ops/roadmap.md'), 'utf8');
+    const phase = fs.readFileSync(path.join(ROOT, 'docs/ops/phase'), 'utf8').trim();
+    const here = stageIndex(phase);
+    /* 表の行だけを見る。地の文の ✅ を拾うと、どこを直しても緑になる。 */
+    const rowOf = (key) => (roadmap.match(
+      new RegExp(`^\\|\\s*\\*\\*${key}\\*\\*\\s*\\|.*$`, 'm'),
+    ) || [])[0] || null;
+    const missing = STAGES.filter((s2) => rowOf(s2.key) === null).map((s2) => s2.key);
+    if (here === -1) {
+      detail = `docs/ops/phase の値 "${phase}" が STAGES に無い（先に plan.mjs へ足すこと）`;
+    } else if (missing.length > 0) {
+      detail = `大計画の表に段が足りない: ${missing.join(' / ')}`;
+    } else {
+      const wrong = [];
+      STAGES.forEach((s2, i) => {
+        const row = rowOf(s2.key);
+        const done = row.includes('✅');
+        const nowHere = row.includes('▶');
+        if (i < here && !done) wrong.push(`${s2.key} は終わっているのに ✅ が無い`);
+        if (i === here && !nowHere) wrong.push(`${s2.key} がいまの現在地なのに ▶ が無い`);
+        if (i > here && (done || nowHere)) wrong.push(`${s2.key} はまだなのに ✅／▶ が付いている`);
+      });
+      if (wrong.length === 0) {
+        ok = true;
+        detail = `現在地 ${phase} と一致（docs/ops/roadmap.md）`;
+      } else {
+        detail = `${wrong.join('\n      ')}\n`
+          + '      docs/ops/roadmap.md の「フェーズごとの宿題」の表を、いまの実態に直すこと。';
+      }
+    }
+  } catch (e) {
+    detail = `確認できなかった: ${e.message.split('\n')[0]}`;
+  }
+  add(ok, '大計画（docs/ops/roadmap.md）の現在地が実態と合っている', detail);
+}
+
 /* ── 結果 ── */
 const failed = steps.filter((s) => !s.ok);
 process.stdout.write('\n【チェックアウト】次のセッションは別のコンテナで、master から始まる\n\n');
