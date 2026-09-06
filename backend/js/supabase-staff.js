@@ -268,65 +268,6 @@ async function buildOwnerLinkSection(ownerId, label) {
   return section;
 }
 
-async function showStaffManager() {
-  /* **権限は「お店の人か / 飼い主か」の2つだけ**（マスター判断 2026-09-06・`D-20260906-68`）。
-     以前は管理者だけがこの画面を開け、招待も「管理者を招待 / スタッフを招待」の
-     2種類あった。区別は DB ごと削除したので、招待も1種類・行に役割の欄も無い。
-     ここへ来るのはお店の人だけ（`bootStaffPortal` で振り分け済み）。 */
-  const dialog = newDialog('スタッフ管理');
-  const intro = document.createElement('p');
-  intro.textContent = 'お店の方を招待する・利用を止める。権限の区別はありません。';
-  const inviteActions = document.createElement('div');
-  inviteActions.className = 'supabase-dialog-actions';
-  const invite = document.createElement('button');
-  invite.type = 'button';
-  invite.textContent = 'お店の方を招待';
-  invite.onclick = async () => {
-    invite.disabled = true;
-    try {
-      await showInvitationDialog({ invitationType: 'staff' }, invite.textContent);
-    } finally {
-      invite.disabled = false;
-    }
-  };
-  inviteActions.append(invite);
-  const list = document.createElement('div');
-  const response = await globalThis.TrimmerStaffApi.request('/api/staff');
-  for (const membership of response.staff || []) {
-    const row = document.createElement('div');
-    row.className = 'supabase-staff-row';
-    const user = document.createElement('code');
-    user.textContent = membership.user_id;
-    const active = document.createElement('input');
-    active.type = 'checkbox';
-    active.checked = membership.active;
-    active.setAttribute('aria-label', '有効');
-    const save = document.createElement('button');
-    save.type = 'button';
-    save.textContent = '保存';
-    save.onclick = async () => {
-      save.disabled = true;
-      try {
-        await globalThis.TrimmerStaffApi.request(`/api/staff/${encodeURIComponent(membership.user_id)}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ active: active.checked }),
-        });
-        save.textContent = '保存済み';
-      } catch {
-        save.disabled = false;
-        save.textContent = '再試行';
-      }
-    };
-    row.append(user, active, save);
-    list.append(row);
-  }
-  const closeActions = document.createElement('div');
-  closeActions.className = 'supabase-dialog-actions';
-  appendCloseButton(dialog, closeActions);
-  dialog.append(intro, inviteActions, list, closeActions);
-  dialog.showModal();
-}
 
 async function bootStaffPortal(PonchiApp) {
   const client = await createAuthClient();
@@ -648,7 +589,6 @@ globalThis.TrimmerSupabaseStaff = {
   showOwnerInvitation: (ownerId, ownerName) => showInvitationDialog(
     { invitationType: 'owner', ownerId }, ownerName || '飼い主',
   ),
-  showStaffManager,
   boot(PonchiApp) {
     /* **失敗を、必ず人に見える形で出す。**
        ここは長らく `.owner-list` を探して書き込んでいたが、その名前の要素は

@@ -68,11 +68,6 @@ export const claimInvitationSchema = z.object({
   token: z.string().regex(/^[0-9a-f]{64}$/i),
 }).strict();
 
-/* 変えられるのは「使えるか / 使えないか」だけ。役割は無い（`D-20260906-68`）。 */
-export const updateMembershipSchema = z.object({
-  active: z.boolean(),
-}).strict();
-
 export async function parseJson(request, schema, maxBytes = 1_048_576) {
   const declaredLength = Number(request.headers.get('Content-Length'));
   if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {

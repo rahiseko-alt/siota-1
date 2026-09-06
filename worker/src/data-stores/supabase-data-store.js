@@ -421,28 +421,6 @@ export class SupabaseDataStore {
     return { ok: true };
   }
 
-  async listStaff() {
-    const shopId = await this.getStaffShopId();
-    return this.request(
-      `/rest/v1/shop_memberships?select=shop_id,user_id,active,created_at&shop_id=eq.${encodeURIComponent(shopId)}&order=created_at.asc`,
-    );
-  }
-
-  async updateStaff(userId, input) {
-    const shopId = await this.getStaffShopId();
-    const updated = await this.request('/rest/v1/rpc/update_staff_membership', {
-      method: 'POST',
-      body: {
-        target_shop: shopId,
-        target_user: userId,
-        new_active: input.active ?? null,
-      },
-    });
-    /* 「最後の管理者は消せない」ガードは無くなった（`D-20260906-68`）。
-       権限が1つになったので、守るべき「最後の管理者」という概念が無い。 */
-    return updated;
-  }
-
   async registerReportAsset(petId, reportId, input) {
     await this.getReport(petId, reportId);
     return this.request('/rest/v1/rpc/register_report_asset', {

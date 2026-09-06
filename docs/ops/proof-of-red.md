@@ -2793,6 +2793,44 @@ invitation 9/9 ・ m6 16/16 ・ migrations 13/13 ・ stack 4/4 ・ first-run 18/
 ——`denied` だけ見ていると、門は出ているのに下に操作が並んでいる形を見逃す（`empty-pass` の型）。
 
 
+### 40回目: 押す場所が無い画面を削除する（2026-09-06・**手元で実測**）
+
+ページ / URL / 権限の一覧をサブに作らせたところ、**スタッフ管理の画面が
+どこからも開けない**ことが分かった（`grep` で呼び出し0件・実測）。
+
+`D-20260823-05`（2026-08-23・マスター判断）で「とりあえず残す」と決めたまま、
+**押す場所が1つも無い状態で2週間残っていた**——`D-12`「押せた ではなく 届いた」の
+裏返しで、そもそも押せない。マスター指示（2026-09-06）で削除。
+
+削除したもの: `showStaffManager()` / `GET /api/staff` / `PATCH /api/staff/{id}` /
+`updateMembershipSchema` / `listStaff()` / `updateStaff()` /
+`public.update_staff_membership()`（migration `202609060013`）。
+
+**画面を消すだけでは足りない。** 口（API と `security definer` の RPC）が残ると、
+**誰も呼ばないのに membership を書き換えられる入口**が残る。だから
+「口が本当に閉じたか」を見る検査に入れ替えた。
+
+**G: `/api/staff` の口を戻す**
+
+```
+not ok 20 - the staff-management endpoints are gone (no way in)
+    GET /api/staff がまだ在る
+```
+
+**直した状態**: `npm test` 149+56+32 fail 0 ・ `stack 4/4 ・ migrations 14/14 ・
+portal 14/14 ・ edit 20/20 ・ xss 24/24 ・ roundtrip 38/38 ・ empty 11/11 ・
+screens 32/32 ・ delete 6/6 ・ draft 7/7 ・ invitation 9/9 ・ m6 16/16 ・
+admin 23/23 ・ first-run 18/18`
+
+**404 を2本とも同じ条件に入れてある**（GET と PATCH）。片方だけ見ていると、
+もう片方が残ったまま緑になる（`empty-pass` の型）。RPC が呼ばれていないことも
+併せて見る——404 を返しつつ先に RPC を叩く形を作らせない。
+
+**残った穴（次の候補）**: スタッフの招待（`invitationType: 'staff'`）は API に
+残っているが、**発行するボタンがどこにも無い**。つまり**アプリ上でお店の人を
+増やす手段が1つも無い**。削除前からそうだったので今回の変更で失われたものは無いが、
+**必要になったら作る**という判断が要る。
+
 ## 未証明（**壊して赤になるところを、まだ見ていない**）
 
 - verify-report-roundtrip.mjs :: 0b. 前回の来店を1回ぶん置けた（推移の線を引く材料）
