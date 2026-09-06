@@ -59,17 +59,19 @@ export const createReportAssetSchema = z.object({
 
 export const createInvitationSchema = z.discriminatedUnion('invitationType', [
   z.object({ invitationType: z.literal('owner'), ownerId: uuidSchema }).strict(),
-  z.object({ invitationType: z.literal('staff'), staffRole: z.enum(['admin', 'staff']) }).strict(),
+  /* 権限は「お店の人か / 飼い主か」の2つだけ（`D-20260906-68`）。
+     スタッフの招待に役割は無いので、受け取る項目も無い。 */
+  z.object({ invitationType: z.literal('staff') }).strict(),
 ]);
 
 export const claimInvitationSchema = z.object({
   token: z.string().regex(/^[0-9a-f]{64}$/i),
 }).strict();
 
+/* 変えられるのは「使えるか / 使えないか」だけ。役割は無い（`D-20260906-68`）。 */
 export const updateMembershipSchema = z.object({
-  role: z.enum(['admin', 'staff']).optional(),
-  active: z.boolean().optional(),
-}).strict().refine((value) => value.role !== undefined || value.active !== undefined);
+  active: z.boolean(),
+}).strict();
 
 export async function parseJson(request, schema, maxBytes = 1_048_576) {
   const declaredLength = Number(request.headers.get('Content-Length'));

@@ -89,7 +89,7 @@ export class SupabaseDataStore {
   async getSessionContext(userId) {
     const encodedUser = encodeURIComponent(userId);
     const [memberships, ownerLinks] = await Promise.all([
-      this.request(`/rest/v1/shop_memberships?select=shop_id,role,active&user_id=eq.${encodedUser}&active=eq.true`),
+      this.request(`/rest/v1/shop_memberships?select=shop_id,active&user_id=eq.${encodedUser}&active=eq.true`),
       this.request(`/rest/v1/owner_users?select=owner_id&user_id=eq.${encodedUser}`),
     ]);
     return { memberships, ownerLinks };
@@ -117,9 +117,9 @@ export class SupabaseDataStore {
    * この利用者が所属する店舗を1つに決める。2つ以上あれば「どの店舗か」を決められないので 409。
    *
    * **`user_id` で必ず絞ること。** RLS の `memberships_authorized_select` は
-   * `user_id = auth.uid() or private.is_shop_admin(shop_id)` なので、**管理者には店舗の
+   * `user_id = auth.uid() or private.is_shop_staff(shop_id)` なので、**お店の人には店舗の
    * 全メンバー行が返る**。以前ここに `user_id` フィルタが無く、スタッフが2人になった
-   * 瞬間に管理者だけが 409 になっていた——飼い主の新規作成・招待の発行と一覧・
+   * 瞬間に 409 になっていた——飼い主の新規作成・招待の発行と一覧・
    * スタッフ管理（＝退職者の停止）が全部使えなくなる。日々のカルテ作成は
    * この関数を通らないので、しばらく気づけない類の壊れ方だった。
    */
@@ -136,7 +136,7 @@ export class SupabaseDataStore {
     return this.staffShopId;
   }
 
-  /** 「次回のおすすめご来店時期」の既定日数・使用オプション一覧。店舗の管理者だけが書き換えられる（RLS `shops_admin_update`）。 */
+  /** 「次回のおすすめご来店時期」の既定日数・使用オプション一覧。お店の人なら書き換えられる（RLS `shops_staff_update`）。 */
   async getShop() {
     const shopId = await this.getStaffShopId();
     const rows = await this.request(
@@ -364,7 +364,7 @@ export class SupabaseDataStore {
   async listInvitations() {
     const shopId = await this.getStaffShopId();
     return this.request(
-      `/rest/v1/invitations?select=id,shop_id,invitation_type,owner_id,staff_role,expires_at,claimed_at,claimed_by,revoked_at,created_by,created_at&shop_id=eq.${encodeURIComponent(shopId)}&order=created_at.desc&limit=100`,
+      `/rest/v1/invitations?select=id,shop_id,invitation_type,owner_id,expires_at,claimed_at,claimed_by,revoked_at,created_by,created_at&shop_id=eq.${encodeURIComponent(shopId)}&order=created_at.desc&limit=100`,
     );
   }
 
@@ -376,7 +376,6 @@ export class SupabaseDataStore {
         target_shop: shopId,
         target_type: input.invitationType,
         target_owner: input.invitationType === 'owner' ? input.ownerId : null,
-        target_staff_role: input.invitationType === 'staff' ? input.staffRole : null,
       },
     });
     const invitation = this.one(result);
@@ -425,7 +424,7 @@ export class SupabaseDataStore {
   async listStaff() {
     const shopId = await this.getStaffShopId();
     return this.request(
-      `/rest/v1/shop_memberships?select=shop_id,user_id,role,active,created_at&shop_id=eq.${encodeURIComponent(shopId)}&order=created_at.asc`,
+      `/rest/v1/shop_memberships?select=shop_id,user_id,active,created_at&shop_id=eq.${encodeURIComponent(shopId)}&order=created_at.asc`,
     );
   }
 
@@ -436,11 +435,11 @@ export class SupabaseDataStore {
       body: {
         target_shop: shopId,
         target_user: userId,
-        new_role: input.role ?? null,
         new_active: input.active ?? null,
       },
     });
-    if (!updated) throw new StoreError(409, 'last_admin');
+    /* 「最後の管理者は消せない」ガードは無くなった（`D-20260906-68`）。
+       権限が1つになったので、守るべき「最後の管理者」という概念が無い。 */
     return updated;
   }
 

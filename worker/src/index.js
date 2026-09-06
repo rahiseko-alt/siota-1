@@ -68,8 +68,7 @@ function supabaseError(error, cors = {}) {
           : error.status === 429 ? 429 : 502;
     const message = status === 404 ? 'not available'
       : status === 409 ? (
-        error.code === 'last_admin' ? 'last admin cannot be disabled'
-          : error.code === 'storage_cleanup_required' ? 'storage cleanup required'
+        error.code === 'storage_cleanup_required' ? 'storage cleanup required'
             : error.code === 'storage_incomplete' ? 'report assets are incomplete'
             : 'shop selection required'
       )
@@ -156,7 +155,7 @@ async function handleSupabaseApi(request, store, path, cors, env) {
   }
 
   /* 「次回のおすすめご来店時期」の既定日数・使用オプション一覧。書き換えは RLS
-     `shops_admin_update` が店舗の管理者だけに絞る（一般スタッフの PATCH は upstream_rejected になる）。 */
+     `shops_staff_update` がお店の人に絞る（飼い主の PATCH は upstream_rejected になる）。 */
   if (path === '/api/shop') {
     if (request.method === 'GET') return json({ shop: await store.getShop() }, 200, cors);
     if (request.method === 'PATCH') {

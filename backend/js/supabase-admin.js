@@ -757,19 +757,20 @@ export async function bootAdminPortal() {
     }
 
     const session = await api('/api/session');
-    const isAdmin = (session.memberships || []).some((m) => m.role === 'admin');
-    if (!isAdmin) {
-      /* **管理者でない人をここに置かない。** ただし「権限がありません」とだけ出して
-         行き止まりにもしない——その人が使える画面へ送る（`D-14` の問1）。 */
-      const hasStaff = (session.memberships || []).length > 0;
-      setMessage(statusEl, '管理者のアカウントではありません。');
+    /* **権限は「お店の人か / 飼い主か」の2つだけ**（マスター判断 2026-09-06・`D-20260906-68`
+       「管理者とスタッフは同一で良い」）。以前はここで `role === 'admin'` を見て
+       一般スタッフを追い返していたが、その区別は DB ごと削除した。
+       残る境目は**飼い主をここに入れない**ことだけ——それは越境なので必ず止める。 */
+    if ((session.memberships || []).length === 0) {
+      /* 行き止まりにしない。その人が使える画面へ送る（`D-14` の問1）。 */
+      setMessage(statusEl, 'この画面はお店の方だけが使えます。');
       show(contentEl, true);
       clear();
       contentEl.append(menuItem({
-        title: hasStaff ? 'カルテを書く画面へ' : 'マイカルテへ',
-        note: 'この画面は管理者だけが使えます',
-        testid: 'not-admin',
-        onSelect: () => { location.href = hasStaff ? '/edit' : '/my'; },
+        title: 'マイカルテへ',
+        note: 'お客様は、愛犬のページからご覧いただけます',
+        testid: 'not-staff',
+        onSelect: () => { location.href = '/my'; },
       }));
       show(signOutButton, true);
       signOutButton.onclick = async () => {

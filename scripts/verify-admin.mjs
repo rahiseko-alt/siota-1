@@ -1,14 +1,18 @@
 /**
- * verify-admin.mjs — 管理者画面（マスター指示 2026-08-26）
+ * verify-admin.mjs — 管理画面（マスター指示 2026-08-26）
+ *
+ * **権限は「お店の人 / 飼い主」の2つだけ**（マスター判断 2026-09-06・`D-20260906-68`）。
+ * `admin` と `staff` の区別は DB ごと削除したので、下の ①〜⑥ は**ただのスタッフ口座**
+ * （`staff@local.test`）で通す——お店の人なら誰でも全部できる、が仕様。
  *
  * 見るもの:
- *   ① 管理者は Google 認証すると**毎回**管理者画面に入る
- *   ② 管理者ページに ①リピーター ②新規 ③削除 が在る
+ *   ① お店の人はカルテ画面に着き、ヘッダーの「管理」から管理画面へ入れる
+ *   ② 管理画面に ①リピーター ②新規 ③削除 が在る
  *   ③ リピーター → カルテ作成 / カルテ修正
  *   ④ 新規 → 顧客アカウント作成・ペットアカウント作成が**実際に効く**
  *   ⑤ 削除3種が**実際に消す**（写真の実体まで。`service_role` で数える）
  *   ⑥ カルテ修正が**確定済みを上書きする**（2枚目を作らない・飼い主に届く中身が変わる）
- *   ⑦ 管理者でない人はこの画面を使えず、かつ行き止まりにならない
+ *   ⑦ **飼い主はこの画面を使えず**、かつ行き止まりにならない（権限の境目はここだけ）
  *
  * **「押せた」で合格にしない**（`D-12`）。作った/消した/直したものを、
  * 作用の出た先（一覧・Storage の実体・飼い主の画面）で数え直す。
@@ -96,7 +100,7 @@ const menuTitles = (page) => page.evaluate(
 );
 
 try {
-  const staffSession = await passwordLogin(FIXTURE.adminEmail, LOCAL_PASSWORD);
+  const staffSession = await passwordLogin(FIXTURE.staffEmail, LOCAL_PASSWORD);
   const authHeaders = { Authorization: `Bearer ${staffSession.access_token}`, 'Content-Type': 'application/json' };
   const serviceKey = await localServiceRoleKey();
 
@@ -110,7 +114,7 @@ try {
   const dialogs = [];
   page.on('dialog', (d) => { dialogs.push(d.message()); d.dismiss().catch(() => {}); });
 
-  /* ── ① 管理者は、みんなと同じカルテ画面に着き、そこから管理画面へ入れる ──
+  /* ── ① お店の人は、みんなと同じカルテ画面に着き、そこから管理画面へ入れる ──
 
      **仕様が変わった**（マスター指示 2026-09-02:「入口は1つ、管理者ページが
      表示されるかされないかの差だけでいい」）。以前ここは「管理者が `/my` を開くと
@@ -118,14 +122,15 @@ try {
      しかもカルテ画面から管理画面へ戻る道が1つも無く（`/admin` へのリンクは
      画面に0件だった）、管理者はどちらか一方にしか居られなかった。
 
-     いまは**着く先は全員同じ**で、管理者にだけヘッダーに「管理」が出る。
+     いまは**着く先は全員同じ**で、お店の人にはヘッダーに「管理」が出る
+     （権限が1つになったので、出す相手も「お店の人なら全員」に揃えた・`D-20260906-68`）。
      検査もその**往復**を見る——着く／入口が出る／押すと着く、の3つ。
      前の1問より見る範囲は広い（弱めていない）。 */
   await page.goto(`${BASE}/my`, { waitUntil: 'domcontentloaded' });
-  await injectSession(page, FIXTURE.adminEmail);
+  await injectSession(page, FIXTURE.staffEmail);
   await page.goto(`${BASE}/my`, { waitUntil: 'domcontentloaded' });
   await page.waitForURL(/\/edit$/, { timeout: 20_000 }).catch(() => {});
-  check('1. 管理者も、みんなと同じカルテ画面に着く',
+  check('1. お店の人は、みんなと同じカルテ画面に着く',
     new URL(page.url()).pathname === '/edit', `path=${new URL(page.url()).pathname}`);
 
   /* **画面が起動しきるまで待つ。** 「管理」は `/api/session` の応答が返って
@@ -148,7 +153,7 @@ try {
     }
     return { ok: true, why: `left=${Math.round(r.left)} right=${Math.round(r.right)} 幅=${window.innerWidth}` };
   });
-  check('1b. 管理者には「管理」の入口が見えていて、指が届く', reach.ok, reach.why);
+  check('1b. お店の人には「管理」の入口が見えていて、指が届く', reach.ok, reach.why);
 
   await adminLink.click();
   await page.waitForURL(/\/admin$/, { timeout: 20_000 }).catch(() => {});
@@ -159,7 +164,7 @@ try {
 
   /* ── ② 管理者ページの4つ（`#4` 店舗設定はマスター指示 2026-08-29・D-20260829-58 で新設） ── */
   const top = await menuTitles(page);
-  check('2. 管理者ページに リピーター / 新規 / 削除 / 店舗設定 が在る',
+  check('2. 管理画面に リピーター / 新規 / 削除 / 店舗設定 が在る',
     top.length === 4
     && top[0].includes('リピーター') && top[1].includes('新規') && top[2].includes('削除')
     && top[3].includes('店舗設定'),
@@ -452,23 +457,30 @@ try {
   check('18. 消した犬の写真が Storage に残っていない',
     Array.isArray(objects) && objects.length === 0, `${(objects || []).length}件`);
 
-  /* ── ⑦ 管理者でない人 ── */
-  const staffPage = await browser.newPage({ viewport: { width: 390, height: 844 } });
-  await staffPage.goto(`${BASE}/my`, { waitUntil: 'domcontentloaded' });
-  await injectSession(staffPage, FIXTURE.staffEmail);
-  await staffPage.goto(`${BASE}/admin`, { waitUntil: 'domcontentloaded' });
-  await staffPage.waitForSelector('[data-admin-action="not-admin"]', { timeout: 20_000 }).catch(() => {});
-  const staffSees = await staffPage.evaluate(() => ({
-    denied: !!document.querySelector('[data-admin-action="not-admin"]'),
+  /* ── ⑦ 権限の境目は**お店の人 / 飼い主**の1本だけ ──
+     権限は2つになった（マスター判断 2026-09-06・`D-20260906-68`
+     「管理者とスタッフは同一で良い」）。`admin` と `staff` の区別は DB ごと削除したので、
+     **ここまでの 1〜18 は、ただのスタッフ口座（`staff@local.test`）で通っている**
+     ——お店の人なら誰でも飼い主登録・犬登録・カルテ修正・削除ができる、という形。
+
+     残る境目は**飼い主をここに入れない**ことだけ。ここが緩むと、お客様が
+     他人の顧客データを消せる越境になるので、必ず見る。 */
+  const ownerPage = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await ownerPage.goto(`${BASE}/my`, { waitUntil: 'domcontentloaded' });
+  await injectSession(ownerPage, FIXTURE.ownerAEmail);
+  await ownerPage.goto(`${BASE}/admin`, { waitUntil: 'domcontentloaded' });
+  await ownerPage.waitForSelector('[data-admin-action="not-staff"]', { timeout: 20_000 }).catch(() => {});
+  const ownerSees = await ownerPage.evaluate(() => ({
+    denied: !!document.querySelector('[data-admin-action="not-staff"]'),
     menus: document.querySelectorAll('[data-admin-action="delete"]').length,
     status: (document.querySelector('[data-portal-status]') || {}).textContent || '',
   }));
-  check('19. 管理者でないスタッフに管理者の操作を出していない',
-    staffSees.denied === true && staffSees.menus === 0,
-    `denied=${staffSees.denied} 削除メニュー=${staffSees.menus}`);
-  check('20. 行き止まりにせず、その人が使える画面への入口を出している',
-    staffSees.denied === true && staffSees.status.includes('管理者のアカウントではありません'),
-    `status="${staffSees.status.trim()}"`);
+  check('19. 飼い主は管理画面を使えない（顧客データを消せない）',
+    ownerSees.denied === true && ownerSees.menus === 0,
+    `denied=${ownerSees.denied} 削除メニュー=${ownerSees.menus}`);
+  check('20. 飼い主を行き止まりにせず、愛犬のページへの入口を出している',
+    ownerSees.denied === true && ownerSees.status.includes('お店の方だけ'),
+    `status="${ownerSees.status.trim()}"`);
 
   check('21. アプリ由来のエラーが無い', pageErrors.length === 0, pageErrors.join(' | '));
 } catch (error) {
