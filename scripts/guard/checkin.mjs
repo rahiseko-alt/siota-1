@@ -26,6 +26,9 @@ import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { ROADMAP, writePlanReadMark } from './plan-read-mark.mjs';
+import {
+  PLAN, parseNextList, topOpen, readDoingMark, writeDoingMark, sessionKey,
+} from './next-list.mjs';
 
 const ROOT = process.env.REPO_ROOT || process.cwd();
 const sh = (cmd) => execSync(cmd, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
@@ -130,6 +133,43 @@ try {
   problems.push('docs/ops/plan.md を読めない（壊れている可能性）');
 }
 
+/* ── 3.6 このセッションがやる「次の一手」を、機械が割り当てる ──
+   マスター指示（2026-09-06）:「大計画通りに進めろ。毎回そうしろ。**毎回そうする仕組みに変えろ**」。
+
+   **読ませるだけでは進まなかった。** 同日、大計画を画面に出した直後のセッションが
+   「どれから着手しますか」とマスターに訊いた——大計画に次の一手が書いてあるのに、
+   選ばせていた。だから**選ばせない**。「次の一手」のいちばん上の未了を機械が取る。
+
+   **既に在れば上書きしない**（`F-20260830-62`）。ここは会話の圧縮・再開のたびに
+   何度も呼ばれるので、途中で割り当てが変わると項目9の比較がずれる。 */
+let doing = null;
+try {
+  const items = parseNextList(fs.readFileSync(path.join(ROOT, PLAN), 'utf8'));
+  if (items === null) {
+    process.stdout.write(`  ❌ ${PLAN} に「次の一手」の節が無い\n`);
+    problems.push('「次の一手」の節が無い');
+  } else {
+    const mark = readDoingMark();
+    const key = sessionKey();
+    const mine = mark && (key ? mark.session === key : true) && items.some((i) => i.id === mark.id);
+    doing = mine ? mark : null;
+    if (!doing) {
+      const top = topOpen(items);
+      if (top) doing = writeDoingMark(top);
+    }
+    if (doing) {
+      process.stdout.write(`  ▶ **このセッションがやるのは ${doing.id}**: ${doing.text}\n`);
+      process.stdout.write('       （選ばない。「次の一手」のいちばん上を機械が取った。'
+        + '割り込みはマスター指示のときだけ、いちばん上に足す）\n');
+    } else {
+      process.stdout.write('  ⚠️  「次の一手」に未了が0件（次にやることを足すこと）\n');
+    }
+  }
+} catch (e) {
+  process.stdout.write(`  ❌ 「次の一手」を読めなかった: ${e.message.split('\n')[0]}\n`);
+  problems.push('「次の一手」を読めない');
+}
+
 /* ── 4. そのフェーズの作業場が開いているか ── */
 if (phase !== '(無し)') {
   const gate = quiet('node scripts/guard/gate.mjs src/index.html');
@@ -145,6 +185,11 @@ for (const [label, cmd] of [['npm run build', 'npm run build'], ['npm run check'
 }
 
 process.stdout.write('\n  次に読むもの: docs/handoff.md の冒頭「## 0」（上の「いまやる番」が指す作業の詳細）\n');
+if (doing) {
+  process.stdout.write(`\n  **このセッションでやること: ${doing.id} ${doing.text}**\n`);
+  process.stdout.write('  終わったら docs/ops/plan.md の「次の一手」で [x] にする'
+    + '（checkout.mjs の項目9が見る）。\n');
+}
 if (problems.length === 0) {
   process.stdout.write('  始めてよい。\n\n');
   process.exit(0);
