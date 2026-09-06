@@ -156,3 +156,65 @@ test('層3b: チェックインが大計画そのものを画面に出す（案�
     'checkin.mjs が roadmap.md の中身を読んで出していない');
   assert.match(checkin, /writePlanReadMark\(\)/, '印を書いていない');
 });
+
+/* ────────────────────────────────────────────────────────────────
+   大計画に**書き戻す**ところ（チェックアウト・`D-20260906-72`）
+
+   マスター指示（2026-09-06）:「大計画の書き込みもチェックアウトスキルに組み込め」。
+
+   **実際に古くなっていた。** `docs/ops/phase` は `F4` なのに、地図は
+   「いま居るのは『棚卸し』の入口」「本番はまだ古い版のまま。いま作ったものは
+   一度も出していない」と書いたままだった——**その時点で本番へは2回出していた**。
+   読む側（`checkin.mjs`）だけ強制しても、書く側が緩いと地図が嘘をつく。
+   ──────────────────────────────────────────────────────────────── */
+
+test('大計画の表に、STAGES の全段が在る（段の抜けを作らない）', () => {
+  const roadmap = fs.readFileSync(path.join(ROOT, 'docs/ops/roadmap.md'), 'utf8');
+  for (const stage of STAGES) {
+    assert.match(roadmap, new RegExp(`^\\|\\s*\\*\\*${stage.key}\\*\\*\\s*\\|`, 'm'),
+      `docs/ops/roadmap.md の表に ${stage.key} の行が無い`
+      + '（`npm run plan` と食い違う。F4 が抜けて全段「未着手」と出した事故と同じ型）');
+  }
+});
+
+test('大計画の現在地が docs/ops/phase と合っている', () => {
+  const roadmap = fs.readFileSync(path.join(ROOT, 'docs/ops/roadmap.md'), 'utf8');
+  const here = stageIndex(phase);
+  assert.notEqual(here, -1, `docs/ops/phase の値 "${phase}" が STAGES に無い`);
+  STAGES.forEach((stage, i) => {
+    const row = (roadmap.match(new RegExp(`^\\|\\s*\\*\\*${stage.key}\\*\\*\\s*\\|.*$`, 'm')) || [])[0];
+    assert.ok(row, `${stage.key} の行が無い`);
+    if (i < here) assert.ok(row.includes('✅'), `${stage.key} は終わっているのに ✅ が無い`);
+    if (i === here) assert.ok(row.includes('▶'), `${stage.key} が現在地なのに ▶ が無い`);
+    if (i > here) {
+      assert.ok(!row.includes('✅') && !row.includes('▶'),
+        `${stage.key} はまだなのに ✅／▶ が付いている`);
+    }
+  });
+});
+
+test('チェックアウトが、大計画の現在地を機械で見る', () => {
+  const checkout = fs.readFileSync(path.join(ROOT, 'scripts/guard/checkout.mjs'), 'utf8');
+  assert.match(checkout, /docs\/ops\/roadmap\.md/,
+    'checkout.mjs が大計画を見ていない（読むだけで、書いたことを確かめていない）');
+  assert.match(checkout, /大計画（docs\/ops\/roadmap\.md）の現在地が実態と合っている/,
+    'チェックアウトの項目に大計画が無い');
+});
+
+test('チェックアウトのスキルが、大計画に書き戻させる', () => {
+  const skill = fs.readFileSync(
+    path.join(ROOT, '.agents/skills/session-checkout/SKILL.md'), 'utf8',
+  );
+  assert.match(skill, /docs\/ops\/roadmap\.md/,
+    'session-checkout の手順に大計画（docs/ops/roadmap.md）が無い');
+  const steps = skill.slice(skill.indexOf('## 手順'));
+  assert.ok(steps.indexOf('roadmap.md') < steps.indexOf('handoff.md'),
+    '大計画が handoff より後ろに置かれている（先に書き戻すこと）');
+});
+
+test('ルールの正（AGENTS.md）にも、大計画への書き戻しが入っている', () => {
+  const agents = fs.readFileSync(path.join(ROOT, 'AGENTS.md'), 'utf8');
+  const outSection = agents.slice(agents.indexOf('### セッション終了 (Out)'));
+  assert.match(outSection, /docs\/ops\/roadmap\.md/,
+    'AGENTS.md のセッション終了規約に大計画への書き戻しが無い');
+});
