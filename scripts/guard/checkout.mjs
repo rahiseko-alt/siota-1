@@ -22,6 +22,10 @@ import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
+import {
+  PLAN as NEXT_PLAN, parseNextList, readDoingMark, judgeDoingClosed,
+} from './next-list.mjs';
+
 const ROOT = process.env.REPO_ROOT || process.cwd();
 const sh = (cmd, opts = {}) => execSync(cmd, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();
 const quiet = (cmd, opts = {}) => { try { execSync(cmd, { cwd: ROOT, stdio: 'ignore', ...opts }); return 0; } catch (e) { return e.status || 1; } };
@@ -260,6 +264,30 @@ const NEXT_RE = /^\*\*いまやる番:\s*(.+?)\*\*\s*$/m;
     detail = `確認できなかった: ${e.message.split('\n')[0]}`;
   }
   add(ok, '大計画（docs/ops/roadmap.md）の現在地が実態と合っている', detail);
+}
+
+/* ── 9. このセッションに割り当てられた「次の一手」が片づいたか ──
+   マスター指示（2026-09-06）:「大計画通りに進めろ。毎回そうしろ。毎回そうする仕組みに変えろ」。
+
+   `checkin.mjs` が「次の一手」のいちばん上を機械で割り当て（`.plan-doing`）、
+   `npm run check` の `plan-next` が割り当ての有無を見る。**ここが最後の1枚**——
+   割り当てられた1件が `[x]`（片づいた）か `[-] 理由: …`（やらないと決めた）に
+   なっていなければ、チェックアウトさせない。
+
+   **行ごと消して片づけたことにはできない**（`偽-9`「症状の場所を移す」）。
+   印が指す番号が「次の一手」から消えていたら、それも ❌ にする。 */
+{
+  let ok = false;
+  let detail;
+  try {
+    const items = parseNextList(fs.readFileSync(path.join(ROOT, NEXT_PLAN), 'utf8'));
+    const verdict = judgeDoingClosed(readDoingMark(), items);
+    ok = verdict.ok;
+    detail = verdict.why;
+  } catch (e) {
+    detail = `確認できなかった: ${e.message.split('\n')[0]}`;
+  }
+  add(ok, '割り当てられた「次の一手」を片づけた（docs/ops/plan.md）', detail);
 }
 
 /* ── 結果 ── */
