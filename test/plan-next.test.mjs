@@ -82,3 +82,15 @@ test('やらないと決めた一手は、理由が書いてあるときだけ�
   assert.equal(judgeDoingClosed(mark, parseNextList('## 次の一手\n\n- [-] N-1 これ\n')).ok, false);
   assert.equal(judgeDoingClosed(mark, parseNextList('## 次の一手\n\n- [-] N-1 これ（理由: マスター判断）\n')).ok, true);
 });
+
+test('閉じた一手は握り続けない（割り込みが上に足されたら、そこへ進む）', () => {
+  /* `checkin.mjs` の割り当て条件と同じ判定。閉じた `N-1` を持ったまま
+     再チェックインしたとき、いちばん上に足されたマスター指示 `N-8` を取ること。
+     2026-09-06 実測: 直す前は `N-1` を握ったままだった（`F-20260906-74`）。 */
+  const items = parseNextList('## 次の一手\n\n- [ ] N-8 割り込み\n- [x] N-1 済\n- [ ] N-2 次\n');
+  const mark = { at: new Date().toISOString(), session: 'session-A', id: 'N-1', text: '済' };
+  const held = items.find((i) => i.id === mark.id);
+  const mine = Boolean(held) && !held.done && !held.dropped;
+  assert.equal(mine, false, '閉じた一手を握り続けている');
+  assert.equal(topOpen(items).id, 'N-8');
+});
