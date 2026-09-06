@@ -248,26 +248,26 @@ function screenHome() {
       title: '① リピーター',
       note: 'すでにお預かりしている子のカルテを作る・直す',
       testid: 'repeat',
-      onSelect: screenRepeat,
+      onSelect: () => navigate('/admin/repeat', screenRepeat),
     },
     {
       title: '② 新規',
       note: '新しい顧客アカウント・ペットアカウントを作る',
       testid: 'new',
-      onSelect: screenNew,
+      onSelect: () => navigate('/admin/new', screenNew),
     },
     {
       title: '③ 削除',
       note: '顧客・ペット・カルテを消す。元に戻せない',
       danger: true,
       testid: 'delete',
-      onSelect: screenDelete,
+      onSelect: () => navigate('/admin/delete', screenDelete),
     },
     {
       title: '④ 店舗設定',
       note: '「次回のおすすめご来店時期」の既定日数・使用オプションの一覧を変える',
       testid: 'shop-settings',
-      onSelect: screenShopSettings,
+      onSelect: () => navigate('/admin/settings', screenShopSettings),
     },
   ]));
 }
@@ -277,7 +277,7 @@ function screenHome() {
    ——編集の場所は「その犬のカルテを見ているとき」がいちばん迷わない。 */
 function screenShopSettings() {
   clear();
-  contentEl.append(backButton(screenHome));
+  contentEl.append(backButton(() => navigate('/admin', screenHome)));
   contentEl.append(heading('店舗設定'));
   contentEl.append(note('「次回のおすすめご来店時期」は、カルテの来店日にこの日数を足して出します。犬ごとに別の日数を使いたいときは、その犬のカルテ確認画面で個別に設定できます。'));
   const field = el('label', 'admin-field');
@@ -409,7 +409,7 @@ function appendGroomingOptionsEditor(root) {
 
 function screenRepeat() {
   clear();
-  contentEl.append(backButton(screenHome));
+  contentEl.append(backButton(() => navigate('/admin', screenHome)));
   contentEl.append(heading('リピーター'));
   contentEl.append(menu([
     { title: '① カルテ作成', note: '今日の施術を書く', testid: 'repeat-create', onSelect: pickPetForCreate },
@@ -424,7 +424,7 @@ async function withList(loader, render) {
     render(await loader());
   } catch (error) {
     clear();
-    contentEl.append(backButton(screenHome));
+    contentEl.append(backButton(() => navigate('/admin', screenHome)));
     contentEl.append(note(`読み込めませんでした: ${error.message}`, true));
   }
 }
@@ -493,7 +493,7 @@ function pickReportForRevise(pet) {
 
 function screenNew() {
   clear();
-  contentEl.append(backButton(screenHome));
+  contentEl.append(backButton(() => navigate('/admin', screenHome)));
   contentEl.append(heading('新規'));
   contentEl.append(menu([
     { title: '① 顧客アカウントの新規作成', note: '飼い主さまを登録する', testid: 'new-owner', onSelect: formNewOwner },
@@ -607,7 +607,7 @@ function formNewPet() {
 
 function screenDelete() {
   clear();
-  contentEl.append(backButton(screenHome));
+  contentEl.append(backButton(() => navigate('/admin', screenHome)));
   contentEl.append(heading('削除'));
   contentEl.append(note('ここでの削除は元に戻せません。写真も一緒に消えます。', true));
   contentEl.append(menu([
@@ -725,6 +725,29 @@ function pickReportForDelete(pet) {
   }));
 }
 
+/* ── 5つのメニュー画面にURLを与える（マスター指示 2026-09-06）───────────
+   対象はホーム／リピーター／新規／削除／店舗設定の5つだけ。その先の
+   サブ画面（犬選択・フォーム・削除確認等）は今回のスコープ外で、URLは
+   従来どおり `/admin` 系のまま変えない（`onBack: screenRepeat` 等）。 */
+const ADMIN_ROUTES = {
+  '/admin': screenHome,
+  '/admin/': screenHome,
+  '/admin/repeat': screenRepeat,
+  '/admin/new': screenNew,
+  '/admin/delete': screenDelete,
+  '/admin/settings': screenShopSettings,
+};
+
+function renderForPath(path) {
+  (ADMIN_ROUTES[path] || screenHome)();
+}
+
+/** メニュー画面への行き来だけ、住所バーも一緒に変える。 */
+function navigate(path, screenFn) {
+  if (location.pathname !== path) history.pushState(null, '', path);
+  screenFn();
+}
+
 /* ── 起動 ──────────────────────────────────────────────────────── */
 
 export async function bootAdminPortal() {
@@ -790,7 +813,10 @@ export async function bootAdminPortal() {
       /* 上と同じ。ログアウトの行き先は3画面とも入口（`/`）で揃える。 */
       location.replace('/');
     };
-    screenHome();
+    /* URLをブックマークして開き直したときも、対応するメニュー画面から始める。 */
+    renderForPath(location.pathname);
+    /* ブラウザの「戻る/進む」でも5つのメニュー画面を行き来できるようにする。 */
+    window.addEventListener('popstate', () => { renderForPath(location.pathname); });
   } catch (error) {
     /* **ログインが切れているなら、入口へ返す。**
        ここは生の JSON（`401 {"error":"authentication required"}`）を人に見せたうえで、
