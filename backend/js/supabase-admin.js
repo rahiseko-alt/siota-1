@@ -412,8 +412,18 @@ function screenRepeat() {
   contentEl.append(backButton(() => navigate('/admin', screenHome)));
   contentEl.append(heading('リピーター'));
   contentEl.append(menu([
-    { title: '① カルテ作成', note: '今日の施術を書く', testid: 'repeat-create', onSelect: pickPetForCreate },
-    { title: '② カルテ修正', note: '確定済みのカルテを直す', testid: 'repeat-revise', onSelect: pickPetForRevise },
+    {
+      title: '① カルテ作成',
+      note: '今日の施術を書く',
+      testid: 'repeat-create',
+      onSelect: () => navigate('/admin/repeat/create', pickPetForCreate),
+    },
+    {
+      title: '② カルテ修正',
+      note: '確定済みのカルテを直す',
+      testid: 'repeat-revise',
+      onSelect: () => navigate('/admin/repeat/revise', pickPetForRevise),
+    },
   ]));
 }
 
@@ -456,7 +466,7 @@ function pickPetForCreate() {
     label: 'カルテを書く子を選ぶ',
     empty: 'まだ1頭も登録されていません。「② 新規」から登録してください。',
     testid: 'pick-pet',
-    onBack: screenRepeat,
+    onBack: () => navigate('/admin/repeat', screenRepeat),
     onPick: (item) => { location.href = `/edit/p/${encodeURIComponent(item.pet.id)}`; },
   }));
 }
@@ -467,7 +477,7 @@ function pickPetForRevise() {
     label: 'カルテを直す子を選ぶ',
     empty: 'まだ1頭も登録されていません。',
     testid: 'pick-pet',
-    onBack: screenRepeat,
+    onBack: () => navigate('/admin/repeat', screenRepeat),
     onPick: (item) => pickReportForRevise(item.pet),
   }));
 }
@@ -482,7 +492,7 @@ function pickReportForRevise(pet) {
     label: `${pet.name} のカルテを選ぶ`,
     empty: 'この子には確定済みのカルテがまだありません。',
     testid: 'pick-report',
-    onBack: pickPetForRevise,
+    onBack: () => navigate('/admin/repeat/revise', pickPetForRevise),
     /* `?revise=1` を付けて④カルテ作成に入る。付けないと⑤確認（読むだけ）に着く。 */
     onPick: (item) => {
       location.href = `/edit/p/${encodeURIComponent(pet.id)}`
@@ -496,8 +506,18 @@ function screenNew() {
   contentEl.append(backButton(() => navigate('/admin', screenHome)));
   contentEl.append(heading('新規'));
   contentEl.append(menu([
-    { title: '① 顧客アカウントの新規作成', note: '飼い主さまを登録する', testid: 'new-owner', onSelect: formNewOwner },
-    { title: '② ペットアカウントの新規作成', note: '登録済みの飼い主さまに子を追加する', testid: 'new-pet', onSelect: formNewPet },
+    {
+      title: '① 顧客アカウントの新規作成',
+      note: '飼い主さまを登録する',
+      testid: 'new-owner',
+      onSelect: () => navigate('/admin/new/owner', formNewOwner),
+    },
+    {
+      title: '② ペットアカウントの新規作成',
+      note: '登録済みの飼い主さまに子を追加する',
+      testid: 'new-pet',
+      onSelect: () => navigate('/admin/new/pet', formNewPet),
+    },
   ]));
 }
 
@@ -522,7 +542,7 @@ function submitButton(label, testid) {
 
 function formNewOwner() {
   clear();
-  contentEl.append(backButton(screenNew));
+  contentEl.append(backButton(() => navigate('/admin/new', screenNew)));
   contentEl.append(heading('顧客アカウントの新規作成'));
   const { field, input } = textField('飼い主さまのお名前', 'owner-name');
   contentEl.append(field);
@@ -553,7 +573,7 @@ function formNewOwner() {
 function formNewPet() {
   return withList(loadOwnersWithPets, ([owners, pets]) => {
     clear();
-    contentEl.append(backButton(screenNew));
+    contentEl.append(backButton(() => navigate('/admin/new', screenNew)));
     contentEl.append(heading('ペットアカウントの新規作成'));
     if (owners.length === 0) {
       contentEl.append(el('p', null, '先に「① 顧客アカウントの新規作成」から飼い主さまを登録してください。'));
@@ -616,21 +636,21 @@ function screenDelete() {
       note: 'その飼い主さまと、ひもづく子・カルテ・写真をすべて消す',
       danger: true,
       testid: 'delete-owner',
-      onSelect: pickOwnerForDelete,
+      onSelect: () => navigate('/admin/delete/owner', pickOwnerForDelete),
     },
     {
       title: '② ペットアカウント全データ削除',
       note: 'その子と、その子のカルテ・写真をすべて消す',
       danger: true,
       testid: 'delete-pet',
-      onSelect: pickPetForDelete,
+      onSelect: () => navigate('/admin/delete/pet', pickPetForDelete),
     },
     {
       title: '③ カルテ1枚単位削除',
       note: 'その子のカルテを1枚だけ消す',
       danger: true,
       testid: 'delete-report',
-      onSelect: pickPetForReportDelete,
+      onSelect: () => navigate('/admin/delete/report', pickPetForReportDelete),
     },
   ]));
 }
@@ -648,7 +668,7 @@ function pickOwnerForDelete() {
     label: '全データを消す飼い主さまを選ぶ',
     empty: '登録されている飼い主さまがいません。',
     testid: 'pick-owner',
-    onBack: screenDelete,
+    onBack: () => navigate('/admin/delete', screenDelete),
     onPick: (item) => confirmDestructive({
       title: '顧客アカウント全データ削除',
       what: `${item.owner.name} さまと、ひもづく子・カルテ・写真をすべて消します。元に戻せません。`,
@@ -656,7 +676,7 @@ function pickOwnerForDelete() {
          どちらにも通ってしまい、押し間違いの歯止めにならない（`#36`）。 */
       detail: ownerNote(item.owner, pets, owners),
       name: item.owner.name,
-      onBack: pickOwnerForDelete,
+      onBack: () => navigate('/admin/delete/owner', pickOwnerForDelete),
       /* **写真 → DB の順**（`D-20260824-34`）。逆にすると RLS の条件が崩れ、
          写真が誰からも取れない置き去りになる。 */
       onConfirm: async () => {
@@ -673,13 +693,13 @@ function pickPetForDelete() {
     label: '全データを消す子を選ぶ',
     empty: '登録されている子がいません。',
     testid: 'pick-pet',
-    onBack: screenDelete,
+    onBack: () => navigate('/admin/delete', screenDelete),
     onPick: (item) => confirmDestructive({
       title: 'ペットアカウント全データ削除',
       what: `${item.pet.name} と、その子のカルテ・写真をすべて消します。元に戻せません。`,
       detail: item.note,
       name: item.pet.name,
-      onBack: pickPetForDelete,
+      onBack: () => navigate('/admin/delete/pet', pickPetForDelete),
       onConfirm: async () => {
         await purgePetAssets({ client: supabase, api, petId: item.pet.id });
         await api(`/api/pets/${encodeURIComponent(item.pet.id)}`, { method: 'DELETE' });
@@ -694,7 +714,7 @@ function pickPetForReportDelete() {
     label: 'カルテを消す子を選ぶ',
     empty: '登録されている子がいません。',
     testid: 'pick-pet',
-    onBack: screenDelete,
+    onBack: () => navigate('/admin/delete', screenDelete),
     onPick: (item) => pickReportForDelete(item.pet),
   }));
 }
@@ -710,7 +730,7 @@ function pickReportForDelete(pet) {
     label: `${pet.name} の消すカルテを選ぶ`,
     empty: 'この子にはカルテがまだありません。',
     testid: 'pick-report',
-    onBack: pickPetForReportDelete,
+    onBack: () => navigate('/admin/delete/report', pickPetForReportDelete),
     onPick: (item) => confirmDestructive({
       title: 'カルテ1枚削除',
       what: `${pet.name} の ${item.report.report_date} のカルテと、その写真を消します。元に戻せません。`,
@@ -725,16 +745,31 @@ function pickReportForDelete(pet) {
   }));
 }
 
-/* ── 5つのメニュー画面にURLを与える（マスター指示 2026-09-06）───────────
-   対象はホーム／リピーター／新規／削除／店舗設定の5つだけ。その先の
-   サブ画面（犬選択・フォーム・削除確認等）は今回のスコープ外で、URLは
-   従来どおり `/admin` 系のまま変えない（`onBack: screenRepeat` 等）。 */
+/* ── 画面が変わったら住所も変える（マスター判断 2026-09-06）─────────────
+   「ふつうの Web アプリは画面が変われば URL も変わる」。まず5つのメニューに
+   URL を与え（PR #75）、ここでその先の**サブ画面**にも与えた。
+
+   **与えたのは「開いた瞬間に自分で描き直せる画面」だけ**——犬や飼い主を1件
+   選んだ後の画面（そのカルテ一覧・削除の確認）には与えていない。理由は2つ:
+     ①削除の確認画面に URL を与えると、**確認画面へ直接飛べてしまう**
+     ②選んだ1件は URL だけでは復元できず、開き直すたびに取り直しが要る
+   これは「あとで足せる」——`docs/ops/plan.md` 放置リスト `#49` に残してある。
+
+   ここに無い `/admin/...` は `screenHome` に落ちる（存在しない住所で
+   白い画面にしない・`F-20260906-68` の型）。 */
 const ADMIN_ROUTES = {
   '/admin': screenHome,
   '/admin/': screenHome,
   '/admin/repeat': screenRepeat,
+  '/admin/repeat/create': pickPetForCreate,
+  '/admin/repeat/revise': pickPetForRevise,
   '/admin/new': screenNew,
+  '/admin/new/owner': formNewOwner,
+  '/admin/new/pet': formNewPet,
   '/admin/delete': screenDelete,
+  '/admin/delete/owner': pickOwnerForDelete,
+  '/admin/delete/pet': pickPetForDelete,
+  '/admin/delete/report': pickPetForReportDelete,
   '/admin/settings': screenShopSettings,
 };
 
@@ -813,9 +848,10 @@ export async function bootAdminPortal() {
       /* 上と同じ。ログアウトの行き先は3画面とも入口（`/`）で揃える。 */
       location.replace('/');
     };
-    /* URLをブックマークして開き直したときも、対応するメニュー画面から始める。 */
+    /* URLをブックマークして開き直したときも、その住所の画面から始める
+       （メニュー5つと、犬を選ぶ・登録する等のサブ画面7つ）。 */
     renderForPath(location.pathname);
-    /* ブラウザの「戻る/進む」でも5つのメニュー画面を行き来できるようにする。 */
+    /* ブラウザの「戻る/進む」でも、住所を持つ12画面を行き来できるようにする。 */
     window.addEventListener('popstate', () => { renderForPath(location.pathname); });
   } catch (error) {
     /* **ログインが切れているなら、入口へ返す。**
