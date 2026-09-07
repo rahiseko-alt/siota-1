@@ -155,13 +155,15 @@ try {
        次の未了へ進む——マスター指示が途中で入り、いちばん上に足された場合もここで拾う。
        （閉じていない間は上書きしない・`F-20260830-62`。閉じた後だけ進むので、
        項目9 が見る「割り当てた1件」は常に閉じたものか、いま抱えているものになる。） */
-    const held = mark && items.find((i) => i.id === mark.id);
-    const mine = mark && (key ? mark.session === key : true) && held && !held.done && !held.dropped;
-    doing = mine ? mark : null;
-    if (!doing) {
-      const top = topOpen(items);
-      if (top) doing = writeDoingMark(top);
-    }
+    /* **いちばん上の未了を持っているときだけ、そのまま握る。**
+       割り当てが動くのは2つ——①持っている1件が片づいた ②**マスター指示が
+       上に割り込んだ**（`docs/ops/plan.md` 第0章の優先度・`D-21`）。
+       ②を拾わないと、機械が「N-3をやれ」と言い続ける横で、マスターは
+       別のことを頼んでいる、という食い違いが起きる（2026-09-07 に実際に起きた）。 */
+    const top = topOpen(items);
+    const sameSession = mark && (key ? mark.session === key : true);
+    doing = sameSession && top && mark.id === top.id ? mark : null;
+    if (!doing && top) doing = writeDoingMark(top, process.env, sameSession ? mark : null);
     if (doing) {
       process.stdout.write(`  ▶ **このセッションがやるのは ${doing.id}**: ${doing.text}\n`);
       process.stdout.write('       （選ばない。「次の一手」のいちばん上を機械が取った。'

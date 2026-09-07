@@ -12,11 +12,15 @@ const App = {
     prevWeight: null
   },
   currentStamp: '赤み',
-  /* 犬体4面図の描き方。**本体はなぞる（フリーハンド）で、スタンプはその一部**
+  /* 犬体4面図の描き方。**本体はペン（フリーハンド）で、スタンプはその一部**
      （マスター指示 2026-09-02）。以前はスタンプを置くことしかできず、
      「ここからここまで赤い」のような**範囲**が書けなかった。
-     `'なぞる'` か `'スタンプ'` のどちらか。 */
-  markMode: 'なぞる',
+     `'ペン'` か `'スタンプ'` のどちらか（表記の変更はマスター指示 2026-09-07。
+     画面の言葉と中の値を割らないため、値もそろえた）。 */
+  markMode: 'ペン',
+
+  /* いま動いている音声認識。1本しか持たない（マイクが1本しか無いから）。 */
+  voiceRec: null,
   /* 付けた印。1件は次のどちらか。
        スタンプ … `{ x, y, type }`
        なぞった線 … `{ type, points: [{ x, y }, …] }`
@@ -1280,35 +1284,60 @@ const App = {
     this.updateCompletionStatus();
   },
 
+  /* ⑧担当メッセージの音声入力。**押すたびに、始める／止めるが交互に効く。**
+
+     直す前は2つ壊れていた（2026-09-07・マスター実機報告「コメント入力が2回目出来ない」）:
+
+       1. **止める道が無かった。** 名前は `toggle` なのに `rec.stop()` を1度も呼ばず、
+          押すたびに**新しい認識器**を作って `start()` していた。マイクは1本しか
+          無いので、1回目が終わっていない間の2回目は何も起きない（`onerror` で
+          赤い印が消えるだけ）。人からは「2回目が入らない」に見える。
+       2. **音声が使えない端末で、見本の文（ブラッシングの作り話）を書き込んでいた。**
+          トリマーが消し忘れれば、
+          **誰も言っていない文が担当者の名前で飼い主に届く**（`D-10`・`F-20260821-14`
+          と同じ型）。使えないなら、使えないと言う。作り話で埋めない。 */
   toggleEditorVoice() {
     const btn = document.getElementById('editor-voice-btn');
     const ta = document.getElementById('editor-trimmer-letter');
-    if (btn) btn.classList.add('is-recording');
+    const stopped = () => {
+      this.voiceRec = null;
+      if (btn) btn.classList.remove('is-recording');
+    };
 
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-      const rec = new SpeechRec();
-      rec.lang = 'ja-JP';
-      rec.onresult = (e) => {
-        const text = e.results[0][0].transcript;
-        if (ta) {
-          ta.value += (ta.value ? ' ' : '') + text;
-          document.getElementById('mag-letter-content').textContent = ta.value;
-          this.updateCompletionStatus();
-        }
-        if (btn) btn.classList.remove('is-recording');
-      };
-      rec.onerror = () => { if (btn) btn.classList.remove('is-recording'); };
+    /* 2回目は「止める」。 */
+    if (this.voiceRec) {
+      try { this.voiceRec.stop(); } catch (_) { /* 既に終わっていることがある */ }
+      stopped();
+      return;
+    }
+
+    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRec) {
+      globalThis.alert('この端末では音声入力が使えません。文字で入力してください。');
+      return;
+    }
+
+    const rec = new SpeechRec();
+    rec.lang = 'ja-JP';
+    rec.onresult = (e) => {
+      const text = e.results[0][0].transcript;
+      if (ta) {
+        ta.value += (ta.value ? ' ' : '') + text;
+        const preview = document.getElementById('mag-letter-content');
+        if (preview) preview.textContent = ta.value;
+        this.updateCompletionStatus();
+      }
+    };
+    rec.onerror = stopped;
+    /* **終わったら必ずここを通る**（結果が出ても、無音で切れても）。
+       ここで手放さないと、次の1回が始められない——それが「2回目が出来ない」。 */
+    rec.onend = stopped;
+    this.voiceRec = rec;
+    if (btn) btn.classList.add('is-recording');
+    try {
       rec.start();
-    } else {
-      setTimeout(() => {
-        if (ta) {
-          ta.value += (ta.value ? ' ' : '') + '耳裏のブラッシングを丁寧に行いました。';
-          document.getElementById('mag-letter-content').textContent = ta.value;
-          this.updateCompletionStatus();
-        }
-        if (btn) btn.classList.remove('is-recording');
-      }, 1500);
+    } catch (_) {
+      stopped();
     }
   },
 
@@ -1351,7 +1380,7 @@ const App = {
     window.addEventListener('resize', resize);
     setTimeout(resize, 100);
 
-    /* 指1本で「なぞる」か「スタンプを置く」。**2本目の指は無視する**——
+    /* 指1本で「ペンで描く」か「スタンプを置く」。**2本目の指は無視する**——
        写真の書き込み（`openAnnotate()`）と同じで、2本の座標が同じ線に混ざると
        線が暴れる。ここは拡大を持たないので、2本目はただ捨てる。 */
     let drawingPointerId = null;
@@ -1405,7 +1434,7 @@ const App = {
     if (btn) btn.classList.add('is-active');
   },
 
-  /* なぞる／スタンプの切り替え。種類（赤み・しこり…）はそのままで、
+  /* ペン／スタンプの切り替え。種類（赤み・しこり…）はそのままで、
      置き方だけを変える。 */
   setMarkMode(mode, btn) {
     this.markMode = mode;
@@ -1414,7 +1443,7 @@ const App = {
   },
 
   /* 直前の1件だけ取り消す。**全部消すしか無いと、線を1本間違えただけで
-     最初からやり直しになる**（なぞる操作は1回が長い）。 */
+     最初からやり直しになる**（ペンの操作は1回が長い）。 */
   undoMark() {
     this.marks.pop();
     this.drawCanvas();
@@ -1571,8 +1600,16 @@ const App = {
     } catch (error) {
       if (button) button.disabled = false;
       /* 理由をそのまま出す。「失敗しました」だけだと、やり直せばよいのか
-         人を呼ぶのかが分からない。 */
-      globalThis.alert(`カルテを保存できませんでした。\n\n${error.message}\n\nもう一度お試しください。`);
+         人を呼ぶのかが分からない。
+
+         **番号（status）と、サーバが言った理由（reason）も出す。**
+         2026-09-07 にマスターが本番で「カルテを確定できませんでした」だけを
+         受け取り、**そこから先を誰も辿れなかった**（`F-20260907-75`）。
+         `readJson()` は失敗時に `error.status` と `error.reason` を載せてくれる。
+         載っているのに捨てていたのはこちら側。 */
+      const detail = [error.message, error.reason, error.status && `(${error.status})`]
+        .filter(Boolean).join(' / ');
+      globalThis.alert(`カルテを保存できませんでした。\n\n${detail}\n\nもう一度お試しください。`);
     }
   },
 

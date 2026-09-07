@@ -867,7 +867,7 @@ button, input, textarea, select {
 
 /* 置き方の切り替えと、取り消し。見た目は種類ボタンに揃えるが、**クラスは分ける**
    ——`setStamp()` が `.stamp-btn` の選択を外して回るので、同じクラスにすると
-   種類を選び直すたびに「なぞる／スタンプ」の選択まで消える。 */
+   種類を選び直すたびに「ペン／スタンプ」の選択まで消える。 */
 .mark-mode-btn,
 .mark-undo-btn {
   flex-shrink: 0;
@@ -2207,7 +2207,7 @@ button, input, textarea, select {
           <div class="clinical-group">
             <div class="clinical-group__label">
               <span>⑤ 皮膚・スパ・犬体4面図</span>
-              <span class="clinical-group__hint">なぞって描く（スタンプも置ける）</span>
+              <span class="clinical-group__hint">ペンで描く（スタンプも置ける）</span>
             </div>
 
             <div class="body-marking-tool">
@@ -2219,10 +2219,11 @@ button, input, textarea, select {
                 <button class="stamp-btn" onclick="App.setStamp('フケ', this)">⚪ フケ</button>
               </div>
 
-              <!-- どう置くか（マスター指示 2026-09-02）。**本体はなぞる**で、
-                   スタンプはその一部。以前はスタンプしか無く、範囲が書けなかった。 -->
+              <!-- どう置くか（マスター指示 2026-09-02）。**本体はペン**（フリーハンド）で、
+                   スタンプはその一部。以前はスタンプしか無く、範囲が書けなかった。
+                   表記は「なぞる」→「ペン」に変えた（マスター指示 2026-09-07）。 -->
               <div class="body-marking-stamps">
-                <button class="mark-mode-btn is-active" onclick="App.setMarkMode('なぞる', this)">✏️ なぞる</button>
+                <button class="mark-mode-btn is-active" onclick="App.setMarkMode('ペン', this)">✏️ ペン</button>
                 <button class="mark-mode-btn" onclick="App.setMarkMode('スタンプ', this)">📍 スタンプ</button>
                 <button class="mark-undo-btn" onclick="App.undoMark()">↩ 1つ戻す</button>
                 <button class="mark-undo-btn" onclick="App.clearCanvas()">✕ 全部消す</button>
