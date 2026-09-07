@@ -180,6 +180,55 @@ try {
   await tapByText(page, '◀ もどる');
   await page.waitForSelector('.admin-menu__item', { timeout: 10_000 });
 
+  /* ── ③b 画面が変われば住所も変わる（マスター判断 2026-09-06）──────────
+     5つのメニューに URL を与えた回（PR #75）は、**その URL を見る検査を
+     1本も足さなかった**（`grep -rn "/admin/repeat" scripts/` → 0件）。
+     サブ画面にも与えた今回、まとめてここで見る。
+
+     見るのは4つ:
+       ①メニューを押すと住所が変わる ②サブ画面でも変わる
+       ③**ブラウザの戻るで、押した順にちょうど1つ戻る**（`#49` の型）
+       ④**その住所を直接開いても、同じ画面が出る**（貼れる URL であること） */
+  const pathNow = () => new URL(page.url()).pathname;
+
+  await tapByText(page, 'リピーター');
+  await page.waitForSelector('.admin-menu__item', { timeout: 10_000 });
+  check('3b. メニューを押すと住所が変わる', pathNow() === '/admin/repeat', `path=${pathNow()}`);
+
+  await tapByText(page, 'カルテ作成');
+  /* この時点では犬がまだ0頭のこともある（作るのは ④）。**行ではなく見出しを待つ**
+     ——0件でも picker は必ず見出しを出す。 */
+  const pickerShown = await page.waitForFunction(
+    () => (document.body.textContent || '').includes('カルテを書く子を選ぶ'),
+    { timeout: 20_000 },
+  ).then(() => true).catch(() => false);
+  check('3c. サブ画面（犬を選ぶ）でも住所が変わる',
+    pickerShown && pathNow() === '/admin/repeat/create', `path=${pathNow()} 出た=${pickerShown}`);
+
+  await page.goBack({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.admin-menu__item', { timeout: 20_000 });
+  const backTitles = await menuTitles(page);
+  check('3d. ブラウザの戻るで、ちょうど1つ手前（リピーター）に戻る',
+    pathNow() === '/admin/repeat' && backTitles.length === 2
+    && backTitles[0].includes('カルテ作成'),
+    `path=${pathNow()} 項目=${JSON.stringify(backTitles)}`);
+
+  await page.goto(`${BASE}/admin/new/owner`, { waitUntil: 'domcontentloaded' });
+  const formShown = await page.waitForSelector('[data-admin-field="owner-name"]', { timeout: 20_000 })
+    .then(() => true).catch(() => false);
+  check('3e. サブ画面の住所を直接開くと、その画面が出る（貼れる URL）',
+    formShown && pathNow() === '/admin/new/owner', `path=${pathNow()} 出た=${formShown}`);
+
+  await page.goto(`${BASE}/admin/nowhere`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.admin-menu__item', { timeout: 20_000 });
+  const fallback = await menuTitles(page);
+  check('3f. 無い住所を開いても白い画面にならず、管理のトップが出る',
+    fallback.length === 4 && fallback[0].includes('リピーター'),
+    `出た項目=${JSON.stringify(fallback)}`);
+
+  await page.goto(`${BASE}/admin`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.admin-menu__item', { timeout: 20_000 });
+
   /* ── ④ 新規: 顧客を作る ── */
   const stamp = Math.random().toString(36).slice(2, 7);
   const ownerName = `新規飼い主${stamp}`;
