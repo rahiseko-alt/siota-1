@@ -40,6 +40,9 @@ function openAnnotateInFakeScreen() {
     offsetHeight: 200,
     getContext: () => new Proxy({}, {
       get: (_, key) => (key === 'canvas' ? canvas : (...args) => drawn.push([key, ...args])),
+      /* 代入も残す。色と太さは呼び出しではなく**代入**で決まるので、
+         `set` を捨てていると「何色で引いたか」を誰も見られない。 */
+      set: (_, key, value) => { drawn.push([`set:${String(key)}`, value]); return true; },
     }),
     toDataURL: () => DATA_URL,
     getBoundingClientRect: () => ({ left: 0, top: 0, width: 300, height: 200 }),
@@ -54,12 +57,17 @@ function openAnnotateInFakeScreen() {
     getBoundingClientRect: () => ({ left: 0, top: 0, width: 300, height: 200 }),
   };
   const button = () => ({ onclick: null });
+  /* ペンの道具（マスター指示 2026-09-07）。本物と同じく `oninput` で受ける。 */
+  const field = (value) => ({ value, oninput: null });
   const parts = {
     '.annotate-canvas': canvas,
     '.annotate-canvas-wrap': wrap,
     '.annotate-clear': button(),
     '.annotate-cancel': button(),
     '.annotate-save': button(),
+    '.annotate-color': field('#d32f2f'),
+    '.annotate-width': field('4'),
+    '.annotate-width-value': { textContent: '' },
   };
   const overlay = {
     className: '',
@@ -110,7 +118,7 @@ function openAnnotateInFakeScreen() {
     for (const handler of handlers.get(type) || []) handler({ pointerId, clientX, clientY });
   };
   const strokesDrawnSince = (mark) => drawn.slice(mark).filter(([key]) => key === 'stroke').length;
-  return { canvas, fire, drawn, strokesDrawnSince };
+  return { App, canvas, fire, drawn, strokesDrawnSince, parts };
 }
 
 test('1本指では、なぞった線が引かれる', () => {
@@ -170,4 +178,54 @@ test('指を全部離せば、次の1本指でまた書ける', () => {
   fire('pointerdown', 3, 10, 10);
   fire('pointermove', 3, 60, 10);
   assert.equal(strokesDrawnSince(mark), 1);
+});
+
+/* ── 写真の書き込みにも、色と太さ（マスター指示 2026-09-07） ── */
+
+test('写真の書き込みも、選んだ色で引かれる', () => {
+  const { fire, drawn, parts } = openAnnotateInFakeScreen();
+  parts['.annotate-color'].value = '#00a3ff';
+  parts['.annotate-color'].oninput();
+  const mark = drawn.length;
+  fire('pointerdown', 1, 10, 10);
+  fire('pointermove', 1, 60, 10);
+  assert.ok(drawn.slice(mark).some(([op, value]) => op === 'set:strokeStyle' && value === '#00a3ff'),
+    '選んだ色で引かれていない');
+});
+
+test('写真の書き込みも、太さを変えられる（画面ではなく写真の画素で数える）', () => {
+  const { fire, drawn, parts } = openAnnotateInFakeScreen();
+  parts['.annotate-width'].value = '10';
+  parts['.annotate-width'].oninput();
+  const mark = drawn.length;
+  fire('pointerdown', 1, 10, 10);
+  fire('pointermove', 1, 60, 10);
+  /* 器は 300px 幅、写真は 600px 幅なので、画面の 10 は写真の 20 になる。
+     **寄って書いても引いて書いても、焼き上がりの太さが同じ**であること。 */
+  assert.ok(drawn.slice(mark).some(([op, value]) => op === 'set:lineWidth' && value === 20),
+    `写真の画素で太さを数えていない: ${JSON.stringify(drawn.slice(mark).filter(([op]) => op === 'set:lineWidth'))}`);
+});
+
+test('色を変えても、先に引いた線は変わらない', () => {
+  const { fire, drawn, parts } = openAnnotateInFakeScreen();
+  parts['.annotate-color'].value = '#00a3ff';
+  parts['.annotate-color'].oninput();
+  fire('pointerdown', 1, 10, 10);
+  fire('pointermove', 1, 60, 10);
+  fire('pointerup', 1, 60, 10);
+  parts['.annotate-color'].value = '#123456';
+  parts['.annotate-color'].oninput();
+  const mark = drawn.length;
+  fire('pointerdown', 2, 100, 100);
+  fire('pointermove', 2, 160, 100);
+  const colors = drawn.slice(mark).filter(([op]) => op === 'set:strokeStyle').map(([, v]) => v);
+  assert.ok(colors.includes('#00a3ff'), '前に引いた線が塗り替えられている');
+  assert.ok(colors.includes('#123456'), '新しい線が新しい色で引かれていない');
+});
+
+test('4面図と写真で、ペンの道具は同じ1組（片方で変えたらもう片方にも効く）', () => {
+  const { App, parts } = openAnnotateInFakeScreen();
+  parts['.annotate-width'].value = '15';
+  parts['.annotate-width'].oninput();
+  assert.equal(App.penWidth, 15, '写真で変えた太さが、4面図側に伝わっていない');
 });

@@ -700,6 +700,16 @@ button, input, textarea, select {
 .photo-pick__kept { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; font-size: 10px; font-weight: 700; color: var(--ink-muted); text-align: center; }
 .photo-pick__drop { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border: 1px solid var(--border-subtle); background: #ffffff; font-size: 12px; line-height: 1; font-weight: 700; cursor: pointer; }
 .photo-pick__note { font-size: 10px; color: var(--ink-muted); margin-top: 6px; }
+/* 写真に書き込む入口。**押せると目で分かる形で置く**（`title` の吹き出しはスマホに出ない）。
+   写真の下の帯にすると枠からはみ出して説明文に重なるので、**写真の上に重ねる**
+   ——64px の枠の中で完結させ、周りの並びを動かさない。 */
+.photo-pick__annotate {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 3px 0; border: 0; border-top: 1px solid var(--border-subtle);
+  background: rgba(255,255,255,0.92); color: var(--ink-primary);
+  font-size: 9px; font-weight: 700; line-height: 1.2; letter-spacing: -0.02em;
+  cursor: pointer;
+}
 
 /* 口の写真への書き込み（マスター指示 2026-08-29・C-10）。
    `#marking-canvas`（犬体4面図・全画面で1個だけの決め打ち）とは別に、
@@ -805,6 +815,21 @@ button, input, textarea, select {
   font-size: 10px;
   padding: 2px 8px;
 }
+
+/* ペンの道具（色・太さ）。4面図の下と、写真の書き込み画面の両方で使う。 */
+.pen-tools {
+  display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+  margin-top: 8px; padding: 8px 10px;
+  background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 10px;
+  font-size: 12px; color: var(--ink-muted);
+}
+.pen-tools__item { display: flex; align-items: center; gap: 6px; }
+.pen-tools__color {
+  width: 40px; height: 28px; padding: 0;
+  border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-surface);
+}
+.pen-tools__width { width: 120px; }
+.pen-tools__value { min-width: 18px; text-align: right; font-weight: 700; color: var(--ink-primary); }
 
 .teeth-selector-grid {
   display: grid;
@@ -2188,7 +2213,7 @@ button, input, textarea, select {
               <input type="file" class="photo-pick__input" accept="image/*" multiple
                      data-field="photo-teeth" onchange="App.onPhotoPick('teeth', this)">
               <div class="photo-pick__thumbs" data-photo-thumbs="teeth"></div>
-              <div class="photo-pick__note">飼い主のカルテの「歯」の欄に出ます。サムネイルをタップすると丸印を書き込めます。</div>
+              <div class="photo-pick__note">飼い主のカルテの「歯」の欄に出ます。写真の「✏️ 書き込む」から、ペンで書き込めます（色と太さを変えられます）。</div>
             </div>
           </div>
 
@@ -2227,6 +2252,22 @@ button, input, textarea, select {
                 <button class="mark-mode-btn" onclick="App.setMarkMode('スタンプ', this)">📍 スタンプ</button>
                 <button class="mark-undo-btn" onclick="App.undoMark()">↩ 1つ戻す</button>
                 <button class="mark-undo-btn" onclick="App.clearCanvas()">✕ 全部消す</button>
+              </div>
+
+              <!-- ペンの色と太さ（マスター指示 2026-09-07「ペンは全て、色と太さを
+                   調整できるようにしろ」）。写真への書き込みと同じ1組を触る。
+                   色は所見（赤み・しこり…）を選び直すとその色に戻り、そのあと
+                   ここで選び直せば、選んだ色で描ける。 -->
+              <div class="pen-tools">
+                <label class="pen-tools__item">色
+                  <input type="color" id="pen-color" class="pen-tools__color" value="#d32f2f"
+                         oninput="App.setPenColor(this.value)">
+                </label>
+                <label class="pen-tools__item">太さ
+                  <input type="range" id="pen-width" class="pen-tools__width" min="1" max="20" step="1"
+                         value="4" oninput="App.setPenWidth(this.value)">
+                  <span class="pen-tools__value" id="pen-width-value">4</span>
+                </label>
               </div>
 
               <div class="canvas-container" id="canvas-wrapper">
