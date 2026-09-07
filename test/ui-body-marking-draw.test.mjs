@@ -25,7 +25,8 @@ const SOURCE = fs.readFileSync(path.join(ROOT, 'src/js/ui.js'), 'utf8');
 const DATA_URL = 'data:image/png;base64,iVBORw0KGgo=';
 
 /** 犬体4面図だけが本物らしく振る舞う画面の替え玉。指は `fire()` で送る。 */
-function loadCanvasScreen() {
+/** `typed` は「文字」の道具で打つ内容（`''` なら何も打たずに閉じたのと同じ）。 */
+function loadCanvasScreen(typed = '要観察') {
   const drawn = [];
   const handlers = new Map();
   const canvas = {
@@ -51,6 +52,8 @@ function loadCanvasScreen() {
   };
   const sandbox = {
     document,
+    /* 「文字」の道具が何を打たれたか（マスター指示 2026-09-07）。 */
+    prompt: () => typed,
     window: { addEventListener: () => {}, DUMMY: { dogs: [] } },
     setTimeout: () => {},
     console,
@@ -221,4 +224,77 @@ test('色と太さを持たない古い印も、これまでどおり描ける�
     '古い印が所見の色で描かれていない');
   assert.ok(after.some(([op, value]) => op === 'set:lineWidth' && value === 4),
     '古い印がこれまでの太さで描かれていない');
+});
+
+/* ── 透過度・消しゴム・文字（マスター指示 2026-09-07） ── */
+
+test('透過度を下げると、その薄さで描かれる', () => {
+  const { App, fire, drawn } = loadCanvasScreen();
+  App.setPenAlpha(0.4);
+  const mark = drawn.length;
+  fire('pointerdown', 1, 40, 40);
+  fire('pointermove', 1, 120, 90);
+  assert.equal(App.marks[0].alpha, 0.4, '線が薄さを覚えていない');
+  assert.ok(drawn.slice(mark).some(([op, value]) => op === 'set:globalAlpha' && value === 0.4),
+    '選んだ薄さで描かれていない');
+});
+
+test('透過度は0.1〜1の外へ出さない', () => {
+  const { App } = loadCanvasScreen();
+  App.setPenAlpha(0);
+  assert.equal(App.penAlpha, 0.1, '完全に透明（＝見えない印）にできてしまう');
+  App.setPenAlpha(5);
+  assert.equal(App.penAlpha, 1);
+});
+
+test('消しゴムは、触れた線を1本だけ取り除く（下絵は消さない）', () => {
+  const { App, fire } = loadCanvasScreen();
+  fire('pointerdown', 1, 40, 40);
+  fire('pointermove', 1, 120, 40);
+  fire('pointerup', 1, 120, 40);
+  fire('pointerdown', 2, 40, 200);
+  fire('pointermove', 2, 120, 200);
+  fire('pointerup', 2, 120, 200);
+  assert.equal(App.marks.length, 2);
+  App.setMarkMode('消しゴム', null);
+  fire('pointerdown', 3, 80, 40);
+  fire('pointerup', 3, 80, 40);
+  assert.equal(App.marks.length, 1, '触れた線が消えていないか、2本とも消えている');
+  assert.equal(App.marks[0].points[0].y > 0.5, true, '残ったのが別の線になっている');
+});
+
+test('消しゴムは、線の途中を触っても消せる（点と点の間も線）', () => {
+  const { App, fire } = loadCanvasScreen();
+  fire('pointerdown', 1, 20, 40);
+  fire('pointermove', 1, 380, 40);
+  fire('pointerup', 1, 380, 40);
+  App.setMarkMode('消しゴム', null);
+  fire('pointerdown', 2, 200, 40);
+  assert.equal(App.marks.length, 0, '点が飛んでいる線の真ん中を触っても消えない');
+});
+
+test('文字は、押した所に置かれる', () => {
+  const { App, fire, drawn } = loadCanvasScreen();
+  App.setMarkMode('文字', null);
+  const mark = drawn.length;
+  fire('pointerdown', 1, 100, 80);
+  assert.equal(App.marks.length, 1);
+  assert.equal(App.marks[0].text, '要観察');
+  assert.ok(drawn.slice(mark).some(([op, value]) => op === 'fillText' && value === '要観察'),
+    '打った文字が描かれていない');
+});
+
+test('文字は、何も打たなければ何も置かない', () => {
+  const { App, fire } = loadCanvasScreen('   ');
+  App.setMarkMode('文字', null);
+  fire('pointerdown', 1, 100, 80);
+  assert.equal(App.marks.length, 0, '空の印が残っている（見えないものを送らない）');
+});
+
+test('文字の大きさは太さに連れて変わる（道具を増やさない）', () => {
+  const { App, fire } = loadCanvasScreen();
+  App.setPenWidth(10);
+  App.setMarkMode('文字', null);
+  fire('pointerdown', 1, 100, 80);
+  assert.equal(App.marks[0].size, 40);
 });

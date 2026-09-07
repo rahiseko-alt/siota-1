@@ -2250,6 +2250,10 @@ button, input, textarea, select {
               <div class="body-marking-stamps">
                 <button class="mark-mode-btn is-active" onclick="App.setMarkMode('ペン', this)">✏️ ペン</button>
                 <button class="mark-mode-btn" onclick="App.setMarkMode('スタンプ', this)">📍 スタンプ</button>
+                <!-- 消しゴムと文字（マスター指示 2026-09-07）。
+                     消しゴムは**下絵を削らず、置いた印だけ**を取り除く。 -->
+                <button class="mark-mode-btn" onclick="App.setMarkMode('消しゴム', this)">🧽 消しゴム</button>
+                <button class="mark-mode-btn" onclick="App.setMarkMode('文字', this)">🅰 文字</button>
                 <button class="mark-undo-btn" onclick="App.undoMark()">↩ 1つ戻す</button>
                 <button class="mark-undo-btn" onclick="App.clearCanvas()">✕ 全部消す</button>
               </div>
@@ -2267,6 +2271,12 @@ button, input, textarea, select {
                   <input type="range" id="pen-width" class="pen-tools__width" min="1" max="20" step="1"
                          value="4" oninput="App.setPenWidth(this.value)">
                   <span class="pen-tools__value" id="pen-width-value">4</span>
+                </label>
+                <!-- 透過度（マスター指示 2026-09-07）。薄くすると下の絵が透ける。 -->
+                <label class="pen-tools__item">透明
+                  <input type="range" id="pen-alpha" class="pen-tools__width" min="0.1" max="1" step="0.1"
+                         value="1" oninput="App.setPenAlpha(this.value)">
+                  <span class="pen-tools__value" id="pen-alpha-value">100%</span>
                 </label>
               </div>
 
