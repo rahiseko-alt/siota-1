@@ -83,6 +83,31 @@
 
 ## 証明済み（`- <ファイル> :: <検査の名前>`）
 
+<!-- 2026-09-07・ペンの色と太さ／歯の写真の入口（マスター指示） -->
+
+### ペンの色と太さ・歯の写真の入口 9件（2026-09-07・実測）
+
+壊し方①: `drawCanvas()` の `m.color || …` `m.width || 4` を、元の決め打ち
+（`this.markColor(m.type)` と `4`）に戻す。
+出力: `not ok 10 - 選んだ色と太さで描かれる（線ごとに覚える）`
+
+壊し方②: `renderPhotoThumbs()` から「✏️ 書き込む」ボタンを作る行をまるごと消す。
+出力: `not ok 1 - 歯の写真1枚につき、押せる「書き込む」入口が1つ出る` /
+`not ok 2 - その入口を押すと、書き込みが開く`
+
+- ui-body-marking-draw.test.mjs :: 選んだ色と太さで描かれる（線ごとに覚える）
+- ui-body-marking-draw.test.mjs :: 色や太さを変えても、先に引いた線は変わらない
+- ui-body-marking-draw.test.mjs :: 所見の種類を選び直すと、色はその所見の色に戻る
+- ui-body-marking-draw.test.mjs :: 太さは1〜20の外へ出さない（0や巨大な値で描かない）
+- ui-body-marking-draw.test.mjs :: 色と太さを持たない古い印も、これまでどおり描ける（下書きや確定済みが壊れない）
+- ui-annotate-pinch.test.mjs :: 写真の書き込みも、選んだ色で引かれる
+- ui-annotate-pinch.test.mjs :: 写真の書き込みも、太さを変えられる（画面ではなく写真の画素で数える）
+- ui-annotate-pinch.test.mjs :: 色を変えても、先に引いた線は変わらない
+- ui-annotate-pinch.test.mjs :: 4面図と写真で、ペンの道具は同じ1組（片方で変えたらもう片方にも効く）
+- ui-teeth-annotate-entry.test.mjs :: 歯の写真1枚につき、押せる「書き込む」入口が1つ出る
+- ui-teeth-annotate-entry.test.mjs :: その入口を押すと、書き込みが開く
+- ui-teeth-annotate-entry.test.mjs :: 保存済み（asset://）の写真には、書き込みの入口を出さない
+
 <!-- 証拠を書いたら、下の「未証明」から1行ここへ移す。 -->
 
 ### 鍵が古いときも入口は1つ 1件（2026-09-05・37回目の実測）

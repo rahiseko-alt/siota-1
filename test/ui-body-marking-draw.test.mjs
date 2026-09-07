@@ -155,3 +155,70 @@ test('古い下書きのスタンプだけの印も、そのまま描ける', ()
   App.drawCanvas();
   assert.ok(drawn.slice(mark).some(([op]) => op === 'arc'), '古い形の印が描かれない');
 });
+
+/* ── ペンの色と太さ（マスター指示 2026-09-07「ペンは全て、色と太さを調整できるようにしろ」） ── */
+
+test('選んだ色と太さで描かれる（線ごとに覚える）', () => {
+  const { App, fire, drawn } = loadCanvasScreen();
+  App.setPenColor('#00a3ff');
+  App.setPenWidth(12);
+  const mark = drawn.length;
+  fire('pointerdown', 1, 40, 40);
+  fire('pointermove', 1, 120, 90);
+  fire('pointerup', 1, 120, 90);
+  assert.equal(App.marks[0].color, '#00a3ff', '線が色を覚えていない');
+  assert.equal(App.marks[0].width, 12, '線が太さを覚えていない');
+  const after = drawn.slice(mark);
+  assert.ok(after.some(([op, value]) => op === 'set:strokeStyle' && value === '#00a3ff'),
+    '選んだ色で引かれていない');
+  assert.ok(after.some(([op, value]) => op === 'set:lineWidth' && value === 12),
+    '選んだ太さで引かれていない');
+});
+
+test('色や太さを変えても、先に引いた線は変わらない', () => {
+  const { App, fire } = loadCanvasScreen();
+  App.setPenColor('#00a3ff');
+  App.setPenWidth(2);
+  fire('pointerdown', 1, 40, 40);
+  fire('pointermove', 1, 90, 70);
+  fire('pointerup', 1, 90, 70);
+  App.setPenColor('#123456');
+  App.setPenWidth(18);
+  fire('pointerdown', 2, 200, 100);
+  fire('pointermove', 2, 260, 150);
+  fire('pointerup', 2, 260, 150);
+  assert.deepEqual(
+    App.marks.map((m) => [m.color, m.width]),
+    [['#00a3ff', 2], ['#123456', 18]],
+    '後から変えた道具が、前に引いた線まで塗り替えている',
+  );
+});
+
+test('所見の種類を選び直すと、色はその所見の色に戻る', () => {
+  const { App } = loadCanvasScreen();
+  App.setPenColor('#00a3ff');
+  App.setStamp('毛玉', null);
+  assert.equal(App.penColor, App.markColor('毛玉'), '種類を選び直しても色が戻らない');
+});
+
+test('太さは1〜20の外へ出さない（0や巨大な値で描かない）', () => {
+  const { App } = loadCanvasScreen();
+  App.setPenWidth(0);
+  assert.equal(App.penWidth, 1);
+  App.setPenWidth(999);
+  assert.equal(App.penWidth, 20);
+  App.setPenWidth('よくわからない値');
+  assert.equal(App.penWidth, 4, '数でないものを渡されたら既定に戻す');
+});
+
+test('色と太さを持たない古い印も、これまでどおり描ける（下書きや確定済みが壊れない）', () => {
+  const { App, drawn } = loadCanvasScreen();
+  App.marks = [{ type: '赤み', points: [{ x: 0.1, y: 0.1 }, { x: 0.5, y: 0.5 }] }];
+  const mark = drawn.length;
+  App.drawCanvas();
+  const after = drawn.slice(mark);
+  assert.ok(after.some(([op, value]) => op === 'set:strokeStyle' && value === App.markColor('赤み')),
+    '古い印が所見の色で描かれていない');
+  assert.ok(after.some(([op, value]) => op === 'set:lineWidth' && value === 4),
+    '古い印がこれまでの太さで描かれていない');
+});

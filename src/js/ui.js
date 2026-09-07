@@ -21,6 +21,13 @@ const App = {
 
   /* いま動いている音声認識。1本しか持たない（マイクが1本しか無いから）。 */
   voiceRec: null,
+
+  /* ペンの色と太さ（マスター指示 2026-09-07「ペンは全て、色と太さを調整できるようにしろ」）。
+     **4面図の書き込みと、写真への書き込みで同じ1組を使う**——道具は1つ、という
+     人の感覚に合わせる。色は所見の種類を選ぶたびにその色へ戻り（`setStamp`）、
+     そのあと自分で選び直せば、選んだ色で描ける。 */
+  penColor: '#d32f2f',
+  penWidth: 4,
   /* 付けた印。1件は次のどちらか。
        スタンプ … `{ x, y, type }`
        なぞった線 … `{ type, points: [{ x, y }, …] }`
@@ -1396,12 +1403,16 @@ const App = {
       if (drawingPointerId !== null) return;
       const point = pointAt(event);
       if (this.markMode === 'スタンプ') {
-        this.marks.push({ ...point, type: this.currentStamp });
+        this.marks.push({
+          ...point, type: this.currentStamp, color: this.penColor, width: this.penWidth,
+        });
         this.drawCanvas();
         return;
       }
       drawingPointerId = event.pointerId;
-      this.marks.push({ type: this.currentStamp, points: [point] });
+      this.marks.push({
+        type: this.currentStamp, points: [point], color: this.penColor, width: this.penWidth,
+      });
       this.drawCanvas();
     });
     canvas.addEventListener('pointermove', (event) => {
@@ -1432,6 +1443,31 @@ const App = {
     this.currentStamp = type;
     document.querySelectorAll('.stamp-btn').forEach(b => b.classList.remove('is-active'));
     if (btn) btn.classList.add('is-active');
+    /* **色は所見の色に戻す。** 色が所見の種類を表しているので、種類を選び直したら
+       いったんその色に戻すのが素直（そのあと自分で選び直せば、その色で描ける）。 */
+    this.setPenColor(this.markColor(type));
+  },
+
+  /* ペンの色を決める（4面図でも写真の書き込みでも同じ1組を使う）。 */
+  setPenColor(color) {
+    if (!color) return;
+    this.penColor = color;
+    const picker = document.getElementById('pen-color');
+    if (picker && picker.value !== color) picker.value = color;
+  },
+
+  /* ペンの太さを決める。数字は画面にも出す（いくつなのか分からないと選べない）。 */
+  setPenWidth(width) {
+    /* 数として読めれば 1〜20 に収める（0 は「無し」ではなく**細い方の端**）。
+       読めないものが来たら既定の4に戻す——0 を falsy として弾くと、
+       いちばん細い指定が既定に化ける。 */
+    const asNumber = Number(width);
+    const value = Number.isFinite(asNumber) ? Math.min(20, Math.max(1, asNumber)) : 4;
+    this.penWidth = value;
+    const slider = document.getElementById('pen-width');
+    if (slider && Number(slider.value) !== value) slider.value = String(value);
+    const label = document.getElementById('pen-width-value');
+    if (label) label.textContent = `${value}`;
   },
 
   /* ペン／スタンプの切り替え。種類（赤み・しこり…）はそのままで、
@@ -1712,6 +1748,21 @@ const App = {
           img.onclick = () => this.openAnnotate(kind, index);
         }
         cell.appendChild(img);
+        /* **押せる場所を目に見える形で置く**（マスター指示 2026-09-07
+           「歯の添付写真にペンで書き込めるようにしろ」）。
+           書き込み自体は前から在った（`C-10`）が、入口は**画像を直接タップ**する
+           だけで、案内は `title`（マウスを乗せたときだけ出る吹き出し）しか無かった。
+           スマホには `title` が出ない——**押せると分からないものは、無いのと同じ**
+           （`D-12`）。 */
+        if (kind === 'teeth') {
+          const pen = document.createElement('button');
+          pen.type = 'button';
+          pen.className = 'photo-pick__annotate';
+          pen.dataset.annotate = 'teeth';
+          pen.textContent = '✏️ 書き込む';
+          pen.onclick = () => this.openAnnotate(kind, index);
+          cell.appendChild(pen);
+        }
       } else {
         const kept = document.createElement('span');
         kept.className = 'photo-pick__kept';
@@ -1744,6 +1795,15 @@ const App = {
     overlay.innerHTML = `
       <div class="annotate-box">
         <div class="annotate-canvas-wrap"><canvas class="annotate-canvas"></canvas></div>
+        <div class="pen-tools">
+          <label class="pen-tools__item">色
+            <input type="color" class="pen-tools__color annotate-color">
+          </label>
+          <label class="pen-tools__item">太さ
+            <input type="range" class="pen-tools__width annotate-width" min="1" max="20" step="1">
+            <span class="pen-tools__value annotate-width-value"></span>
+          </label>
+        </div>
         <p class="annotate-hint">1本指で書き込み、2本指で拡大・移動できます。</p>
         <div class="annotate-actions">
           <button type="button" class="btn-inline annotate-clear">やり直す</button>
@@ -1767,18 +1827,24 @@ const App = {
     const pointers = new Map();
     let pinch = null;
 
+    /* **線1本ごとに色と太さを覚える**（マスター指示 2026-09-07）。
+       途中で色や太さを変えても、先に引いた線は引いたときの見た目のまま。
+       写真は原寸で描いているので、太さは画面の見かけではなく写真の画素で数える
+       ——寄って書いても引いて書いても、焼き上がりの太さが同じになる。 */
+    const strokeWidth = () => Math.max(1, this.penWidth * (canvas.width / (wrap.clientWidth || canvas.width)));
     const redraw = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      ctx.strokeStyle = '#e0392b';
-      ctx.lineWidth = 4;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       for (const stroke of strokes) {
-        if (stroke.length < 2) continue;
+        const points = stroke.points || stroke;
+        if (points.length < 2) continue;
+        ctx.strokeStyle = stroke.color || '#e0392b';
+        ctx.lineWidth = stroke.width || 4;
         ctx.beginPath();
-        ctx.moveTo(stroke[0].x, stroke[0].y);
-        for (const pt of stroke.slice(1)) ctx.lineTo(pt.x, pt.y);
+        ctx.moveTo(points[0].x, points[0].y);
+        for (const pt of points.slice(1)) ctx.lineTo(pt.x, pt.y);
         ctx.stroke();
       }
     };
@@ -1841,7 +1907,7 @@ const App = {
       if (pointers.size === 1) {
         drawing = true;
         activePointerId = event.pointerId;
-        strokes.push([pointFromEvent(event)]);
+        strokes.push({ points: [pointFromEvent(event)], color: this.penColor, width: strokeWidth() });
         return;
       }
       /* 2本目が触れた時点で「さっきのは書き込みではなくピンチの1本目だった」と分かる。
@@ -1884,7 +1950,7 @@ const App = {
         return;
       }
       if (!drawing || event.pointerId !== activePointerId) return;
-      strokes[strokes.length - 1].push(pointFromEvent(event));
+      strokes[strokes.length - 1].points.push(pointFromEvent(event));
       redraw();
     });
 
@@ -1902,6 +1968,24 @@ const App = {
     canvas.addEventListener('pointerup', releasePointer);
     canvas.addEventListener('pointercancel', releasePointer);
     canvas.addEventListener('pointerleave', releasePointer);
+
+    /* 道具は4面図と同じ1組（`penColor` / `penWidth`）を触る。
+       開いた時点の値を出し、動かしたらその場から新しい線に効く。 */
+    const colorInput = overlay.querySelector('.annotate-color');
+    const widthInput = overlay.querySelector('.annotate-width');
+    const widthValue = overlay.querySelector('.annotate-width-value');
+    if (colorInput) {
+      colorInput.value = this.penColor;
+      colorInput.oninput = () => this.setPenColor(colorInput.value);
+    }
+    if (widthInput) {
+      widthInput.value = String(this.penWidth);
+      if (widthValue) widthValue.textContent = `${this.penWidth}`;
+      widthInput.oninput = () => {
+        this.setPenWidth(widthInput.value);
+        if (widthValue) widthValue.textContent = `${this.penWidth}`;
+      };
+    }
 
     const close = () => overlay.remove();
     overlay.querySelector('.annotate-cancel').onclick = close;
@@ -1959,8 +2043,12 @@ const App = {
         ctx.beginPath();
         ctx.moveTo(m.points[0].x * canvas.width, m.points[0].y * canvas.height);
         for (const p of m.points.slice(1)) ctx.lineTo(p.x * canvas.width, p.y * canvas.height);
-        ctx.strokeStyle = this.markColor(m.type);
-        ctx.lineWidth = 4;
+        /* **古い印はそのまま描ける。** 色と太さは 2026-09-07 に足したもので、
+           それ以前の下書き・確定済みカルテの印は持っていない。無ければ
+           これまでどおり「所見の色・太さ4」で描く（`D-6` の型——消す前に、
+           まだ使われているものが在るかを見る）。 */
+        ctx.strokeStyle = m.color || this.markColor(m.type);
+        ctx.lineWidth = m.width || 4;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.stroke();
@@ -1970,9 +2058,10 @@ const App = {
       const px = m.x * canvas.width;
       const py = m.y * canvas.height;
       ctx.beginPath();
-      ctx.arc(px, py, 9, 0, Math.PI * 2);
+      /* スタンプの大きさも太さに連れて変わる（既定の太さ4のとき、これまでと同じ半径9）。 */
+      ctx.arc(px, py, Math.max(4, (m.width || 4) * 2.25), 0, Math.PI * 2);
 
-      ctx.fillStyle = this.markColor(m.type);
+      ctx.fillStyle = m.color || this.markColor(m.type);
 
       ctx.fill();
       ctx.lineWidth = 2;
