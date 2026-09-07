@@ -69,7 +69,7 @@ function loadCanvasScreen() {
   return { App, fire, drawn };
 }
 
-test('指でなぞると、線が1本残る（点ではなく範囲が書ける）', () => {
+test('ペンでなぞると、線が1本残る（点ではなく範囲が書ける）', () => {
   const { App, fire } = loadCanvasScreen();
   fire('pointerdown', 1, 40, 40);
   fire('pointermove', 1, 80, 60);
@@ -122,7 +122,7 @@ test('1つ戻すは、直前の1件だけ消す', () => {
   App.setMarkMode('スタンプ', null);
   fire('pointerdown', 1, 40, 40);
   fire('pointerup', 1, 40, 40);
-  App.setMarkMode('なぞる', null);
+  App.setMarkMode('ペン', null);
   fire('pointerdown', 2, 100, 100);
   fire('pointermove', 2, 160, 140);
   fire('pointerup', 2, 160, 140);

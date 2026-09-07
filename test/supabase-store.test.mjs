@@ -517,6 +517,64 @@ test('finalize keeps a report draft when storage metadata or objects are incompl
   assert.deepEqual(await response.json(), { error: 'report assets are incomplete' });
 });
 
+/* **本番で確定できなかった形**（2026-09-07・マスター実機報告 `F-20260907-75`）。
+
+   PostgREST は関数の戻りを「1件の行」で返すことも「行の配列」で返すこともある。
+   配列は truthy なので、素通りさせると `{ report: [ … ] }` という**器だけの 200**
+   になり、画面には「カルテを確定できませんでした」とだけ出て原因が残らない。
+   表を読む側は最初から `one(rows)` で均していたのに、**RPC を通る3本だけが
+   均しを通っていなかった**。 */
+test('finalize は配列で返ってきても、カルテ1件として返す（本番で確定できなかった形）', async () => {
+  const petId = '40000000-0000-0000-0000-0000000000a1';
+  const reportId = '50000000-0000-0000-0000-0000000000a1';
+  const response = await worker.fetch(new Request(
+    `https://test.local/api/pets/${petId}/reports/${reportId}/finalize`,
+    { method: 'POST', headers: { Authorization: 'Bearer staff-jwt' } },
+  ), supabaseEnv(async (url) => {
+    if (url.endsWith('/auth/v1/user')) {
+      return Response.json({ id: '20000000-0000-0000-0000-000000000002', email: 'staff@local.test' });
+    }
+    if (url.includes('/rpc/consume_rate_limit')) return Response.json(true);
+    if (url.includes('/rest/v1/reports?')) {
+      return Response.json([{ id: reportId, pet_id: petId, shop_id: '10000000-0000-0000-0000-000000000001', status: 'draft', data: {} }]);
+    }
+    if (url.includes('/rest/v1/report_assets?')) return Response.json([]);
+    /* ここが本番の形。**配列で1件**返る。 */
+    if (url.includes('/rpc/finalize_report')) {
+      return Response.json([{ id: reportId, pet_id: petId, status: 'final', data: {} }]);
+    }
+    return Response.json({}, { status: 500 });
+  }));
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.report.id, reportId, '器（配列）のまま返すと、画面は番号を見つけられない');
+  assert.equal(body.report.status, 'final');
+});
+
+test('finalize は空の配列を「確定できた」と言わない', async () => {
+  const petId = '40000000-0000-0000-0000-0000000000a1';
+  const reportId = '50000000-0000-0000-0000-0000000000a1';
+  const response = await worker.fetch(new Request(
+    `https://test.local/api/pets/${petId}/reports/${reportId}/finalize`,
+    { method: 'POST', headers: { Authorization: 'Bearer staff-jwt' } },
+  ), supabaseEnv(async (url) => {
+    if (url.endsWith('/auth/v1/user')) {
+      return Response.json({ id: '20000000-0000-0000-0000-000000000002', email: 'staff@local.test' });
+    }
+    if (url.includes('/rpc/consume_rate_limit')) return Response.json(true);
+    if (url.includes('/rest/v1/reports?')) {
+      return Response.json([{ id: reportId, pet_id: petId, shop_id: '10000000-0000-0000-0000-000000000001', status: 'draft', data: {} }]);
+    }
+    if (url.includes('/rest/v1/report_assets?')) return Response.json([]);
+    if (url.includes('/rpc/finalize_report')) return Response.json([]);
+    return Response.json({}, { status: 500 });
+  }));
+
+  assert.equal(response.status, 409);
+  assert.deepEqual(await response.json(), { error: 'report assets are incomplete' });
+});
+
 /* 本番の Cloudflare Workers では、fetch をレシーバ付きで呼ぶと
    `TypeError: Illegal invocation` で落ちる。`this.fetchImpl(...)` と書いていたため
    Supabase への REST 呼び出しが本番で全滅していた（`F-20260821-25`）。

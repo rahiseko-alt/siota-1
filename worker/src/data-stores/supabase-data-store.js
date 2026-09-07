@@ -325,20 +325,44 @@ export class SupabaseDataStore {
     return this.one(rows);
   }
 
+  /**
+   * RPC が返した1件を、**器ではなく中身で**受け取る。
+   *
+   * PostgREST は関数の戻りを「1件の行」で返すことも「行の配列」で返すこともある
+   * （版と `Accept` の解釈で変わる）。**配列は truthy** なので、素通りさせると
+   * `{ report: [ … ] }` という**器だけの 200** を返してしまい、画面には
+   * 「カルテを確定できませんでした」とだけ出て、原因がどこにも残らない
+   * （2026-09-07・マスターが本番で遭遇。`F-20260907-75`）。
+   *
+   * 表を読む側は最初から `one(rows)` で均していた。**RPC を通る3本だけが
+   * その均しを通っていなかった。** ここで揃える。
+   */
+  oneFromRpc(result, reason) {
+    const row = Array.isArray(result) ? result[0] : result;
+    if (!row || !row.id) throw new StoreError(409, reason);
+    return row;
+  }
+
   async finalizeReport(petId, reportId) {
     await this.getReport(petId, reportId);
-    const finalized = await this.request('/rest/v1/rpc/finalize_report', {
-      method: 'POST', body: { target_report: reportId },
-    });
-    if (!finalized) throw new StoreError(409, 'storage_incomplete');
-    return finalized;
+    return this.oneFromRpc(
+      await this.request('/rest/v1/rpc/finalize_report', {
+        method: 'POST', body: { target_report: reportId },
+      }),
+      /* 空（1件も返らない）ときの意味は前から変えない——写真の登録が
+         揃っていない、が唯一の原因だったため（`supabase-staff.js` の順序表）。 */
+      'storage_incomplete',
+    );
   }
 
   async archiveReport(petId, reportId) {
     await this.getReport(petId, reportId);
-    return this.request('/rest/v1/rpc/archive_report', {
-      method: 'POST', body: { target_report: reportId },
-    });
+    return this.oneFromRpc(
+      await this.request('/rest/v1/rpc/archive_report', {
+        method: 'POST', body: { target_report: reportId },
+      }),
+      'archive_returned_no_row',
+    );
   }
 
   /* 確定済みカルテの中身を差し替える（管理者画面の「カルテ修正」）。
@@ -348,9 +372,12 @@ export class SupabaseDataStore {
      RLS 越しに確かめてから RPC に渡す（reportId だけでは他の犬のカルテを指せる）。 */
   async reviseReport(petId, reportId, data) {
     await this.getReport(petId, reportId);
-    return this.request('/rest/v1/rpc/revise_report', {
-      method: 'POST', body: { target_report: reportId, new_data: data },
-    });
+    return this.oneFromRpc(
+      await this.request('/rest/v1/rpc/revise_report', {
+        method: 'POST', body: { target_report: reportId, new_data: data },
+      }),
+      'revise_returned_no_row',
+    );
   }
 
   async consumeRateLimit(scope, ipHash = null) {

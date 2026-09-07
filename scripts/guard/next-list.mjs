@@ -72,12 +72,27 @@ export function topOpen(items) {
   return (items || []).find((i) => !i.done && !i.dropped) || null;
 }
 
-export function writeDoingMark(item, env = process.env) {
+/**
+ * このセッションに1件を割り当てる。
+ *
+ * **これまでに割り当てた番号を `ids` に積む。** 割り当ては途中で動く——
+ * ①その1件が片づいたとき ②**マスター指示が上に割り込んだとき**（`D-21` の優先度）。
+ * 動いた後も「このセッションが何を持たされたか」を全部残しておかないと、
+ * 項目9（片づけたか）が**直前の1件しか見られず**、片づけた実績を落とす。
+ */
+export function writeDoingMark(item, env = process.env, previous = null) {
+  const ids = [...new Set([...(previous && previous.ids ? previous.ids : []), item.id])];
   const mark = {
-    at: new Date().toISOString(), session: sessionKey(env), id: item.id, text: item.text,
+    at: new Date().toISOString(), session: sessionKey(env), id: item.id, text: item.text, ids,
   };
   fs.writeFileSync(DOING_PATH, `${JSON.stringify(mark)}\n`);
   return mark;
+}
+
+/** 印が持っている番号の全部（古い形の印にも耐える）。 */
+export function markIds(mark) {
+  if (!mark) return [];
+  return Array.isArray(mark.ids) && mark.ids.length > 0 ? mark.ids : [mark.id];
 }
 
 export function readDoingMark(raw) {
@@ -118,18 +133,31 @@ export function judgeDoingMark(mark, items, { env = process.env, now = Date.now(
   return { ok: true, why: `${mark.id} ${mark.text}（セッション鍵は無い環境）` };
 }
 
-/** `checkout.mjs` 項目9 — 割り当てた一手が片づいたか。 */
+/**
+ * `checkout.mjs` 項目9 — このセッションが持たされた一手を片づけたか。
+ *
+ * **見るのは「1件でも閉じたか」**。割り当ては途中で動く（上の `writeDoingMark`）ので、
+ * 「いま持っている1件」だけを見ると、**閉じた直後に次を割り当てられた回が必ず赤**になり、
+ * 閉じても閉じても終われない罠になる。持たされた番号のどれか1つが閉じていればよい。
+ */
 export function judgeDoingClosed(mark, items) {
   if (!mark) return { ok: false, why: '割り当ての印（.plan-doing）が無い（checkin.mjs を通していない）' };
   if (items === null) return { ok: false, why: `${PLAN} に「次の一手」の節が無い` };
-  const item = items.find((i) => i.id === mark.id);
-  if (!item) return { ok: false, why: `${mark.id} が「次の一手」から消えている（行ごと消して片づけない）` };
-  if (item.done) return { ok: true, why: `${item.id} ${item.text}` };
-  if (item.dropped && item.reason) return { ok: true, why: `やらないと決めた: ${item.id} ${item.text}` };
-  if (item.dropped) return { ok: false, why: `${item.id} を [-] にしたが、同じ行に「理由:」が無い` };
+  const ids = markIds(mark);
+  const missing = ids.filter((id) => !items.some((i) => i.id === id));
+  if (missing.length === ids.length) {
+    return { ok: false, why: `${missing.join(' / ')} が「次の一手」から消えている（行ごと消して片づけない）` };
+  }
+  const closed = items.filter((i) => ids.includes(i.id) && (i.done || (i.dropped && i.reason)));
+  if (closed.length > 0) {
+    return { ok: true, why: closed.map((i) => `${i.id} ${i.text}`).join('\n      ') };
+  }
+  const bad = items.find((i) => ids.includes(i.id) && i.dropped && !i.reason);
+  if (bad) return { ok: false, why: `${bad.id} を [-] にしたが、同じ行に「理由:」が無い` };
+  const open = items.filter((i) => ids.includes(i.id));
   return {
     ok: false,
-    why: `${item.id} がまだ [ ] のまま: ${item.text}\n`
+    why: `${open.map((i) => `${i.id} ${i.text}`).join(' / ')} がまだ [ ] のまま\n`
       + '      片づいたなら [x]、やらないと決めたなら [-] にして同じ行に「理由:」を書くこと。',
   };
 }

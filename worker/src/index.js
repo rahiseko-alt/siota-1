@@ -69,6 +69,11 @@ function supabaseError(error, cors = {}) {
       : status === 409 ? (
         error.code === 'storage_cleanup_required' ? 'storage cleanup required'
             : error.code === 'storage_incomplete' ? 'report assets are incomplete'
+            /* RPC が1件も返さなかった（`oneFromRpc`）。**「店舗が選べない」に
+               混ぜない**——2026-09-07 に本番で確定できなくなったとき、画面には
+               理由が1文字も出ず、原因を辿る手掛かりが無かった（`F-20260907-75`）。 */
+            : error.code === 'archive_returned_no_row' ? 'report was not archived'
+            : error.code === 'revise_returned_no_row' ? 'report was not revised'
             : 'shop selection required'
       )
         : status === 429 ? 'too many requests' : 'data request failed';

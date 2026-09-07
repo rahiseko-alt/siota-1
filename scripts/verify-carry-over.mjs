@@ -298,7 +298,7 @@ try {
   await canvas.scrollIntoViewIfNeeded();
   await page.waitForTimeout(300);
   const box = await canvas.boundingBox();
-  /* **クリックではなく、なぞる。** 既定の置き方は「なぞる」で、
+  /* **クリックではなく、なぞる。** 既定の置き方は「ペン」で、
      なぞらずに触れただけの点1つは捨てる仕様（見えない印を残さない）。
      人が指でやるのと同じに、押して・動かして・離す。 */
   await page.mouse.move(box.x + box.width * 0.65, box.y + box.height * 0.3);
