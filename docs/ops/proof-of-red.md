@@ -83,6 +83,30 @@
 
 ## 証明済み（`- <ファイル> :: <検査の名前>`）
 
+### 透過度・消しゴム・文字 13件（2026-09-07・実測）
+
+壊し方①: `drawCanvas()` / `redraw()` の `globalAlpha` の行を消す（＝いつも濃い）。
+出力: `not ok - 透過度を下げると、その薄さで描かれる`
+
+壊し方②: 消しゴムの当たり判定を「点だけ」に戻す（線分を見ない）。
+出力: `not ok - 消しゴムは、線の途中を触っても消せる（点と点の間も線）`
+——**これは実際に一度そうなっていた。** 点だけを見ていたので、なぞりが速くて点が
+飛んでいる線は真ん中を触っても消えなかった。検査が先に見つけた。
+
+- ui-body-marking-draw.test.mjs :: 透過度を下げると、その薄さで描かれる
+- ui-body-marking-draw.test.mjs :: 透過度は0.1〜1の外へ出さない
+- ui-body-marking-draw.test.mjs :: 消しゴムは、触れた線を1本だけ取り除く（下絵は消さない）
+- ui-body-marking-draw.test.mjs :: 消しゴムは、線の途中を触っても消せる（点と点の間も線）
+- ui-body-marking-draw.test.mjs :: 文字は、押した所に置かれる
+- ui-body-marking-draw.test.mjs :: 文字は、何も打たなければ何も置かない
+- ui-body-marking-draw.test.mjs :: 文字の大きさは太さに連れて変わる（道具を増やさない）
+- ui-annotate-pinch.test.mjs :: 透過度を下げると、その薄さで引かれる
+- ui-annotate-pinch.test.mjs :: 薄さは1件ごとに戻す（次の線まで薄くならない）
+- ui-annotate-pinch.test.mjs :: 消しゴムは、触れた線を取り除く（写真は削らない）
+- ui-annotate-pinch.test.mjs :: 消しゴムは、離れたところの線までは消さない
+- ui-annotate-pinch.test.mjs :: 文字は、打った文字がその場に置かれる
+- ui-annotate-pinch.test.mjs :: 文字は、何も打たなければ何も置かない
+
 <!-- 2026-09-07・ペンの色と太さ／歯の写真の入口（マスター指示） -->
 
 ### ペンの色と太さ・歯の写真の入口 9件（2026-09-07・実測）

@@ -28,6 +28,12 @@ const App = {
      そのあと自分で選び直せば、選んだ色で描ける。 */
   penColor: '#d32f2f',
   penWidth: 4,
+
+  /* 透過度（マスター指示 2026-09-07）。0.1〜1.0。薄くすると下の写真や絵が透ける。 */
+  penAlpha: 1,
+
+  /* 文字の大きさは太さから作る（道具を1つ増やさない）。太さ4なら16px。 */
+  textSize() { return Math.max(10, this.penWidth * 4); },
   /* 付けた印。1件は次のどちらか。
        スタンプ … `{ x, y, type }`
        なぞった線 … `{ type, points: [{ x, y }, …] }`
@@ -1402,21 +1408,62 @@ const App = {
     canvas.addEventListener('pointerdown', (event) => {
       if (drawingPointerId !== null) return;
       const point = pointAt(event);
+
+      /* 消しゴム（マスター指示 2026-09-07）。**写真や下絵は消さない**——
+         触れた印（線・スタンプ・文字）を1件ずつ取り除く。画素を削る方式にすると
+         下絵の犬まで白くなり、戻せない。 */
+      if (this.markMode === '消しゴム') {
+        drawingPointerId = event.pointerId;
+        this.eraseAt(point);
+        return;
+      }
+
+      /* 文字（マスター指示 2026-09-07）。押した所に置く。
+         **何も打たなければ何も置かない**（空の印を残さない・`D-10`）。 */
+      if (this.markMode === '文字') {
+        const text = (globalThis.prompt && globalThis.prompt('入れる文字')) || '';
+        if (!text.trim()) return;
+        this.marks.push({
+          ...point,
+          text: text.trim(),
+          type: this.currentStamp,
+          color: this.penColor,
+          width: this.penWidth,
+          alpha: this.penAlpha,
+          size: this.textSize(),
+        });
+        this.drawCanvas();
+        return;
+      }
+
       if (this.markMode === 'スタンプ') {
         this.marks.push({
-          ...point, type: this.currentStamp, color: this.penColor, width: this.penWidth,
+          ...point,
+          type: this.currentStamp,
+          color: this.penColor,
+          width: this.penWidth,
+          alpha: this.penAlpha,
         });
         this.drawCanvas();
         return;
       }
       drawingPointerId = event.pointerId;
       this.marks.push({
-        type: this.currentStamp, points: [point], color: this.penColor, width: this.penWidth,
+        type: this.currentStamp,
+        points: [point],
+        color: this.penColor,
+        width: this.penWidth,
+        alpha: this.penAlpha,
       });
       this.drawCanvas();
     });
     canvas.addEventListener('pointermove', (event) => {
       if (event.pointerId !== drawingPointerId) return;
+      if (this.markMode === '消しゴム') {
+        /* なぞって消せる。指を動かした先も見る。 */
+        this.eraseAt(pointAt(event));
+        return;
+      }
       const last = this.marks[this.marks.length - 1];
       if (!last || !last.points) return;
       last.points.push(pointAt(event));
@@ -1428,6 +1475,7 @@ const App = {
     const stopStroke = (event) => {
       if (event.pointerId !== drawingPointerId) return;
       drawingPointerId = null;
+      if (this.markMode === '消しゴム') return;
       const last = this.marks[this.marks.length - 1];
       if (last && last.points && last.points.length < 2) {
         this.marks.pop();
@@ -1456,6 +1504,17 @@ const App = {
     if (picker && picker.value !== color) picker.value = color;
   },
 
+  /* ペンの透過度を決める（0.1〜1.0）。数字は画面にも出す。 */
+  setPenAlpha(alpha) {
+    const asNumber = Number(alpha);
+    const value = Number.isFinite(asNumber) ? Math.min(1, Math.max(0.1, asNumber)) : 1;
+    this.penAlpha = value;
+    const slider = document.getElementById('pen-alpha');
+    if (slider && Number(slider.value) !== value) slider.value = String(value);
+    const label = document.getElementById('pen-alpha-value');
+    if (label) label.textContent = `${Math.round(value * 100)}%`;
+  },
+
   /* ペンの太さを決める。数字は画面にも出す（いくつなのか分からないと選べない）。 */
   setPenWidth(width) {
     /* 数として読めれば 1〜20 に収める（0 は「無し」ではなく**細い方の端**）。
@@ -1476,6 +1535,45 @@ const App = {
     this.markMode = mode;
     document.querySelectorAll('.mark-mode-btn').forEach(b => b.classList.remove('is-active'));
     if (btn) btn.classList.add('is-active');
+  },
+
+  /* 点と線分の距離。**線は点の列ではなく、点と点の間もつながっている。**
+     点だけを見ると、なぞりが速くて点が飛んでいる線は、真ん中を触っても消せない
+     （実測でそうなった）。間も見る。 */
+  distanceToSegment(point, a, b) {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const lengthSquared = (dx * dx) + (dy * dy);
+    if (lengthSquared === 0) return Math.hypot(point.x - a.x, point.y - a.y);
+    let t = (((point.x - a.x) * dx) + ((point.y - a.y) * dy)) / lengthSquared;
+    t = Math.min(1, Math.max(0, t));
+    return Math.hypot(point.x - (a.x + (t * dx)), point.y - (a.y + (t * dy)));
+  },
+
+  /** 線（点の列）に、指がどれだけ近いか。1点だけの線もそのまま測れる。 */
+  distanceToStroke(point, points) {
+    if (points.length === 1) return Math.hypot(point.x - points[0].x, point.y - points[0].y);
+    let best = Infinity;
+    for (let i = 1; i < points.length; i += 1) {
+      best = Math.min(best, this.distanceToSegment(point, points[i - 1], points[i]));
+    }
+    return best;
+  },
+
+  /* 消しゴム（マスター指示 2026-09-07）。触れた印を取り除く。
+
+     **画素を削らない。** 下絵（犬体4面図）や写真まで白くしてしまうと戻せないので、
+     消すのは**こちらが置いた印**（線・スタンプ・文字）だけにする。
+     当たり判定は「指の位置から近いか」——線は点の1つでも近ければ、その線ごと消える。
+     指1本ぶんの太さ（画面の 4%）を目安にする。 */
+  eraseAt(point, reach = 0.04) {
+    const before = this.marks.length;
+    this.marks = this.marks.filter((m) => {
+      if (Array.isArray(m.points)) return this.distanceToStroke(point, m.points) > reach;
+      return Math.hypot(m.x - point.x, m.y - point.y) > reach;
+    });
+    if (this.marks.length !== before) this.drawCanvas();
+    return before - this.marks.length;
   },
 
   /* 直前の1件だけ取り消す。**全部消すしか無いと、線を1本間違えただけで
@@ -1796,12 +1894,21 @@ const App = {
       <div class="annotate-box">
         <div class="annotate-canvas-wrap"><canvas class="annotate-canvas"></canvas></div>
         <div class="pen-tools">
+          <button type="button" class="mark-mode-btn is-active annotate-mode" data-mode="ペン">✏️ ペン</button>
+          <button type="button" class="mark-mode-btn annotate-mode" data-mode="消しゴム">🧽 消しゴム</button>
+          <button type="button" class="mark-mode-btn annotate-mode" data-mode="文字">🅰 文字</button>
+        </div>
+        <div class="pen-tools">
           <label class="pen-tools__item">色
             <input type="color" class="pen-tools__color annotate-color">
           </label>
           <label class="pen-tools__item">太さ
             <input type="range" class="pen-tools__width annotate-width" min="1" max="20" step="1">
             <span class="pen-tools__value annotate-width-value"></span>
+          </label>
+          <label class="pen-tools__item">透明
+            <input type="range" class="pen-tools__width annotate-alpha" min="0.1" max="1" step="0.1">
+            <span class="pen-tools__value annotate-alpha-value"></span>
           </label>
         </div>
         <p class="annotate-hint">1本指で書き込み、2本指で拡大・移動できます。</p>
@@ -1819,7 +1926,12 @@ const App = {
     const img = new Image();
     let strokes = [];
     let drawing = false;
+    let erasing = false;
     let activePointerId = null;
+    /* 書き込み画面の中だけの道具の選択（ペン／消しゴム／文字）。
+       4面図の `markMode` とは別に持つ——写真に「スタンプ」は無いので、
+       同じ入れ物にすると、片方で選んだ道具がもう片方で存在しないことになる。 */
+    let mode = 'ペン';
     /* 拡大の状態。`scale` 倍して `(x, y)` だけずらしたものを画面に出す。
        画像そのもの（canvas の中身）は触らない——書き込んだ線の座標が
        拡大の履歴で狂わないように、拡大は**見た目だけ**にする。 */
@@ -1838,15 +1950,40 @@ const App = {
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       for (const stroke of strokes) {
+        /* 透過度は**1件ごとに戻す**。戻し忘れると次の線まで薄くなる。 */
+        ctx.globalAlpha = typeof stroke.alpha === 'number' ? stroke.alpha : 1;
+        if (stroke.text) {
+          const size = stroke.size || 16;
+          ctx.fillStyle = stroke.color || '#e0392b';
+          ctx.font = `700 ${size}px "Hiragino Mincho ProN", "Yu Mincho", YuMincho, "Times New Roman", serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(stroke.text, stroke.x, stroke.y);
+          ctx.globalAlpha = 1;
+          continue;
+        }
         const points = stroke.points || stroke;
-        if (points.length < 2) continue;
+        if (points.length < 2) { ctx.globalAlpha = 1; continue; }
         ctx.strokeStyle = stroke.color || '#e0392b';
         ctx.lineWidth = stroke.width || 4;
         ctx.beginPath();
         ctx.moveTo(points[0].x, points[0].y);
         for (const pt of points.slice(1)) ctx.lineTo(pt.x, pt.y);
         ctx.stroke();
+        ctx.globalAlpha = 1;
       }
+    };
+
+    /* 消しゴム（写真側）。**写真は削らない**——こちらが置いた線と文字だけを取り除く。
+       当たりの広さはペンの太さに連れて変わる（太いペンなら大きく消える）。 */
+    const eraseAt = (point) => {
+      const reach = Math.max(12, strokeWidth() * 1.5);
+      const before = strokes.length;
+      strokes = strokes.filter((stroke) => {
+        if (stroke.text) return Math.hypot(stroke.x - point.x, stroke.y - point.y) > reach;
+        return this.distanceToStroke(point, stroke.points || stroke) > reach;
+      });
+      if (strokes.length !== before) redraw();
     };
 
     const pointFromEvent = (event) => {
@@ -1905,17 +2042,50 @@ const App = {
     canvas.addEventListener('pointerdown', (event) => {
       pointers.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY });
       if (pointers.size === 1) {
+        /* 消しゴム（マスター指示 2026-09-07）。線は増やさず、触れた印を取り除く。 */
+        if (mode === '消しゴム') {
+          drawing = true;
+          activePointerId = event.pointerId;
+          erasing = true;
+          eraseAt(pointFromEvent(event));
+          return;
+        }
+        /* 文字。**何も打たなければ何も置かない**（空の印を残さない・`D-10`）。 */
+        if (mode === '文字') {
+          const typed = (globalThis.prompt && globalThis.prompt('入れる文字')) || '';
+          if (!typed.trim()) return;
+          const at = pointFromEvent(event);
+          strokes.push({
+            text: typed.trim(),
+            x: at.x,
+            y: at.y,
+            color: this.penColor,
+            alpha: this.penAlpha,
+            size: Math.max(12, this.textSize() * (canvas.width / (wrap.clientWidth || canvas.width))),
+          });
+          redraw();
+          return;
+        }
         drawing = true;
         activePointerId = event.pointerId;
-        strokes.push({ points: [pointFromEvent(event)], color: this.penColor, width: strokeWidth() });
+        erasing = false;
+        strokes.push({
+          points: [pointFromEvent(event)],
+          color: this.penColor,
+          width: strokeWidth(),
+          alpha: this.penAlpha,
+        });
         return;
       }
       /* 2本目が触れた時点で「さっきのは書き込みではなくピンチの1本目だった」と分かる。
          1本目が引きかけた線は**消してから**拡大に移る。残すと、拡大するたびに
          写真に線が1本ずつ増えていく。 */
       if (drawing) {
-        strokes.pop();
+        /* 消しゴムのときは線を積んでいないので、**取り消す線が無い**。
+           ここで `pop()` すると、直前に引いた別の線が消える。 */
+        if (!erasing) strokes.pop();
         drawing = false;
+        erasing = false;
         activePointerId = null;
         redraw();
       }
@@ -1950,6 +2120,10 @@ const App = {
         return;
       }
       if (!drawing || event.pointerId !== activePointerId) return;
+      if (erasing) {
+        eraseAt(pointFromEvent(event));
+        return;
+      }
       strokes[strokes.length - 1].points.push(pointFromEvent(event));
       redraw();
     });
@@ -1971,6 +2145,24 @@ const App = {
 
     /* 道具は4面図と同じ1組（`penColor` / `penWidth`）を触る。
        開いた時点の値を出し、動かしたらその場から新しい線に効く。 */
+    const modeButtons = overlay.querySelectorAll('.annotate-mode');
+    modeButtons.forEach((button) => {
+      button.onclick = () => {
+        mode = button.dataset.mode;
+        modeButtons.forEach((other) => other.classList.remove('is-active'));
+        button.classList.add('is-active');
+      };
+    });
+    const alphaInput = overlay.querySelector('.annotate-alpha');
+    const alphaValue = overlay.querySelector('.annotate-alpha-value');
+    if (alphaInput) {
+      alphaInput.value = String(this.penAlpha);
+      if (alphaValue) alphaValue.textContent = `${Math.round(this.penAlpha * 100)}%`;
+      alphaInput.oninput = () => {
+        this.setPenAlpha(alphaInput.value);
+        if (alphaValue) alphaValue.textContent = `${Math.round(this.penAlpha * 100)}%`;
+      };
+    }
     const colorInput = overlay.querySelector('.annotate-color');
     const widthInput = overlay.querySelector('.annotate-width');
     const widthValue = overlay.querySelector('.annotate-width-value');
@@ -2036,6 +2228,23 @@ const App = {
     }
 
     this.marks.forEach(m => {
+      /* 透過度（マスター指示 2026-09-07）。持っていない古い印は 1（透けない）。
+         **1件ごとに戻す**——戻し忘れると、次の印まで一緒に薄くなる。 */
+      ctx.globalAlpha = typeof m.alpha === 'number' ? m.alpha : 1;
+
+      /* 文字（マスター指示 2026-09-07）。押した所を左上ではなく**中心**にする
+         ——人は押した所に文字が出ると思う。 */
+      if (m.text) {
+        const size = m.size || 16;
+        ctx.fillStyle = m.color || this.markColor(m.type);
+        ctx.font = `700 ${size}px "Hiragino Mincho ProN", "Yu Mincho", YuMincho, "Times New Roman", serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(m.text, m.x * canvas.width, m.y * canvas.height);
+        ctx.globalAlpha = 1;
+        return;
+      }
+
       /* なぞった線。**スタンプと同じ色**で引く——色が所見の種類を表しているので、
          置き方が変わっても意味が変わってはいけない。 */
       if (Array.isArray(m.points)) {
@@ -2052,6 +2261,7 @@ const App = {
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.stroke();
+        ctx.globalAlpha = 1;
         return;
       }
 
@@ -2074,6 +2284,7 @@ const App = {
       ctx.font = 'bold 8px "Hiragino Mincho ProN", "Yu Mincho", YuMincho, "Times New Roman", serif';
       ctx.textAlign = 'center';
       ctx.fillText(m.type.charAt(0), px, py + 3);
+      ctx.globalAlpha = 1;
     });
   },
 
