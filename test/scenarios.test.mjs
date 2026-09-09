@@ -75,14 +75,14 @@ for (const group of GROUPS) {
       /* 末尾は空文字（行末の `|` の右）。その手前2つが 実施日・結果。 */
       const date = cells[cells.length - 2];
       const result = cells[cells.length - 3];
-      return !['未実施', 'OK', 'NG'].includes(result) || date === '';
+      return !['未実施', 'OK', 'NG', '実施不能'].includes(result) || date === '';
     });
     assert.deepEqual(bad.map((r) => `${group.key}-${r.n}`), [],
-      '結果は 未実施／OK／NG のどれか、実施日は空にしないこと');
+      '結果は 未実施／OK／NG／実施不能 のどれか、実施日は空にしないこと');
   });
 }
 
-test('NG を付けた行は、放置リストの番号か理由が書いてある', () => {
+test('NG を付けた行は、理由が書いてある', () => {
   /* **印を変えるだけで終わらせない**（`偽-8`）。NG なのに何も書いていない行は、
      見つけたことが誰にも引き継がれない。 */
   const bad = [];
@@ -94,6 +94,20 @@ test('NG を付けた行は、放置リストの番号か理由が書いてあ�
     }
   }
   assert.deepEqual(bad, [], `NG の理由が書かれていない: ${bad.join(' / ')}`);
+});
+
+test('実施不能 を付けた行は、理由が書いてある', () => {
+  /* 実施不能は不具合ではないが、「なぜ確かめられなかったか」を書かないと
+     次にやる人が同じ壁にもう一度ぶつかる（`偽-8` と同じ理屈）。 */
+  const bad = [];
+  for (const group of GROUPS) {
+    for (const row of rows(group.key)) {
+      const cells = row.rest.split('|').map((c) => c.trim());
+      if (cells[cells.length - 3] !== '実施不能') continue;
+      if (!/実施不能:/.test(row.rest)) bad.push(`${group.key}-${row.n}`);
+    }
+  }
+  assert.deepEqual(bad, [], `実施不能の理由が書かれていない: ${bad.join(' / ')}`);
 });
 
 test('❌（守りが無い）の行は、末尾の宿題の表から辿れる', () => {
