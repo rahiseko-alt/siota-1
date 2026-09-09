@@ -218,3 +218,66 @@ test('ルールの正（AGENTS.md）にも、大計画への書き戻しが入�
   assert.match(outSection, /docs\/ops\/roadmap\.md/,
     'AGENTS.md のセッション終了規約に大計画への書き戻しが無い');
 });
+
+/* ── 決着した判断を、判断待ちの欄へ置き直させない（`D-20260827-52` の一般化） ──
+ *
+ * 実際に2回起きた:
+ *   1回目 2026-08-27 — `docs/runbook.md` 2-D の表で、決着済みのバックアップを「未」と書いた
+ *   2回目 2026-09-09 — `docs/ops/plan.md` 第6章の表が `#35` を「判断待ち」に置いたままで、
+ *                      2週間後に「マスターに確認する」という一手（`N-3`）を生んだ。
+ *                      マスター指示は「この件に関して話題に出すな」（`D-20260827-52`）
+ *
+ * 文章で「再提起しない」と書いても、次に書く人は表のほうを見る。だから表を機械で見る。
+ * **見ないもの**: 他の項目が判断待ちかどうか（それは人が決める）。ここが見るのは
+ * 「`decisions.md` で決着した `#35` が、判断待ちの表に載っていないか」だけ。 */
+
+/** `docs/ops/plan.md` 第6章（棚卸しの判断待ち表）の行だけを取り出す。 */
+function chapter6Rows(text) {
+  const start = text.indexOf('## 6. F3 完了後の棚卸し');
+  assert.notEqual(start, -1, 'plan.md の第6章が見つからない（見出しを変えたら、この検査も直すこと）');
+  const rest = text.slice(start + 1);
+  const end = rest.indexOf('\n## ');
+  const body = end === -1 ? rest : rest.slice(0, end);
+  return body.split('\n').filter((l) => l.startsWith('|') && !/^\|[-\s|]+\|$/.test(l));
+}
+
+test('決着済みの `#35`（バックアップ）が、棚卸しの判断待ち表に載っていない', () => {
+  const decisions = fs.readFileSync(path.join(ROOT, 'docs/decisions.md'), 'utf8');
+  assert.match(decisions, /D-20260827-52/,
+    '`D-20260827-52`（バックアップの件は決着済み・再提起しない）が decisions.md から消えている');
+
+  for (const row of chapter6Rows(planText)) {
+    assert.ok(!row.includes('#35'),
+      '第6章の判断待ち表に `#35`（バックアップ）が載っている。'
+      + 'これは 2026-08-27 に決着した決定で、マスター指示は「この件に関して話題に出すな」'
+      + '（`D-20260827-46` / `D-20260827-52`）。判断待ちの欄へ置き直さないこと。'
+      + `該当行: ${row}`);
+  }
+});
+
+test('手順書（runbook 2-D）でも、バックアップが「決着済み」と書かれている', () => {
+  const runbook = fs.readFileSync(path.join(ROOT, 'docs/runbook.md'), 'utf8');
+  const start = runbook.indexOf('## 2-D.');
+  assert.notEqual(start, -1, 'runbook の 2-D 節が見つからない');
+  const rest = runbook.slice(start + 1);
+  const end = rest.indexOf('\n## ');
+  const body = end === -1 ? rest : rest.slice(0, end);
+  const row = body.split('\n').find((l) => l.startsWith('|') && l.includes('バックアップ'));
+  assert.ok(row, 'runbook 2-D にバックアップの行が無い（実顧客投入前のチェックから消えている）');
+  assert.ok(row.includes('決着済み'),
+    `runbook 2-D のバックアップが「決着済み」になっていない: ${row}`);
+});
+
+test('「次の一手」に、バックアップをマスターへ確認する一手が未了で並んでいない', () => {
+  const start = planText.indexOf('## 次の一手');
+  assert.notEqual(start, -1, 'plan.md の「次の一手」が見つからない');
+  const rest = planText.slice(start + 1);
+  const end = rest.indexOf('\n---');
+  const body = end === -1 ? rest : rest.slice(0, end);
+  for (const line of body.split('\n')) {
+    if (!line.startsWith('- [ ]')) continue;
+    assert.ok(!(line.includes('#35') || line.includes('バックアップ')),
+      '未了の一手がバックアップの再提起になっている（`D-20260827-52`「この件に関して話題に出すな」）。'
+      + `該当行: ${line}`);
+  }
+});
