@@ -65,6 +65,37 @@ for (const group of GROUPS) {
   });
 }
 
+/* 実行の記録欄（マスター指示 2026-09-09「まずシナリオを記録に残せ」）。
+   台帳をそのまま記録簿にするので、**欄が消えたら記録できなくなる**。
+   それを機械で見張る。 */
+for (const group of GROUPS) {
+  test(`${group.label} の全行に「結果」と「実施日」が在る`, () => {
+    const bad = rows(group.key).filter((r) => {
+      const cells = r.rest.split('|').map((c) => c.trim());
+      /* 末尾は空文字（行末の `|` の右）。その手前2つが 実施日・結果。 */
+      const date = cells[cells.length - 2];
+      const result = cells[cells.length - 3];
+      return !['未実施', 'OK', 'NG'].includes(result) || date === '';
+    });
+    assert.deepEqual(bad.map((r) => `${group.key}-${r.n}`), [],
+      '結果は 未実施／OK／NG のどれか、実施日は空にしないこと');
+  });
+}
+
+test('NG を付けた行は、放置リストの番号か理由が書いてある', () => {
+  /* **印を変えるだけで終わらせない**（`偽-8`）。NG なのに何も書いていない行は、
+     見つけたことが誰にも引き継がれない。 */
+  const bad = [];
+  for (const group of GROUPS) {
+    for (const row of rows(group.key)) {
+      const cells = row.rest.split('|').map((c) => c.trim());
+      if (cells[cells.length - 3] !== 'NG') continue;
+      if (!/NG:/.test(row.rest)) bad.push(`${group.key}-${row.n}`);
+    }
+  }
+  assert.deepEqual(bad, [], `NG の理由が書かれていない: ${bad.join(' / ')}`);
+});
+
 test('❌（守りが無い）の行は、末尾の宿題の表から辿れる', () => {
   /* 台帳の中で ❌ を付けたのに、宿題の表に1度も出てこない番号があってはいけない。
      出てこなければ、**見つけたのに誰も引き取っていない**ことになる（偽-8 の型）。 */
