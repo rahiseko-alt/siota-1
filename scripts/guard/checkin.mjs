@@ -29,6 +29,7 @@ import { ROADMAP, writePlanReadMark } from './plan-read-mark.mjs';
 import {
   PLAN, parseNextList, topOpen, readDoingMark, writeDoingMark, sessionKey,
 } from './next-list.mjs';
+import { isMergedByContent } from './merged-by-content.mjs';
 
 const ROOT = process.env.REPO_ROOT || process.cwd();
 const sh = (cmd) => execSync(cmd, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
@@ -39,11 +40,14 @@ quiet('git fetch origin --prune');
 const problems = [];
 process.stdout.write('\n【チェックイン】前回の続きから始められるかを見る\n\n');
 
-/* ── 1. master に取り込まれていない作業ブランチが無いか ── */
+/* ── 1. master に取り込まれていない作業ブランチが無いか ──
+   **系譜だけで見てはいけない**（squash マージは中身が入っても祖先関係にならない・
+   放置リスト `#40`＝`checkout.mjs` 項目3と同じ穴。`merged-by-content.mjs` に判定を集約）。 */
 const remotes = sh("git branch -r --format='%(refname:short)'")
   .split('\n').map((s) => s.trim())
   .filter((b) => b && b !== 'origin/master' && !b.includes('->'));
-const unmerged = remotes.filter((b) => quiet(`git merge-base --is-ancestor ${b} origin/master`) !== 0);
+const unmerged = remotes.filter((b) => quiet(`git merge-base --is-ancestor ${b} origin/master`) !== 0
+  && !isMergedByContent(ROOT, b));
 
 if (unmerged.length === 0) {
   process.stdout.write('  ✅ master に取り込まれていない作業ブランチは無い\n');

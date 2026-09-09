@@ -25,6 +25,7 @@ import { pathToFileURL } from 'node:url';
 import {
   PLAN as NEXT_PLAN, parseNextList, readDoingMark, judgeDoingClosed,
 } from './next-list.mjs';
+import { isMergedByContent } from './merged-by-content.mjs';
 
 const ROOT = process.env.REPO_ROOT || process.cwd();
 const sh = (cmd, opts = {}) => execSync(cmd, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();
@@ -82,16 +83,7 @@ add(pushed, `push した（${branch}）`,
    どちらでもないときだけ「まだ」と言う——判定を緩めたのではなく、
    **測る対象を、系譜から中身へ正した**。 */
 const isAncestor = quiet('git merge-base --is-ancestor HEAD origin/master') === 0;
-let contentInMaster = false;
-if (!isAncestor) {
-  try {
-    const base = sh('git merge-base origin/master HEAD');
-    const touched = sh(`git diff --name-only ${base} HEAD`).split('\n').filter(Boolean);
-    /* 1件も触っていないブランチを「取り込まれた」とは言わない（無を通さない）。 */
-    contentInMaster = touched.length > 0
-      && touched.every((f) => quiet(`git diff --quiet origin/master HEAD -- "${f}"`) === 0);
-  } catch { contentInMaster = false; }
-}
+const contentInMaster = !isAncestor && isMergedByContent(ROOT, 'HEAD');
 const merged = isAncestor || contentInMaster;
 add(merged, 'master に取り込まれた（PR をマージした）',
   merged
