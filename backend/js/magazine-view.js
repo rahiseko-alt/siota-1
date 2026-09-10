@@ -429,7 +429,13 @@ function renderWeightGraph(root, weights, bestWeight) {
     host.append(p);
     return;
   }
-  const sorted = points.slice().sort((a, b) => String(a.ym).localeCompare(String(b.ym)));
+  /* **出すのは直近4回まで**（マスター指示 2026-09-10「2回測定実績あるなら、点も
+     日付も2つ。4回あるなら4つ。最大4」）。全部の点に日付を添えるので、5回以上を
+     並べると札が重なって読めなくなる。**古いほうから落とす**——飼い主が見たいのは
+     いまに近い側。 */
+  const sorted = points.slice()
+    .sort((a, b) => String(a.ym).localeCompare(String(b.ym)))
+    .slice(-4);
   const kgs = sorted.map((w) => Number(w.kg));
   /* **理想体重も目盛りに入れる。** 入れないと、体重が理想から離れている犬ほど
      理想の線が枠の外へ出て、いちばん見たい犬で見えなくなる。 */
@@ -537,13 +543,15 @@ function renderWeightGraph(root, weights, bestWeight) {
     t.textContent = stampLabel(pt).slice(0, 10);
     return t;
   };
-  const first = coords[0];
   const last = coords[coords.length - 1];
-  if (coords.length > 1) {
-    svg.append(monthLabel(first, padX, 'start'), monthLabel(last, w - padX, 'end'));
-  } else {
-    svg.append(monthLabel(first, first.x, 'middle'));
-  }
+  /* **全部の観測点に日付を添える**（マスター指示 2026-09-10「日付は観測点には
+     全てつけろ。2回測定実績あるなら、点も日付も2つ。4回あるなら4つ」）。
+     端の札だけ内側へ寄せる（左端は左揃え・右端は右揃え）——枠から出ると読めない。 */
+  coords.forEach((c, i) => {
+    const anchor = coords.length === 1 ? 'middle'
+      : (i === 0 ? 'start' : (i === coords.length - 1 ? 'end' : 'middle'));
+    svg.append(monthLabel(c, c.x, anchor));
+  });
   const wrap = document.createElement('div');
   wrap.style.cssText = 'background:var(--bg-paper);padding:16px;border:1px solid var(--border-subtle)';
   const label = document.createElement('div');

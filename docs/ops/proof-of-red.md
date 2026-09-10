@@ -3082,6 +3082,17 @@ $ node --test test/report-commit-guard.test.mjs      ← 直しを入れ直し�
    docker のある回に、`ADMIN_ROUTES` からサブ画面の1行を消す／`navigate()` の
    `pushState` を止める、の2つで赤を見て証明済みへ移すこと。）
 
+- verify-report-roundtrip.mjs :: 14f. 飼い主: 観測点の数だけ日付が出ている
+  （2026-09-10 追加。マスター指示「日付は観測点には全てつけろ。2回測定実績あるなら、
+   点も日付も2つ。4回あるなら4つ。最大4」。`14e.` と同じ事情で、**この手元では
+   `npm run verify:roundtrip` を実行できない**（docker が無い）。
+   **同じ数え方で、赤と緑は実ブラウザで見ている**——5回ぶんの履歴を渡して
+   `svg circle` と、理想体重の札を除いた `svg text` を数えた:
+   直す前 **点5／札2**（両端だけ）、直したあと **点4／札4**（直近4回に絞り、全部に札）。
+   **これは検査そのものの赤ではない**ので、証明済みには移さない。
+   docker のある回に `mutate-run.mjs` の `weight-date-labels-ends-only` を走らせて
+   `14f.` が赤になるところを見てから移すこと。）
+
 - verify-report-roundtrip.mjs :: 14e. 飼い主: 体重グラフに理想体重の線が引かれている
   （2026-09-10 追加。マスターが本番で「理想体重のラインが出ていない」と指摘した1件。
    **この手元では `npm run verify:roundtrip` を実行できない**——docker が無く
