@@ -1994,11 +1994,7 @@ FAIL  2. 検査用の犬を登録できた
 - verify-revisit-interval.mjs :: 1b. 変えた値が読み返せる
 - verify-revisit-interval.mjs :: 2. 検査用の犬を登録できた
 - verify-revisit-interval.mjs :: 3. 確認: 次回日（上書き無し・店舗の既定日数）
-- verify-revisit-interval.mjs :: 4. 確認: 編集欄がスタッフ側に出ている
-- verify-revisit-interval.mjs :: 5. 確認: 保存直後にその場で日付が変わる
-- verify-revisit-interval.mjs :: 6. 確認: 読み直しても上書きが残っている
-- verify-revisit-interval.mjs :: 7. 飼い主: 上書き後の次回日が同じ値で届く
-- verify-revisit-interval.mjs :: 8. 飼い主画面に編集欄が出ない（編集はスタッフ限定）
+- verify-revisit-interval.mjs :: 4. 飼い主: 次回日が同じ値で届く
 - verify-revisit-interval.mjs :: 検査を最後まで実行できた
 
 ### 使用オプションの復活（2026-08-31・マスター指示）で足した2件
@@ -2154,8 +2150,10 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
   理由: 入力欄に既定値を入れても（`weight-prefilled-sample`）、その値は飼い主まで届かない——つまり**症状そのものが起きない**ので、緑が正しい判定である。検査の欠陥ではない。
 - verify-report-roundtrip.mjs :: 3e. 確認: 来店日（確定日ではなく）
   理由: ⑤トリマー確認は確定直後、`src/js/ui.js` が `reportDate: report.isoDate || report.date || ''`（`report.report_date` という DB 列を持たない、既に来店日優先の別オブジェクト）を組み立てて描く経路なので、`backend/js/magazine-view.js` の並びをどう壊しても影響しない。実測（`report-date-confirm-wins`）でも `3e.` は2回ともPASSのまま、`9e.` だけが赤になった（`### 25回目`）。単発の壊しでは赤にできないが、対の `9e.`（⑥飼い主・実際にDB列と衝突する経路）で同じ穴を証明済み。
-- verify-revisit-interval.mjs :: 9. アプリ由来の確認ダイアログが余計に出ていない
-  理由: 「想定外の alert/confirm/prompt が出ていないか」だけを見る安全網で、対応する「出すべき場面」が無い（`21.` のようなコース必須の alert とは違い、この項は「出ない」ことしか守っていない）。この検査の他の項目（0〜8）を壊す壊し方はどれも値のずれ・欄の表示/非表示で赤になり、余計なダイアログを1つだけ出すピンポイントな壊し方をまだ書いていない。
+- verify-revisit-interval.mjs :: 6. アプリ由来の確認ダイアログが余計に出ていない
+  理由: 「想定外の alert/confirm/prompt が出ていないか」だけを見る安全網で、対応する「出すべき場面」が無い（`21.` のようなコース必須の alert とは違い、この項は「出ない」ことしか守っていない）。この検査の他の項目（0〜5）を壊す壊し方はどれも値のずれ・欄の表示で赤になり、余計なダイアログを1つだけ出すピンポイントな壊し方をまだ書いていない。
+- verify-revisit-interval.mjs :: 5. 犬ごとに日数を直す欄が、店の画面に無い
+  理由: **消したものが残っていないこと**だけを見る項なので、壊すには消した欄を書き戻すことになる——それは「壊し方」ではなく機能の復活で、マスター指示（2026-09-10「日後も保存も不要だから削除しろ」）に反する。
 
 ### 27回目: 「6枚目を前回の続きから始める」新設 40件のうち 20件（2026-09-03・**手元で実測**）
 
@@ -3132,7 +3130,8 @@ $ node --test test/report-commit-guard.test.mjs      ← 直しを入れ直し�
 - verify-production.mjs :: `削除済みの旧UI が本番に残っていない（${deletedUiPaths.length} 本を確認）`
 - verify-production.mjs :: `/edit が正UI を配っている（手元 ${want.length} 本 ＋ 注入 ${injected.length} 本）`
 - verify-report-roundtrip.mjs :: 20. 飼い主の画面に、量っていない体重が出ない
-- verify-revisit-interval.mjs :: 9. アプリ由来の確認ダイアログが余計に出ていない
+- verify-revisit-interval.mjs :: 6. アプリ由来の確認ダイアログが余計に出ていない
+- verify-revisit-interval.mjs :: 5. 犬ごとに日数を直す欄が、店の画面に無い
 - verify-screens.mjs :: 1. `/` が配信される
 - verify-screens.mjs :: 9. 飼い主だけの人は、飼い主の画面に留まる
 - verify-screens.mjs :: 9b. 飼い主だけの人に、作業画面への入口を1つも出していない

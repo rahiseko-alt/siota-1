@@ -663,20 +663,13 @@ const App = {
       petName: pet.petName || '',
       reportDate: report.isoDate || report.date || '',
       data: report,
-      /* 「次回のおすすめご来店時期」（マスター指示 2026-08-29・D-20260829-58）。 */
+      /* 「次回のおすすめご来店時期」（マスター指示 2026-08-29・D-20260829-58）。
+         **犬ごとに日数を直す欄は消した**（マスター指示 2026-09-10）。値は表示側で
+         既定日数の代わりに使うだけで、画面から直す道はもう無い。 */
       revisitDaysOverride: pet.revisitDaysOverride ?? null,
       shopDefaultRevisitDays: pet.shopDefaultRevisitDays,
       /* 体重の推移（マスター指示 2026-09-03）。⑥飼い主と同じものを渡す。 */
       weightHistory: pet.weightHistory || null,
-    }, {
-      onRevisitDaysChange: (value) => globalThis.TrimmerStaffApi.request(
-        `/api/pets/${encodeURIComponent(pet.id)}`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ revisitDaysOverride: value }),
-        },
-      ),
     });
     /* **描けたことを覚えておく。** 段のタブ「04」は本番の動線として使う
        （マスター回答 2026-08-27・`docs/deferred.md` #2）ので、まだ描いていない

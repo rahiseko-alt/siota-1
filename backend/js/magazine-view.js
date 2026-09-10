@@ -192,15 +192,6 @@ const TEMPLATE = `
       被毛の毛玉防止と皮膚の健康維持のため、定期的なケアをおすすめいたします。
     </p>
     <div class="magazine-revisit-date" data-view="revisit-date"></div>
-    <div data-view="revisit-edit" hidden style="margin-top:20px">
-      <label style="font-size:12px;opacity:.8;display:block;margin-bottom:6px">この犬だけの来店間隔（空欄なら既定日数を使用）</label>
-      <div style="display:flex;gap:8px;justify-content:center;align-items:center">
-        <input type="number" data-view="revisit-days-input" min="1" max="3650" style="width:90px;padding:8px;text-align:center">
-        <span style="font-size:12px">日後</span>
-        <button type="button" data-view="revisit-save-btn" class="boxbutton boxbutton--white" style="padding:8px 16px;min-height:auto">保存</button>
-      </div>
-      <p data-view="revisit-save-status" style="font-size:11px;margin-top:6px;min-height:14px"></p>
-    </div>
   </section>
 
   <div style="text-align:center;margin-top:40px">
@@ -662,11 +653,15 @@ export function renderMagazine(container, report, opts = {}) {
     : '';
 
   const staffNote = esc(data.staffNote).trim();
-  /* 顧客ページ（編集欄が渡らない＝⑥飼い主側）の案内文には、次回のおすすめご来店時期を
-     一文添える（マスター指示: 「次回のおすすめ時期は顧客ページの案内文に表示しろ」）。
-     編集はスタッフ限定のままなので、この一文は⑤トリマー確認画面には出さない
-     （`opts.onRevisitDaysChange` の有無で分ける——編集欄の出し分けと同じ条件）。 */
-  const isCustomerView = typeof opts.onRevisitDaysChange !== 'function';
+  /* 顧客ページ（⑥飼い主側）の案内文には、次回のおすすめご来店時期を一文添える
+     （マスター指示: 「次回のおすすめ時期は顧客ページの案内文に表示しろ」）。
+     この一文は⑤トリマー確認画面には出さない。
+
+     **見分け方を、渡された関数の有無から、明示の印に変えた**（2026-09-10）。
+     以前は「編集欄を出すための関数（`onRevisitDaysChange`）が渡っていない＝飼い主側」と
+     見ていたが、**その編集欄をマスター指示で消した瞬間、店側も飼い主扱いになる**——
+     関係のない物の有無で身元を決めていたため。呼ぶ側が名乗る形にする。 */
+  const isCustomerView = opts.customerView === true;
   const revisitLine = isCustomerView && revisitDateText ? `次回のご来店は ${revisitDateText} 頃をおすすめします。` : '';
   const noteDisplay = [staffNote, revisitLine].filter(Boolean).join('\n\n');
   const letterSection = container.querySelector('[data-view="letter-section"]');
@@ -748,48 +743,14 @@ export function renderMagazine(container, report, opts = {}) {
   /* 次回のおすすめご来店時期の箱（マスター指示 2026-08-29・D-20260829-58）。
      日数・日付テキストは冒頭（案内文を組み立てた箇所）で計算済みのものを使い回す。
      **どちらも渡ってこなければ節ごと隠す**（D-10・持っていない値を出さない）。
-     編集欄はスタッフ側だけ（`opts.onRevisitDaysChange` が渡っているとき）出す
-     ——⑥飼い主画面には渡さない。 */
+
+     **犬ごとに日数を直す欄は消した**（マスター指示 2026-09-10「日後も保存も不要だから
+     削除しろ」）。`D-20260829-58` で一度は「犬ごとの修正も可能とする」と決めていたが、
+     マスターが本番の画面を見て要らないと判断した。日付は店の既定日数で出したまま。 */
   const revisitBox = container.querySelector('[data-view="revisit-box"]');
   if (revisitBox) {
     revisitBox.hidden = revisitDateText === '';
     setText(container, 'revisit-date', revisitDateText);
-
-    const revisitEdit = container.querySelector('[data-view="revisit-edit"]');
-    if (revisitEdit && typeof opts.onRevisitDaysChange === 'function') {
-      revisitBox.hidden = false;
-      revisitEdit.hidden = false;
-      const input = container.querySelector('[data-view="revisit-days-input"]');
-      if (input) input.value = hasOverride ? String(Number(overrideRaw)) : '';
-      const statusEl = container.querySelector('[data-view="revisit-save-status"]');
-      const saveBtn = container.querySelector('[data-view="revisit-save-btn"]');
-      if (saveBtn) {
-        saveBtn.addEventListener('click', async () => {
-          const raw = (input && input.value || '').trim();
-          const value = raw === '' ? null : Number(raw);
-          if (value !== null && (!Number.isInteger(value) || value < 1 || value > 3650)) {
-            if (statusEl) statusEl.textContent = '1〜3650の整数か、空欄にしてください。';
-            return;
-          }
-          saveBtn.disabled = true;
-          if (statusEl) statusEl.textContent = '保存中…';
-          try {
-            await opts.onRevisitDaysChange(value);
-            const nextDays = value !== null ? value : Number(shopDefaultRaw);
-            const nextText = Number.isFinite(nextDays) && nextDays > 0
-              ? addDaysToIsoLike(visitDateStr, nextDays)
-              : '';
-            setText(container, 'revisit-date', nextText);
-            revisitBox.hidden = nextText === '';
-            if (statusEl) statusEl.textContent = '保存しました。';
-          } catch (error) {
-            if (statusEl) statusEl.textContent = `保存できませんでした。${error.message || ''}`;
-          } finally {
-            saveBtn.disabled = false;
-          }
-        });
-      }
-    }
   }
 
   const backBtn = container.querySelector('[data-view="back-btn"]');

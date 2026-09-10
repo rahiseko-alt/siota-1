@@ -71,25 +71,9 @@ export const MUTATIONS = [
      （2026-08-29・手元で実測） 編集欄を隠したままにする。フォームが触れないので
      この壊しの先（保存・読み直し）は実行できず、「検査を最後まで実行できた」も道連れで赤になる
      （`docs/ops/proof-of-red.md` の通例どおり）。 */
-  {
-    id: 'revisit-edit-stays-hidden',
-    why: '**⑤カルテ確認に、この犬だけの来店間隔を直す欄が出ない**（犬ごとの上書きが直せない）',
-    file: 'backend/js/magazine-view.js',
-    find: '      revisitBox.hidden = false;\n      revisitEdit.hidden = false;',
-    replace: '      revisitBox.hidden = false;',
-    scripts: ['verify-revisit-interval.mjs'],
-  },
   /* ── 27回目: 保存した直後、その場の表示が新しい日付に変わらない
      （2026-08-29・手元で実測） サーバへの保存自体は成功するので、読み直せば正しい
      （＝この壊しは「保存直後の即時反映」だけを壊し、「サーバに残るか」は壊さない）。 */
-  {
-    id: 'revisit-save-stale-display',
-    why: '**この犬だけの来店間隔を保存しても、その場の日付表示が古いまま**（保存できたのか分からない）',
-    file: 'backend/js/magazine-view.js',
-    find: "            setText(container, 'revisit-date', nextText);\n            revisitBox.hidden = nextText === '';",
-    replace: "            setText(container, 'revisit-date', revisitDateText);\n            revisitBox.hidden = nextText === '';",
-    scripts: ['verify-revisit-interval.mjs'],
-  },
   /* ── 26回目: この犬だけの上書きを保存しても、サーバに残らない
      （2026-08-29・手元で実測） 送る値を常に `null` に固定する。PATCH 自体は
      （null は許される値なので）200 で成功し、保存直後の画面はクライアント側の
@@ -116,14 +100,6 @@ export const MUTATIONS = [
   /* ── 25.4回目: 飼い主画面にも、犬ごとの上書き編集欄が出てしまう
      （2026-08-29・手元で実測） 編集はスタッフ限定のはずが、条件を外すと⑥にも出る。
      ⑤側は元々 `onRevisitDaysChange` を渡しているので、この壊しでは変化しない。 */
-  {
-    id: 'revisit-edit-leaks-to-owner',
-    why: '**飼い主画面にも、犬ごとの来店間隔を直す欄が出てしまう**（編集はスタッフ限定のはずが誰でも触れる）',
-    file: 'backend/js/magazine-view.js',
-    find: "    if (revisitEdit && typeof opts.onRevisitDaysChange === 'function') {",
-    replace: '    if (revisitEdit) {',
-    scripts: ['verify-revisit-interval.mjs'],
-  },
   /* ── 25回目: 飼い主に届く日付が、来店日ではなく確定日に戻る
      （2026-08-29・手元で実測・マスター指示 C-3・敵対検証「検証2」の指摘） */
   {
