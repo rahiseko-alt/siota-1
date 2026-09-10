@@ -1552,9 +1552,16 @@ button, input, textarea, select {
 .lightbox-modal img {
   max-width: 90vw;
   max-height: 85vh;
+}
+
 /* ==========================================================================
    10. MOBILE COMPREHENSIVE RESPONSIVE DESIGN (375px+ スマートフォン完全最適化)
-   ========================================================================== */
+   ==========================================================================
+   **この `}` が抜けていた**（2026-09-10 に発見）。閉じていないと、すぐ下の
+   `@media (max-width: 600px)` が「宣言の途中に現れた at-rule」として捨てられ、
+   **スマホ用の指定 約310行が丸ごと効かなくなる**。
+   実測: 390px 幅で `html` の文字の大きさが 14.5px のまま（この節の指定は 13.5px）。
+   マスターの「スマホだと文字が切れている」（2026-09-09）の出どころがこれ。 */
 @media (max-width: 600px) {
   html {
     font-size: 13.5px;
@@ -1767,10 +1774,13 @@ button, input, textarea, select {
     gap: 4px;
     font-size: 11px;
   }
+  /* 矢印だけにする（上の注記のとおり、未記入の文と並べると切れるため）。
+     押せる大きさは保つので、左右の余白は逆に広げる。 */
   .btn-dock-goto {
-    padding: 2px 6px;
-    font-size: 9.5px;
+    padding: 3px 9px;
+    font-size: 11px;
   }
+  .btn-dock-goto__label { display: none; }
   .dock-action-wrap .boxbutton {
     min-height: 36px !important;
     font-size: 11px !important;
@@ -2422,7 +2432,12 @@ button, input, textarea, select {
         <div class="dock-status-wrap" id="dock-status-wrap">
           <span id="dock-status-icon">⚠️</span>
           <span id="dock-status-text">未記入 ②爪のチェック</span>
-          <button class="btn-dock-goto" id="btn-dock-goto" onclick="App.focusMissingSection()">該当項目へ ➜</button>
+          <!-- スマホでは矢印だけにする。**名前つきの未記入と並べると幅が足りず、
+               このボタンが右で切れて矢印ごと消える**（実測 390px・未記入「④歯 ⑧メッセージ」で
+               中身269px・枠250px）。未記入の文を削るわけにはいかない（マスター指示
+               「全文見える様にしろ」）ので、こちらを縮める。 -->
+          <button class="btn-dock-goto" id="btn-dock-goto" aria-label="該当項目へ移動"
+                  onclick="App.focusMissingSection()"><span class="btn-dock-goto__label">該当項目へ </span>➜</button>
         </div>
         <div class="dock-action-wrap">
           <!-- **文言は「確定」だけ**（マスター指示 2026-09-09）。空いた幅は
