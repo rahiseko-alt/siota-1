@@ -28,6 +28,11 @@ const App = {
   /* 犬体図を開いた時点の印の控え（「キャンセル」で戻すため）。閉じたら捨てる。 */
   marksBeforeEdit: null,
 
+  /* 確定の最中か（`true` の間は下書きを書かない）と、飛んでいる下書きの約束。
+     どちらも `commitReport()` が `saveDraft()` と噛み合わないようにするためのもの。 */
+  committing: false,
+  draftInFlight: null,
+
   /* ペンの色と太さ（マスター指示 2026-09-07「ペンは全て、色と太さを調整できるようにしろ」）。
      **4面図の書き込みと、写真への書き込みで同じ1組を使う**——道具は1つ、という
      人の感覚に合わせる。色は所見の種類を選ぶたびにその色へ戻り（`setStamp`）、
@@ -493,6 +498,14 @@ const App = {
   saveDraft() {
     const staff = globalThis.TrimmerSupabaseStaff;
     if (!staff || !staff.saveDraft || !this.draftPetId) return;
+    /* **確定を始めたら、下書きはもう書かない。**
+       下書きは写真を `data:image/…` のまま置く（実体化するのは確定の側）。
+       ところがサーバの確定は「下書きに `data:image/` が残っていたら失敗」と決めており
+       （`finalize_report`）、確定が中身を差し替えた**後**に下書きが着地すると、
+       生の `data:image/` が書き戻されて確定が 409 `report assets are incomplete`
+       で落ちる。マスターが本番で「全項目入力した後でも保存できない」と踏んだのがこれ
+       （2026-09-10・`F-20260910-79`）。 */
+    if (this.committing) return;
     /* 1件目を作っている最中にもう1回入ると、下書きが2件出来る。 */
     if (this.draftSaving) return;
     this.draftSaving = true;
@@ -501,7 +514,8 @@ const App = {
        **確定でも落とさない**（`commitReport()` も同じ形で載せる・マスター指示
        2026-09-03）——次の回に引き継ぐには印そのものが要るため。 */
     const data = { ...this.extractReport(), __marks: this.marks };
-    staff.saveDraft(this.draftPetId, this.draftReportId, data, this.today())
+    /* **飛んでいる下書きを、確定が待てるようにしておく**（上の理由）。 */
+    this.draftInFlight = staff.saveDraft(this.draftPetId, this.draftReportId, data, this.today())
       .then((id) => { this.draftReportId = id; this.draftSaving = false; })
       .catch(() => {
         this.draftSaving = false;
@@ -1782,6 +1796,15 @@ const App = {
     if (button) button.disabled = true;
     try {
       clearTimeout(this.draftTimer);
+      /* **飛んでいる下書きが着地してから中身を差し替える。**
+         `clearTimeout` が止められるのは「これから出る」下書きだけで、
+         **もう出てしまったもの**は止まらない。写真を選んだ直後や犬体図を閉じた
+         直後は下書きが直に出ているので、待たずに確定すると、確定が書いた
+         `asset://…` の上に下書きの `data:image/…` が後から乗り、サーバの確定が
+         409 `report assets are incomplete` で落ちる（`F-20260910-79`）。
+         下書きの失敗そのものは確定を止めない——止めるとむしろ保存できなくなる。 */
+      this.committing = true;
+      try { await this.draftInFlight; } catch { /* 下書きの成否は確定の可否ではない */ }
       /* 直しているのか、新しく書いているのか。**ここを間違えると、直したつもりが
          2枚目のカルテになって飼い主に2通届く。** */
       /* **確定にも `__marks` を載せる**（マスター指示 2026-09-03）。
@@ -1803,6 +1826,9 @@ const App = {
       location.href = `/edit/p/${encodeURIComponent(context.petId)}/${encodeURIComponent(saved.id)}`;
     } catch (error) {
       if (button) button.disabled = false;
+      /* **やり直せる状態に戻す。** ここを戻さないと、以後どれだけ直しても
+         下書きが1件も残らない（`saveDraft()` が入口で弾き続ける）。 */
+      this.committing = false;
       /* 理由をそのまま出す。「失敗しました」だけだと、やり直せばよいのか
          人を呼ぶのかが分からない。
 

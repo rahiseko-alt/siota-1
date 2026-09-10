@@ -3028,6 +3028,47 @@ Q: チェックアウトの項目8を外す   → not ok 15 - チェックアウ
 機械に書けるのは、**`phase` と地図の印が食い違っていないか**までで、そこを超えて
 「進捗の文章が正しいか」を判定するふりをしない（`D-10`）。
 
+### 43回目: 確定と下書きが噛み合わず、本番で保存できなかった（2026-09-10・**手元で実測**）
+
+マスターが本番で「全項目入力した後でも保存できない」。画面に出ていた文言は
+**`not available / report assets are incomplete / (409)`**。
+
+**原因**: 下書き（`saveDraft`）は写真を `data:image/…` のまま置く——実体化するのは
+確定の側（`replaceDataUrlAssets`）。ところがサーバの確定 `finalize_report` は
+**「下書きに `data:image/` が残っていたら1件も返さない」**と決めている
+（`supabase/migrations/202607160004_private_storage_lifecycle.sql`）。
+`commitReport()` は `clearTimeout(this.draftTimer)` で下書きを止めていたが、
+止まるのは**これから出る**ものだけで、**もう出てしまったもの**は止まらない。
+写真を選んだ直後（`onPhotoPick`）と犬体図を閉じた直後（`closeBodyMarking`）は
+下書きが**直に**出るので、確定が中身を差し替えた後にそれが着地し、
+生の `data:image/` が書き戻されて確定が落ちていた。
+
+**直した形**: ①`commitReport()` が**飛んでいる下書きの着地を待ってから**中身を差し替える
+②確定を始めたら `committing` を立てて**新しい下書きを書かせない**
+③失敗したら `committing` を戻す（戻さないと以後1件も下書きが残らない）。
+
+**2通りの壊し方で赤を実測した。**
+
+| 壊し方 | 赤になった項 |
+|---|---|
+| `await this.draftInFlight` を外す（待たない） | `飛んでいる下書きが着地してから確定する（確定の後に生の data:image を書き戻さない）` |
+| `if (this.committing) return;` を外す（確定中も書く） | `確定を始めたら、新しい下書きは書かない` |
+
+```
+$ node --test test/report-commit-guard.test.mjs      ← 直しを戻した状態
+not ok 8 - 飛んでいる下書きが着地してから確定する（確定の後に生の data:image を書き戻さない）
+not ok 9 - 確定を始めたら、新しい下書きは書かない
+# pass 8
+# fail 2
+
+$ node --test test/report-commit-guard.test.mjs      ← 直しを入れ直した状態
+# pass 10
+# fail 0
+```
+
+**見ていないもの**: 本番の実機での再現（ログインできないため）。ここで見たのは
+**下書きと確定の順番**だけで、サーバ側が 409 を返す条件そのものは SQL を読んで特定した。
+
 ## 未証明（**壊して赤になるところを、まだ見ていない**）
 
 - verify-admin.mjs :: 3b. メニューを押すと住所が変わる
@@ -3085,6 +3126,7 @@ Q: チェックアウトの項目8を外す   → not ok 15 - チェックアウ
 - verify-portal.mjs :: 1. /my が配信される
 - verify-portal.mjs :: 3. Supabase vendor が読めている
 - verify-report-roundtrip.mjs :: 3e. 確認: 来店日（確定日ではなく）
+- report-commit-guard.test.mjs :: 確定に失敗したら、下書きをまた書ける状態に戻す（行き止まりにしない）
 - verify-production.mjs :: `配信物が手元の dist と同じ（${sameCount}/${staticFiles.length} 本）`
 - verify-production.mjs :: /my が dist/my.html と同じ
 - verify-production.mjs :: `削除済みの旧UI が本番に残っていない（${deletedUiPaths.length} 本を確認）`
