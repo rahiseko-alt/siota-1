@@ -156,7 +156,7 @@ try {
     await opt.click();
   }
 
-  await staff.locator('text=確定してお客様カルテを見る').first().click();
+  await staff.locator('.dock-action-wrap .boxbutton').first().click();
   await staff.waitForTimeout(6_000);
   check('12. 確定できた（カルテが1枚できた）', Number(sql('select count(*) from reports')) === 1,
     `${sql('select count(*) from reports')}枚`);

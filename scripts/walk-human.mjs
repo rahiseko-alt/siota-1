@@ -239,7 +239,7 @@ try {
     await writeKarte('今日はおとなしくしていました。');
     await shot(page, '04 カルテを書いた');
 
-    await tapText('確定してお客様カルテ');
+    await tapText('確定');
     await shot(page, '05 確定した（トリマーの確認）');
 
     /* ⑥は**飼い主が自分の端末で開いたもの**。以前は⑤と同じ画面を1枚で兼ねていたが、
@@ -312,7 +312,7 @@ try {
       const course = document.querySelector('[data-field="course"]');
       if (course) { course.value = 'トリミングコース'; course.dispatchEvent(new Event('change', { bubbles: true })); }
     });
-    await tapText('確定してお客様カルテ');
+    await tapText('確定');
     await shot(page, 'M3-0 顧客ページまで進んだ');
     await tapText('03 カルテ作成');
     await shot(page, 'M3-1 タッチ1 カルテ作成へ戻った');
