@@ -403,11 +403,25 @@ function renderSkinRows(root, skin, lightbox) {
   return rows.length;
 }
 
+/* 体重推移のグラフ（マスター指示 2026-09-03 / 2026-09-10）。
+
+   **見るのは2つ。過去のカルテが1本の線になっているか、理想体重の線が出ているか。**
+
+   `weights` は worker が確定カルテを横断して組み立てた履歴（無ければ、いま手元に
+   在るカルテ1枚分）。`bestWeight` は④で入れた「ベスト体重」。
+
+   2026-09-10 にマスターが本番で見つけた: **理想体重の線が一度も引かれていなかった。**
+   `bestWeight` は「（目標 4kg）」という**文字にしか使っていなかった**ので、
+   いまの体重が理想より上か下かが、グラフからは読めなかった。
+   目盛りにも入れていなかったので、線を足すだけでは枠の外へ出て見えない
+   ——**`min`/`max` に理想体重も混ぜる**のはそのため。 */
 function renderWeightGraph(root, weights, bestWeight) {
   const host = root.querySelector('[data-view="weight-graph"]');
   if (!host) return;
   host.replaceChildren();
   const points = (weights || []).filter((w) => w && w.ym && Number.isFinite(Number(w.kg)));
+  const best = Number(bestWeight);
+  const hasBest = Number.isFinite(best) && best > 0;
   if (points.length === 0) {
     const p = document.createElement('p');
     p.style.cssText = 'font-size:13.5px;line-height:1.8;color:var(--ink-secondary)';
@@ -417,36 +431,93 @@ function renderWeightGraph(root, weights, bestWeight) {
   }
   const sorted = points.slice().sort((a, b) => String(a.ym).localeCompare(String(b.ym)));
   const kgs = sorted.map((w) => Number(w.kg));
-  const min = Math.min(...kgs);
-  const max = Math.max(...kgs);
+  /* **理想体重も目盛りに入れる。** 入れないと、体重が理想から離れている犬ほど
+     理想の線が枠の外へ出て、いちばん見たい犬で見えなくなる。 */
+  const scale = hasBest ? [...kgs, best] : kgs;
+  const min = Math.min(...scale);
+  const max = Math.max(...scale);
   const span = max - min || 1;
   const w = 300;
-  const h = 90;
-  const pad = 10;
-  const xStep = sorted.length > 1 ? (w - pad * 2) / (sorted.length - 1) : 0;
-  const coords = sorted.map((pt, i) => {
-    const x = pad + i * xStep;
-    const y = pad + (1 - (Number(pt.kg) - min) / span) * (h - pad * 2);
-    return { x, y, kg: pt.kg, ym: pt.ym };
-  });
+  const h = 112;
+  const padX = 12;
+  const padTop = 14;
+  const padBottom = 24;
+  const plotH = h - padTop - padBottom;
+  const yOf = (kg) => padTop + (1 - (kg - min) / span) * plotH;
+  const xStep = sorted.length > 1 ? (w - padX * 2) / (sorted.length - 1) : 0;
+  const coords = sorted.map((pt, i) => ({
+    x: sorted.length > 1 ? padX + i * xStep : w / 2,
+    y: yOf(Number(pt.kg)),
+    kg: pt.kg,
+    ym: pt.ym,
+  }));
   const svgNS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(svgNS, 'svg');
   svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
   svg.setAttribute('width', '100%');
-  svg.setAttribute('height', '90');
+  svg.setAttribute('height', String(h));
+  /* 理想体重の線を**先に**描く（背面に置く。体重の線を隠さない）。 */
+  if (hasBest) {
+    const yBest = yOf(best);
+    const ideal = document.createElementNS(svgNS, 'line');
+    ideal.dataset.view = 'ideal-weight-line';
+    ideal.setAttribute('x1', String(padX));
+    ideal.setAttribute('x2', String(w - padX));
+    ideal.setAttribute('y1', String(yBest));
+    ideal.setAttribute('y2', String(yBest));
+    ideal.setAttribute('stroke', '#c59b27');
+    ideal.setAttribute('stroke-width', '1.5');
+    ideal.setAttribute('stroke-dasharray', '5 4');
+    svg.append(ideal);
+    const tag = document.createElementNS(svgNS, 'text');
+    tag.dataset.view = 'ideal-weight-label';
+    tag.setAttribute('x', String(w - padX));
+    /* 上端に張り付くときは線の下へ逃がす（文字が枠から出ると読めない）。 */
+    tag.setAttribute('y', String(yBest - padTop < 4 ? yBest + 11 : yBest - 4));
+    tag.setAttribute('text-anchor', 'end');
+    tag.setAttribute('font-size', '9.5');
+    tag.setAttribute('font-weight', '700');
+    tag.setAttribute('fill', '#c59b27');
+    tag.textContent = `理想 ${best}kg`;
+    svg.append(tag);
+  }
   const polyline = document.createElementNS(svgNS, 'polyline');
   polyline.setAttribute('fill', 'none');
   polyline.setAttribute('stroke', '#121212');
   polyline.setAttribute('stroke-width', '2.5');
   polyline.setAttribute('points', coords.map((c) => `${c.x},${c.y}`).join(' '));
   svg.append(polyline);
+  /* **過去の回にも点を打つ。** 打たないと、何回分が線になっているのかが読めない
+     （マスター「過去のカルテの入力が最新に反映されて折れ線グラフに」）。 */
+  coords.forEach((c, i) => {
+    const isLast = i === coords.length - 1;
+    const dot = document.createElementNS(svgNS, 'circle');
+    dot.setAttribute('cx', String(c.x));
+    dot.setAttribute('cy', String(c.y));
+    dot.setAttribute('r', isLast ? '4' : '3');
+    dot.setAttribute('fill', isLast ? '#c85a32' : '#121212');
+    svg.append(dot);
+  });
+  /* いつの回かを、線の両端にだけ添える。全部に付けると重なって読めない。
+     **`textContent` で入れる**——`ym` は保存済み JSON から来るので細工が混ざりうる
+     （`D-11`・`verify:xss` が `weights[].ym` を突く）。 */
+  const monthLabel = (pt, x, anchor) => {
+    const t = document.createElementNS(svgNS, 'text');
+    t.setAttribute('x', String(x));
+    t.setAttribute('y', String(h - 7));
+    t.setAttribute('text-anchor', anchor);
+    t.setAttribute('font-size', '9.5');
+    t.setAttribute('fill', '#8c8c88');
+    t.textContent = String(pt.ym).slice(0, 7);
+    return t;
+  };
+  const first = coords[0];
   const last = coords[coords.length - 1];
-  const dot = document.createElementNS(svgNS, 'circle');
-  dot.setAttribute('cx', String(last.x));
-  dot.setAttribute('cy', String(last.y));
-  dot.setAttribute('r', '4');
-  dot.setAttribute('fill', '#c85a32');
-  svg.append(dot);
+  if (coords.length > 1) {
+    svg.append(monthLabel(first, padX, 'start'), monthLabel(last, w - padX, 'end'));
+  } else {
+    svg.append(monthLabel(first, first.x, 'middle'));
+  }
   const wrap = document.createElement('div');
   wrap.style.cssText = 'background:var(--bg-paper);padding:16px;border:1px solid var(--border-subtle)';
   const label = document.createElement('div');
@@ -459,7 +530,6 @@ function renderWeightGraph(root, weights, bestWeight) {
   wrap.append(current);
   host.append(wrap);
 }
-
 /* 使用オプション（マスター指示 2026-08-31で復活）。選んだ名前をタグとして並べる。
    1件も無ければ帯ごと隠す（`D-10`）。`textContent` で入れる——店舗管理者が
    自由入力した名前なので `innerHTML` にすると細工が実行される（`D-9`/`verify:xss`）。 */

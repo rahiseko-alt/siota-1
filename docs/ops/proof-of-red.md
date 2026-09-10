@@ -3082,6 +3082,18 @@ $ node --test test/report-commit-guard.test.mjs      ← 直しを入れ直し�
    docker のある回に、`ADMIN_ROUTES` からサブ画面の1行を消す／`navigate()` の
    `pushState` を止める、の2つで赤を見て証明済みへ移すこと。）
 
+- verify-report-roundtrip.mjs :: 14e. 飼い主: 体重グラフに理想体重の線が引かれている
+  （2026-09-10 追加。マスターが本番で「理想体重のラインが出ていない」と指摘した1件。
+   **この手元では `npm run verify:roundtrip` を実行できない**——docker が無く
+   ローカル Supabase を起こせないため（上の `verify-admin.mjs` 3b〜3f と同じ事情）。
+   ただし**同じ DOM の数え方で、赤と緑は実ブラウザで見ている**:
+   直す前の `renderWeightGraph` で
+   `host.querySelectorAll('[data-view="ideal-weight-line"]').length` → **0**、
+   直したあと → **1**（Chromium 390px で描画して実測）。
+   **これは検査そのものの赤ではない**ので、証明済みには移さない。
+   docker のある回に `mutate-run.mjs` の `ideal-weight-line-off` を走らせて
+   `14e.` が赤になるところを見てから移すこと。）
+
 - verify-report-roundtrip.mjs :: 0b. 前回の来店を1回ぶん置けた（推移の線を引く材料）
 - verify-report-roundtrip.mjs :: 0c. 前回のカルテを確定できた（確定分だけが推移に乗る）
   （**土台を組めたことの確認**。壊すには API 側を壊すことになり、そのときは

@@ -272,6 +272,15 @@ try {
         if (!line) return 0;
         return (line.getAttribute('points') || '').trim().split(/\s+/).filter(Boolean).length;
       })(),
+      /* **理想体重の線が引かれているか**（マスター指示 2026-09-10）。
+         `bestWeight` は「（目標 3.2kg）」という**文字にしか使っていなかった**ので、
+         いまの体重が理想より上か下かがグラフから読めなかった。文字だけ見ていると
+         `14b.`/`14c.` は緑のまま通る（`F-20260828-51` と同じ型）ので、**線の要素を数える**。 */
+      idealWeightLine: (() => {
+        const host = document.querySelector('[data-view="weight-graph"]');
+        if (!host) return -1;
+        return host.querySelectorAll('[data-view="ideal-weight-line"]').length;
+      })(),
       /* 犬体図の印が**画像として**届いているか。`asset://` のままだと出ない。 */
       skinImage: (document.querySelector('[data-view="skin-image"]') || {}).getAttribute
         ? (document.querySelector('[data-view="skin-image"]').getAttribute('src') || '')
@@ -350,6 +359,10 @@ try {
      1以下なら履歴が届いていない。`>= 2` だけだと、混ざったときに気づけない。 */
   check('14d. 飼い主: 推移の点が、確定カルテの枚数（2枚）と合っている',
     ownerView.weightGraphPoints, 2);
+  /* **理想体重の線**（マスター指示 2026-09-10「理想体重のラインが出ていない」）。
+     ④で入れたベスト体重（3.2kg）が、文字だけでなく**グラフの線**として出ているか。 */
+  check('14e. 飼い主: 体重グラフに理想体重の線が引かれている',
+    ownerView.idealWeightLine, 1);
   check('15. 飼い主: 犬体図の印が画像として届く',
     /^(blob:|data:image)/.test(ownerView.skinImage) ? 'ok' : `src=${ownerView.skinImage.slice(0, 40)}`, 'ok');
   check('16. 飼い主: 壊れた画像（ページURL）が出ていない', ownerView.pageUrlImgs, 0);
