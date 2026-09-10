@@ -507,15 +507,23 @@ function renderWeightGraph(root, weights, bestWeight) {
      日が無い古い記録（`date` が空・`weightHistoryFromReports` は `ym` だけでも点を作る）
      では月までに落とす——**無い日を作らない**（`D-10`）。 */
   const stampLabel = (pt) => {
+    /* **`ym` を先に見る。** ここは体重の札そのもので、`date` は日の桁を借りるだけ。
+       `ym` が「年-月」の形をしていない値（保存済み JSON からは何でも入る・`D-11`）は
+       **そのまま全文を出す**。`date` を優先すると、`ym` に入った細工が画面に一度も
+       出ず、**`verify:xss` が「届いていない＝何も検査できていない」で赤になる**
+       （実測: PR #100 で 23/24 PASS。細工を止めているのは `textContent` であって、
+       出さないことではない）。 */
+    const month = String(pt.ym || '').match(/^(\d{4})-(\d{2})$/);
+    if (!month) return String(pt.ym || '');
+    /* 日は `date` から借りる（マスター指示 2026-09-10「日も書け。例 26/09/05」）。
+       月だけだと、同じ月に2回来た回が同じ札になって見分けられない。
+       **月がずれている `date` は使わない**——別の回の日を貼ると嘘になる。
+       日が無い古い記録は月までに落とす（**無い日を作らない**・`D-10`）。 */
     const day = String(pt.date || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (day) return `${day[1].slice(2)}/${day[2]}/${day[3]}`;
-    const month = String(pt.ym || '').match(/^(\d{4})-(\d{2})/);
-    if (month) return `${month[1].slice(2)}/${month[2]}`;
-    /* 日付として読めない値は**そのまま返す（切り詰めない）**。切ると、保存済み
-       JSON に細工が入っていても画面に全文が出ず、**`verify:xss` が「届いていない＝
-       何も検査できていない」で赤になる**（実測: 23/24 PASS で落ちた）。
-       細工を止めるのは `textContent` であって、長さを削ることではない。 */
-    return String(pt.ym || '');
+    if (day && day[1] === month[1] && day[2] === month[2]) {
+      return `${month[1].slice(2)}/${month[2]}/${day[3]}`;
+    }
+    return `${month[1].slice(2)}/${month[2]}`;
   };
   const monthLabel = (pt, x, anchor) => {
     const t = document.createElementNS(svgNS, 'text');
