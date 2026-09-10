@@ -120,7 +120,26 @@ try {
   await ownerPage.goto(`${BASE}/my/pets/${pet.id}/reports/${reportId}`, { waitUntil: 'networkidle' });
   await ownerPage.waitForSelector('.magazine-container', { timeout: 20_000 });
   check('4. 飼い主: 次回日が同じ値で届く', await revisitDate(ownerPage), addDays(VISIT_DATE, DEFAULT_DAYS));
+
+  /* 4b. 「予約はこちら」の入口（マスター指示 2026-09-10「予約はこちらボタンをつけろ。
+     押すと指定のURLに飛ぶ仕組みにしろ」）。**日付の下に在るだけでは足りない**——
+     行き先が空でも文字は出るので、`href` に中身が在ることまで見る。
+     行き先そのもの（いまは Wikipedia の仮置き）は本番が決まれば変わるので**値では縛らない**。
+     ⑤と⑥は同一レンダラなので、両方で見る。 */
+  const bookLink = (target) => target.evaluate(() => {
+    const el = document.querySelector('[data-view="revisit-book"]');
+    if (!el) return { ある: false };
+    return { ある: true, 文字: el.textContent.trim(), 行き先: el.getAttribute('href') || '', 別タブ: el.getAttribute('target') };
+  });
+  const ownerBook = await bookLink(ownerPage);
+  check('4b. 飼い主: 次回日の下に「予約はこちら」が在り、行き先が入っている',
+    ownerBook.ある && ownerBook.文字 === '予約はこちら' && /^https?:\/\/.+/.test(ownerBook.行き先)
+      && ownerBook.別タブ === '_blank' ? 'ok' : JSON.stringify(ownerBook), 'ok');
   await ownerContext.close();
+
+  const staffBook = await bookLink(page);
+  check('4c. 確認: 店の画面にも同じ入口が在る（同一レンダラ）',
+    staffBook.ある && staffBook.行き先 === ownerBook.行き先 ? 'ok' : JSON.stringify(staffBook), 'ok');
 
   /* 5. 直す欄が、どちらの画面にも無い（消したものが残っていない）。 */
   const editGone = (target) => target.evaluate(() => !document.querySelector('[data-view="revisit-days-input"]')

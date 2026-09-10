@@ -192,6 +192,10 @@ const TEMPLATE = `
       被毛の毛玉防止と皮膚の健康維持のため、定期的なケアをおすすめいたします。
     </p>
     <div class="magazine-revisit-date" data-view="revisit-date"></div>
+    <!-- 予約はこちら（マスター指示 2026-09-10）。行き先は RESERVATION_URL の1行だけが決める。
+         別のタブで開く——カルテを読んでいる途中で持っていかれると、戻る道が分かりにくい。
+         この器は文字列リテラルの中なので、ここに逆引用符を書かない（書くと途中で切れる・実測）。 -->
+    <a class="magazine-revisit-book" data-view="revisit-book" target="_blank" rel="noopener noreferrer">予約はこちら</a>
   </section>
 
   <div style="text-align:center;margin-top:40px">
@@ -273,6 +277,8 @@ const STYLE = `
 .magazine-revisit-title{font-family:var(--font-serif);font-size:22px;font-weight:600;letter-spacing:.08em;margin-bottom:14px}
 .magazine-revisit-desc{font-size:14px;line-height:1.9;color:rgba(255,255,255,.85);max-width:600px;margin:0 auto 24px}
 .magazine-revisit-date{font-family:var(--font-en);font-size:26px;font-weight:700;letter-spacing:.05em}
+.magazine-revisit-book{display:inline-block;margin-top:22px;padding:13px 34px;background:#fff;color:var(--ink-primary);font-size:14px;font-weight:700;letter-spacing:.06em;text-decoration:none;border:1px solid #fff}
+.magazine-revisit-book:hover{background:transparent;color:#fff}
 .wave-card.is-open .wave-card-body{display:block}
 .wave-body-grid-2col{display:grid;grid-template-columns:1fr;gap:20px}
 @media(min-width:768px){.wave-body-grid-2col{grid-template-columns:1fr 1fr}}
@@ -682,6 +688,15 @@ function renderTimeline(root, report) {
  * }
  * opts: { onBack, backLabel }      // 戻るボタン（任意）
  */
+/** 予約ページの行き先（マスター指示 2026-09-10「予約はこちらボタンをつけろ。
+    押すと指定のURLに飛ぶ仕組みにしろ。とりあえずは Wikipedia の AI ページに飛ばしとけ」）。
+
+    **本番の予約ページが決まったら、差し替えるのはこの1行だけ。** 画面側（TEMPLATE）に
+    URL を直書きしないのは、⑤確認と⑥顧客ページが同じ器を使うため——2か所に書くと
+    片方だけ古くなる（`D-5` と同じ型）。
+    いまの行き先は日本語版 Wikipedia の「人工知能」（URL は符号化してある）。 */
+const RESERVATION_URL = 'https://ja.wikipedia.org/wiki/%E4%BA%BA%E5%B7%A5%E7%9F%A5%E8%83%BD';
+
 /** カルテが取れなかったときに器へ入れる、正直な空の状態。
     ここに文例を置かない——置いた瞬間に #1 が戻る。 */
 const EMPTY_HTML = '<p style="padding:28px 24px;color:#8c8c88;font-size:14px;line-height:2">'
@@ -855,6 +870,10 @@ export function renderMagazine(container, report, opts = {}) {
   if (revisitBox) {
     revisitBox.hidden = revisitDateText === '';
     setText(container, 'revisit-date', revisitDateText);
+    /* 「予約はこちら」の行き先を入れる（マスター指示 2026-09-10）。
+       **器（TEMPLATE）には書かない**——書くと⑤と⑥で2か所になる。 */
+    const book = container.querySelector('[data-view="revisit-book"]');
+    if (book) book.href = RESERVATION_URL;
   }
 
   const backBtn = container.querySelector('[data-view="back-btn"]');

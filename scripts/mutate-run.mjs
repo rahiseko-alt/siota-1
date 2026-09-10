@@ -424,6 +424,16 @@ export const MUTATIONS = [
     scripts: ['verify-report-roundtrip.mjs'],
   },
   {
+    /* 「予約はこちら」の行き先を入れない（マスター指示 2026-09-10）。文字は出たままなので、
+       目で見ると在るように見える。行き先を見ている 4b./4c. だけが赤になる。 */
+    id: 'revisit-book-href-off',
+    why: '「予約はこちら」を押しても、どこにも飛ばない（文字だけが出ている）',
+    file: 'backend/js/magazine-view.js',
+    find: '    if (book) book.href = RESERVATION_URL;',
+    replace: '    if (book) book.removeAttribute(\'href\');',
+    scripts: ['verify-revisit-interval.mjs'],
+  },
+  {
     /* 日付の札を両端だけに戻す（マスター指示 2026-09-10 の前の姿）。点の数は変えないので、
        点を数えている `14c.`〜`14d.` は緑のまま——札を数えている `14f.` だけが赤になる。 */
     id: 'weight-date-labels-ends-only',

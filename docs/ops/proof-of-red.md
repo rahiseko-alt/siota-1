@@ -2093,6 +2093,11 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 > 判断に迷ったら、まず壊し方を書いて実測すること。
 
 
+- verify-revisit-interval.mjs :: 4b. 飼い主: 次回日の下に「予約はこちら」が在り、行き先が入っている
+  理由: この容器には docker が無く、ローカル Supabase を起こせないので `npm run verify:revisit-interval` を1度も実行できない。同じ見方（`[data-view="revisit-book"]` を読む）では直す前 null・直したあと href 入りを実ブラウザで実測しているが、検査そのものの赤は見ていない。
+- verify-revisit-interval.mjs :: 4c. 確認: 店の画面にも同じ入口が在る（同一レンダラ）
+  理由: 同上。⑤と⑥が同じレンダラを使っていることの確認で、実データの往復が要る。docker のある回に赤を見て移すこと。
+
 - verify-carry-over.mjs :: 引き継ぎの告知を出していない（引き継ぎは既定の動き）
   理由: この容器には docker が無く、ローカル Supabase を起こせないので `npm run verify:carry-over` を1度も実行できない。告知を出す行を戻して赤を見る、という壊し方はできるが、その赤を実際に見ていないので証明済みとは書けない。docker のある回に実測して移すこと。
 - verify-carry-over.mjs :: 引き継ぎが実際に走った（前回の値が画面に入った）
@@ -3121,6 +3126,17 @@ $ node --test test/report-commit-guard.test.mjs      ← 直しを入れ直し�
 > 「前回の値が画面に入った」の4件を下の「未証明」に置き、**引き継いだ値そのものを見る**
 > 検査（爪・耳・歯・BCS・ベスト体重・犬体図の印）は今までどおり全部残してある。
 > 消した挙動そのものをやめたので `verify-revisit-interval` のときと同じ扱い。
+
+- verify-revisit-interval.mjs :: 4b. 飼い主: 次回日の下に「予約はこちら」が在り、行き先が入っている
+- verify-revisit-interval.mjs :: 4c. 確認: 店の画面にも同じ入口が在る（同一レンダラ）
+  （2026-09-10 追加。マスター指示「予約はこちらボタンをつけろ。押すと指定のURLに飛ぶ仕組みにしろ」。
+   **この手元では `npm run verify:revisit-interval` を実行できない**——docker が無く
+   ローカル Supabase を起こせない。ただし**同じ見方で、赤と緑は実ブラウザで見ている**:
+   `[data-view="revisit-book"]` を読んで、直す前 **無し（null）**、直したあと
+   **文字「予約はこちら」／`href` は Wikipedia の人工知能／`target=_blank`**。
+   さらに**実際に押して**、新しいタブがその URL を要求するところまで見た。
+   **検査そのものの赤ではない**ので証明済みには移さない。docker のある回に
+   `mutate-run.mjs` の `revisit-book-href-off` を走らせて移すこと。）
 
 - verify-carry-over.mjs :: 引き継ぎの告知を出していない（引き継ぎは既定の動き）
 - verify-carry-over.mjs :: 引き継ぎが実際に走った（前回の値が画面に入った）
