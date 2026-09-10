@@ -511,7 +511,11 @@ function renderWeightGraph(root, weights, bestWeight) {
     if (day) return `${day[1].slice(2)}/${day[2]}/${day[3]}`;
     const month = String(pt.ym || '').match(/^(\d{4})-(\d{2})/);
     if (month) return `${month[1].slice(2)}/${month[2]}`;
-    return String(pt.ym || '').slice(0, 7);
+    /* 日付として読めない値は**そのまま返す（切り詰めない）**。切ると、保存済み
+       JSON に細工が入っていても画面に全文が出ず、**`verify:xss` が「届いていない＝
+       何も検査できていない」で赤になる**（実測: 23/24 PASS で落ちた）。
+       細工を止めるのは `textContent` であって、長さを削ることではない。 */
+    return String(pt.ym || '');
   };
   const monthLabel = (pt, x, anchor) => {
     const t = document.createElementNS(svgNS, 'text');
@@ -520,7 +524,9 @@ function renderWeightGraph(root, weights, bestWeight) {
     t.setAttribute('text-anchor', anchor);
     t.setAttribute('font-size', '9.5');
     t.setAttribute('fill', '#8c8c88');
-    t.textContent = stampLabel(pt);
+    /* 札は絵の中に置くので、読めない値が来たときだけ長さで抑える
+       （全文は下の「直近:」に出る）。 */
+    t.textContent = stampLabel(pt).slice(0, 10);
     return t;
   };
   const first = coords[0];
