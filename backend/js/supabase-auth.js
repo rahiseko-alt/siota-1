@@ -171,6 +171,9 @@ async function renderReport(container, report, supabase, siblingReports) {
        worker が確定カルテを横断して組み立てたものを渡す。 */
     weightHistory: report.weightHistory,
   }, {
+    /* **飼い主の画面だと名乗る。** 案内文に「次回のご来店は…」の一文を添えるのは
+       こちらだけ（⑤トリマー確認画面には出さない・マスター指示）。 */
+    customerView: true,
     onBack: () => { location.href = `/my/pets/${encodeURIComponent(report.pet_id || '')}`; },
     backLabel: 'このわんちゃんのカルテ一覧へ戻る',
   });

@@ -102,44 +102,32 @@ try {
     const el = document.querySelector('[data-view="revisit-date"]');
     return el ? el.textContent.trim() : '(器が無い)';
   });
-  const editIsVisible = (target) => target.evaluate(() => {
-    const el = document.querySelector('[data-view="revisit-edit"]');
-    return !!el && !el.hidden;
-  });
 
   /* 3. 上書きが無い犬 → 来店日 + 店舗の既定日数。 */
   check('3. 確認: 次回日（上書き無し・店舗の既定日数）', await revisitDate(page), addDays(VISIT_DATE, DEFAULT_DAYS));
 
-  /* 4. 編集欄はスタッフ側にだけ出る。 */
-  check('4. 確認: 編集欄がスタッフ側に出ている', await editIsVisible(page) ? 'ok' : '出ていない', 'ok');
+  /* **犬ごとに日数を直す欄は消えた**（マスター指示 2026-09-10「日後も保存も不要だから
+     削除しろ」）。それを見ていた4項（編集欄がスタッフ側に出る／保存直後に日付が変わる／
+     読み直しても残る／飼い主側には出ない）は、**見る対象そのものが無くなった**ので畳んだ。
+     残したのは「店舗の既定日数で計算した日付が、店にも飼い主にも同じ値で届くか」——
+     機能の本体はこちらで、こちらは消えていない。 */
 
-  /* 5. ⑤でこの犬だけの上書きを保存する。 */
-  const OVERRIDE_DAYS = 10;
-  await page.fill('[data-view="revisit-days-input"]', String(OVERRIDE_DAYS));
-  await page.click('[data-view="revisit-save-btn"]');
-  await page.waitForFunction(
-    () => (document.querySelector('[data-view="revisit-save-status"]') || {}).textContent === '保存しました。',
-    { timeout: 10_000 },
-  );
-  check('5. 確認: 保存直後にその場で日付が変わる', await revisitDate(page), addDays(VISIT_DATE, OVERRIDE_DAYS));
-
-  /* 6. 読み直しても（サーバに実際に残っている）。 */
-  await page.reload({ waitUntil: 'networkidle' });
-  await page.waitForSelector('#screen-4 .magazine-container', { timeout: 20_000 });
-  check('6. 確認: 読み直しても上書きが残っている', await revisitDate(page), addDays(VISIT_DATE, OVERRIDE_DAYS));
-
-  /* 7〜8. 飼い主側（⑥）。 */
+  /* 4. 飼い主側（⑥）にも同じ日付が届く。 */
   const ownerContext = await browser.newContext();
   const ownerPage = await ownerContext.newPage();
   await ownerPage.goto(`${BASE}/my`);
   await injectSession(ownerPage, FIXTURE.ownerAEmail);
   await ownerPage.goto(`${BASE}/my/pets/${pet.id}/reports/${reportId}`, { waitUntil: 'networkidle' });
   await ownerPage.waitForSelector('.magazine-container', { timeout: 20_000 });
-  check('7. 飼い主: 上書き後の次回日が同じ値で届く', await revisitDate(ownerPage), addDays(VISIT_DATE, OVERRIDE_DAYS));
-  check('8. 飼い主画面に編集欄が出ない（編集はスタッフ限定）', await editIsVisible(ownerPage) ? '出た' : 'ok', 'ok');
+  check('4. 飼い主: 次回日が同じ値で届く', await revisitDate(ownerPage), addDays(VISIT_DATE, DEFAULT_DAYS));
   await ownerContext.close();
 
-  check('9. アプリ由来の確認ダイアログが余計に出ていない', dialogs.length, 0);
+  /* 5. 直す欄が、どちらの画面にも無い（消したものが残っていない）。 */
+  const editGone = (target) => target.evaluate(() => !document.querySelector('[data-view="revisit-days-input"]')
+    && !document.querySelector('[data-view="revisit-save-btn"]'));
+  check('5. 犬ごとに日数を直す欄が、店の画面に無い', await editGone(page) ? 'ok' : '残っている', 'ok');
+
+  check('6. アプリ由来の確認ダイアログが余計に出ていない', dialogs.length, 0);
 } catch (error) {
   check('検査を最後まで実行できた', error.message, 'ok');
 } finally {
