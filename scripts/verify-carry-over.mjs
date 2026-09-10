@@ -291,7 +291,11 @@ try {
   if (optionCount > 0) await page.locator('#options-grid .teeth-pill-btn').first().click();
   check('⑦使用オプションが選べる（帯が出ている）', optionCount > 0, `option=${optionCount}`);
 
-  /* 引き継いだ印に、今回の分を1つ足す。**引き継いだ印が編集できる**こと。 */
+  /* 引き継いだ印に、今回の分を1つ足す。**引き継いだ印が編集できる**こと。
+     犬体図は「タップして開く」形式になった（マスター指示 2026-09-09）ので、
+     **人と同じ手順**——まず「✏️ 書き込む」を押して描画画面を開く。 */
+  await page.locator('[data-annotate="skin"]').click();
+  await page.waitForTimeout(300);
   const canvas = page.locator('#marking-canvas');
   /* **画面に入れてから触る。** `boundingBox()` は表示域からの座標なので、
      下の方に在るまま押すと別の場所を押すことになる。 */
@@ -307,6 +311,9 @@ try {
   await page.mouse.up();
   const markCount = await page.evaluate(() => App.marks.length);
   check('引き継いだ印に、今回の印を足せる', markCount === 2, `marks=${markCount}`);
+  /* 描いたら「保存する」で閉じる（開いたままだと覆いが確定ボタンを隠す）。 */
+  await page.locator('.body-marking-tool .annotate-save').click();
+  await page.waitForTimeout(300);
 
   /* **確定に失敗しても、そこで検査を終わらせない。** 途中で throw すると、
      以降の項（6枚目の中身・7枚目の引き継ぎ）が**赤とも緑とも言われない**まま

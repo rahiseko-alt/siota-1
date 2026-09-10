@@ -711,16 +711,33 @@ button, input, textarea, select {
   cursor: pointer;
 }
 
+/* 来店日が空のときだけ「日付を選ぶ」を薄く出す（マスター指示 2026-09-09）。
+   `:not(:focus)` が要る——打っている途中の日付は未完成で `:invalid` のままなので、
+   除外しないと入力中の文字まで透明になって見えなくなる。
+   `box-shadow: none` は Firefox が `:invalid` に既定で付ける赤い光を消すため。 */
+.date-field { position: relative; display: block; }
+#input-visit-date:invalid:not(:focus) { color: transparent; box-shadow: none; }
+.date-field__placeholder {
+  position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
+  color: var(--ink-muted); font-weight: 700; pointer-events: none; opacity: 0;
+}
+#input-visit-date:invalid:not(:focus) + .date-field__placeholder { opacity: 1; }
+
 /* 口の写真への書き込み（マスター指示 2026-08-29・C-10）。
    `#marking-canvas`（犬体4面図・全画面で1個だけの決め打ち）とは別に、
    写真1枚ごとの使い捨てオーバーレイをその場で作る。 */
 .annotate-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 999; display: flex; align-items: center; justify-content: center; padding: 16px; }
-.annotate-box { background: #ffffff; padding: 12px; max-width: 100%; max-height: 100%; display: flex; flex-direction: column; gap: 10px; }
+.annotate-box { background: #ffffff; padding: 16px; max-width: 100%; max-height: 100%; display: flex; flex-direction: column; gap: 10px; }
 /* 書き込み面は**アプリが指を全部受け取る**（`touch-action: none`）。ブラウザの
    拡大に任せると1本指の書き込みが途中で持っていかれるため、拡大・移動は
    `openAnnotate()` が2本指から自分で作る。枠は動かさず、中の canvas だけを
    `transform` で動かすので、`overflow` は `hidden`。 */
-.annotate-canvas-wrap { width: min(86vw, 560px); overflow: hidden; touch-action: none; border: 1px solid var(--border-subtle); }
+/* **枠は写真の大きさに吸い付かせる**（マスター指示 2026-09-09「画像が左半分に寄って
+   右が空白。中央に寄せて四方を均等に余白を持たせろ」）。以前は `width` の固定幅で、
+   縦長写真だと canvas が高さ側で縮んで枠より小さくなり、ブロック要素として左詰めになって
+   **余った幅が全部右の白帯**になっていた。枠が中身に吸い付けば、canvas と枠の左上が
+   一致したままなので、書き込みの座標もピンチ拡大の原点（`wrap` 基準）も動かさずに済む。 */
+.annotate-canvas-wrap { max-width: min(86vw, 560px); align-self: center; display: inline-flex; align-items: center; justify-content: center; overflow: hidden; touch-action: none; border: 1px solid var(--border-subtle); }
 .annotate-canvas { display: block; touch-action: none; transform-origin: 0 0; }
 .annotate-hint { font-size: 11px; color: var(--ink-muted); margin: 0; }
 .annotate-actions { display: flex; gap: 8px; justify-content: flex-end; }
@@ -865,6 +882,34 @@ button, input, textarea, select {
   margin-bottom: 12px;
 }
 
+/* 閉じているあいだ（既定）: **絵は見えるが描けない**。道具の段は隠し、
+   絵の上に入口だけを重ねる（マスター指示 2026-09-09）。 */
+.body-marking-tool:not(.is-open) .body-marking-only { display: none; }
+.body-marking-tool:not(.is-open) #marking-canvas { pointer-events: none; }
+.body-marking-open {
+  position: absolute; inset: 0;
+  border: 0; background: transparent; cursor: pointer;
+  display: flex; align-items: flex-end; justify-content: center; padding: 0 0 8px;
+}
+.body-marking-open span {
+  padding: 5px 12px; border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.92); color: var(--ink-primary);
+  font-size: 12px; font-weight: 700; line-height: 1.2;
+}
+/* 開いたとき: 歯の `.annotate-overlay` と同じ覆いにする。 */
+.body-marking-tool.is-open {
+  position: fixed; inset: 0; z-index: 999;
+  margin: 0; padding: 16px; border: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex; align-items: center; justify-content: center;
+}
+.body-marking-tool.is-open .body-marking-box {
+  background: #ffffff; padding: 16px;
+  width: min(92vw, 560px); max-height: 100%; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.body-marking-tool.is-open .body-marking-open { display: none; }
+
 /* ボタンの帯は**折り返して画面に収める**（マスター指示 2026-09-02。
    `D-20260827-50`「保留・このまま」を差し替える）。
    以前は横スクロールで、右端のボタン（「フケ」「全部消す」）が画面の外に隠れ、
@@ -997,6 +1042,9 @@ button, input, textarea, select {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* 未記入の文と「該当項目へ ➜」を1行に並べる。**縮むのは文のほうだけ**——
+     ボタンが縮むと「該当項」のように文字が切れて押せるものに見えなくなる（実測・390px）。 */
+  min-width: 0;
 }
 
 .btn-dock-goto {
@@ -1008,6 +1056,7 @@ button, input, textarea, select {
   padding: 3px 8px;
   cursor: pointer;
   white-space: nowrap;
+  flex: 0 0 auto;
   transition: background 0.15s ease;
 }
 .btn-dock-goto:hover {
@@ -1711,10 +1760,12 @@ button, input, textarea, select {
   .editor-bottom-dock__container {
     gap: 6px;
   }
+  /* ボタンが「確定」だけになって細くなった分、未記入の表示に幅を回す
+     （マスター指示 2026-09-09「その分スペースができるので、未記入内容は全文見える様にしろ」）。
+     幅の上限は置かない——`min-width: 0` と `flex` で、余った分だけ自動で伸びる。 */
   .dock-status-wrap {
     gap: 4px;
     font-size: 11px;
-    max-width: calc(100% - 140px);
   }
   .btn-dock-goto {
     padding: 2px 6px;
@@ -2000,14 +2051,21 @@ button, input, textarea, select {
                C-3: 体重の時系列は来店日を基準にする（`report_date` は触らず、
                この入力欄を別に持って `weights[].date` へ使う）。
                C-9: コースは来店ごとに変わるので毎回選択必須。 -->
-          <div class="clinical-group">
+          <div class="clinical-group" id="sec-course">
             <div class="clinical-group__label">
               <span>◎ 来店日・コース</span>
               <span class="clinical-group__hint">必須・カルテごとに選ぶ</span>
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px;">
-              <input type="date" data-field="visit-date" id="input-visit-date"
-                     style="width: 100%; border: 1px solid var(--border-subtle); padding: 8px; background: #ffffff; font-weight: 700;">
+              <!-- 空のとき「日付を選ぶ」を薄く出す（マスター指示 2026-09-09
+                   「初期状態が空白なので、日付を選ぶ欄がどうかが分からない」）。
+                   `required` を付けると空欄が `:invalid` になるので、**JS を足さずに**
+                   出し分けられる——下書きを復元して値が入った瞬間に自動で消える。 -->
+              <span class="date-field">
+                <input type="date" data-field="visit-date" id="input-visit-date" required
+                       style="width: 100%; border: 1px solid var(--border-subtle); padding: 8px; background: #ffffff; font-weight: 700;">
+                <span class="date-field__placeholder">日付を選ぶ</span>
+              </span>
               <select data-field="course" required onchange="App.updateCompletionStatus()"
                       style="width: 100%; border: 1px solid var(--border-subtle); padding: 8px; background: #ffffff; font-weight: 700;">
                 <option value="" disabled selected>コースを選択してください</option>
@@ -2019,7 +2077,7 @@ button, input, textarea, select {
           </div>
 
           <!-- 1. Weight & BCS -->
-          <div class="clinical-group">
+          <div class="clinical-group" id="sec-weight">
             <div class="clinical-group__label">
               <span>① 体重・コンディション</span>
             </div>
@@ -2123,7 +2181,7 @@ button, input, textarea, select {
           </div>
 
           <!-- 3. Ear Examination（6段階判定・マスター指示 2026-08-29・C-6） -->
-          <div class="clinical-group">
+          <div class="clinical-group" id="sec-ear">
             <div class="clinical-group__label">
               <span>③ 耳のチェック (左右判定・6段階)</span>
               <span class="clinical-group__hint">1〜6レベル</span>
@@ -2165,7 +2223,7 @@ button, input, textarea, select {
           </div>
 
           <!-- 4. Teeth & Oral Examination（口の写真2枚・書き込み可能・マスター指示 2026-08-29・C-10/C-11） -->
-          <div class="clinical-group">
+          <div class="clinical-group" id="sec-teeth">
             <div class="clinical-group__label">
               <span>④ 口・歯のチェック (6段階判定)</span>
               <span class="clinical-group__hint">頭骨歯列基準</span>
@@ -2235,54 +2293,78 @@ button, input, textarea, select {
               <span class="clinical-group__hint">ペンで描く（スタンプも置ける）</span>
             </div>
 
-            <div class="body-marking-tool">
-              <!-- 何の所見か（色を決める）。上の段。 -->
-              <div class="body-marking-stamps">
-                <button class="stamp-btn is-active" onclick="App.setStamp('赤み', this)">🔴 赤み</button>
-                <button class="stamp-btn" onclick="App.setStamp('しこり/イボ', this)">🟡 しこり/イボ</button>
-                <button class="stamp-btn" onclick="App.setStamp('毛玉', this)">🔵 毛玉</button>
-                <button class="stamp-btn" onclick="App.setStamp('フケ', this)">⚪ フケ</button>
-              </div>
+            <!-- **歯の写真と同じ「タップして開く」形式**（マスター指示 2026-09-09
+                 「今はデフォルトで描画できる状態だが、歯と同じ形式にしろ。タップすると
+                 描画画面になる。描画画面のボタン配置なども歯と同じ。スタンプ機能などは
+                 同様に配置しろ」）。
+                 **描画面は動かさない**——`#marking-canvas` は読み込み時からここに在り、
+                 閉じているあいだは絵を見せるだけ（描けない）。開くと `is-open` が付いて
+                 覆いになり、並びは歯（`openAnnotate()`）と同じ
+                 「絵 → 道具の段 → 説明 → やり直す・キャンセル・保存する」になる。 -->
+            <div class="body-marking-tool" id="body-marking-tool">
+              <div class="body-marking-box">
 
-              <!-- どう置くか（マスター指示 2026-09-02）。**本体はペン**（フリーハンド）で、
-                   スタンプはその一部。以前はスタンプしか無く、範囲が書けなかった。
-                   表記は「なぞる」→「ペン」に変えた（マスター指示 2026-09-07）。 -->
-              <div class="body-marking-stamps">
-                <button class="mark-mode-btn is-active" onclick="App.setMarkMode('ペン', this)">✏️ ペン</button>
-                <button class="mark-mode-btn" onclick="App.setMarkMode('スタンプ', this)">📍 スタンプ</button>
-                <!-- 消しゴムと文字（マスター指示 2026-09-07）。
-                     消しゴムは**下絵を削らず、置いた印だけ**を取り除く。 -->
-                <button class="mark-mode-btn" onclick="App.setMarkMode('消しゴム', this)">🧽 消しゴム</button>
-                <button class="mark-mode-btn" onclick="App.setMarkMode('文字', this)">🅰 文字</button>
-                <button class="mark-undo-btn" onclick="App.undoMark()">↩ 1つ戻す</button>
-                <button class="mark-undo-btn" onclick="App.clearCanvas()">✕ 全部消す</button>
-              </div>
+                <div class="canvas-container" id="canvas-wrapper">
+                  <img src="/assets/body-marking.png" id="canvas-bg-img" style="display:none;">
+                  <canvas id="marking-canvas"></canvas>
+                  <!-- 入口。歯の写真と同じ「✏️ 書き込む」。**絵のどこを触っても開く**ように
+                       全面を受け口にし、文字は下に小さく置く——帯で覆うと犬の足元が隠れる。 -->
+                  <button type="button" class="body-marking-open" data-annotate="skin"
+                          onclick="App.openBodyMarking()"><span>✏️ 書き込む</span></button>
+                </div>
 
-              <!-- ペンの色と太さ（マスター指示 2026-09-07「ペンは全て、色と太さを
-                   調整できるようにしろ」）。写真への書き込みと同じ1組を触る。
-                   色は所見（赤み・しこり…）を選び直すとその色に戻り、そのあと
-                   ここで選び直せば、選んだ色で描ける。 -->
-              <div class="pen-tools">
-                <label class="pen-tools__item">色
-                  <input type="color" id="pen-color" class="pen-tools__color" value="#d32f2f"
-                         oninput="App.setPenColor(this.value)">
-                </label>
-                <label class="pen-tools__item">太さ
-                  <input type="range" id="pen-width" class="pen-tools__width" min="1" max="20" step="1"
-                         value="4" oninput="App.setPenWidth(this.value)">
-                  <span class="pen-tools__value" id="pen-width-value">4</span>
-                </label>
-                <!-- 透過度（マスター指示 2026-09-07）。薄くすると下の絵が透ける。 -->
-                <label class="pen-tools__item">透明
-                  <input type="range" id="pen-alpha" class="pen-tools__width" min="0.1" max="1" step="0.1"
-                         value="1" oninput="App.setPenAlpha(this.value)">
-                  <span class="pen-tools__value" id="pen-alpha-value">100%</span>
-                </label>
-              </div>
+                <div class="body-marking-panel body-marking-only">
+                  <!-- どう置くか（マスター指示 2026-09-02）。**本体はペン**（フリーハンド）で、
+                       スタンプはその一部。以前はスタンプしか無く、範囲が書けなかった。
+                       表記は「なぞる」→「ペン」に変えた（マスター指示 2026-09-07）。
+                       消しゴムは**下絵を削らず、置いた印だけ**を取り除く。
+                       「✕ 全部消す」は下の「やり直す」と同じ働きなので置かない（`A-5`）。 -->
+                  <div class="body-marking-stamps">
+                    <button class="mark-mode-btn is-active" onclick="App.setMarkMode('ペン', this)">✏️ ペン</button>
+                    <button class="mark-mode-btn" onclick="App.setMarkMode('スタンプ', this)">📍 スタンプ</button>
+                    <button class="mark-mode-btn" onclick="App.setMarkMode('消しゴム', this)">🧽 消しゴム</button>
+                    <button class="mark-mode-btn" onclick="App.setMarkMode('文字', this)">🅰 文字</button>
+                    <button class="mark-undo-btn" onclick="App.undoMark()">↩ 1つ戻す</button>
+                  </div>
 
-              <div class="canvas-container" id="canvas-wrapper">
-                <img src="/assets/body-marking.png" id="canvas-bg-img" style="display:none;">
-                <canvas id="marking-canvas"></canvas>
+                  <!-- 何の所見か（色を決める）。 -->
+                  <div class="body-marking-stamps">
+                    <button class="stamp-btn is-active" onclick="App.setStamp('赤み', this)">🔴 赤み</button>
+                    <button class="stamp-btn" onclick="App.setStamp('しこり/イボ', this)">🟡 しこり/イボ</button>
+                    <button class="stamp-btn" onclick="App.setStamp('毛玉', this)">🔵 毛玉</button>
+                    <button class="stamp-btn" onclick="App.setStamp('フケ', this)">⚪ フケ</button>
+                  </div>
+
+                  <!-- ペンの色と太さ（マスター指示 2026-09-07「ペンは全て、色と太さを
+                       調整できるようにしろ」）。写真への書き込みと同じ1組を触る。
+                       色は所見（赤み・しこり…）を選び直すとその色に戻り、そのあと
+                       ここで選び直せば、選んだ色で描ける。 -->
+                  <div class="pen-tools">
+                    <label class="pen-tools__item">色
+                      <input type="color" id="pen-color" class="pen-tools__color" value="#d32f2f"
+                             oninput="App.setPenColor(this.value)">
+                    </label>
+                    <label class="pen-tools__item">太さ
+                      <input type="range" id="pen-width" class="pen-tools__width" min="1" max="20" step="1"
+                             value="4" oninput="App.setPenWidth(this.value)">
+                      <span class="pen-tools__value" id="pen-width-value">4</span>
+                    </label>
+                    <!-- 透過度（マスター指示 2026-09-07）。薄くすると下の絵が透ける。 -->
+                    <label class="pen-tools__item">透明
+                      <input type="range" id="pen-alpha" class="pen-tools__width" min="0.1" max="1" step="0.1"
+                             value="1" oninput="App.setPenAlpha(this.value)">
+                      <span class="pen-tools__value" id="pen-alpha-value">100%</span>
+                    </label>
+                  </div>
+                </div>
+
+                <p class="annotate-hint body-marking-only">1本指で書き込みます。「キャンセル」を押すと、開く前の状態に戻ります。</p>
+
+                <div class="annotate-actions body-marking-only">
+                  <button type="button" class="btn-inline" onclick="App.clearCanvas()">やり直す</button>
+                  <button type="button" class="btn-inline" onclick="App.closeBodyMarking(false)">キャンセル</button>
+                  <button type="button" class="btn-inline annotate-save" onclick="App.closeBodyMarking(true)">保存する</button>
+                </div>
               </div>
             </div>
           </div>
@@ -2314,7 +2396,7 @@ button, input, textarea, select {
           </div>
 
           <!-- 7. Trimmer Personal Letter Message -->
-          <div class="clinical-group">
+          <div class="clinical-group" id="sec-note">
             <div class="clinical-group__label">
               <span>⑧ 担当トリマーからのメッセージ</span>
               <span class="clinical-group__hint">音声入力対応</span>
@@ -2339,12 +2421,14 @@ button, input, textarea, select {
       <div class="editor-bottom-dock__container">
         <div class="dock-status-wrap" id="dock-status-wrap">
           <span id="dock-status-icon">⚠️</span>
-          <span id="dock-status-text">未記入: 爪のチェック</span>
-          <button class="btn-dock-goto" id="btn-dock-goto" onclick="App.focusNailSection()">該当項目へ ➜</button>
+          <span id="dock-status-text">未記入 ②爪のチェック</span>
+          <button class="btn-dock-goto" id="btn-dock-goto" onclick="App.focusMissingSection()">該当項目へ ➜</button>
         </div>
         <div class="dock-action-wrap">
+          <!-- **文言は「確定」だけ**（マスター指示 2026-09-09）。空いた幅は
+               左の未記入表示に回す——スマホで未記入が切れていたのを直すため。 -->
           <button class="boxbutton boxbutton--white" style="min-height: 44px; padding: 10px 48px 10px 18px;" onclick="App.commitReport()">
-            <span>確定してお客様カルテを見る</span>
+            <span>確定</span>
           </button>
         </div>
       </div>

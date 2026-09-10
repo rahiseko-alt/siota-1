@@ -22,6 +22,12 @@ const App = {
   /* いま動いている音声認識。1本しか持たない（マイクが1本しか無いから）。 */
   voiceRec: null,
 
+  /* フッターの「該当項目へ ➜」が飛ぶ先。`updateCompletionStatus()` が毎回置き直す。 */
+  missingSection: null,
+
+  /* 犬体図を開いた時点の印の控え（「キャンセル」で戻すため）。閉じたら捨てる。 */
+  marksBeforeEdit: null,
+
   /* ペンの色と太さ（マスター指示 2026-09-07「ペンは全て、色と太さを調整できるようにしろ」）。
      **4面図の書き込みと、写真への書き込みで同じ1組を使う**——道具は1つ、という
      人の感覚に合わせる。色は所見の種類を選ぶたびにその色へ戻り（`setStamp`）、
@@ -1125,15 +1131,21 @@ const App = {
 
     const courseEl = document.querySelector('[data-field="course"]');
     const noteEl = document.querySelector('[data-field="staff-note"]');
+    /* `mark` と `sec` は**画面の見出しと同じ番号・同じ場所**（マスター指示 2026-09-09
+       「未記入①④など番号で表示しろ」）。①には3項目がぶら下がるので、番号だけを出すときは
+       重複を畳む。`sec` は「該当項目へ ➜」が飛ぶ先。
+       **名前は短くする**——番号が場所を指しているので見分けが付く長さで足り、長い名前
+       （「担当からのメッセージ」等）を並べるとスマホの1行に収まらず、隣の
+       「該当項目へ ➜」を押し出して切ってしまう（実測・390px）。 */
     const items = [
-      { label: 'コース', done: !!(courseEl && courseEl.value) },
-      { label: '体重', done: !!this.form.weight },
-      { label: 'ベスト体重', done: !!this.form.bestWeight },
-      { label: 'BCS', done: !!this.form.bcs },
-      { label: '爪のチェック', done: !!(this.form.nail.front && this.form.nail.rear) },
-      { label: '耳のチェック', done: !!(this.form.ear.right && this.form.ear.left) },
-      { label: '歯のチェック', done: !!this.form.teeth },
-      { label: '担当からのメッセージ', done: !!(noteEl && noteEl.value.trim()) },
+      { mark: '◎', sec: 'sec-course', label: 'コース', done: !!(courseEl && courseEl.value) },
+      { mark: '①', sec: 'sec-weight', label: '体重', done: !!this.form.weight },
+      { mark: '①', sec: 'sec-weight', label: 'ベスト体重', done: !!this.form.bestWeight },
+      { mark: '①', sec: 'sec-weight', label: 'BCS', done: !!this.form.bcs },
+      { mark: '②', sec: 'sec-nail', label: '爪', done: !!(this.form.nail.front && this.form.nail.rear) },
+      { mark: '③', sec: 'sec-ear', label: '耳', done: !!(this.form.ear.right && this.form.ear.left) },
+      { mark: '④', sec: 'sec-teeth', label: '歯', done: !!this.form.teeth },
+      { mark: '⑧', sec: 'sec-note', label: 'メッセージ', done: !!(noteEl && noteEl.value.trim()) },
     ];
     const missing = items.filter((i) => !i.done);
     const total = items.length;
@@ -1146,9 +1158,22 @@ const App = {
     } else {
       dock.classList.add('has-incomplete');
       statusIcon.textContent = '⚠️';
-      statusText.textContent = `未記入: ${missing.map((i) => i.label).join('・')}`;
+      statusText.textContent = this.missingText(missing);
       if (gotoBtn) gotoBtn.style.display = 'inline-block';
     }
+    this.missingSection = missing.length > 0 ? missing[0].sec : null;
+  },
+
+  /* **スマホの1行に必ず収める**（マスター指示 2026-09-09「未記入内容は全文見える様にしろ。
+     複数あることも想定されるので、未記入①④など番号で表示しろ」）。
+     以前は項目名を全部並べていたので、`text-overflow: ellipsis` に食われて
+     **何が足りないのか読めなかった**。少ないうちは名前まで出し、増えたら番号だけにする
+     （マスター選択）——どちらも切れずに全部見える。 */
+  missingText(missing) {
+    if (missing.length <= 2) return `未記入 ${missing.map((i) => `${i.mark}${i.label}`).join(' ')}`;
+    const marks = [];
+    for (const item of missing) if (!marks.includes(item.mark)) marks.push(item.mark);
+    return `未記入 ${marks.join('')}`;
   },
 
   /* 耳の6段階（マスター指示 2026-08-29・C-6）。歯と同じグリッド見た目を使うが、
@@ -1354,8 +1379,12 @@ const App = {
     }
   },
 
-  focusNailSection() {
-    const sec = document.getElementById('sec-nail');
+  /* **いちばん上の未記入の場所へ運ぶ**（マスター選択 2026-09-09）。
+     以前は名前のとおり必ず爪へ飛んでいたので、番号で「①が未記入」と出しているのに
+     押すと②爪へ行く、という食い違いになっていた。行き先は
+     `updateCompletionStatus()` が毎回置き直す（判定と行き先を1か所で決める）。 */
+  focusMissingSection() {
+    const sec = document.getElementById(this.missingSection || 'sec-nail');
     if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'center' });
   },
 
@@ -1383,6 +1412,30 @@ const App = {
       }
     }
     this.drawCanvas();
+  },
+
+  /* 犬体図は「タップして開く」形式（マスター指示 2026-09-09「歯と同じ形式にしろ」）。
+     **描画面は動かさない**——`#marking-canvas` は読み込み時から同じ場所に在り、
+     開閉は class の付け外しだけ。印は 0〜1 の割合で持っているので（`marks`）、
+     大きさが変わっても測り直して描き直せば同じ絵になる。 */
+  openBodyMarking() {
+    const tool = document.getElementById('body-marking-tool');
+    if (!tool) return;
+    /* 「キャンセル」で**開く前**に戻すための控え（マスター選択・歯と同じ3ボタン）。 */
+    this.marksBeforeEdit = JSON.stringify(this.marks);
+    tool.classList.add('is-open');
+    /* 器の大きさが変わるので測り直す。間の取り方は `goToStep()` と同じ。 */
+    setTimeout(() => this.resizeCanvas(), 50);
+  },
+
+  closeBodyMarking(save) {
+    const tool = document.getElementById('body-marking-tool');
+    if (!tool) return;
+    if (!save && typeof this.marksBeforeEdit === 'string') this.marks = JSON.parse(this.marksBeforeEdit);
+    this.marksBeforeEdit = null;
+    tool.classList.remove('is-open');
+    setTimeout(() => this.resizeCanvas(), 50);
+    if (save) this.saveDraft();
   },
 
   initCanvas() {
@@ -1943,7 +1996,11 @@ const App = {
        途中で色や太さを変えても、先に引いた線は引いたときの見た目のまま。
        写真は原寸で描いているので、太さは画面の見かけではなく写真の画素で数える
        ——寄って書いても引いて書いても、焼き上がりの太さが同じになる。 */
-    const strokeWidth = () => Math.max(1, this.penWidth * (canvas.width / (wrap.clientWidth || canvas.width)));
+    /* **枠ではなく「最初に測った使える幅」で数える**（2026-09-09）。枠は写真に吸い付いて
+       縮むようになったので、`wrap.clientWidth` を都度読むと分母が変わり、**頼まれていない
+       太さの変更**が起きる。`fitToWrap()` が最初の1回に覚えた幅を使い、今までと同じにする。 */
+    let availableWidth = 0;
+    const strokeWidth = () => Math.max(1, this.penWidth * (canvas.width / (availableWidth || canvas.width)));
     const redraw = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
@@ -2011,7 +2068,9 @@ const App = {
        ——書き込みの座標は `getBoundingClientRect()` から画素数へ換算するので、
        表示だけ縮めても線はずれない。 */
     const fitToWrap = () => {
-      const boxWidth = wrap.clientWidth || 0;
+      /* 枠は写真に吸い付いて縮むので、**測り直すと縮み続ける**。最初の1回だけ覚える。 */
+      availableWidth = availableWidth || wrap.clientWidth || 0;
+      const boxWidth = availableWidth;
       const boxHeight = Math.round((globalThis.innerHeight || 0) * 0.6);
       if (!boxWidth || !canvas.width || !canvas.height) return;
       const ratio = Math.min(boxWidth / canvas.width, (boxHeight || boxWidth) / canvas.height, 1);
@@ -2061,7 +2120,7 @@ const App = {
             y: at.y,
             color: this.penColor,
             alpha: this.penAlpha,
-            size: Math.max(12, this.textSize() * (canvas.width / (wrap.clientWidth || canvas.width))),
+            size: Math.max(12, this.textSize() * (canvas.width / (availableWidth || canvas.width))),
           });
           redraw();
           return;
