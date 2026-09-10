@@ -424,6 +424,17 @@ export const MUTATIONS = [
     scripts: ['verify-report-roundtrip.mjs'],
   },
   {
+    /* 理想体重の線だけを消す（マスター指示 2026-09-10）。グラフ全体を消す
+       `weight-graph-off` では `14b.`〜`14d.` が先に赤になるので、**理想体重の線を
+       見ている検査が在るか**は判らない。ここだけを消して `14e.` を名指しで試す。 */
+    id: 'ideal-weight-line-off',
+    why: '理想体重の線が飼い主に出ない（体重が理想より上か下かが読めない）',
+    file: 'backend/js/magazine-view.js',
+    find: "    ideal.dataset.view = 'ideal-weight-line';",
+    replace: "    ideal.dataset.view = 'ideal-weight-line-MUTATED';",
+    scripts: ['verify-report-roundtrip.mjs'],
+  },
+  {
     id: 'resume-draft-off',
     why: '書きかけのカルテが戻ってこない（離れて戻ると、書いた分が消えている）',
     file: 'src/js/ui.js',
