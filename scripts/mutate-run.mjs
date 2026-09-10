@@ -424,6 +424,16 @@ export const MUTATIONS = [
     scripts: ['verify-report-roundtrip.mjs'],
   },
   {
+    /* 日付の札を両端だけに戻す（マスター指示 2026-09-10 の前の姿）。点の数は変えないので、
+       点を数えている `14c.`〜`14d.` は緑のまま——札を数えている `14f.` だけが赤になる。 */
+    id: 'weight-date-labels-ends-only',
+    why: '観測点が3回以上あっても、日付が両端の2つしか出ない（いつの記録か読めない）',
+    file: 'backend/js/magazine-view.js',
+    find: '    svg.append(monthLabel(c, c.x, anchor));',
+    replace: '    if (i === 0 || i === coords.length - 1) svg.append(monthLabel(c, c.x, anchor));',
+    scripts: ['verify-report-roundtrip.mjs'],
+  },
+  {
     /* 理想体重の線だけを消す（マスター指示 2026-09-10）。グラフ全体を消す
        `weight-graph-off` では `14b.`〜`14d.` が先に赤になるので、**理想体重の線を
        見ている検査が在るか**は判らない。ここだけを消して `14e.` を名指しで試す。 */

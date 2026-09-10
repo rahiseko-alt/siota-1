@@ -1134,16 +1134,6 @@ button, input, textarea, select {
    それ以前に、**起動が途中で失敗すると隠す処理まで進まない**——
    だから隠すのをやめ、配る前に消すことにした。ここに CSS は要らない。 */
 .carry-over__text { font-size: 11px; line-height: 1.5; color: var(--ink-body); }
-.carry-over__clear {
-  border: 1px solid var(--border-subtle);
-  background: #ffffff;
-  padding: 5px 10px;
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
 .past-reports { margin: 0 0 18px; }
 .past-reports__label {
   font-size: 11px; font-weight: 700; letter-spacing: .08em;
@@ -2056,14 +2046,15 @@ button, input, textarea, select {
             <div class="past-reports__list" id="past-reports-list"></div>
           </div>
 
-          <!-- 前回からの引き継ぎ（マスター指示 2026-09-03）
-               常連の6枚目を「前回の続き」から書き始められるようにした。
-               **引き継いだ項目だけを名指しする。** 以前の「前回を複製」は
-               「読み込みました」と言いながら何も複製していなかった（`6fecedc` で削除）。
-               1枚も確定カルテが無い犬（初回）では帯ごと出ない。中身は `ui.js` が入れる。 -->
+          <!-- 「まだ前回のままです」の警告（`docs/decisions.md` A-3）
+               **「引き継ぎました」の告知はここから消した**（マスター指示 2026-09-10
+               「引き継ぎ自体はデフォルトだから記載不要」）。前回の値が入ることは
+               既定の動きなので、毎回は言わない。
+               残しているのは**前回の所見のまま確定しそうなとき**だけで、
+               これが無いと前回の所見が今回の所見として飼い主に届く（`D-12`）。
+               中身は `ui.js`（`showStillSameBand`）が入れる。 -->
           <div class="carry-over" id="carry-over-undo" hidden>
             <span class="carry-over__text" id="carry-over-text"></span>
-            <button type="button" class="carry-over__clear" id="carry-over-clear" onclick="App.clearCarryOver()">引き継ぎをやめて白紙にする</button>
           </div>
 
           <!-- 0. 来店日・コース（マスター指示 2026-08-29）

@@ -281,6 +281,16 @@ try {
         if (!host) return -1;
         return host.querySelectorAll('[data-view="ideal-weight-line"]').length;
       })(),
+      /* **観測点の数だけ日付が出ているか**（マスター指示 2026-09-10「日付は観測点には
+         全てつけろ。2回測定実績あるなら、点も日付も2つ」）。以前は両端の2つしか
+         出しておらず、3点以上でも札は2つのままだった。理想体重の札は数から外す
+         ——あれは点の札ではない。 */
+      weightDateLabels: (() => {
+        const host = document.querySelector('[data-view="weight-graph"]');
+        if (!host) return -1;
+        return [...host.querySelectorAll('svg text')]
+          .filter((el) => el.dataset.view !== 'ideal-weight-label').length;
+      })(),
       /* 犬体図の印が**画像として**届いているか。`asset://` のままだと出ない。 */
       skinImage: (document.querySelector('[data-view="skin-image"]') || {}).getAttribute
         ? (document.querySelector('[data-view="skin-image"]').getAttribute('src') || '')
@@ -363,6 +373,11 @@ try {
      ④で入れたベスト体重（3.2kg）が、文字だけでなく**グラフの線**として出ているか。 */
   check('14e. 飼い主: 体重グラフに理想体重の線が引かれている',
     ownerView.idealWeightLine, 1);
+  /* **点の数と日付の数が同じ**（マスター指示 2026-09-10）。この犬の確定カルテは
+     前回と今回の2枚なので、点2つ・日付2つ。`14d.` が点を数えているので、
+     ここは札だけを数えて突き合わせる。 */
+  check('14f. 飼い主: 観測点の数だけ日付が出ている',
+    ownerView.weightDateLabels, ownerView.weightGraphPoints);
   check('15. 飼い主: 犬体図の印が画像として届く',
     /^(blob:|data:image)/.test(ownerView.skinImage) ? 'ok' : `src=${ownerView.skinImage.slice(0, 40)}`, 'ok');
   check('16. 飼い主: 壊れた画像（ページURL）が出ていない', ownerView.pageUrlImgs, 0);

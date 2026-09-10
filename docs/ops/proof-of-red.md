@@ -404,7 +404,6 @@ FAIL  2. 正UI が配られている（仕事に使う②③④が在る）  作
 - verify-carry-over.mjs :: 6枚目に __marks が載っている（次の回で印を引き継げる）
 - verify-carry-over.mjs :: 7枚目に、6枚目で足した印まで引き継がれている
 - verify-carry-over.mjs :: 7枚目のメッセージは空（6枚目の文が残っていない）
-- verify-carry-over.mjs :: `帯が「${word}」を名指ししている`
 - verify-carry-over.mjs :: 爪（前足）が5枚目と同じ
 - verify-carry-over.mjs :: 爪（後ろ足）が5枚目と同じ
 - verify-carry-over.mjs :: 耳（右）が5枚目と同じ
@@ -412,11 +411,7 @@ FAIL  2. 正UI が配られている（仕事に使う②③④が在る）  作
 - verify-carry-over.mjs :: 歯の状態が5枚目と同じ
 - verify-carry-over.mjs :: ベスト体重が5枚目と同じ
 - verify-carry-over.mjs :: 犬体図に前回の印が描かれている
-- verify-carry-over.mjs :: 白紙にすると、引き継ぎの帯が消える
 - verify-carry-over.mjs :: 引き継いだ印に、今回の印を足せる
-- verify-carry-over.mjs :: 引き継ぎが実際に走った（帯に字が入った）
-- verify-carry-over.mjs :: 引き継ぎの帯が出ている
-- verify-carry-over.mjs :: 白紙にすると、引き継いだ選択が全部外れる
 - verify-carry-over.mjs :: 6枚目に爪が引き継がれている
 - verify-carry-over.mjs :: 7枚目も「前回の続き」から始まる
 
@@ -2097,6 +2092,15 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 > **ここに足すのは「埋めるべきでないもの」だけ。** 埋められるのに面倒だから、は該当しない。
 > 判断に迷ったら、まず壊し方を書いて実測すること。
 
+
+- verify-carry-over.mjs :: 引き継ぎの告知を出していない（引き継ぎは既定の動き）
+  理由: この容器には docker が無く、ローカル Supabase を起こせないので `npm run verify:carry-over` を1度も実行できない。告知を出す行を戻して赤を見る、という壊し方はできるが、その赤を実際に見ていないので証明済みとは書けない。docker のある回に実測して移すこと。
+- verify-carry-over.mjs :: 引き継ぎが実際に走った（前回の値が画面に入った）
+  理由: 同上。実データの往復（5枚の確定カルテを積んで6枚目を開く）が要るため、この容器では赤も緑も見ていない。引き継ぎを止める壊し方で赤になるはずだが、はずは証拠ではない。
+- verify-carry-over.mjs :: 「引き継ぎをやめて白紙にする」の入口が無い
+  理由: 同じ数え方（配信物を開いて `.carry-over__clear` を数える）では、直す前1本・直したあと0本を実ブラウザで実測している。ただし検査そのものは docker が要るので、この項の赤は見ていない。
+- verify-carry-over.mjs :: 白紙に戻す処理も残っていない（押す場所が無いのに動く道を残さない）
+  理由: 同じ数え方（`typeof App.clearCarryOver`）で、直す前 function・直したあと undefined を実測。検査そのものの赤は docker が無くて見ていない。なお当初 `window.App` を見て書いており、常に緑になる中身の無い検査だった（`偽-5`）ことも実測で判った。
 - verify-carry-over.mjs :: 土台: 確定カルテが5枚ある犬を作った
   理由: 5枚を積む土台そのもの。ここを壊すと以降の全項が巻き添えで落ちるので、この行だけを狙って赤にする壊し方が無い（`verify-portal :: 1.` と同じ型）。
 - verify-carry-over.mjs :: ② 一覧に犬が出ている
@@ -3082,6 +3086,17 @@ $ node --test test/report-commit-guard.test.mjs      ← 直しを入れ直し�
    docker のある回に、`ADMIN_ROUTES` からサブ画面の1行を消す／`navigate()` の
    `pushState` を止める、の2つで赤を見て証明済みへ移すこと。）
 
+- verify-report-roundtrip.mjs :: 14f. 飼い主: 観測点の数だけ日付が出ている
+  （2026-09-10 追加。マスター指示「日付は観測点には全てつけろ。2回測定実績あるなら、
+   点も日付も2つ。4回あるなら4つ。最大4」。`14e.` と同じ事情で、**この手元では
+   `npm run verify:roundtrip` を実行できない**（docker が無い）。
+   **同じ数え方で、赤と緑は実ブラウザで見ている**——5回ぶんの履歴を渡して
+   `svg circle` と、理想体重の札を除いた `svg text` を数えた:
+   直す前 **点5／札2**（両端だけ）、直したあと **点4／札4**（直近4回に絞り、全部に札）。
+   **これは検査そのものの赤ではない**ので、証明済みには移さない。
+   docker のある回に `mutate-run.mjs` の `weight-date-labels-ends-only` を走らせて
+   `14f.` が赤になるところを見てから移すこと。）
+
 - verify-report-roundtrip.mjs :: 14e. 飼い主: 体重グラフに理想体重の線が引かれている
   （2026-09-10 追加。マスターが本番で「理想体重のラインが出ていない」と指摘した1件。
    **この手元では `npm run verify:roundtrip` を実行できない**——docker が無く
@@ -3098,6 +3113,30 @@ $ node --test test/report-commit-guard.test.mjs      ← 直しを入れ直し�
 - verify-report-roundtrip.mjs :: 0c. 前回のカルテを確定できた（確定分だけが推移に乗る）
   （**土台を組めたことの確認**。壊すには API 側を壊すことになり、そのときは
    `14c.` `14d.` が先に赤になる。単独では赤を見ていない）
+
+> **2026-09-10 追記（マスター指示）**: 「引き継ぎ自体はデフォルトだから記載不要」。
+> 「◯◯から 爪・耳・歯… を引き継ぎました」の**告知と「白紙にする」ボタンを消した**ので、
+> それを見ていた5件を証明済みから外した——**指す先がもう無い**。
+> 件数は減らしていない: 代わりに「告知を出していない」「入口が無い」「処理も残っていない」
+> 「前回の値が画面に入った」の4件を下の「未証明」に置き、**引き継いだ値そのものを見る**
+> 検査（爪・耳・歯・BCS・ベスト体重・犬体図の印）は今までどおり全部残してある。
+> 消した挙動そのものをやめたので `verify-revisit-interval` のときと同じ扱い。
+
+- verify-carry-over.mjs :: 引き継ぎの告知を出していない（引き継ぎは既定の動き）
+- verify-carry-over.mjs :: 引き継ぎが実際に走った（前回の値が画面に入った）
+  （2026-09-10 追加。**この手元では `npm run verify:carry-over` を実行できない**
+   ——docker が無くローカル Supabase を起こせない。この2件は実データの往復が要るので、
+   手元では赤も緑も見ていない。docker のある回に、告知を出す行を戻す／引き継ぎを
+   止める、の2つで赤を見て証明済みへ移すこと。）
+
+- verify-carry-over.mjs :: 「引き継ぎをやめて白紙にする」の入口が無い
+- verify-carry-over.mjs :: 白紙に戻す処理も残っていない（押す場所が無いのに動く道を残さない）
+  （2026-09-10 追加。**同じ数え方で、赤と緑は実ブラウザで見ている**——配信物を開いて
+   `.carry-over__clear` の数と `typeof App.clearCarryOver` を読んだ:
+   直す前 **1本 / function**、直したあと **0本 / undefined**。
+   なお最初は `window.App` を見て書いており、`ui.js` は `const App = {…}` なので
+   **処理が残っていても常に緑になる中身の無い検査**だった（`偽-5`）。実測で気づいて
+   素の `App` に直してある。**検査そのものの赤ではない**ので証明済みには移さない。）
 
 - verify-carry-over.mjs :: 土台: 確定カルテが5枚ある犬を作った
 - verify-carry-over.mjs :: ② 一覧に犬が出ている
