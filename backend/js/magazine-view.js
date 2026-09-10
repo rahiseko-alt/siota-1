@@ -450,6 +450,7 @@ function renderWeightGraph(root, weights, bestWeight) {
     y: yOf(Number(pt.kg)),
     kg: pt.kg,
     ym: pt.ym,
+    date: pt.date,
   }));
   const svgNS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(svgNS, 'svg');
@@ -499,8 +500,19 @@ function renderWeightGraph(root, weights, bestWeight) {
     svg.append(dot);
   });
   /* いつの回かを、線の両端にだけ添える。全部に付けると重なって読めない。
-     **`textContent` で入れる**——`ym` は保存済み JSON から来るので細工が混ざりうる
-     （`D-11`・`verify:xss` が `weights[].ym` を突く）。 */
+     **`textContent` で入れる**——`ym` も `date` も保存済み JSON から来るので細工が
+     混ざりうる（`D-11`・`verify:xss` が `weights[].ym` を突く）。 */
+  /* **日まで出す**（マスター指示 2026-09-10「日も書け。例 2026/09/05 → 26/09/05」）。
+     月だけだと、同じ月に2回来た回が同じ札になって見分けられない。
+     日が無い古い記録（`date` が空・`weightHistoryFromReports` は `ym` だけでも点を作る）
+     では月までに落とす——**無い日を作らない**（`D-10`）。 */
+  const stampLabel = (pt) => {
+    const day = String(pt.date || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (day) return `${day[1].slice(2)}/${day[2]}/${day[3]}`;
+    const month = String(pt.ym || '').match(/^(\d{4})-(\d{2})/);
+    if (month) return `${month[1].slice(2)}/${month[2]}`;
+    return String(pt.ym || '').slice(0, 7);
+  };
   const monthLabel = (pt, x, anchor) => {
     const t = document.createElementNS(svgNS, 'text');
     t.setAttribute('x', String(x));
@@ -508,7 +520,7 @@ function renderWeightGraph(root, weights, bestWeight) {
     t.setAttribute('text-anchor', anchor);
     t.setAttribute('font-size', '9.5');
     t.setAttribute('fill', '#8c8c88');
-    t.textContent = String(pt.ym).slice(0, 7);
+    t.textContent = stampLabel(pt);
     return t;
   };
   const first = coords[0];
@@ -526,7 +538,7 @@ function renderWeightGraph(root, weights, bestWeight) {
   wrap.append(label, svg);
   const current = document.createElement('div');
   current.style.cssText = 'font-size:12.5px;margin-top:8px;color:var(--ink-secondary)';
-  current.textContent = `直近: ${last.ym} ${last.kg}kg${bestWeight ? `（目標 ${bestWeight}kg）` : ''}`;
+  current.textContent = `直近: ${stampLabel(last)} ${last.kg}kg${bestWeight ? `（目標 ${bestWeight}kg）` : ''}`;
   wrap.append(current);
   host.append(wrap);
 }
