@@ -84,9 +84,25 @@
 - `scripts/walk-human.mjs` ×2箇所 — `tapText('確定してお客様カルテ')` → `tapText('確定')`
 - `scripts/verify-carry-over.mjs` — 犬体図をなぞる前に「✏️ 書き込む」を押し、後で「保存する」を押す
 
+### 本番に出した（2026-09-10）
+
+PR #90 をマージ（`e73e16e`）→ `deploy.yml` を手動起動 → **本番に反映済み**。
+`npm run verify:prod` は **4/5 PASS**。内訳:
+
+- ✅ 配信物が手元の dist と同じ（33/33本）／`/my` が一致／`/edit` が正UI／`/` が本物の入口
+- ❌ 「削除済みの旧UI が本番に残っていない」——**これは本番の問題ではない。**
+  検査自身が「**1本も走査していない**。git の履歴が浅い（`--depth` つき clone）ため
+  消えたファイルが見えない」と言っている（このコンテナは `git rev-parse
+  --is-shallow-repository` が `true`）。全履歴のある場所（CI は `fetch-depth: 0`）で走らせること。
+
+本番の実物を直接叩いて、4件が載っていることも確かめた:
+`/edit` の HTML に `日付を選ぶ` `body-marking-open` `closeBodyMarking` `<span>確定</span>`、
+`/js/ui.js` に `openBodyMarking` `missingText` `focusMissingSection` がいずれも在る。
+
 ### 次のセッションがまずやること
 
-**まだ本番に出していない**（`D-22`）。マスターに本番で確認してもらうには、先にデプロイが要る。
+**マスターの実操作による確認がまだ**（`D-23`。機械が緑でも、人が触るまで「確認した」とは言わない）。
+確認してもらう URL と手順は、このセッションからマスターへ出してある。
 そのうえで `N-5`（放置リスト `#41`＝`AGENTS.md` の「CI / CD 無し」の記述が実態と違う・判断待ち）。
 
 ---
