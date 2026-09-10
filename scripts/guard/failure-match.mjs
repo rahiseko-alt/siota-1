@@ -89,6 +89,16 @@ function readMark() {
   try { return JSON.parse(fs.readFileSync(MARK, 'utf8')); } catch { return null; }
 }
 
+/* **CI では見ない。** CI はまっさらな clone から `npm ci` を走らせるだけで、
+   対話セッションの手順（`checkin.mjs` / `--show`）を一度も呼ばない。ここを CI にも
+   適用すると、すべての PR の `check` job が恒常的に赤くなる——それは「過去の失敗を
+   読ませる」強制ではなく、ただの機械の不具合になる（実際に PR #97 で赤にした）。
+   姉妹の関所（`plan-read.mjs` / `plan-next.mjs`）と同じ判定にそろえる。 */
+if (process.env.CI === 'true') {
+  console.log('[failure-match] CI 実行なので見ない（checkin.mjs を通らないため）');
+  process.exit(0);
+}
+
 const entries = parseLedger(fs.readFileSync(path.join(ROOT, LEDGER), 'utf8'));
 const touched = changedFiles();
 const hits = matchFailures(entries, touched);
