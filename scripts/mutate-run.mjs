@@ -308,8 +308,10 @@ export const MUTATIONS = [
        「入口を1つにする」（`D-20260905-67`）で無くなった。**守る性質は同じ**
        ——未ログインの人をここに留めない——ので、狙いを転送そのものに移した。 */
     file: 'backend/js/supabase-auth.js',
-    find: "    sessionStorage.setItem('post_auth_return', safeReturnPath(returnPath));\n    location.replace('/');",
-    replace: "    sessionStorage.setItem('post_auth_return', safeReturnPath(returnPath));\n    show(content, true);",
+    /* 2026-09-10: 入口へ返すとき**理由を持たせる**ようにした（`entry_notice`）ので、
+       この2行の間に1行入った。狙い（転送そのものを殺す）は変えていない。 */
+    find: "    if (reason) sessionStorage.setItem('entry_notice', reason);\n    location.replace('/');",
+    replace: "    if (reason) sessionStorage.setItem('entry_notice', reason);\n    show(content, true);",
     scripts: ['verify-portal.mjs'],
   },
   {
@@ -733,10 +735,12 @@ export const MUTATIONS = [
        `goToEntry` を何もしない関数にすると、未ログインの人は飼い主の画面に
        置き去りになる。 */
     file: 'backend/js/supabase-auth.js',
-    find: '  const goToEntry = (returnPath) => {\n',
-    replace: '  const goToEntry = (returnPath) => {\n',
+    /* 2026-09-10: 入口へ返す理由を持たせたので、引数が1つ増えた（`reason`）。
+       狙い（転送を何もしない関数にする）は変えていない。 */
+    find: '  const goToEntry = (returnPath, reason) => {\n',
+    replace: '  const goToEntry = (returnPath, reason) => {\n',
     extra: null,
-    injectAfter: '  const goToEntry = (returnPath) => {\n',
+    injectAfter: '  const goToEntry = (returnPath, reason) => {\n',
     inject: '    if (returnPath !== undefined) return;\n',
     scripts: ['verify-portal.mjs'],
   },

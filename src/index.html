@@ -715,6 +715,9 @@ button, input, textarea, select {
    `:not(:focus)` が要る——打っている途中の日付は未完成で `:invalid` のままなので、
    除外しないと入力中の文字まで透明になって見えなくなる。
    `box-shadow: none` は Firefox が `:invalid` に既定で付ける赤い光を消すため。 */
+/* 入口の一言（ふだんの案内と、戻されたときの理由）。 */
+.auth-note { margin: 10px 0 0; font-size: 12px; line-height: 1.7; color: var(--ink-muted); text-align: center; }
+
 .date-field { position: relative; display: block; }
 #input-visit-date:invalid:not(:focus) { color: transparent; box-shadow: none; }
 .date-field__placeholder {
@@ -1976,6 +1979,12 @@ button, input, textarea, select {
               <span>Google でログイン</span>
             </div>
           </button>
+          <!-- **入口へ戻された理由を出す場所**（マスター報告 2026-09-10「Google認証が2回必要」）。
+               `bootLoginPage()` は前からここへ文言を入れようとしていたが、**受け皿の
+               `data-demo-note` がどこにも無く、その処理は何もしていなかった**（本番でも0件）。
+               ログインが弾かれても画面には何も出ず、人には「またログイン画面だ」としか
+               見えなかった——`F-20260907-75`（理由が1文字も残らない）と同じ形。 -->
+          <p class="auth-note" data-demo-note></p>
         </div>
 
       </div>

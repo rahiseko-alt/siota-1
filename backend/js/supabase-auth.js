@@ -233,8 +233,10 @@ export async function bootProtectedPortal() {
 
      出ていくときは**必ず戻り先を積む**。積まないと、飼い主が招待リンクや
      カルテの共有URLから来たときに、ログイン後そこへ帰れない（`D-12`）。 */
-  const goToEntry = (returnPath) => {
+  /* `reason` は入口で人に見せる一言。**黙って戻さない**ため（下記）。 */
+  const goToEntry = (returnPath, reason) => {
     sessionStorage.setItem('post_auth_return', safeReturnPath(returnPath));
+    if (reason) sessionStorage.setItem('entry_notice', reason);
     location.replace('/');
   };
 
@@ -273,8 +275,18 @@ export async function bootProtectedPortal() {
         sessionStorage.removeItem('pending_invitation');
       }
     }
+    /* **失敗したら、その番号を持たせて投げる。**（マスター報告 2026-09-10「Google認証が2回必要」）
+       ここが `ok` でないと、下の `catch` がセッションを消して入口へ返す——つまり
+       **`/api/session` が1回でも失敗すると、必ずもう一度ログインさせられる。**
+       いま分かっていないのは「なぜ失敗するか」なので、**推測で塞がずに、番号を残す**。
+       番号は入口の画面に出す（`entry_notice`）。次に起きたとき、それが原因を指す。 */
     const sessionResponse = await authorizedFetch(supabase, '/api/session');
-    if (!sessionResponse.ok) throw new Error('authentication required');
+    if (!sessionResponse.ok) {
+      /* **文言は変えない。** 下の `catch` は文字列の完全一致で見分けている。 */
+      const failed = new Error('authentication required');
+      failed.status = sessionResponse.status;
+      throw failed;
+    }
     const session = await sessionResponse.json();
     if ((session.ownerLinks || []).length === 0 && (session.memberships || []).length === 0) {
       setMessage(status, invitationMessage || '登録されたお客様情報が見つかりません');
@@ -327,6 +339,11 @@ export async function bootProtectedPortal() {
     if (error.message === 'authentication required' && !sessionStorage.getItem('auth_reload_once')) {
       sessionStorage.setItem('auth_reload_once', '1');
       try { await supabase?.auth.signOut(); } catch { /* セッションが既に壊れていても reload は続ける */ }
+      /* **消したことを、入口で人に伝える。** ここを黙って通ると、人には
+         「ログインしたのに、またログイン画面に戻された」としか見えない
+         （マスター報告 2026-09-10「Google認証が2回必要」）。 */
+      sessionStorage.setItem('entry_notice',
+        `ログインの確認に失敗したため、入り直しをお願いします。（${error.status || '応答なし'}）`);
       location.reload();
       return;
     }
@@ -340,7 +357,8 @@ export async function bootProtectedPortal() {
        （2026-09-02 に一度起きた形）。 */
     if (error.message === 'authentication required') {
       try { await supabase?.auth.signOut(); } catch { /* 消せなくても入口へは返す */ }
-      goToEntry(`${location.pathname}${location.search}`);
+      goToEntry(`${location.pathname}${location.search}`,
+        `ログインの確認に失敗したため、入り直しをお願いします。（${error.status || '応答なし'}）`);
       return;
     }
     show(content, false);
@@ -393,7 +411,14 @@ async function bootLoginPage() {
     await signInWithGoogle(supabase, '/my');
   });
   const note = document.querySelector('[data-demo-note]');
-  if (note) note.textContent = 'Googleアカウントで安全にログインします';
+  /* **戻された理由が在れば、それを出す。**（マスター報告 2026-09-10「Google認証が2回必要」）
+     入口へ返す道は在ったが**何も言わずに返していた**ので、人には「ログインしたのに
+     またログイン画面だ」としか見えず、原因を辿る手掛かりが1つも残らなかった
+     （`F-20260907-75` と同じ型——理由を出す、が唯一の直し方）。
+     一度出したら消す。次に開いたときまで残ると、直った後も出続ける。 */
+  const notice = sessionStorage.getItem('entry_notice');
+  if (notice) sessionStorage.removeItem('entry_notice');
+  if (note) note.textContent = notice || 'Googleアカウントで安全にログインします';
 }
 
 if (typeof document !== 'undefined') {
