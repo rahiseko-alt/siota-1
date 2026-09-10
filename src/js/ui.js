@@ -1145,8 +1145,21 @@ const App = {
       { mark: '②', sec: 'sec-nail', label: '爪', done: !!(this.form.nail.front && this.form.nail.rear) },
       { mark: '③', sec: 'sec-ear', label: '耳', done: !!(this.form.ear.right && this.form.ear.left) },
       { mark: '④', sec: 'sec-teeth', label: '歯', done: !!this.form.teeth },
+      /* **⑤⑥⑦を数に入れる**（マスター指示 2026-09-10「未入力項目、8で全部じゃないだろ、
+         ⑤⑥⑦が未入力でも残り8と出た」）。8項目しか見ていなかったので、犬体図も
+         仕上がり写真も使用オプションも空のまま「全項目入力完了」と言えてしまっていた
+         ——**画面が嘘をつく**（`D-12`）。 */
+      { mark: '⑤', sec: 'sec-skin', label: '犬体図', done: this.marks.length > 0 },
+      { mark: '⑥', sec: 'sec-photo', label: '仕上がり写真', done: this.photos.trimming.length > 0 },
       { mark: '⑧', sec: 'sec-note', label: 'メッセージ', done: !!(noteEl && noteEl.value.trim()) },
     ];
+    /* ⑦は**帯が出ているときだけ**数える。店がオプションを1つも登録していないと
+       `#sec-options` は `hidden` で、画面に無いものは埋めようがない（`D-10` の型）。 */
+    const optionsEl = document.getElementById('sec-options');
+    if (optionsEl && !optionsEl.hidden) {
+      items.splice(items.length - 1, 0,
+        { mark: '⑦', sec: 'sec-options', label: 'オプション', done: this.form.options.length > 0 });
+    }
     const missing = items.filter((i) => !i.done);
     const total = items.length;
 
@@ -1262,6 +1275,7 @@ const App = {
     if (btn.classList.contains('is-active')) set.add(name);
     else set.delete(name);
     this.form.options = [...set];
+    this.updateCompletionStatus();
   },
 
   /* 前回比のバッジを描く。**前回の体重が入ったときにも描き直せるように**
@@ -1435,6 +1449,7 @@ const App = {
     this.marksBeforeEdit = null;
     tool.classList.remove('is-open');
     setTimeout(() => this.resizeCanvas(), 50);
+    this.updateCompletionStatus();
     if (save) this.saveDraft();
   },
 
@@ -1634,11 +1649,13 @@ const App = {
   undoMark() {
     this.marks.pop();
     this.drawCanvas();
+    this.updateCompletionStatus();
   },
 
   clearCanvas() {
     this.marks = [];
     this.drawCanvas();
+    this.updateCompletionStatus();
   },
 
   /* 犬体図に付けた印を、カルテに残せる形（PNG）で取り出す。
@@ -1864,6 +1881,7 @@ const App = {
       }
     }
     this.renderPhotoThumbs(kind);
+    this.updateCompletionStatus();
     /* **その場で下書きに残す。** 画面の入力を見張っている `queue` は、
        ファイルを選んだ瞬間に走る——縮小が終わる前なので、待たずに送ると
        写真の無い下書きが残る。処理が終わったここで、明示的に残す。 */
@@ -1874,6 +1892,7 @@ const App = {
     if (this.isMultiPhoto(kind)) this.photos[kind].splice(index, 1);
     else this.photos[kind] = '';
     this.renderPhotoThumbs(kind);
+    this.updateCompletionStatus();
     this.saveDraft();
   },
 
