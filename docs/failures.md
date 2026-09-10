@@ -1358,6 +1358,35 @@
 
 ---
 
+## F-20260910-81 — **新しく足した検査が、壊れていても必ず緑になる形だった**（`window.App`）
+
+- **Date**: 2026-09-10
+- **Level**: 中（本番は無事。ただし**守っているつもりで何も守らない検査**を足しかけた）
+- **見つけた人**: 自分（赤になるはずの状態で実測したら、赤にならなかった）
+
+- **What happened**: 「引き継ぎをやめて白紙にする」を消したので、
+  **処理まで消えているか**を見る検査を足した:
+
+      const clearFn = await page.evaluate(() => typeof (window.App || {}).clearCarryOver);
+
+  消す前の版で測っても `undefined`。つまり**処理が丸ごと残っていても緑**になる。
+
+- **Why it happened**: `src/js/ui.js` は `const App = { … }` で始まる古典スクリプト。
+  トップレベルの `const` は**グローバルオブジェクトのプロパティにならない**ので、
+  `window.App` は常に `undefined`。`App` という名前では引けるのに、`window.App` では引けない。
+
+- **Fixed**: `typeof App === 'undefined' ? 'App が無い' : typeof App.clearCarryOver` にした。
+  実測: 直す前 **function** → 直したあと **undefined**。CI の `verify` でも
+  `白紙に戻す処理も残っていない typeof=undefined` で PASS。
+
+- **How to prevent**: **新しい検査は、必ず「壊した状態」で1度動かして赤を見る。**
+  `docs/ops/proof-of-red.md` が要求しているのはこれで、この件は**要求どおりに実測した
+  から見つかった**（書いて満足していたら気づけなかった）。
+  あわせて: **`window.<名前>` で引けるとは限らない。** `const` / `let` で定義したものは
+  グローバルオブジェクトに乗らない。素の名前で見ること。
+
+- **Status**: RESOLVED（CI の `verify` job が緑・本番反映済み）
+
 ## F-20260910-80 — **手元の再現が本番と形が違っていて、同じ場所で CI を2回赤にした**
 
 - **Date**: 2026-09-10
