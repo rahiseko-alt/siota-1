@@ -159,3 +159,87 @@ test('番号が在るときは、これまでどおり進む（直しで機能�
   await App.commitReport();
   assert.deepEqual(navigated, ['/edit/p/pet-1/report-9']);
 });
+
+/* ── 3. 確定と下書きが噛み合わない（`F-20260910-79`） ──────────────
+
+   下書きは写真を `data:image/…` のまま置く（実体化するのは確定の側）。
+   サーバの確定（`finalize_report`）は「下書きに `data:image/` が残っていたら
+   1件も返さない」と決めているので、**確定が中身を差し替えた後に下書きが
+   着地すると、生の `data:image/` が書き戻されて確定が落ちる**
+   （409 `report assets are incomplete`）。マスターが本番で
+   「全項目入力した後でも保存できない」と踏んだのがこれ。
+
+   `clearTimeout(this.draftTimer)` が止められるのは「これから出る」下書きだけで、
+   **もう出てしまったもの**は止まらない。写真を選んだ直後や犬体図を閉じた直後は
+   下書きが直に出ているので、そこが穴だった。 */
+
+/** 下書きと確定の**順番**を記録できる画面。下書きは合図があるまで着地しない。 */
+function loadAppWithDraft(saved = { id: 'report-9' }) {
+  const order = [];
+  let releaseDraft = () => {};
+  const gate = new Promise((resolve) => { releaseDraft = resolve; });
+  const sandbox = {
+    document: {
+      getElementById: () => null,
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      addEventListener() {},
+      createElement: () => ({
+        style: {}, dataset: {}, classList: { add() {}, remove() {} }, append() {},
+      }),
+    },
+    window: { addEventListener() {}, DUMMY: { dogs: [] } },
+    location: { search: '', get href() { return '/edit/p/pet-1'; }, set href(v) { order.push(`go:${v}`); } },
+    setTimeout: () => {},
+    clearTimeout: () => {},
+    alert: () => {},
+    console,
+    __REPORT_CONTEXT__: { petId: 'pet-1' },
+    TrimmerSupabaseStaff: {
+      saveDraft: async () => { order.push('下書き:出た'); await gate; order.push('下書き:着地'); return 'draft-1'; },
+      saveReport: async () => { order.push('確定:中身を差し替えた'); return saved; },
+      reviseReport: async () => saved,
+    },
+  };
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(`${SOURCE}\n;globalThis.__App = App;`, sandbox);
+  const App = sandbox.__App;
+  App.extractReport = () => ({ template: 'ponchi' });
+  App.today = () => '2026-09-10';
+  App.draftPetId = 'pet-1';
+  return { App, order, releaseDraft };
+}
+
+test('飛んでいる下書きが着地してから確定する（確定の後に生の data:image を書き戻さない）', async () => {
+  const { App, order, releaseDraft } = loadAppWithDraft();
+  App.saveDraft();                 // 写真を選んだ直後・犬体図を閉じた直後にこれが直に出る
+  const committing = App.commitReport();
+  await new Promise((r) => setTimeout(r, 10));   // 確定を先に走らせてみる
+  releaseDraft();
+  await committing;
+  assert.deepEqual(
+    order,
+    ['下書き:出た', '下書き:着地', '確定:中身を差し替えた', 'go:/edit/p/pet-1/report-9'],
+    `下書きが確定より後に着地している: ${order.join(' → ')}`,
+  );
+});
+
+test('確定を始めたら、新しい下書きは書かない', async () => {
+  const { App, order, releaseDraft } = loadAppWithDraft();
+  const committing = App.commitReport();
+  App.saveDraft();                 // 確定の最中に入力が動いても、ここは書かせない
+  releaseDraft();
+  await committing;
+  assert.ok(!order.includes('下書き:出た'), `確定の最中に下書きを書いている: ${order.join(' → ')}`);
+});
+
+test('確定に失敗したら、下書きをまた書ける状態に戻す（行き止まりにしない）', async () => {
+  const { App, order, releaseDraft } = loadAppWithDraft({ id: null });
+  releaseDraft();
+  await App.commitReport();
+  assert.equal(App.committing, false, '確定の印が立ったままで、以後どれだけ直しても下書きが1件も残らない');
+  App.saveDraft();
+  await new Promise((r) => setTimeout(r, 10));
+  assert.ok(order.includes('下書き:出た'), `失敗の後に下書きを書けていない: ${order.join(' → ')}`);
+});
