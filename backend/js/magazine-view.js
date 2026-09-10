@@ -450,6 +450,7 @@ function renderWeightGraph(root, weights, bestWeight) {
     y: yOf(Number(pt.kg)),
     kg: pt.kg,
     ym: pt.ym,
+    date: pt.date,
   }));
   const svgNS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(svgNS, 'svg');
@@ -499,8 +500,31 @@ function renderWeightGraph(root, weights, bestWeight) {
     svg.append(dot);
   });
   /* いつの回かを、線の両端にだけ添える。全部に付けると重なって読めない。
-     **`textContent` で入れる**——`ym` は保存済み JSON から来るので細工が混ざりうる
-     （`D-11`・`verify:xss` が `weights[].ym` を突く）。 */
+     **`textContent` で入れる**——`ym` も `date` も保存済み JSON から来るので細工が
+     混ざりうる（`D-11`・`verify:xss` が `weights[].ym` を突く）。 */
+  /* **日まで出す**（マスター指示 2026-09-10「日も書け。例 2026/09/05 → 26/09/05」）。
+     月だけだと、同じ月に2回来た回が同じ札になって見分けられない。
+     日が無い古い記録（`date` が空・`weightHistoryFromReports` は `ym` だけでも点を作る）
+     では月までに落とす——**無い日を作らない**（`D-10`）。 */
+  const stampLabel = (pt) => {
+    /* **`ym` を先に見る。** ここは体重の札そのもので、`date` は日の桁を借りるだけ。
+       `ym` が「年-月」の形をしていない値（保存済み JSON からは何でも入る・`D-11`）は
+       **そのまま全文を出す**。`date` を優先すると、`ym` に入った細工が画面に一度も
+       出ず、**`verify:xss` が「届いていない＝何も検査できていない」で赤になる**
+       （実測: PR #100 で 23/24 PASS。細工を止めているのは `textContent` であって、
+       出さないことではない）。 */
+    const month = String(pt.ym || '').match(/^(\d{4})-(\d{2})$/);
+    if (!month) return String(pt.ym || '');
+    /* 日は `date` から借りる（マスター指示 2026-09-10「日も書け。例 26/09/05」）。
+       月だけだと、同じ月に2回来た回が同じ札になって見分けられない。
+       **月がずれている `date` は使わない**——別の回の日を貼ると嘘になる。
+       日が無い古い記録は月までに落とす（**無い日を作らない**・`D-10`）。 */
+    const day = String(pt.date || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (day && day[1] === month[1] && day[2] === month[2]) {
+      return `${month[1].slice(2)}/${month[2]}/${day[3]}`;
+    }
+    return `${month[1].slice(2)}/${month[2]}`;
+  };
   const monthLabel = (pt, x, anchor) => {
     const t = document.createElementNS(svgNS, 'text');
     t.setAttribute('x', String(x));
@@ -508,7 +532,9 @@ function renderWeightGraph(root, weights, bestWeight) {
     t.setAttribute('text-anchor', anchor);
     t.setAttribute('font-size', '9.5');
     t.setAttribute('fill', '#8c8c88');
-    t.textContent = String(pt.ym).slice(0, 7);
+    /* 札は絵の中に置くので、読めない値が来たときだけ長さで抑える
+       （全文は下の「直近:」に出る）。 */
+    t.textContent = stampLabel(pt).slice(0, 10);
     return t;
   };
   const first = coords[0];
@@ -526,7 +552,7 @@ function renderWeightGraph(root, weights, bestWeight) {
   wrap.append(label, svg);
   const current = document.createElement('div');
   current.style.cssText = 'font-size:12.5px;margin-top:8px;color:var(--ink-secondary)';
-  current.textContent = `直近: ${last.ym} ${last.kg}kg${bestWeight ? `（目標 ${bestWeight}kg）` : ''}`;
+  current.textContent = `直近: ${stampLabel(last)} ${last.kg}kg${bestWeight ? `（目標 ${bestWeight}kg）` : ''}`;
   wrap.append(current);
   host.append(wrap);
 }
