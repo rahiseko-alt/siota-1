@@ -138,25 +138,25 @@ try {
   await page.waitForSelector('#screen-3.is-active', { timeout: 20_000 });
   check('④ カルテ作成画面まで、押すだけで着いた', true);
 
-  /* ── 引き継ぎの帯が出ているか（言ったことと、やったことが合うか）──
+  /* ── 引き継ぎが走ったか ────────────────────────────────────────
      引き継ぎは**サーバとの往復のあと**に起きる。画面が出た瞬間に読むと、
-     「まだ来ていない」を「入っていない」と読み違える。帯に字が入るまで待つ。 */
+     「まだ来ていない」を「入っていない」と読み違える。
+
+     **合図に帯を使わない**（マスター指示 2026-09-10「引き継ぎ自体はデフォルトだから
+     記載不要」で、「引き継ぎました」の告知は消した）。代わりに**引き継いだ値そのもの**が
+     画面に入るまで待つ——告知より、こちらのほうが見たいものに近い。 */
   const arrived = await page
-    .waitForFunction(() => {
-      const el = document.getElementById('carry-over-text');
-      return !!el && el.textContent.trim() !== '';
-    }, null, { timeout: 20_000 })
+    .waitForFunction(() => !!document.querySelector('[data-group="nail"][data-side="front"] .stepper-btn.is-active'),
+      null, { timeout: 20_000 })
     .then(() => true)
     .catch(() => false);
-  check('引き継ぎが実際に走った（帯に字が入った）', arrived);
+  check('引き継ぎが実際に走った（前回の値が画面に入った）', arrived);
 
-  const band = page.locator('#carry-over-undo');
-  const bandVisible = await band.isVisible();
-  const bandText = await page.locator('#carry-over-text').textContent();
-  check('引き継ぎの帯が出ている', bandVisible, bandText.slice(0, 30));
-  for (const word of ['爪', '耳', '歯', 'BCS', 'ベスト体重', '犬体図の印']) {
-    check(`帯が「${word}」を名指ししている`, bandText.includes(word));
-  }
+  /* **告知は出さない。** 出していた頃は「◯◯から 爪・耳・歯… を引き継ぎました」と
+     毎回出ていた。引き継ぎは既定の動きなので知らせない（マスター指示 2026-09-10）。
+     ここが赤なら、告知が戻っている。 */
+  const bandVisible = await page.locator('#carry-over-undo').isVisible();
+  check('引き継ぎの告知を出していない（引き継ぎは既定の動き）', bandVisible === false);
 
   /* ── 空にする項目 ─────────────────────────────────────────────
      **画面の値を読む。** `App.form` ではなく入力欄そのものを見る。 */
@@ -232,7 +232,7 @@ try {
     await page.locator(selector).first().screenshot({ path: `.human/carry-over/${name}.png` })
       .catch(() => {});
   };
-  await shot('1_引き継ぎの帯', '.carry-over');
+  await shot('1_爪と耳_前回から引き継ぎ済み', '.clinical-group:has([data-group="nail"])');
   await shot('2_来店日とコース_空のまま', '.clinical-group:has(#input-visit-date)');
   await shot('3_爪_前回から引き継ぎ', '.clinical-group:has([data-group="nail"])');
   await shot('4_耳と歯_前回から引き継ぎ', '.clinical-group:has([data-ear="right"])');
@@ -243,18 +243,19 @@ try {
   const drafts = await countDrafts(worker.base, headers, petId);
   check('触っていないので下書きは生えていない', drafts === 0, `draft=${drafts}`);
 
-  /* ── 「引き継ぎをやめて白紙にする」が効くか ──────────────────── */
-  /* 帯が出ていないとき（引き継ぎが起きていないとき）は押せない。
-     **押せないことで検査を終わらせない**——以降の項が消えると、
-     壊したときに何が守れていないのか分からなくなる。 */
-  const clearable = await page.locator('.carry-over__clear').isVisible().catch(() => false);
-  if (clearable) await page.locator('.carry-over__clear').click();
-  const afterNail = await page.locator('[data-group="nail"] .stepper-btn.is-active').count();
-  const afterTeeth = await page.locator('#teeth-selector-grid .teeth-pill-btn.is-active').count();
-  check('白紙にすると、引き継いだ選択が全部外れる', afterNail === 0 && afterTeeth === 0,
-    `nail=${afterNail} teeth=${afterTeeth}`);
-  const bandAfter = await page.locator('#carry-over-undo').isVisible();
-  check('白紙にすると、引き継ぎの帯が消える', bandAfter === false);
+  /* ── 「引き継ぎをやめて白紙にする」は消した ────────────────────
+     告知と一緒に消した（マスター指示 2026-09-10）。**押す場所が無いのに処理だけ
+     残す**のは `A-5` なので、ボタンも `clearCarryOver()` も落としてある。
+     ここが赤なら、どちらかが戻っている。 */
+  const clearButtons = await page.locator('.carry-over__clear').count();
+  check('「引き継ぎをやめて白紙にする」の入口が無い', clearButtons === 0, `入口=${clearButtons}`);
+  /* **`window.App` で見ない。** `ui.js` は `const App = {…}` なので、グローバル
+     オブジェクトのプロパティにはならない（`window.App` は常に `undefined`）。
+     そこを見ると、処理が残っていても緑になる**中身の無い検査**になる（`偽-5`）。
+     素の `App` を見る——実測でこの違いを踏んだ。 */
+  const clearFn = await page.evaluate(() => (typeof App === 'undefined' ? 'App が無い' : typeof App.clearCarryOver));
+  check('白紙に戻す処理も残っていない（押す場所が無いのに動く道を残さない）',
+    clearFn === 'undefined', `typeof=${clearFn}`);
   const initiallyHidden = await page.evaluate(() => {
     /* **`hidden` が CSS に負けていないか。** `.carry-over { display: flex }` を
        素で書くと `[hidden] { display: none }` を上書きし、引き継ぎが起きていない
@@ -270,10 +271,10 @@ try {
      さらに次（7枚目）でまた引き継げる**ところまで通す。 */
   await page.reload();
   await page.waitForSelector('#screen-3.is-active', { timeout: 20_000 });
-  await page.waitForFunction(() => {
-    const el = document.getElementById('carry-over-text');
-    return !!el && el.textContent.trim() !== '';
-  }, null, { timeout: 20_000 }).catch(() => {});
+  await page.waitForFunction(
+    () => !!document.querySelector('[data-group="nail"][data-side="front"] .stepper-btn.is-active'),
+    null, { timeout: 20_000 },
+  ).catch(() => {});
 
   await page.fill('#input-visit-date', '2026-09-03');
   await page.selectOption('[data-field="course"]', { index: 1 }).catch(async () => {
@@ -405,10 +406,8 @@ try {
   await page.goto(`${worker.base}/edit/p/${petId}`);
   await page.waitForSelector('#screen-3.is-active', { timeout: 20_000 });
   const seventh = await page
-    .waitForFunction(() => {
-      const el = document.getElementById('carry-over-text');
-      return !!el && el.textContent.trim() !== '';
-    }, null, { timeout: 20_000 })
+    .waitForFunction(() => !!document.querySelector('[data-group="nail"][data-side="front"] .stepper-btn.is-active'),
+      null, { timeout: 20_000 })
     .then(() => true)
     .catch(() => false);
   check('7枚目も「前回の続き」から始まる', seventh);

@@ -312,10 +312,11 @@ const App = {
   },
 
   /* 下書きの続きを開いたときに、**前回のままの項目を名指しで出す。**
-     引き継ぎ直後の帯（`applyCarryOver`）と同じ場所を使うが、**「白紙にする」は出さない**
-     ——ここまでに今回の体重やコースが入っていることがあり、`clearCarryOver()` は
-     それも含めて初期値に戻すので、**人が入れたものを消してしまう**。項目そのものは
-     すぐ上に並んでいるので、直すのは1つずつでよい。 */
+
+     **これは「引き継ぎました」の告知ではない**（あれはマスター指示 2026-09-10 で
+     やめた——引き継ぎは既定の動きなので毎回言わない）。こちらは
+     **前回の所見のまま確定してしまう手前で止める警告**で、消すと
+     「前回の所見が今回の所見として飼い主に届く」が黙って起きる（`D-12`）。 */
   showStillSameBand(labels, previous) {
     if (!labels || labels.length === 0) return false;
     const text = document.getElementById('carry-over-text');
@@ -324,8 +325,6 @@ const App = {
       text.textContent = `${labels.join('・')} は ${when}のままです。`
         + '今回見た結果に直してから確定してください。';
     }
-    const clear = document.getElementById('carry-over-clear');
-    if (clear) clear.hidden = true;
     const band = document.getElementById('carry-over-undo');
     if (band) band.hidden = false;
     return true;
@@ -342,42 +341,14 @@ const App = {
     const labels = this.carryOverLabels(carried);
     if (labels.length === 0) return false;
     this.applyReport(carried);
-    this.carriedOver = true;
-    /* **ドックの状態欄には書かない。** あそこは「未記入: 爪のチェック」を出す場所で、
-       次の打鍵で `updateCompletionStatus()` に上書きされる。引き継ぎの告知は
-       消えては困るので、専用の帯を持つ。 */
-    const text = document.getElementById('carry-over-text');
-    if (text) {
-      const when = (previous && previous.date) ? `${previous.date} のカルテ` : '前回のカルテ';
-      text.textContent = `${when}から ${labels.join('・')} を引き継ぎました。日付・コース・体重・オプション・写真・メッセージは今回の分を入れてください。`;
-    }
-    /* 引き継いだ直後は「白紙にする」を出す（まだ何も入っていないので安全）。
-       下書きを再開したときは出さない（`showStillSameBand`）。 */
-    const clear = document.getElementById('carry-over-clear');
-    if (clear) clear.hidden = false;
-    const band = document.getElementById('carry-over-undo');
-    if (band) band.hidden = false;
+    /* **引き継いだことは知らせない**（マスター指示 2026-09-10
+       「引き継ぎ自体はデフォルトだから記載不要」）。前まではここで
+       「◯◯から 爪・耳・歯… を引き継ぎました」の帯を出していた。
+       **値が入ることは既定の動きなので、毎回言う必要がない。**
+       ただし「**前回のまま確定しそうなとき**」は別で、そちらは
+       `showStillSameBand()` が引き続き名指しで言う——あれは
+       「引き継ぎました」の告知ではなく、**直してから確定しろ**の警告。 */
     return true;
-  },
-
-  /* 引き継ぎをやめて白紙に戻す。**まだ何も保存していない**段階なので、
-     消えて困るものは無い（人が1つでも触れば `watchDraft()` が下書きを作る）。 */
-  clearCarryOver() {
-    /* 初期値の形は `App.form` の宣言と揃える（`0` / `''` / `[]`）。
-       ここだけ `null` にすると、`updateCompletionStatus()` の未記入判定が
-       別の見方をすることになる。 */
-    this.form = {
-      nail: { front: 0, rear: 0 }, ear: { right: 0, left: 0 }, teeth: '', weight: 0,
-      bcs: 0, bestWeight: 0, options: [],
-    };
-    this.marks = [];
-    document.querySelectorAll('#screen-3 .stepper-btn.is-active').forEach((el) => el.classList.remove('is-active'));
-    document.querySelectorAll('#screen-3 .teeth-pill-btn.is-active').forEach((el) => el.classList.remove('is-active'));
-    this.drawCanvas();
-    this.updateCompletionStatus();
-    this.carriedOver = false;
-    const band = document.getElementById('carry-over-undo');
-    if (band) band.hidden = true;
   },
 
   resumeDraft(petId) {
