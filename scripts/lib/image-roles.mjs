@@ -41,7 +41,7 @@ export const IMAGE_ROLES = [
   },
   {
     id: 'nail-diagram',
-    file: 'nail-diagram.png',
+    file: 'nail-diagram.jpg',
     what: '④カルテ作成「② 爪のチェック」の基準図',
     seenBy: 'トリマー',
     note: '血管の位置を見て3段階を判定する図。**画質を落とさない**（`D-20260827-47`）',
