@@ -6,8 +6,8 @@
  *     犬ごとの修正も可能とする。」
  *
  * 見るもの:
- *   0. 一般スタッフは店舗の既定日数を変えられない（RLS `shops_admin_update`）
- *   1. 管理者は店舗の既定日数を変えられる（PATCH /api/shop）
+ *   0. 飼い主は店舗の既定日数を変えられない（いまの境界は「お店の人か、飼い主か」）
+ *   1. お店の人は店舗の既定日数を変えられる（PATCH /api/shop）
  *   3. 上書きが無い犬は、来店日 + 店舗の既定日数がそのまま⑤に出る
  *   4. 編集欄（この犬だけの上書き）は⑤（スタッフ）側にだけ出る
  *   5〜6. ⑤で上書きを保存すると、その場で・読み直しても新しい日付が出る
@@ -49,19 +49,45 @@ try {
   const adminSession = await passwordLogin(FIXTURE.adminEmail, LOCAL_PASSWORD);
   const adminHeaders = { Authorization: `Bearer ${adminSession.access_token}`, 'Content-Type': 'application/json' };
 
-  /* 0. 一般スタッフは店舗の既定日数を変えられない（RLS が UPDATE を0行に絞り、
-        店の側は `one()` が 404 として扱う）。 */
-  const staffPatch = await fetch(`${BASE}/api/shop`, {
-    method: 'PATCH', headers: staffHeaders, body: JSON.stringify({ defaultRevisitDays: 99 }),
-  });
-  check('0. 一般スタッフは店舗の既定日数を変えられない', staffPatch.status, 404);
+  /* 0. **飼い主**は店舗の既定日数を変えられない。
 
-  /* 1. 管理者は変えられる。 */
+     ここは以前「**一般スタッフ**は変えられない」を見ていた。`admin` と `staff` の
+     2権限を前提にした検査で、その2権限は **2026-09-06 にマスターの判断で廃止**された
+     （`D-20260906-68`・`supabase/migrations/202609060012_single_staff_role.sql`——
+     「管理者とスタッフは同一で良い」）。同じ migration が `shops_admin_update` を落として
+     `shops_staff_update`（その店のメンバーなら誰でも）に置き換えている。
+     **つまりスタッフが変えられるのは、決めたとおりの挙動。** 検査のほうが古かった。
+
+     5日間そのままだったのは、**この検査が CI に入っていなかった**から
+     （`F-20260910-82`）。いま在る境界は「お店の人か、飼い主か」なので、そこを見る。
+
+     **結果で見る。** 応答コード（404 / 403 / 500 のどれになるか）は判定に使わない
+     ——実際に返ったコードは下に出すので、変わったら次の人が見て決められる。
+     **「変わっていない」だけを見ない**（読めていなくても等しくなってしまう・`偽-5`）。
+     土台として「そもそも読めたか」を同じ条件に置く。 */
+  const ownerSession = await passwordLogin(FIXTURE.ownerAEmail, LOCAL_PASSWORD);
+  const readDays = async () => {
+    const res = await fetch(`${BASE}/api/shop`, { headers: staffHeaders });
+    return res.ok ? (await res.json()).shop.default_revisit_days : `読めない(${res.status})`;
+  };
+  const daysBefore = await readDays();
+  const ownerPatch = await fetch(`${BASE}/api/shop`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${ownerSession.access_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ defaultRevisitDays: 99 }),
+  });
+  const daysAfterOwner = await readDays();
+  process.stdout.write(`      （飼い主の PATCH /api/shop は ${ownerPatch.status} を返した）\n`);
+  check('0. 飼い主は店舗の既定日数を変えられない',
+    `読めた=${Number.isFinite(Number(daysBefore))} 変わっていない=${String(daysAfterOwner) === String(daysBefore)}`,
+    '読めた=true 変わっていない=true');
+
+  /* 1. お店の人は変えられる（権限は1つなので、管理者のトークンも「お店の人」のトークン）。 */
   const DEFAULT_DAYS = 45;
   const adminPatch = await fetch(`${BASE}/api/shop`, {
     method: 'PATCH', headers: adminHeaders, body: JSON.stringify({ defaultRevisitDays: DEFAULT_DAYS }),
   });
-  check('1. 管理者は店舗の既定日数を変えられる', adminPatch.status, 200);
+  check('1. お店の人は店舗の既定日数を変えられる', adminPatch.status, 200);
   const shopAfter = adminPatch.ok ? (await adminPatch.json()).shop : null;
   check('1b. 変えた値が読み返せる', shopAfter && shopAfter.default_revisit_days, DEFAULT_DAYS);
 
@@ -120,7 +146,26 @@ try {
   await ownerPage.goto(`${BASE}/my/pets/${pet.id}/reports/${reportId}`, { waitUntil: 'networkidle' });
   await ownerPage.waitForSelector('.magazine-container', { timeout: 20_000 });
   check('4. 飼い主: 次回日が同じ値で届く', await revisitDate(ownerPage), addDays(VISIT_DATE, DEFAULT_DAYS));
+
+  /* 4b. 「予約はこちら」の入口（マスター指示 2026-09-10「予約はこちらボタンをつけろ。
+     押すと指定のURLに飛ぶ仕組みにしろ」）。**日付の下に在るだけでは足りない**——
+     行き先が空でも文字は出るので、`href` に中身が在ることまで見る。
+     行き先そのもの（いまは Wikipedia の仮置き）は本番が決まれば変わるので**値では縛らない**。
+     ⑤と⑥は同一レンダラなので、両方で見る。 */
+  const bookLink = (target) => target.evaluate(() => {
+    const el = document.querySelector('[data-view="revisit-book"]');
+    if (!el) return { ある: false };
+    return { ある: true, 文字: el.textContent.trim(), 行き先: el.getAttribute('href') || '', 別タブ: el.getAttribute('target') };
+  });
+  const ownerBook = await bookLink(ownerPage);
+  check('4b. 飼い主: 次回日の下に「予約はこちら」が在り、行き先が入っている',
+    ownerBook.ある && ownerBook.文字 === '予約はこちら' && /^https?:\/\/.+/.test(ownerBook.行き先)
+      && ownerBook.別タブ === '_blank' ? 'ok' : JSON.stringify(ownerBook), 'ok');
   await ownerContext.close();
+
+  const staffBook = await bookLink(page);
+  check('4c. 確認: 店の画面にも同じ入口が在る（同一レンダラ）',
+    staffBook.ある && staffBook.行き先 === ownerBook.行き先 ? 'ok' : JSON.stringify(staffBook), 'ok');
 
   /* 5. 直す欄が、どちらの画面にも無い（消したものが残っていない）。 */
   const editGone = (target) => target.evaluate(() => !document.querySelector('[data-view="revisit-days-input"]')

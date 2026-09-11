@@ -1984,9 +1984,24 @@ FAIL  2. 検査用の犬を登録できた
 使われる・⑥（飼い主）にも同じ計算結果が届くが編集欄は出ない——という
 `D-20260829-58` の全条件。
 
-- verify-revisit-interval.mjs :: 0. 一般スタッフは店舗の既定日数を変えられない
-- verify-revisit-interval.mjs :: 1. 管理者は店舗の既定日数を変えられる
+- verify-revisit-interval.mjs :: 0. 飼い主は店舗の既定日数を変えられない
+- verify-revisit-interval.mjs :: 1. お店の人は店舗の既定日数を変えられる
 - verify-revisit-interval.mjs :: 1b. 変えた値が読み返せる
+
+> **2026-09-11 追記（名前だけ変えた・件数は減らしていない）**: 上の2行は
+> 旧「0. **一般スタッフ**は店舗の既定日数を変えられない」「1. **管理者**は…」。
+> `admin` と `staff` の2権限は **2026-09-06 にマスターの判断で廃止**され
+> （`D-20260906-68`「管理者とスタッフは同一で良い」・
+> `supabase/migrations/202609060012_single_staff_role.sql`）、
+> `shops_admin_update` は `shops_staff_update`（その店のメンバーなら誰でも）に
+> 置き換わっている。**旧 `0.` は、もう存在しない境界を見ていた。**
+> 消さずに、いま在る境界（お店の人か、飼い主か）へ**付け替えた**。
+> 壊し方の台帳（`mutate-run.mjs`）の本数も減らしていない。
+> `verify-admin.mjs` の 2026-09-02 と同じ扱い。
+>
+> **5日間気づけなかった理由**: この検査は CI に入っていなかった（`F-20260910-82`）。
+> **走らない検査は、古くなっても分からない。**
+
 - verify-revisit-interval.mjs :: 2. 検査用の犬を登録できた
 - verify-revisit-interval.mjs :: 3. 確認: 次回日（上書き無し・店舗の既定日数）
 - verify-revisit-interval.mjs :: 4. 飼い主: 次回日が同じ値で届く
@@ -2092,6 +2107,11 @@ verify-photo-roundtrip.mjs / verify-delete.mjs / verify-draft.mjs / verify-xss.m
 > **ここに足すのは「埋めるべきでないもの」だけ。** 埋められるのに面倒だから、は該当しない。
 > 判断に迷ったら、まず壊し方を書いて実測すること。
 
+
+- verify-revisit-interval.mjs :: 4b. 飼い主: 次回日の下に「予約はこちら」が在り、行き先が入っている
+  理由: この容器には docker が無く、ローカル Supabase を起こせないので `npm run verify:revisit-interval` を1度も実行できない。同じ見方（`[data-view="revisit-book"]` を読む）では直す前 null・直したあと href 入りを実ブラウザで実測しているが、検査そのものの赤は見ていない。
+- verify-revisit-interval.mjs :: 4c. 確認: 店の画面にも同じ入口が在る（同一レンダラ）
+  理由: 同上。⑤と⑥が同じレンダラを使っていることの確認で、実データの往復が要る。docker のある回に赤を見て移すこと。
 
 - verify-carry-over.mjs :: 引き継ぎの告知を出していない（引き継ぎは既定の動き）
   理由: この容器には docker が無く、ローカル Supabase を起こせないので `npm run verify:carry-over` を1度も実行できない。告知を出す行を戻して赤を見る、という壊し方はできるが、その赤を実際に見ていないので証明済みとは書けない。docker のある回に実測して移すこと。
@@ -3121,6 +3141,24 @@ $ node --test test/report-commit-guard.test.mjs      ← 直しを入れ直し�
 > 「前回の値が画面に入った」の4件を下の「未証明」に置き、**引き継いだ値そのものを見る**
 > 検査（爪・耳・歯・BCS・ベスト体重・犬体図の印）は今までどおり全部残してある。
 > 消した挙動そのものをやめたので `verify-revisit-interval` のときと同じ扱い。
+
+- verify-revisit-interval.mjs :: 4b. 飼い主: 次回日の下に「予約はこちら」が在り、行き先が入っている
+- verify-revisit-interval.mjs :: 4c. 確認: 店の画面にも同じ入口が在る（同一レンダラ）
+  （2026-09-10 追加。マスター指示「予約はこちらボタンをつけろ。押すと指定のURLに飛ぶ仕組みにしろ」。
+   **この手元では `npm run verify:revisit-interval` を実行できない**——docker が無く
+   ローカル Supabase を起こせない。ただし**同じ見方で、赤と緑は実ブラウザで見ている**:
+   `[data-view="revisit-book"]` を読んで、直す前 **無し（null）**、直したあと
+   **文字「予約はこちら」／`href` は Wikipedia の人工知能／`target=_blank`**。
+   さらに**実際に押して**、新しいタブがその URL を要求するところまで見た。
+   **検査そのものの赤ではない**ので証明済みには移さない。docker のある回に
+   `mutate-run.mjs` の `revisit-book-href-off` を走らせて移すこと。
+
+   **2026-09-10 追記**: この2件を足したあと、`verify:revisit` が **CI に1本も
+   入っていない**ことに気づいた（`.github/workflows/ci.yml` の `verify` job に
+   この1本だけ無く、PR #103 の verify ログに `verify-revisit-interval` の文字が0件）。
+   **足した検査が、どこでも走らない検査だった**——守っているつもりで何も守っていない
+   形（`偽-5`）。CI に足したので、いまは本物の Supabase で走る。
+   それでも「壊すと赤になる」は別の話なので、ここは未証明のまま置く。）
 
 - verify-carry-over.mjs :: 引き継ぎの告知を出していない（引き継ぎは既定の動き）
 - verify-carry-over.mjs :: 引き継ぎが実際に走った（前回の値が画面に入った）
