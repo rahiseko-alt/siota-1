@@ -68,7 +68,6 @@ Google Fonts への直リンクを外すにあたり、日本語4ファミリは
 | `dog-doodle.jpg` | Google C2PA Media Services | 検索一覧のデモ用アバター | `c2pa.created` + `c2pa.edited` |
 | `dog-poodle.jpg` | Google C2PA Media Services | 同上 | 同上 |
 | `body-marking.png` | Google C2PA Media Services | 犬体図（Konva の下絵） | `c2pa.converted` あり |
-| `nail-diagram.png` | Google C2PA Media Services | 爪の状態図 | **6.1MB**。追跡対象13MB のうち約46%を占める |
 
 **確認事項**: 生成サービスの利用規約上、生成物の商用利用可否と帰属表示の要否は
 アカウントのプラン・生成時点の規約に依存する。**マスターが生成したものであれば問題ない**が、
@@ -88,6 +87,7 @@ Google Fonts への直リンクを外すにあたり、日本語4ファミリは
 | `photo-dog-paw-high.jpg` | 1122x1402 | 230KB | 検索一覧の既定アバター |
 | `photo-dog-pawpad.jpg` | 1484x1060 | 196KB | 肉球画面の意匠 |
 | `photo-trim-action.jpg` | 1536x1024 | 257KB | **`VERIFIED`（マスター撮影・2026-08-27 確認）**。ログイン画面と⑤ギャラリーで使用中 |
+| `nail-diagram.jpg` | 1392x1130 | 316KB | **`VERIFIED`（マスター提供・2026-09-11）**。④カルテ作成「② 爪のチェック」の基準図。GitHub 経由で受け取り `swap-image.mjs` で差し替え |
 | `guide-nail-state.jpg` | 1440x1092 | 340KB | 爪の状態ガイド |
 | `guide-teeth-state.jpg` | 1321x1191 | 257KB | 歯の状態ガイド |
 | `teeth-diagram.jpg` | 700x1162 | 92KB | 歯式図 |
@@ -157,18 +157,23 @@ URL を知っていれば誰でも取得でき、これは D-4「出所未確認
 - [x] **`photo-trim-action.jpg`（最優先）**: ログイン画面で使用中・
       ログイン前の誰にでも見える。**マスターが撮影したものと確認できた**
       （2026-08-27・実物を見せて確認）。`VERIFIED` に更新済み
-- [ ] AI 生成3件（`app-icon.png` / `body-marking.png` / `nail-diagram.png`。
-      使用中のもののみ）について、生成したアカウントと当時の規約を確認する
+- [ ] AI 生成**2件**（`app-icon.png` / `body-marking.png`。使用中のもののみ）について、
+      生成したアカウントと当時の規約を確認する
+      （**`nail-diagram` は 2026-09-11 にマスター提供のものへ差し替えて片づいた**）
 - [ ] 使用中の `UNVERIFIED`（`teeth-diagram.jpg` / `body-side.png`）の
       出所を確認する。トリマー側の画面にしか出ないので飼い主には配られないが、
       外部公開物であることに変わりはない
       （`icon-*.png` 5件は 2026-09-02 に削除したので、この宿題から外れた）
-- [x] `nail-diagram.png` 6.1MB の圧縮 → **圧縮しない**（2026-08-27・`D-20260827-47`）。
+- [x] `nail-diagram` の重さ → **こちらでは圧縮しない**（2026-08-27・`D-20260827-47`）。
       血管の位置を見て判定する図なので、画質は落とさない。重さへの手当ては
-      `loading="lazy"` だけ（配るものは変えず、要るときまで落とさない）
-- [ ] **`nail-diagram.png` はマスターが後日差し替える**（2026-08-27・マスター発言）。
-      差し替えたら**この台帳の出どころを書き換える**——いまの1枚は AI 生成・`UNVERIFIED` で、
-      上の「AI 生成3件」の宿題に入っている。差し替えで1つ片づく
+      `loading="lazy"` だけ（配るものは変えず、要るときまで落とさない）。
+      **2026-09-11 の差し替えで 6.1MB → 316KB になった**——縮めたのではなく、
+      マスターが渡してくれた実物がもともと軽い（渡されたものをそのまま置いている）
+- [x] **`nail-diagram` はマスターが後日差し替える**（2026-08-27・マスター発言）
+      → **2026-09-11 に差し替え済み**。マスター提供の写真（爪の断面に「指／肉球／地面」
+      「血管＋神経」と①②③の切る位置を重ねたもの）。`nail-diagram.png`（AI 生成・
+      `UNVERIFIED`・6.1MB）→ `nail-diagram.jpg`（`VERIFIED`・316KB）。
+      受け取りは GitHub 経由、差し替えは `node scripts/swap-image.mjs nail-diagram`
 
 **済**:
 - [x] 未参照の `UNVERIFIED` 7件と `AI-GENERATED` 2件を削除し、配信を止めた（2026-08-24・
