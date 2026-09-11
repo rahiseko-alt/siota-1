@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>操作手順ナビ | SALTY DOG カルテ</title>
+<style>
+  :root{
+    --ink:#121212; --ink-2:#4a4a48; --ink-3:#8c8c88;
+    --line:#dcdcd6; --paper:#faf9f6; --band:#f2f2ef;
+    --accent:#4a7c59; --warn:#c85a32;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",system-ui,sans-serif;
+    line-height:1.8; -webkit-text-size-adjust:100%;
+  }
+  .wrap{max-width:860px; margin:0 auto; padding:32px 20px 64px}
+  header{border-bottom:3px solid var(--ink); padding-bottom:16px; margin-bottom:28px}
+  h1{font-size:26px; letter-spacing:.04em; margin:0 0 6px}
+  .sub{font-size:13.5px; color:var(--ink-2); margin:0}
+  .lead{
+    background:#fff; border:1px solid var(--line); padding:14px 16px;
+    font-size:13.5px; color:var(--ink-2); margin:22px 0 30px;
+  }
+  .lead b{color:var(--ink)}
+  h2{
+    font-size:15px; letter-spacing:.08em; color:var(--ink-3);
+    margin:34px 0 12px; padding-bottom:6px; border-bottom:1px solid var(--line);
+  }
+  .case{
+    background:#fff; border:1px solid var(--line);
+    padding:14px 16px; margin-bottom:12px; page-break-inside:avoid;
+  }
+  .case__title{font-size:15.5px; font-weight:700; margin:0 0 10px}
+  .case__title .of{color:var(--accent)}
+  .steps{display:flex; flex-wrap:wrap; align-items:center; gap:6px 4px; margin:0}
+  .step{
+    display:inline-block; background:var(--band); border:1px solid var(--line);
+    padding:5px 11px; font-size:13.5px; white-space:nowrap;
+  }
+  .step.is-goal{background:var(--ink); color:#fff; border-color:var(--ink)}
+  .arrow{color:var(--ink-3); font-size:13px; padding:0 1px}
+  .note{
+    font-size:12.5px; color:var(--ink-2); margin:9px 0 0;
+    padding-left:12px; border-left:2px solid var(--line);
+  }
+  .note.is-warn{border-left-color:var(--warn); color:var(--warn)}
+  .tag{
+    display:inline-block; font-size:11px; letter-spacing:.06em;
+    background:var(--ink); color:#fff; padding:2px 8px; margin-left:6px; vertical-align:2px;
+  }
+  .tag.is-owner{background:var(--accent)}
+  footer{margin-top:40px; padding-top:14px; border-top:1px solid var(--line);
+         font-size:12px; color:var(--ink-3)}
+  @media print{
+    body{background:#fff}
+    .wrap{max-width:none; padding:0 8mm}
+    .case,.lead{border-color:#bbb}
+    h2{break-after:avoid}
+  }
+  @media (max-width:480px){
+    .wrap{padding:20px 14px 48px}
+    h1{font-size:21px}
+    .step{font-size:12.5px; padding:5px 9px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>操作手順ナビ</h1>
+  <p class="sub">SALTY DOG カルテ ／ お店の方むけ操作早見表</p>
+</header>
+
+<p class="lead">
+  <b>使い方</b>：やりたいことを左の見出しから探して、矢印のとおりに押していってください。<br>
+  <b>入口はいつも1つ</b>です。ページを開いて Google でログインすると、
+  お店の方は作業画面、飼い主さんはご自分のカルテ画面へ自動で分かれます。
+</p>
+
+<h2>毎日の仕事</h2>
+
+<div class="case">
+  <p class="case__title"><span class="of">はじめての子のカルテを書く場合</span></p>
+  <p class="steps">
+    <span class="step">ページを開く</span><span class="arrow">→</span>
+    <span class="step">Google でログイン</span><span class="arrow">→</span>
+    <span class="step">一覧から犬を押す</span><span class="arrow">→</span>
+    <span class="step">03 カルテ作成</span><span class="arrow">→</span>
+    <span class="step">上から順に入れる</span><span class="arrow">→</span>
+    <span class="step">確定</span><span class="arrow">→</span>
+    <span class="step is-goal">04 顧客カルテ</span>
+  </p>
+  <p class="note">一覧に犬がいないときは、先に「新しい飼い主さんと犬を登録する場合」を行ってください。</p>
+</div>
+
+<div class="case">
+  <p class="case__title"><span class="of">2回目以降のカルテを書く場合</span></p>
+  <p class="steps">
+    <span class="step">一覧から犬を押す</span><span class="arrow">→</span>
+    <span class="step">前回の内容が入った状態で開く</span><span class="arrow">→</span>
+    <span class="step">今回の分を入れ直す</span><span class="arrow">→</span>
+    <span class="step">確定</span><span class="arrow">→</span>
+    <span class="step is-goal">04 顧客カルテ</span>
+  </p>
+  <p class="note">
+    前回から引き継がれるのは <b>爪・耳・歯・BCS・ベスト体重・犬体図の印</b> の6つです。<br>
+    <b>日付・コース・体重・オプション・写真・メッセージは毎回空</b>なので、今回の分を入れてください。
+  </p>
+  <p class="note is-warn">
+    引き継いだ項目をそのまま確定すると、<b>前回の所見が今回の所見としてお客様に届きます。</b>
+    今回見た結果に直してから確定してください。
+  </p>
+</div>
+
+<div class="case">
+  <p class="case__title"><span class="of">確定できない・未記入がある場合</span></p>
+  <p class="steps">
+    <span class="step">画面のいちばん下の帯を見る</span><span class="arrow">→</span>
+    <span class="step">「未記入 ◎①…」の番号を確認</span><span class="arrow">→</span>
+    <span class="step">右の「➜」を押す</span><span class="arrow">→</span>
+    <span class="step">その項目へ飛ぶ</span><span class="arrow">→</span>
+    <span class="step">入れる</span><span class="arrow">→</span>
+    <span class="step is-goal">確定</span>
+  </p>
+  <p class="note">
+    番号は入力欄の見出しと同じです。
+    ◎来店日・コース ／ ①体重 ／ ②爪 ／ ③耳 ／ ④歯 ／ ⑤犬体図 ／ ⑥仕上がり写真 ／ ⑦オプション ／ ⑧メッセージ。
+  </p>
+</div>
+
+<div class="case">
+  <p class="case__title"><span class="of">過去のカルテを探す場合</span></p>
+  <p class="steps">
+    <span class="step">02 カルテ検索</span><span class="arrow">→</span>
+    <span class="step">犬の名前で探す</span><span class="arrow">→</span>
+    <span class="step is-goal">カードを押して開く</span>
+  </p>
+</div>
+
+<h2>登録とお渡し</h2>
+
+<div class="case">
+  <p class="case__title"><span class="of">新しい飼い主さんと犬を登録する場合</span></p>
+  <p class="steps">
+    <span class="step">画面上の「管理」</span><span class="arrow">→</span>
+    <span class="step">② 新規</span><span class="arrow">→</span>
+    <span class="step">飼い主さんを登録</span><span class="arrow">→</span>
+    <span class="step">続けて犬を登録</span><span class="arrow">→</span>
+    <span class="step is-goal">作業画面の一覧に出る</span>
+  </p>
+  <p class="note"><b>順番があります。</b>飼い主さんを先に登録しないと、犬を登録できません。</p>
+</div>
+
+<div class="case">
+  <p class="case__title"><span class="of">お客様にカルテを見てもらう場合</span></p>
+  <p class="steps">
+    <span class="step">一覧の犬のカード</span><span class="arrow">→</span>
+    <span class="step">初回登録QR</span><span class="arrow">→</span>
+    <span class="step">QR か URL をお客様に渡す</span><span class="arrow">→</span>
+    <span class="step">お客様がご自分のスマホで開く</span><span class="arrow">→</span>
+    <span class="step is-goal">Google でログインして完了</span>
+  </p>
+  <p class="note is-warn">
+    この QR は <b>最初にクリックした Google アカウント</b>に結び付きます。
+    渡す相手をお間違えのないようご注意ください。
+  </p>
+</div>
+
+<h2>直す・変える</h2>
+
+<div class="case">
+  <p class="case__title"><span class="of">確定したカルテを直す場合</span></p>
+  <p class="steps">
+    <span class="step">管理</span><span class="arrow">→</span>
+    <span class="step">① リピーター</span><span class="arrow">→</span>
+    <span class="step">犬を選ぶ</span><span class="arrow">→</span>
+    <span class="step">② カルテ修正</span><span class="arrow">→</span>
+    <span class="step">直す</span><span class="arrow">→</span>
+    <span class="step is-goal">確定</span>
+  </p>
+  <p class="note">直した内容は、お客様の画面にもそのまま反映されます。</p>
+</div>
+
+<div class="case">
+  <p class="case__title"><span class="of">次回のご来店時期の日数を変える場合</span></p>
+  <p class="steps">
+    <span class="step">管理</span><span class="arrow">→</span>
+    <span class="step">④ 店舗設定</span><span class="arrow">→</span>
+    <span class="step">日数を変える</span><span class="arrow">→</span>
+    <span class="step is-goal">保存</span>
+  </p>
+  <p class="note">カルテの「次回のおすすめご来店時期」は、来店日にこの日数を足した日付で出ます。</p>
+</div>
+
+<div class="case">
+  <p class="case__title"><span class="of">使用オプションの名前を変える場合</span></p>
+  <p class="steps">
+    <span class="step">管理</span><span class="arrow">→</span>
+    <span class="step">④ 店舗設定</span><span class="arrow">→</span>
+    <span class="step">オプションの名前を直す</span><span class="arrow">→</span>
+    <span class="step is-goal">保存</span>
+  </p>
+  <p class="note">ここで決めた名前が、カルテの「⑦ 使用オプション」に並びます。</p>
+</div>
+
+<h2>消す</h2>
+
+<div class="case">
+  <p class="case__title"><span class="of">消す場合</span></p>
+  <p class="steps">
+    <span class="step">管理</span><span class="arrow">→</span>
+    <span class="step">③ 削除</span><span class="arrow">→</span>
+    <span class="step">消すものを選ぶ</span><span class="arrow">→</span>
+    <span class="step is-goal">確認して削除</span>
+  </p>
+  <p class="note">
+    選べるのは3種類です。<br>
+    ① 顧客アカウント全削除（飼い主さんと、その犬とカルテが全部消えます）<br>
+    ② ペットアカウント削除（その犬とカルテが消えます）<br>
+    ③ カルテ1枚単位削除（そのカルテ1枚だけ消えます）
+  </p>
+  <p class="note is-warn"><b>消したものは戻せません。</b>お客様の画面からも同時に消えます。</p>
+</div>
+
+<h2>飼い主さん（お客様）の操作<span class="tag is-owner">お客様むけ</span></h2>
+
+<div class="case">
+  <p class="case__title"><span class="of">お客様がカルテを見る場合</span></p>
+  <p class="steps">
+    <span class="step">ページを開く</span><span class="arrow">→</span>
+    <span class="step">Google でログイン</span><span class="arrow">→</span>
+    <span class="step">ご自分の犬を押す</span><span class="arrow">→</span>
+    <span class="step is-goal">カルテを開く</span>
+  </p>
+  <p class="note">お客様には、お店の作業画面は出ません。ご自分の犬のカルテだけが見えます。</p>
+</div>
+
+<div class="case">
+  <p class="case__title"><span class="of">お客様が次回の予約をする場合</span></p>
+  <p class="steps">
+    <span class="step">カルテを開く</span><span class="arrow">→</span>
+    <span class="step">いちばん下までスクロール</span><span class="arrow">→</span>
+    <span class="step">次回のおすすめご来店時期</span><span class="arrow">→</span>
+    <span class="step is-goal">予約はこちら</span>
+  </p>
+</div>
+
+<h2>困ったとき</h2>
+
+<div class="case">
+  <p class="case__title"><span class="of">画面から抜けられなくなった場合</span></p>
+  <p class="steps">
+    <span class="step">画面上の「ログアウト」</span><span class="arrow">→</span>
+    <span class="step">入口に戻る</span><span class="arrow">→</span>
+    <span class="step is-goal">ログインし直す</span>
+  </p>
+</div>
+
+<div class="case">
+  <p class="case__title"><span class="of">画面が古いまま変わらない場合</span></p>
+  <p class="steps">
+    <span class="step">画面を強制的に読み込み直す</span><span class="arrow">→</span>
+    <span class="step is-goal">Ctrl + Shift + R（スマホは再読み込み）</span>
+  </p>
+</div>
+
+<footer>
+  SALTY DOG カルテ ／ 操作手順ナビ
+</footer>
+
+</div>
+</body>
+</html>
