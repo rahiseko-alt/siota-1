@@ -1580,4 +1580,10 @@
 - **How to prevent**: **仕様を消したら、`grep` の対象に `scripts/` `test/` `supabase/seed.sql` を必ず入れる。**
   製品コードから消えても、検査と fixture に残っていれば、機械がその区別を生かし続ける。
 
+  **もう1つ（この直しで実際に踏んだ）**: 変数名を変えるときに、
+  `adminPatch.status` `adminPatch.ok` と**メンバー参照ごとに置換**して
+  `adminPatch.json()` を落とし、CI を赤にした（`adminPatch is not defined`）。
+  `node --check` は通る——**構文は正しく、走らせて初めて出る**。
+  **識別子そのものを置換し、そのあと古い名前で `grep` して0件を確かめる。**
+
 - **Status**: RESOLVED（`npm run check` / `npm test` EXIT 0。CI の次の実行で確かめる）
