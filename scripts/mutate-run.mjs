@@ -45,18 +45,13 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
  * 証明の役に立たない（何を検出したのか言えないため）。
  */
 export const MUTATIONS = [
-  /* ── 30回目: 一般スタッフが店舗の既定来店間隔を書き換えられてしまう
-     （2026-08-29・手元で実測・マスター指示 D-20260829-58「次回のおすすめご来店時期」）
-     RLS の `using`/`with check` を `true` に緩め、管理者限定の縛りを外す。
-     SQL の壊しなので `db reset` を通してから検査する（`mutate-run.mjs` 本体が自動で行う）。 */
-  {
-    id: 'shops-admin-update-rls-open',
-    why: '**一般スタッフが店舗の既定来店間隔を書き換えられる**（管理者限定のはずの設定が誰でも変えられる）',
-    file: 'supabase/migrations/202608290010_revisit_interval.sql',
-    find: '  using (private.is_shop_admin(id)) with check (private.is_shop_admin(id));',
-    replace: '  using (true) with check (true);',
-    scripts: ['verify-revisit-interval.mjs'],
-  },
+  /* **`shops-admin-update-rls-open` はここに在った**（30回目・2026-08-29）。
+     「一般スタッフが店舗の既定来店間隔を書き換えられる」を捕まえる壊し方だったが、
+     `admin` と `staff` の2権限は 2026-09-06 にマスターの判断で廃止され
+     （`D-20260906-68`）、`202609060012_single_staff_role.sql` が
+     `shops_admin_update` を落としている。**壊す対象がもう無い**ので削除した
+     （2026-09-11・マスター指示「機械も拾わないように削除しろ」・`F-20260910-83`）。
+     いまの境界（飼い主は変えられない）は `verify-revisit-interval.mjs` の `0.` が見る。 */
   /* ── 29回目: 店舗の既定来店間隔が変えられなくなる（PATCH /api/shop が死ぬ）
      （2026-08-29・手元で実測） PATCH 分岐を丸ごと落とすので、応答は 404 に落ちる。 */
   {
@@ -564,20 +559,14 @@ export const MUTATIONS = [
     extra: null,
     scripts: ['verify-admin.mjs'],
   },
-  {
-    /* 管理者だけ着く先が変わる形（2026-08-26 まで実際にそうだった）。
-       トリマー画面から管理画面へ戻る道が無かった時代の再現で、
-       壊すと `verify-admin.mjs` の `1.` が赤になる。 */
-    id: 'admin-lands-elsewhere',
-    why: '**管理者だけ、みんなと違う画面に着く**——日々のカルテ画面と管理画面のどちらかにしか居られなくなる（2026-08-26 まで実際に起きていた形）',
-    file: 'backend/js/supabase-auth.js',
-    find: `    if ((session.memberships || []).length > 0) {
-      location.replace('/edit');`,
-    replace: `    if ((session.memberships || []).length > 0) {
-      location.replace((session.memberships || []).some((m) => m.role === 'admin') ? '/admin' : '/edit');`,
-    extra: null,
-    scripts: ['verify-admin.mjs'],
-  },
+  /* **`admin-lands-elsewhere` はここに在った**（1回目・2026-09-02 に足した）。
+     注入していたのは `(session.memberships || []).some((m) => m.role === 'admin')` で、
+     その `role` 列は 2026-09-06 にマスターの判断で**削除**されている
+     （`D-20260906-68`・`202609060012_single_staff_role.sql`）。
+     いま注入しても `m.role` は常に `undefined` ＝ 行き先は変わらず、**壊しても赤にならない**。
+     壊す対象が無い壊し方は残さない（2026-09-11・マスター指示「機械も拾わないように削除しろ」）。
+     `verify-admin.mjs :: 1.` を当時この壊し方で赤にした記録は `proof-of-red.md` の
+     「28回目」にそのまま残す（見た事実は消さない）。 */
   {
     /* `admin-link-hidden` は入口ごと消すので、押した先を見る `1c` まで届かない
        （検査がそこで死ぬ）。**押せるが行き先が違う**形を別に用意する。 */

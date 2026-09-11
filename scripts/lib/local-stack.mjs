@@ -13,7 +13,6 @@
  *
  * `supabase/seed.sql` にある password login 専用のローカルテストアカウント:
  *   staff@local.test  — 店舗スタッフ（Local SALTY DOG）。飼い主ではない
- *   admin@local.test  — 店舗管理者
  *   owner-a@local.test — 犬 X/Y/Z の飼い主（スタッフではない）
  *   owner-b@local.test — 犬 Q の飼い主（スタッフではない）
  *   uninvited@local.test — どの犬にも紐付いていない飼い主
@@ -44,7 +43,6 @@ export const LOCAL_PASSWORD = 'LocalOnly-Password-2026!';
 export const FIXTURE = {
   shopId: '10000000-0000-0000-0000-000000000001',
   staffEmail: 'staff@local.test',
-  adminEmail: 'admin@local.test',
   ownerAEmail: 'owner-a@local.test',
   ownerAOwnerId: '30000000-0000-0000-0000-0000000000a1',
   ownerBEmail: 'owner-b@local.test',

@@ -46,8 +46,6 @@ let browser = null;
 try {
   const staffSession = await passwordLogin(FIXTURE.staffEmail, LOCAL_PASSWORD);
   const staffHeaders = { Authorization: `Bearer ${staffSession.access_token}`, 'Content-Type': 'application/json' };
-  const adminSession = await passwordLogin(FIXTURE.adminEmail, LOCAL_PASSWORD);
-  const adminHeaders = { Authorization: `Bearer ${adminSession.access_token}`, 'Content-Type': 'application/json' };
 
   /* 0. **飼い主**は店舗の既定日数を変えられない。
 
@@ -82,13 +80,13 @@ try {
     `読めた=${Number.isFinite(Number(daysBefore))} 変わっていない=${String(daysAfterOwner) === String(daysBefore)}`,
     '読めた=true 変わっていない=true');
 
-  /* 1. お店の人は変えられる（権限は1つなので、管理者のトークンも「お店の人」のトークン）。 */
+  /* 1. お店の人は変えられる（権限は1つ。「管理者」という区分はもう無い）。 */
   const DEFAULT_DAYS = 45;
-  const adminPatch = await fetch(`${BASE}/api/shop`, {
-    method: 'PATCH', headers: adminHeaders, body: JSON.stringify({ defaultRevisitDays: DEFAULT_DAYS }),
+  const shopPatch = await fetch(`${BASE}/api/shop`, {
+    method: 'PATCH', headers: staffHeaders, body: JSON.stringify({ defaultRevisitDays: DEFAULT_DAYS }),
   });
-  check('1. お店の人は店舗の既定日数を変えられる', adminPatch.status, 200);
-  const shopAfter = adminPatch.ok ? (await adminPatch.json()).shop : null;
+  check('1. お店の人は店舗の既定日数を変えられる', shopPatch.status, 200);
+  const shopAfter = shopPatch.ok ? (await shopPatch.json()).shop : null;
   check('1b. 変えた値が読み返せる', shopAfter && shopAfter.default_revisit_days, DEFAULT_DAYS);
 
   /* 2. 検査用の犬を作り、来店日つきでカルテを1枚作って確定する。 */

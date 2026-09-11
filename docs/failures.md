@@ -1541,3 +1541,49 @@
   走っていれば、その日のうちに赤で分かった。
 
 - **Status**: RESOLVED（CI の次の実行で 10/10 になることを確かめる）
+
+---
+
+## F-20260911-84 — **廃止した権限を「付け替え」で残した。指示は削除だった**
+
+- **When**: 2026-09-11（マスター指摘「この件、削除しろと指示したぞ。こういうことになるから機械も拾わないように削除しろよ」）
+- **Level**: 2
+- **Where**: `supabase/seed.sql` ／ `scripts/lib/local-stack.mjs` ／ `scripts/mutate-run.mjs` ／ `test/*`
+
+- **What happened**: `F-20260910-83` で、廃止した `admin`/`staff` の2権限を見ていた検査を
+  **付け替えて**直した。だが 2026-09-06 の指示は「**使わないものを先に削除しろ**」だった。
+  付け替えただけでは、**廃止した区別が repo のあちこちに残る**——そして機械がそれを拾い、
+  また同じことが起きる。
+
+- **Why it happened**: 2026-09-06 に消したのは **DB と製品コード**だけ。
+  検査の側（`scripts/` `test/` `supabase/seed.sql`）を同じ `grep` に入れていなかった。
+  しかも `verify:revisit` は CI に無かったので（`F-20260910-82`）、残骸に誰も当たらなかった。
+
+- **Fixed（削除したもの）**:
+  1. `supabase/seed.sql` — `admin@local.test` の口座・identity・membership の3行
+     （権限が同じなのに名前だけ「管理者」で、検査がそれを本物の区別だと読んでいた）
+  2. `scripts/lib/local-stack.mjs` — `FIXTURE.adminEmail` と説明行
+  3. 使っていた3か所を `staffEmail` に寄せた
+     （`verify-screens` の行の名札は「お店の人（管理画面）」へ）
+  4. `scripts/mutate-run.mjs` — **壊す対象が無くなった壊し方2つ**
+     - `shops-admin-update-rls-open`（`shops_admin_update` はもう無い）
+     - `admin-lands-elsewhere`（注入する `m.role === 'admin'` の `role` 列はもう無い）
+  5. `test/supabase-schema.test.mjs` — 古い migration を読んで `is_shop_admin` を
+     名指ししていた検査を、**いまの定義**（`202609060012` の `is_shop_staff`）へ向け直し、
+     「`is_shop_admin` が無いこと」も条件に足した
+  6. `test/supabase-store.test.mjs` — RLS の説明が `is_shop_admin` のままだった
+
+  **`supabase/migrations/` の過去ファイルは書き換えない**（適用済みの歴史を直すと本番と
+  手元が食い違う）。`proof-of-red.md` に残る「当時その壊し方で赤を見た」記録も消さない
+  ——**見た事実は消さない。壊す対象が無くなった仕掛けだけを外す。**
+
+- **How to prevent**: **仕様を消したら、`grep` の対象に `scripts/` `test/` `supabase/seed.sql` を必ず入れる。**
+  製品コードから消えても、検査と fixture に残っていれば、機械がその区別を生かし続ける。
+
+  **もう1つ（この直しで実際に踏んだ）**: 変数名を変えるときに、
+  `adminPatch.status` `adminPatch.ok` と**メンバー参照ごとに置換**して
+  `adminPatch.json()` を落とし、CI を赤にした（`adminPatch is not defined`）。
+  `node --check` は通る——**構文は正しく、走らせて初めて出る**。
+  **識別子そのものを置換し、そのあと古い名前で `grep` して0件を確かめる。**
+
+- **Status**: RESOLVED（`npm run check` / `npm test` EXIT 0。CI の次の実行で確かめる）

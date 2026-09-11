@@ -7,6 +7,9 @@ const lifecycleMigrationUrl = new URL('../supabase/migrations/202607160002_repor
 const invitationMigrationUrl = new URL('../supabase/migrations/202607160003_invitation_management.sql', import.meta.url);
 const storageMigrationUrl = new URL('../supabase/migrations/202607160004_private_storage_lifecycle.sql', import.meta.url);
 const importMigrationUrl = new URL('../supabase/migrations/202607160005_import_ledger_rpc.sql', import.meta.url);
+/* 取り込み台帳の RPC は `202609060012` で**いまの形**に置き換わっている（権限が1本になった回）。
+   古い定義を読んだままだと、廃止した `is_shop_admin` を検査が名指しし続ける（`F-20260910-83`）。 */
+const singleStaffRoleMigrationUrl = new URL('../supabase/migrations/202609060012_single_staff_role.sql', import.meta.url);
 
 async function migrationSql() {
   return readFile(migrationUrl, 'utf8');
@@ -130,15 +133,21 @@ test('private storage lifecycle derives paths and keeps incomplete reports non-f
   assert.match(sql, /set search_path = ''/i);
 });
 
-test('migration ledger RPC is admin-scoped and never grants direct table access', async () => {
-  const sql = await readFile(importMigrationUrl, 'utf8');
-  assert.match(sql, /private\.is_shop_admin\(target_shop\)/i);
+test('migration ledger RPC is staff-scoped and never grants direct table access', async () => {
+  /* **いまの定義を読む。** 中身（誰が呼べるか・何を弾くか）は `202609060012` が
+     `create or replace` で置き換えている。ここは以前 `202607160005` の古い定義を読み、
+     **廃止した `is_shop_admin` を名指ししていた**（`F-20260910-83`）。 */
+  const sql = await readFile(singleStaffRoleMigrationUrl, 'utf8');
+  assert.match(sql, /private\.is_shop_staff\(target_shop\)/i);
+  assert.doesNotMatch(sql, /private\.is_shop_admin\(target_shop\)/i);
   assert.match(sql, /'cloudflare-kv:' \|\| target_shop::text/i);
   assert.match(sql, /on conflict \(source_system, entity_type, legacy_key\) do update/i);
   assert.match(sql, /target_source_hash !~ '\^\[0-9a-f\]\{64\}\$'/i);
   assert.match(sql, /security definer[\s\S]*set search_path = ''/i);
-  assert.match(sql, /revoke all on function public\.write_import_ledger[\s\S]*from public, anon/i);
-  assert.doesNotMatch(sql, /grant (?:select|insert|update|delete).*import_ledger.*authenticated/i);
+  /* 権限の revoke/grant は `202607160005` のまま（`create or replace` は権限を戻さない）。 */
+  const grants = await readFile(importMigrationUrl, 'utf8');
+  assert.match(grants, /revoke all on function public\.write_import_ledger[\s\S]*from public, anon/i);
+  assert.doesNotMatch(grants, /grant (?:select|insert|update|delete).*import_ledger.*authenticated/i);
 });
 
 /* ══════════════════════════════════════════════════════════════
