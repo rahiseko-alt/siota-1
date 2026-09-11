@@ -88,6 +88,7 @@ Google Fonts への直リンクを外すにあたり、日本語4ファミリは
 | `photo-dog-pawpad.jpg` | 1484x1060 | 196KB | 肉球画面の意匠 |
 | `photo-trim-action.jpg` | 1536x1024 | 257KB | **`VERIFIED`（マスター撮影・2026-08-27 確認）**。ログイン画面と⑤ギャラリーで使用中 |
 | `nail-diagram.jpg` | 1392x1130 | 316KB | **`VERIFIED`（マスター提供・2026-09-11）**。④カルテ作成「② 爪のチェック」の基準図。GitHub 経由で受け取り `swap-image.mjs` で差し替え |
+| `body-marking-2.jpg` | 1536x1024 | 92KB | **`VERIFIED`（マスター提供・2026-09-11）**。⑤の犬体図**②**（①の下に並ぶ2枚目の下絵）。GitHub 経由で受け取った |
 | `guide-nail-state.jpg` | 1440x1092 | 340KB | 爪の状態ガイド |
 | `guide-teeth-state.jpg` | 1321x1191 | 257KB | 歯の状態ガイド |
 | `teeth-diagram.jpg` | 700x1162 | 92KB | 歯式図 |

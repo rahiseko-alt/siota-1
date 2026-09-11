@@ -83,6 +83,11 @@ const TEMPLATE = `
       <div class="wave-card-body">
         <div class="wave-body-grid-2col">
           <div class="wave-body-img-frame" data-view="skin-image-frame" hidden><img data-view="skin-image" alt="皮膚チェック図"></div>
+          <!-- 犬体図②（マスター指示 2026-09-11）。**①とは別の枠**で、
+               ①が無くても②だけ届くことがある（トリマーがどちらに描くかは自由）。
+               どちらも印が無ければ、枠ごと出さない（D-10）。
+               この器は文字列リテラルの中なので、逆引用符を書かない（F-20260910-80）。 -->
+          <div class="wave-body-img-frame" data-view="skin-image-2-frame" hidden><img data-view="skin-image-2" alt="皮膚チェック図（2枚目）"></div>
           <div data-view="skin-rows"></div>
         </div>
       </div>
@@ -615,7 +620,7 @@ function openLightbox(root, src) {
 function wireLightbox(root) {
   const modal = root.querySelector('[data-view="lightbox"]');
   if (modal) modal.addEventListener('click', () => modal.classList.remove('is-open'));
-  root.querySelectorAll('[data-view="hero-photo"], [data-view="skin-image"], [data-view="ear-image"], [data-view="teeth-image"]')
+  root.querySelectorAll('[data-view="hero-photo"], [data-view="skin-image"], [data-view="skin-image-2"], [data-view="ear-image"], [data-view="teeth-image"]')
     .forEach((img) => {
       img.addEventListener('click', () => { if (img.src) openLightbox(root, img.src); });
       img.style.cursor = 'pointer';
@@ -790,6 +795,10 @@ export function renderMagazine(container, report, opts = {}) {
   const skinCount = renderSkinRows(container, data.skin, true);
   setText(container, 'skin-pill', skinCount > 0 ? `記録 ${skinCount}件` : '記録なし');
   setImage(container, 'skin-image-frame', 'skin-image', data.bodyMarkingImage);
+  /* 犬体図②（マスター指示 2026-09-11「現状と同じ機能も付けろ」）。
+     ④が出すのは `bodyMarkingImage2`。**出していないカルテでは枠ごと出ない**
+     （`setImage` が空なら `hidden` にする）ので、過去のカルテが変わることはない。 */
+  setImage(container, 'skin-image-2-frame', 'skin-image-2', data.bodyMarkingImage2);
 
   /* 爪は前足・後ろ足を分けて記録する（マスター指示 2026-08-29・C-5）。
      ⚠️ 移行前の旧いカルテは `nail.level`（単一値）のまま——**推測で埋めない**。

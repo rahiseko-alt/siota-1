@@ -27,6 +27,10 @@ const App = {
 
   /* 犬体図を開いた時点の印の控え（「キャンセル」で戻すため）。閉じたら捨てる。 */
   marksBeforeEdit: null,
+  /* 犬体図②（マスター指示 2026-09-11「現状のしたにこの添付画像を追加して、
+     現状と同じ機能も付けろ」）。**①とは別の入れ物**にする——同じ配列に混ぜると、
+     過去に①へ付けた印の位置の意味が変わる。 */
+  marksBeforeEdit2: null,
 
   /* 確定の最中か（`true` の間は下書きを書かない）と、飛んでいる下書きの約束。
      どちらも `commitReport()` が `saveDraft()` と噛み合わないようにするためのもの。 */
@@ -51,6 +55,7 @@ const App = {
      座標は 0〜1 の割合で持つ（画面の大きさが変わっても位置がずれない）。
      **古い下書きにはスタンプしか入っていない**ので、`points` の有無で見分ける。 */
   marks: [],
+  marks2: [],
   allWavesOpen: true,
 
   /* 実データで動いているときに backend から入る犬の一覧。
@@ -70,6 +75,31 @@ const App = {
   /* 口の写真1枚あたりの上限枚数（マスター指示 2026-08-29・C-11）。 */
   MAX_TEETH_PHOTOS: 2,
 
+  /* 犬体図の「面」。2枚目を足したときに作った（マスター指示 2026-09-11）。
+
+     **①の id と、印を入れる `marks` という名前は変えない。** 検査（`verify:roundtrip`
+     `verify:delete` `verify:carry-over` `walk-human`）も引き継ぎも、この名前を見ている。
+     2枚目だけを別の入れ物（`marks2`）にして、描く・消す・保存するが**面ごと**に
+     効くようにする。番号を渡さなければ①（既定）。 */
+  SURFACES: {
+    1: {
+      canvas: 'marking-canvas', wrap: 'canvas-wrapper', bg: 'canvas-bg-img',
+      tool: 'body-marking-tool', marks: 'marks', before: 'marksBeforeEdit',
+      empty: '犬体4面図（前面・背面・左側面・右側面）',
+    },
+    2: {
+      canvas: 'marking-canvas-2', wrap: 'canvas-wrapper-2', bg: 'canvas-bg-img-2',
+      tool: 'body-marking-tool-2', marks: 'marks2', before: 'marksBeforeEdit2',
+      empty: '犬体4面図（顔・横・正面・後ろ）',
+    },
+  },
+
+  /** 面の台帳を引く。**知らない番号は①として扱う**——番号を取り違えたときに
+      2枚目の印を①へ書き込むより、①に落とすほうが被害が小さい。 */
+  surface(n) {
+    return this.SURFACES[n === 2 ? 2 : 1];
+  },
+
   /* 選ばれた写真。**中身は `data:image/jpeg` か、既に上がっている `asset://{id}`。**
      前者は `saveReport`/`reviseReport` が実体化し（`replaceDataUrlAssets`）、
      後者は**そのまま出し直す**——直しのときに落とすと、飼い主に届いていた写真が消える。
@@ -87,7 +117,7 @@ const App = {
   draftSaving: false,
 
   init() {
-    this.initCanvas();
+    Object.keys(this.SURFACES).forEach((n) => this.initCanvas(Number(n)));
 
     /* backend が載っていれば、そちらに描画を任せる（`/edit`）。
        載っていなければ仮データで描く（`/`）。**判定は「居るか」だけ**で、
@@ -251,6 +281,9 @@ const App = {
     if (source.bestWeight) carried.bestWeight = source.bestWeight;
     /* 犬体図の印。**焼いた PNG（`bodyMarkingImage`）からは復元できない**ので、
        確定カルテにも `__marks` を載せてある（`commitReport()`）。 */
+    if (Array.isArray(source.__marks2) && source.__marks2.length > 0) {
+      carried.__marks2 = source.__marks2;
+    }
     if (Array.isArray(source.__marks) && source.__marks.length > 0) {
       carried.__marks = source.__marks;
     }
@@ -265,7 +298,7 @@ const App = {
     if (carried.teeth) labels.push('歯');
     if (carried.bcs) labels.push('BCS');
     if (carried.bestWeight) labels.push('ベスト体重');
-    if (carried.__marks) labels.push('犬体図の印');
+    if (carried.__marks || carried.__marks2) labels.push('犬体図の印');
     return labels;
   },
 
@@ -307,6 +340,13 @@ const App = {
     if (Array.isArray(marks) && Array.isArray(drawn) && marks.length === drawn.length
       && marks.every((m, i) => m.x === drawn[i].x && m.y === drawn[i].y && m.type === drawn[i].type)) {
       still.__marks = marks;
+    }
+    /* 犬体図②も同じ見方で（マスター指示 2026-09-11）。**別の配列**なので別に見る。 */
+    const marks2 = carried.__marks2;
+    const drawn2 = draft.__marks2;
+    if (Array.isArray(marks2) && Array.isArray(drawn2) && marks2.length === drawn2.length
+      && marks2.every((m, i) => m.x === drawn2[i].x && m.y === drawn2[i].y && m.type === drawn2[i].type)) {
+      still.__marks2 = marks2;
     }
     return this.carryOverLabels(still);
   },
@@ -484,7 +524,7 @@ const App = {
        ⑥ は知らないキーを読まないので、飼い主に届くものは変わらない。
        **確定でも落とさない**（`commitReport()` も同じ形で載せる・マスター指示
        2026-09-03）——次の回に引き継ぐには印そのものが要るため。 */
-    const data = { ...this.extractReport(), __marks: this.marks };
+    const data = { ...this.extractReport(), __marks: this.marks, __marks2: this.marks2 };
     /* **飛んでいる下書きを、確定が待てるようにしておく**（上の理由）。 */
     this.draftInFlight = staff.saveDraft(this.draftPetId, this.draftReportId, data, this.today())
       .then((id) => { this.draftReportId = id; this.draftSaving = false; })
@@ -575,7 +615,11 @@ const App = {
 
     if (Array.isArray(data.__marks) && data.__marks.length > 0) {
       this.marks = data.__marks;
-      this.resizeCanvas();
+      this.resizeCanvas(1);
+    }
+    if (Array.isArray(data.__marks2) && data.__marks2.length > 0) {
+      this.marks2 = data.__marks2;
+      this.resizeCanvas(2);
     }
     this.updateCompletionStatus();
   },
@@ -896,7 +940,7 @@ const App = {
     if (stepNum === 3) {
       /* **描く前に測り直す。** 隠れている間は器が 0 なので、ここで測らないと
          描画面が 0×0 のままになる（上の `resizeCanvas` の注記）。 */
-      setTimeout(() => this.resizeCanvas(), 50);
+      setTimeout(() => this.resizeCanvases(), 50);
     }
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1127,7 +1171,7 @@ const App = {
          ⑤⑥⑦が未入力でも残り8と出た」）。8項目しか見ていなかったので、犬体図も
          仕上がり写真も使用オプションも空のまま「全項目入力完了」と言えてしまっていた
          ——**画面が嘘をつく**（`D-12`）。 */
-      { mark: '⑤', sec: 'sec-skin', label: '犬体図', done: this.marks.length > 0 },
+      { mark: '⑤', sec: 'sec-skin', label: '犬体図', done: this.marks.length > 0 || this.marks2.length > 0 },
       { mark: '⑥', sec: 'sec-photo', label: '仕上がり写真', done: this.photos.trimming.length > 0 },
       { mark: '⑧', sec: 'sec-note', label: 'メッセージ', done: !!(noteEl && noteEl.value.trim()) },
     ];
@@ -1389,12 +1433,13 @@ const App = {
      実際 `verify:roundtrip` の 8 と 15 がこれで落ちた。
      `#3`（トリマーが見つけた印がどこにも残らず消える）と同じ結末なので、
      **画面に入るたびに測り直す**。 */
-  resizeCanvas() {
-    const canvas = document.getElementById('marking-canvas');
+  resizeCanvas(n) {
+    const surface = this.surface(n);
+    const canvas = document.getElementById(surface.canvas);
     if (!canvas) return;
     /* 器は測るためだけに要る。無くても**描くことはやめない**——
        描画面の大きさが既に決まっていれば、印は描ける。 */
-    const wrapper = document.getElementById('canvas-wrapper');
+    const wrapper = document.getElementById(surface.wrap);
     if (wrapper) {
       const width = wrapper.clientWidth;
       const height = wrapper.clientHeight;
@@ -1403,39 +1448,54 @@ const App = {
         canvas.height = height;
       }
     }
-    this.drawCanvas();
+    this.drawCanvas(n);
+  },
+
+  /** 面を全部測り直す。画面に入った直後や窓の大きさが変わったときはこちら
+      ——**どちらか片方だけ測ると、測っていない面が 0×0 のまま**になり、
+      そこに付けた印は `data:,`（中身の無い画像）として飼い主に届く。 */
+  resizeCanvases() {
+    Object.keys(this.SURFACES).forEach((n) => this.resizeCanvas(Number(n)));
   },
 
   /* 犬体図は「タップして開く」形式（マスター指示 2026-09-09「歯と同じ形式にしろ」）。
      **描画面は動かさない**——`#marking-canvas` は読み込み時から同じ場所に在り、
      開閉は class の付け外しだけ。印は 0〜1 の割合で持っているので（`marks`）、
      大きさが変わっても測り直して描き直せば同じ絵になる。 */
-  openBodyMarking() {
-    const tool = document.getElementById('body-marking-tool');
+  openBodyMarking(n) {
+    const surface = this.surface(n);
+    const tool = document.getElementById(surface.tool);
     if (!tool) return;
     /* 「キャンセル」で**開く前**に戻すための控え（マスター選択・歯と同じ3ボタン）。 */
-    this.marksBeforeEdit = JSON.stringify(this.marks);
+    this[surface.before] = JSON.stringify(this[surface.marks]);
     tool.classList.add('is-open');
     /* 器の大きさが変わるので測り直す。間の取り方は `goToStep()` と同じ。 */
-    setTimeout(() => this.resizeCanvas(), 50);
+    setTimeout(() => this.resizeCanvas(n), 50);
   },
 
-  closeBodyMarking(save) {
-    const tool = document.getElementById('body-marking-tool');
+  closeBodyMarking(save, n) {
+    const surface = this.surface(n);
+    const tool = document.getElementById(surface.tool);
     if (!tool) return;
-    if (!save && typeof this.marksBeforeEdit === 'string') this.marks = JSON.parse(this.marksBeforeEdit);
-    this.marksBeforeEdit = null;
+    if (!save && typeof this[surface.before] === 'string') {
+      this[surface.marks] = JSON.parse(this[surface.before]);
+    }
+    this[surface.before] = null;
     tool.classList.remove('is-open');
-    setTimeout(() => this.resizeCanvas(), 50);
+    setTimeout(() => this.resizeCanvas(n), 50);
     this.updateCompletionStatus();
     if (save) this.saveDraft();
   },
 
-  initCanvas() {
-    const canvas = document.getElementById('marking-canvas');
+  initCanvas(n) {
+    const surface = this.surface(n);
+    const canvas = document.getElementById(surface.canvas);
     if (!canvas) return;
+    /* この面の印を出し入れする窓口。**面ごとに別の配列**なので、
+       ここを間違えると2枚目の線が1枚目に描かれる。 */
+    const marks = () => this[surface.marks];
 
-    const resize = () => this.resizeCanvas();
+    const resize = () => this.resizeCanvas(n);
     window.addEventListener('resize', resize);
     setTimeout(resize, 100);
 
@@ -1460,7 +1520,7 @@ const App = {
          下絵の犬まで白くなり、戻せない。 */
       if (this.markMode === '消しゴム') {
         drawingPointerId = event.pointerId;
-        this.eraseAt(point);
+        this.eraseAt(point, undefined, n);
         return;
       }
 
@@ -1469,7 +1529,7 @@ const App = {
       if (this.markMode === '文字') {
         const text = (globalThis.prompt && globalThis.prompt('入れる文字')) || '';
         if (!text.trim()) return;
-        this.marks.push({
+        marks().push({
           ...point,
           text: text.trim(),
           type: this.currentStamp,
@@ -1478,42 +1538,42 @@ const App = {
           alpha: this.penAlpha,
           size: this.textSize(),
         });
-        this.drawCanvas();
+        this.drawCanvas(n);
         return;
       }
 
       if (this.markMode === 'スタンプ') {
-        this.marks.push({
+        marks().push({
           ...point,
           type: this.currentStamp,
           color: this.penColor,
           width: this.penWidth,
           alpha: this.penAlpha,
         });
-        this.drawCanvas();
+        this.drawCanvas(n);
         return;
       }
       drawingPointerId = event.pointerId;
-      this.marks.push({
+      marks().push({
         type: this.currentStamp,
         points: [point],
         color: this.penColor,
         width: this.penWidth,
         alpha: this.penAlpha,
       });
-      this.drawCanvas();
+      this.drawCanvas(n);
     });
     canvas.addEventListener('pointermove', (event) => {
       if (event.pointerId !== drawingPointerId) return;
       if (this.markMode === '消しゴム') {
         /* なぞって消せる。指を動かした先も見る。 */
-        this.eraseAt(pointAt(event));
+        this.eraseAt(pointAt(event), undefined, n);
         return;
       }
-      const last = this.marks[this.marks.length - 1];
+      const last = marks()[marks().length - 1];
       if (!last || !last.points) return;
       last.points.push(pointAt(event));
-      this.drawCanvas();
+      this.drawCanvas(n);
     });
     /* 指を離す。**点1つだけの線は捨てる**——なぞらずに触れただけのとき、
        画面には何も見えないのに「所見あり」の印が1件残ってしまう。
@@ -1522,10 +1582,10 @@ const App = {
       if (event.pointerId !== drawingPointerId) return;
       drawingPointerId = null;
       if (this.markMode === '消しゴム') return;
-      const last = this.marks[this.marks.length - 1];
+      const last = marks()[marks().length - 1];
       if (last && last.points && last.points.length < 2) {
-        this.marks.pop();
-        this.drawCanvas();
+        marks().pop();
+        this.drawCanvas(n);
       }
     };
     canvas.addEventListener('pointerup', stopStroke);
@@ -1546,8 +1606,13 @@ const App = {
   setPenColor(color) {
     if (!color) return;
     this.penColor = color;
-    const picker = document.getElementById('pen-color');
-    if (picker && picker.value !== color) picker.value = color;
+    /* 犬体図が2枚になったので、**道具の欄も2組ある**（マスター指示 2026-09-11）。
+       色・太さ・透明はどちらの面でも同じ1組を使うので、**両方の欄をそろえる**
+       ——片方だけ直すと、開いた面によって表示が食い違う。 */
+    ['pen-color', 'pen-color-2'].forEach((id) => {
+      const picker = document.getElementById(id);
+      if (picker && picker.value !== color) picker.value = color;
+    });
   },
 
   /* ペンの透過度を決める（0.1〜1.0）。数字は画面にも出す。 */
@@ -1555,10 +1620,14 @@ const App = {
     const asNumber = Number(alpha);
     const value = Number.isFinite(asNumber) ? Math.min(1, Math.max(0.1, asNumber)) : 1;
     this.penAlpha = value;
-    const slider = document.getElementById('pen-alpha');
-    if (slider && Number(slider.value) !== value) slider.value = String(value);
-    const label = document.getElementById('pen-alpha-value');
-    if (label) label.textContent = `${Math.round(value * 100)}%`;
+    ['pen-alpha', 'pen-alpha-2'].forEach((id) => {
+      const slider = document.getElementById(id);
+      if (slider && Number(slider.value) !== value) slider.value = String(value);
+    });
+    ['pen-alpha-value', 'pen-alpha-value-2'].forEach((id) => {
+      const label = document.getElementById(id);
+      if (label) label.textContent = `${Math.round(value * 100)}%`;
+    });
   },
 
   /* ペンの太さを決める。数字は画面にも出す（いくつなのか分からないと選べない）。 */
@@ -1569,10 +1638,14 @@ const App = {
     const asNumber = Number(width);
     const value = Number.isFinite(asNumber) ? Math.min(20, Math.max(1, asNumber)) : 4;
     this.penWidth = value;
-    const slider = document.getElementById('pen-width');
-    if (slider && Number(slider.value) !== value) slider.value = String(value);
-    const label = document.getElementById('pen-width-value');
-    if (label) label.textContent = `${value}`;
+    ['pen-width', 'pen-width-2'].forEach((id) => {
+      const slider = document.getElementById(id);
+      if (slider && Number(slider.value) !== value) slider.value = String(value);
+    });
+    ['pen-width-value', 'pen-width-value-2'].forEach((id) => {
+      const label = document.getElementById(id);
+      if (label) label.textContent = `${value}`;
+    });
   },
 
   /* ペン／スタンプの切り替え。種類（赤み・しこり…）はそのままで、
@@ -1612,27 +1685,30 @@ const App = {
      消すのは**こちらが置いた印**（線・スタンプ・文字）だけにする。
      当たり判定は「指の位置から近いか」——線は点の1つでも近ければ、その線ごと消える。
      指1本ぶんの太さ（画面の 4%）を目安にする。 */
-  eraseAt(point, reach = 0.04) {
-    const before = this.marks.length;
-    this.marks = this.marks.filter((m) => {
+  eraseAt(point, reach = 0.04, n) {
+    const surface = this.surface(n);
+    const before = this[surface.marks].length;
+    this[surface.marks] = this[surface.marks].filter((m) => {
       if (Array.isArray(m.points)) return this.distanceToStroke(point, m.points) > reach;
       return Math.hypot(m.x - point.x, m.y - point.y) > reach;
     });
-    if (this.marks.length !== before) this.drawCanvas();
-    return before - this.marks.length;
+    if (this[surface.marks].length !== before) this.drawCanvas(n);
+    return before - this[surface.marks].length;
   },
 
   /* 直前の1件だけ取り消す。**全部消すしか無いと、線を1本間違えただけで
      最初からやり直しになる**（ペンの操作は1回が長い）。 */
-  undoMark() {
-    this.marks.pop();
-    this.drawCanvas();
+  undoMark(n) {
+    const surface = this.surface(n);
+    this[surface.marks].pop();
+    this.drawCanvas(n);
     this.updateCompletionStatus();
   },
 
-  clearCanvas() {
-    this.marks = [];
-    this.drawCanvas();
+  clearCanvas(n) {
+    const surface = this.surface(n);
+    this[surface.marks] = [];
+    this.drawCanvas(n);
     this.updateCompletionStatus();
   },
 
@@ -1723,8 +1799,13 @@ const App = {
 
     /* 犬体図の印。**印が無ければキーごと出さない**（白紙の絵を「所見あり」にしない）。
        印が在るのに描き先が無ければ `exportBodyMarking()` が投げる——握らない。 */
-    const marking = this.exportBodyMarking();
+    const marking = this.exportBodyMarking(1);
     if (marking) report.bodyMarkingImage = marking;
+    /* 犬体図②（マスター指示 2026-09-11）。**①と同じ扱いで、別のキー**にする。
+       ⑥（`magazine-view.js`）に `bodyMarkingImage2` の枠を足してあり、
+       `key-parity` が「④が出す」と「⑥が読む」を毎回突き合わせる。 */
+    const marking2 = this.exportBodyMarking(2);
+    if (marking2) report.bodyMarkingImage2 = marking2;
 
     return report;
   },
@@ -1776,7 +1857,7 @@ const App = {
          **PNG からは印を復元できない**。次の回で引き継ぐには、印そのものが要る。
          `saveDraft()` が下書きに載せているのと同じ形。⑥は知らないキーを読まないので、
          飼い主に届くものは変わらない（`extractReport()` は⑥向けのまま触らない）。 */
-      const payload = { ...this.extractReport(), __marks: this.marks };
+      const payload = { ...this.extractReport(), __marks: this.marks, __marks2: this.marks2 };
       const saved = this.reviseReportId
         ? await staff.reviseReport(context.petId, this.reviseReportId, payload)
         : await staff.saveReport(
@@ -2261,27 +2342,29 @@ const App = {
     };
   },
 
-  exportBodyMarking() {
-    if (this.marks.length === 0) return null;
-    const canvas = document.getElementById('marking-canvas');
+  exportBodyMarking(n) {
+    const surface = this.surface(n);
+    if (this[surface.marks].length === 0) return null;
+    const canvas = document.getElementById(surface.canvas);
     if (!canvas) throw new Error('犬体図が見つからないため、付けた印を保存できません');
     /* 描画面が 0×0 のままだと `toDataURL()` は `data:,` を返す。**中身が無い。**
        これを返すと「印を保存した」ことになってしまい、飼い主には空が届く
        ——`#3` そのもの。測り直しても駄目なら、黙って空を返さずに投げる。 */
-    this.resizeCanvas();
+    this.resizeCanvas(n);
     if (!canvas.width || !canvas.height) {
       throw new Error('犬体図の大きさを取れないため、付けた印を保存できません');
     }
     return canvas.toDataURL('image/png');
   },
 
-  drawCanvas() {
-    const canvas = document.getElementById('marking-canvas');
+  drawCanvas(n) {
+    const surface = this.surface(n);
+    const canvas = document.getElementById(surface.canvas);
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    const img = document.getElementById('canvas-bg-img');
+    const img = document.getElementById(surface.bg);
     if (img && img.complete && img.naturalWidth > 0) {
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     } else {
@@ -2292,10 +2375,10 @@ const App = {
          フォント統一（C-8）と同じシステムフォント列を直書きする。 */
       ctx.font = '12px "Hiragino Mincho ProN", "Yu Mincho", YuMincho, "Times New Roman", serif';
       ctx.textAlign = 'center';
-      ctx.fillText('犬体4面図（前面・背面・左側面・右側面）', canvas.width / 2, canvas.height / 2);
+      ctx.fillText(surface.empty, canvas.width / 2, canvas.height / 2);
     }
 
-    this.marks.forEach(m => {
+    this[surface.marks].forEach(m => {
       /* 透過度（マスター指示 2026-09-07）。持っていない古い印は 1（透けない）。
          **1件ごとに戻す**——戻し忘れると、次の印まで一緒に薄くなる。 */
       ctx.globalAlpha = typeof m.alpha === 'number' ? m.alpha : 1;

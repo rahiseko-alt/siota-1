@@ -2377,6 +2377,78 @@ button, input, textarea, select {
                 </div>
               </div>
             </div>
+
+            <!-- 犬体図②（マスター指示 2026-09-11「⑤の皮膚スパ項目に画像を追加。
+                 現状のしたにこの添付画像を追加して、現状と同じ機能も付けろ」）。
+                 **①と同じ形・同じ道具**。違うのは下絵と、印を入れる先だけ
+                 （`App.marks2` → 保存は `__marks2` / `bodyMarkingImage2`）。
+                 ①の id と位置は動かしていない——検査が掴んでいるため。 -->
+            <div class="body-marking-tool" id="body-marking-tool-2">
+              <div class="body-marking-box">
+
+                <div class="canvas-container" id="canvas-wrapper-2">
+                  <img src="/assets/body-marking-2.jpg" id="canvas-bg-img-2" style="display:none;">
+                  <canvas id="marking-canvas-2"></canvas>
+                  <!-- 入口。歯の写真と同じ「✏️ 書き込む」。**絵のどこを触っても開く**ように
+                       全面を受け口にし、文字は下に小さく置く——帯で覆うと犬の足元が隠れる。 -->
+                  <button type="button" class="body-marking-open" data-annotate="skin2"
+                          onclick="App.openBodyMarking(2)"><span>✏️ 書き込む</span></button>
+                </div>
+
+                <div class="body-marking-panel body-marking-only">
+                  <!-- どう置くか（マスター指示 2026-09-02）。**本体はペン**（フリーハンド）で、
+                       スタンプはその一部。以前はスタンプしか無く、範囲が書けなかった。
+                       表記は「なぞる」→「ペン」に変えた（マスター指示 2026-09-07）。
+                       消しゴムは**下絵を削らず、置いた印だけ**を取り除く。
+                       「✕ 全部消す」は下の「やり直す」と同じ働きなので置かない（`A-5`）。 -->
+                  <div class="body-marking-stamps">
+                    <button class="mark-mode-btn is-active" onclick="App.setMarkMode('ペン', this)">✏️ ペン</button>
+                    <button class="mark-mode-btn" onclick="App.setMarkMode('スタンプ', this)">📍 スタンプ</button>
+                    <button class="mark-mode-btn" onclick="App.setMarkMode('消しゴム', this)">🧽 消しゴム</button>
+                    <button class="mark-mode-btn" onclick="App.setMarkMode('文字', this)">🅰 文字</button>
+                    <button class="mark-undo-btn" onclick="App.undoMark(2)">↩ 1つ戻す</button>
+                  </div>
+
+                  <!-- 何の所見か（色を決める）。 -->
+                  <div class="body-marking-stamps">
+                    <button class="stamp-btn is-active" onclick="App.setStamp('赤み', this)">🔴 赤み</button>
+                    <button class="stamp-btn" onclick="App.setStamp('しこり/イボ', this)">🟡 しこり/イボ</button>
+                    <button class="stamp-btn" onclick="App.setStamp('毛玉', this)">🔵 毛玉</button>
+                    <button class="stamp-btn" onclick="App.setStamp('フケ', this)">⚪ フケ</button>
+                  </div>
+
+                  <!-- ペンの色と太さ（マスター指示 2026-09-07「ペンは全て、色と太さを
+                       調整できるようにしろ」）。写真への書き込みと同じ1組を触る。
+                       色は所見（赤み・しこり…）を選び直すとその色に戻り、そのあと
+                       ここで選び直せば、選んだ色で描ける。 -->
+                  <div class="pen-tools">
+                    <label class="pen-tools__item">色
+                      <input type="color" id="pen-color-2" class="pen-tools__color" value="#d32f2f"
+                             oninput="App.setPenColor(this.value)">
+                    </label>
+                    <label class="pen-tools__item">太さ
+                      <input type="range" id="pen-width-2" class="pen-tools__width" min="1" max="20" step="1"
+                             value="4" oninput="App.setPenWidth(this.value)">
+                      <span class="pen-tools__value" id="pen-width-value-2">4</span>
+                    </label>
+                    <!-- 透過度（マスター指示 2026-09-07）。薄くすると下の絵が透ける。 -->
+                    <label class="pen-tools__item">透明
+                      <input type="range" id="pen-alpha-2" class="pen-tools__width" min="0.1" max="1" step="0.1"
+                             value="1" oninput="App.setPenAlpha(this.value)">
+                      <span class="pen-tools__value" id="pen-alpha-value-2">100%</span>
+                    </label>
+                  </div>
+                </div>
+
+                <p class="annotate-hint body-marking-only">1本指で書き込みます。「キャンセル」を押すと、開く前の状態に戻ります。</p>
+
+                <div class="annotate-actions body-marking-only">
+                  <button type="button" class="btn-inline" onclick="App.clearCanvas(2)">やり直す</button>
+                  <button type="button" class="btn-inline" onclick="App.closeBodyMarking(false, 2)">キャンセル</button>
+                  <button type="button" class="btn-inline annotate-save" onclick="App.closeBodyMarking(true, 2)">保存する</button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- 6. 仕上がり写真（カットスタイルの選択欄は削除・マスター指示 2026-08-29・C-12） -->
