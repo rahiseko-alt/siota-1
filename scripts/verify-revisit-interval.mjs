@@ -6,8 +6,8 @@
  *     犬ごとの修正も可能とする。」
  *
  * 見るもの:
- *   0. 一般スタッフは店舗の既定日数を変えられない（RLS `shops_admin_update`）
- *   1. 管理者は店舗の既定日数を変えられる（PATCH /api/shop）
+ *   0. 飼い主は店舗の既定日数を変えられない（いまの境界は「お店の人か、飼い主か」）
+ *   1. お店の人は店舗の既定日数を変えられる（PATCH /api/shop）
  *   3. 上書きが無い犬は、来店日 + 店舗の既定日数がそのまま⑤に出る
  *   4. 編集欄（この犬だけの上書き）は⑤（スタッフ）側にだけ出る
  *   5〜6. ⑤で上書きを保存すると、その場で・読み直しても新しい日付が出る
@@ -49,19 +49,45 @@ try {
   const adminSession = await passwordLogin(FIXTURE.adminEmail, LOCAL_PASSWORD);
   const adminHeaders = { Authorization: `Bearer ${adminSession.access_token}`, 'Content-Type': 'application/json' };
 
-  /* 0. 一般スタッフは店舗の既定日数を変えられない（RLS が UPDATE を0行に絞り、
-        店の側は `one()` が 404 として扱う）。 */
-  const staffPatch = await fetch(`${BASE}/api/shop`, {
-    method: 'PATCH', headers: staffHeaders, body: JSON.stringify({ defaultRevisitDays: 99 }),
-  });
-  check('0. 一般スタッフは店舗の既定日数を変えられない', staffPatch.status, 404);
+  /* 0. **飼い主**は店舗の既定日数を変えられない。
 
-  /* 1. 管理者は変えられる。 */
+     ここは以前「**一般スタッフ**は変えられない」を見ていた。`admin` と `staff` の
+     2権限を前提にした検査で、その2権限は **2026-09-06 にマスターの判断で廃止**された
+     （`D-20260906-68`・`supabase/migrations/202609060012_single_staff_role.sql`——
+     「管理者とスタッフは同一で良い」）。同じ migration が `shops_admin_update` を落として
+     `shops_staff_update`（その店のメンバーなら誰でも）に置き換えている。
+     **つまりスタッフが変えられるのは、決めたとおりの挙動。** 検査のほうが古かった。
+
+     5日間そのままだったのは、**この検査が CI に入っていなかった**から
+     （`F-20260910-82`）。いま在る境界は「お店の人か、飼い主か」なので、そこを見る。
+
+     **結果で見る。** 応答コード（404 / 403 / 500 のどれになるか）は判定に使わない
+     ——実際に返ったコードは下に出すので、変わったら次の人が見て決められる。
+     **「変わっていない」だけを見ない**（読めていなくても等しくなってしまう・`偽-5`）。
+     土台として「そもそも読めたか」を同じ条件に置く。 */
+  const ownerSession = await passwordLogin(FIXTURE.ownerAEmail, LOCAL_PASSWORD);
+  const readDays = async () => {
+    const res = await fetch(`${BASE}/api/shop`, { headers: staffHeaders });
+    return res.ok ? (await res.json()).shop.default_revisit_days : `読めない(${res.status})`;
+  };
+  const daysBefore = await readDays();
+  const ownerPatch = await fetch(`${BASE}/api/shop`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${ownerSession.access_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ defaultRevisitDays: 99 }),
+  });
+  const daysAfterOwner = await readDays();
+  process.stdout.write(`      （飼い主の PATCH /api/shop は ${ownerPatch.status} を返した）\n`);
+  check('0. 飼い主は店舗の既定日数を変えられない',
+    `読めた=${Number.isFinite(Number(daysBefore))} 変わっていない=${String(daysAfterOwner) === String(daysBefore)}`,
+    '読めた=true 変わっていない=true');
+
+  /* 1. お店の人は変えられる（権限は1つなので、管理者のトークンも「お店の人」のトークン）。 */
   const DEFAULT_DAYS = 45;
   const adminPatch = await fetch(`${BASE}/api/shop`, {
     method: 'PATCH', headers: adminHeaders, body: JSON.stringify({ defaultRevisitDays: DEFAULT_DAYS }),
   });
-  check('1. 管理者は店舗の既定日数を変えられる', adminPatch.status, 200);
+  check('1. お店の人は店舗の既定日数を変えられる', adminPatch.status, 200);
   const shopAfter = adminPatch.ok ? (await adminPatch.json()).shop : null;
   check('1b. 変えた値が読み返せる', shopAfter && shopAfter.default_revisit_days, DEFAULT_DAYS);
 

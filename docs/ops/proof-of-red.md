@@ -1984,9 +1984,24 @@ FAIL  2. 検査用の犬を登録できた
 使われる・⑥（飼い主）にも同じ計算結果が届くが編集欄は出ない——という
 `D-20260829-58` の全条件。
 
-- verify-revisit-interval.mjs :: 0. 一般スタッフは店舗の既定日数を変えられない
-- verify-revisit-interval.mjs :: 1. 管理者は店舗の既定日数を変えられる
+- verify-revisit-interval.mjs :: 0. 飼い主は店舗の既定日数を変えられない
+- verify-revisit-interval.mjs :: 1. お店の人は店舗の既定日数を変えられる
 - verify-revisit-interval.mjs :: 1b. 変えた値が読み返せる
+
+> **2026-09-11 追記（名前だけ変えた・件数は減らしていない）**: 上の2行は
+> 旧「0. **一般スタッフ**は店舗の既定日数を変えられない」「1. **管理者**は…」。
+> `admin` と `staff` の2権限は **2026-09-06 にマスターの判断で廃止**され
+> （`D-20260906-68`「管理者とスタッフは同一で良い」・
+> `supabase/migrations/202609060012_single_staff_role.sql`）、
+> `shops_admin_update` は `shops_staff_update`（その店のメンバーなら誰でも）に
+> 置き換わっている。**旧 `0.` は、もう存在しない境界を見ていた。**
+> 消さずに、いま在る境界（お店の人か、飼い主か）へ**付け替えた**。
+> 壊し方の台帳（`mutate-run.mjs`）の本数も減らしていない。
+> `verify-admin.mjs` の 2026-09-02 と同じ扱い。
+>
+> **5日間気づけなかった理由**: この検査は CI に入っていなかった（`F-20260910-82`）。
+> **走らない検査は、古くなっても分からない。**
+
 - verify-revisit-interval.mjs :: 2. 検査用の犬を登録できた
 - verify-revisit-interval.mjs :: 3. 確認: 次回日（上書き無し・店舗の既定日数）
 - verify-revisit-interval.mjs :: 4. 飼い主: 次回日が同じ値で届く
