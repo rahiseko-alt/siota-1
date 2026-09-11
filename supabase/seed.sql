@@ -6,7 +6,6 @@ insert into auth.users (
   raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
   confirmation_token, recovery_token, email_change, email_change_token_new
 ) values
-  ('00000000-0000-0000-0000-000000000000', '20000000-0000-0000-0000-000000000001', 'authenticated', 'authenticated', 'admin@local.test', extensions.crypt('LocalOnly-Password-2026!', extensions.gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}', '{"full_name":"Local Admin"}', now(), now(), '', '', '', ''),
   ('00000000-0000-0000-0000-000000000000', '20000000-0000-0000-0000-000000000002', 'authenticated', 'authenticated', 'staff@local.test', extensions.crypt('LocalOnly-Password-2026!', extensions.gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}', '{"full_name":"Local Staff"}', now(), now(), '', '', '', ''),
   ('00000000-0000-0000-0000-000000000000', '20000000-0000-0000-0000-0000000000a1', 'authenticated', 'authenticated', 'owner-a@local.test', extensions.crypt('LocalOnly-Password-2026!', extensions.gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}', '{"full_name":"Owner A"}', now(), now(), '', '', '', ''),
   ('00000000-0000-0000-0000-000000000000', '20000000-0000-0000-0000-0000000000b1', 'authenticated', 'authenticated', 'owner-b@local.test', extensions.crypt('LocalOnly-Password-2026!', extensions.gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}', '{"full_name":"Owner B"}', now(), now(), '', '', '', ''),
@@ -28,7 +27,6 @@ select
   jsonb_build_object('sub', user_id::text, 'email', email),
   'email', now(), now(), now()
 from (values
-  ('21000000-0000-0000-0000-000000000001'::uuid, '20000000-0000-0000-0000-000000000001'::uuid, 'admin@local.test'),
   ('21000000-0000-0000-0000-000000000002'::uuid, '20000000-0000-0000-0000-000000000002'::uuid, 'staff@local.test'),
   ('21000000-0000-0000-0000-0000000000a1'::uuid, '20000000-0000-0000-0000-0000000000a1'::uuid, 'owner-a@local.test'),
   ('21000000-0000-0000-0000-0000000000b1'::uuid, '20000000-0000-0000-0000-0000000000b1'::uuid, 'owner-b@local.test'),
@@ -42,10 +40,11 @@ values ('10000000-0000-0000-0000-000000000001', 'Local SALTY DOG', 'local-salty-
 on conflict (id) do nothing;
 
 /* 権限は「お店の人か / 飼い主か」の2つだけ（`D-20260906-68`）。
-   `admin` と `staff` の区別は無いので、3人とも同じ「お店の人」。
-   アカウント名の `admin@` `staff@` は**歴史的な名前**で、権限の差ではない。 */
+   `admin` と `staff` の区別は無いので、**「管理者」の口座も置かない**
+   （2026-09-11・マスター指示「機械も拾わないように削除しろ」）。
+   置いていた `admin@local.test` は、権限が同じなのに名前だけ「管理者」で、
+   検査がそれを本物の区別だと読んでいた（`F-20260910-83`）。 */
 insert into public.shop_memberships (shop_id, user_id) values
-  ('10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001'),
   ('10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000002'),
   ('10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-0000000000c1')
 on conflict (shop_id, user_id) do nothing;

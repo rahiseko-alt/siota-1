@@ -51,7 +51,7 @@ try {
 
   /* ── A: 病院スタッフ ── */
   await staff.goto(`${BASE}/my`, { waitUntil: 'domcontentloaded' });
-  await injectSession(staff, FIXTURE.adminEmail);
+  await injectSession(staff, FIXTURE.staffEmail);
   await staff.waitForTimeout(1_500);
   await staff.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
   await staff.waitForTimeout(5_000);

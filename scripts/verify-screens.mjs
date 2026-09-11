@@ -157,7 +157,7 @@ try {
   const stalePages = [];
   for (const [label, email, door] of [
     ['スタッフ', FIXTURE.staffEmail, '/edit'],
-    ['管理者', FIXTURE.adminEmail, '/admin'],
+    ['お店の人（管理画面）', FIXTURE.staffEmail, '/admin'],
     ['飼い主', FIXTURE.ownerAEmail, '/my'],
   ]) {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });

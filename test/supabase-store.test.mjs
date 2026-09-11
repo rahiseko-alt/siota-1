@@ -602,10 +602,13 @@ test('the Supabase store never calls fetch with itself as the receiver', async (
 });
 
 /* RLS の `memberships_authorized_select` は
-   `user_id = auth.uid() or private.is_shop_admin(shop_id)` なので、**管理者には店舗の
-   全メンバー行が返る**。getStaffShopId が user_id で絞っていないと、スタッフが2人に
-   なった瞬間に管理者だけが 409 になり、飼い主の新規作成・招待の発行と一覧・スタッフ管理
-   （退職者の停止）が全部使えなくなる。日々のカルテ作成はこの関数を通らないので気づけない。 */
+   `user_id = auth.uid() or private.is_shop_staff(shop_id)` なので、**同じ店のメンバーには
+   店舗の全メンバー行が返る**。getStaffShopId が user_id で絞っていないと、スタッフが2人に
+   なった瞬間に 409 になり、飼い主の新規作成・招待の発行と一覧・スタッフ管理
+   （退職者の停止）が全部使えなくなる。日々のカルテ作成はこの関数を通らないので気づけない。
+
+   （以前ここは `is_shop_admin` と「管理者だけが」と書いていた。その関数と `admin` 権限は
+   2026-09-06 に削除済み・`D-20260906-68`。読む人も機械も古い区別を拾わないよう直した。） */
 test('getStaffShopId asks only for the caller own membership', async () => {
   const urls = [];
   const store = new SupabaseDataStore({
@@ -615,7 +618,7 @@ test('getStaffShopId asks only for the caller own membership', async () => {
     userId: '20000000-0000-0000-0000-000000000001',
     fetchImpl: (url) => {
       urls.push(String(url));
-      // 管理者が自分で絞らずに問い合わせた場合に RLS が返すもの（店舗の全メンバー）
+      // 自分で絞らずに問い合わせた場合に RLS が返すもの（店舗の全メンバー）
       if (!String(url).includes('user_id=eq.')) {
         return Response.json([
           { shop_id: '10000000-0000-0000-0000-000000000001' },
@@ -633,7 +636,7 @@ test('getStaffShopId asks only for the caller own membership', async () => {
   assert.match(
     membershipUrl,
     /user_id=eq\.20000000-0000-0000-0000-000000000001/,
-    'user_id で絞っていない。管理者はスタッフが2人になった瞬間に 409 で詰む',
+    'user_id で絞っていない。スタッフが2人になった瞬間に 409 で詰む',
   );
 });
 
