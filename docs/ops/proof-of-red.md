@@ -3136,7 +3136,14 @@ $ node --test test/report-commit-guard.test.mjs      ← 直しを入れ直し�
    **文字「予約はこちら」／`href` は Wikipedia の人工知能／`target=_blank`**。
    さらに**実際に押して**、新しいタブがその URL を要求するところまで見た。
    **検査そのものの赤ではない**ので証明済みには移さない。docker のある回に
-   `mutate-run.mjs` の `revisit-book-href-off` を走らせて移すこと。）
+   `mutate-run.mjs` の `revisit-book-href-off` を走らせて移すこと。
+
+   **2026-09-10 追記**: この2件を足したあと、`verify:revisit` が **CI に1本も
+   入っていない**ことに気づいた（`.github/workflows/ci.yml` の `verify` job に
+   この1本だけ無く、PR #103 の verify ログに `verify-revisit-interval` の文字が0件）。
+   **足した検査が、どこでも走らない検査だった**——守っているつもりで何も守っていない
+   形（`偽-5`）。CI に足したので、いまは本物の Supabase で走る。
+   それでも「壊すと赤になる」は別の話なので、ここは未証明のまま置く。）
 
 - verify-carry-over.mjs :: 引き継ぎの告知を出していない（引き継ぎは既定の動き）
 - verify-carry-over.mjs :: 引き継ぎが実際に走った（前回の値が画面に入った）

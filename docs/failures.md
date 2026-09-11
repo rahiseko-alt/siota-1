@@ -1465,3 +1465,37 @@
 
 - **Status**: RESOLVED（**本番での再現確認はマスターの次の1回待ち**——この容器からは
   本番にログインできないため、ここで見たのは下書きと確定の順番だけ）
+
+---
+
+## F-20260910-82 — **足した検査が、どこでも走らない検査だった**（`verify:revisit` が CI に無い）
+
+- **When**: 2026-09-10（マスター指示「予約はこちらボタンをつけろ」の直後）
+- **Level**: 2（検査基盤）
+- **Where**: `.github/workflows/ci.yml` の `verify` job ／ `scripts/verify-revisit-interval.mjs`
+
+- **What happened**: 「予約はこちら」の入口を守るために `verify-revisit-interval.mjs` へ
+  検査を2件（`4b.` `4c.`）足し、**足したことで守られていると思っていた**。
+  PR #103 の verify ログを読んだところ、**`verify-revisit-interval` の文字が0件**。
+  `.github/workflows/ci.yml` の `verify` job には `verify:*` が14本並んでいるのに、
+  **この1本だけ入っていなかった**。手元は docker が無いので走らせられない。
+  つまり**足した2件は、CI でも手元でも一度も走らない**。
+
+- **Why it happened**:
+  - 「検査に足した」を「守られるようになった」と読んだ。**走る場所を確かめていない。**
+  - `npm run check` の `verify-inventory` は**検査の本数と名前**を台帳と突き合わせるが、
+    **その検査が CI で走るか**は見ていない。形の上では全部そろって見える。
+  - 同じ日に `F-20260910-81`（`window.App` を見ていて常に緑）も踏んでいる。
+    **中身が空の検査**と**走らない検査**は別の穴だが、結果は同じ——守っていない。
+
+- **Fixed**: `.github/workflows/ci.yml` の `verify` job に `npm run verify:revisit` を足した。
+  置く場所は `verify:carry-over` の後・`verify:first-run` の前
+  （この検査は店の既定日数を 45 に書き換えるので日付を読む検査より後ろ、
+  `verify:first-run` は DB を空にするのでその前）。
+
+- **How to prevent**: **検査を足したら、その検査が走るところを出力で確かめる。**
+  「`verify-*.mjs` に `check()` を書いた」は、走る保証ではない。
+  確かめ方は、CI のログにその検査の名前が `PASS` として出ていること
+  （`14e.` のときはそうした。今回はしなかった）。
+
+- **Status**: RESOLVED（CI に足して、`4b.` `4c.` が実際に走ることを次の実行で確かめる）
