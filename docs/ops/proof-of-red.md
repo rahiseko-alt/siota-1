@@ -3148,6 +3148,20 @@ $ node --test test/report-commit-guard.test.mjs      ← 直しを入れ直し�
 > 検査（爪・耳・歯・BCS・ベスト体重・犬体図の印）は今までどおり全部残してある。
 > 消した挙動そのものをやめたので `verify-revisit-interval` のときと同じ扱い。
 
+- verify-report-roundtrip.mjs :: 15b. 飼い主: 犬体図②の印も画像として届く
+- verify-report-roundtrip.mjs :: 15c. 飼い主: ①と②が別の絵として届いている
+  （2026-09-11 追加。マスター指示「⑤の皮膚スパ項目に画像を追加。現状のしたにこの
+   添付画像を追加して、現状と同じ機能も付けろ」。**この手元では `npm run verify:roundtrip`
+   を実行できない**——docker が無くローカル Supabase を起こせない。
+   ただし**同じ見方で、赤と緑は実ブラウザで見ている**:
+   `15c` … `exportBodyMarking(2)` が①の絵を返すように壊すと「別の絵」が **false**、
+   直した作りでは **true**。
+   `15b` … ⑥が `bodyMarkingImage2` を受け取らないように壊すと
+   `[data-view="skin-image-2"]` の `src` が **空**、直した作りでは `data:image/png;…`。
+   **検査そのものの赤ではない**ので証明済みには移さない。docker のある回に
+   `mutate-run.mjs` の `body-marking-2-same-as-1` / `body-marking-2-not-delivered` を
+   走らせて移すこと。）
+
 - verify-revisit-interval.mjs :: 4b. 飼い主: 次回日の下に「予約はこちら」が在り、行き先が入っている
 - verify-revisit-interval.mjs :: 4c. 確認: 店の画面にも同じ入口が在る（同一レンダラ）
   （2026-09-10 追加。マスター指示「予約はこちらボタンをつけろ。押すと指定のURLに飛ぶ仕組みにしろ」。

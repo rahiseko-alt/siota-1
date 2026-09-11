@@ -199,10 +199,12 @@ try {
       .find((el) => ((el.querySelector('.name') || {}).textContent || '').trim() === input.option);
     if (!optionBtn) missing.push(`option=${input.option}`); else optionBtn.click();
 
-    /* 犬体図に印を1つ付ける。押した所見が残る道はここしか無い（`#3`）。 */
-    const canvas = document.getElementById('marking-canvas');
-    if (!canvas) missing.push('#marking-canvas');
-    else {
+    /* 犬体図に印を1つ付ける。押した所見が残る道はここしか無い（`#3`）。
+       **2枚目にも付ける**（マスター指示 2026-09-11 で犬体図が2枚になった）。
+       ①だけ見ていると、2枚目に描いた所見が飼い主に届かなくても緑のまま通る。 */
+    for (const id of ['marking-canvas', 'marking-canvas-2']) {
+      const canvas = document.getElementById(id);
+      if (!canvas) { missing.push(`#${id}`); continue; }
       const rect = canvas.getBoundingClientRect();
       canvas.dispatchEvent(new PointerEvent('pointerdown', {
         bubbles: true,
@@ -295,6 +297,11 @@ try {
       skinImage: (document.querySelector('[data-view="skin-image"]') || {}).getAttribute
         ? (document.querySelector('[data-view="skin-image"]').getAttribute('src') || '')
         : '',
+      /* 犬体図②（マスター指示 2026-09-11）。**①とは別の入れ物**なので別に見る
+         ——①だけ見ていると、2枚目に描いた所見が消えても気づけない（`D-12`）。 */
+      skinImage2: (document.querySelector('[data-view="skin-image-2"]') || {}).getAttribute
+        ? (document.querySelector('[data-view="skin-image-2"]').getAttribute('src') || '')
+        : '',
       pageUrlImgs: [...document.querySelectorAll('img')]
         .map((el) => el.getAttribute('src') || '')
         .filter((src) => /^https?:\/\/[^/]+\/(edit|my)\//.test(src)).length,
@@ -380,6 +387,15 @@ try {
     ownerView.weightDateLabels, ownerView.weightGraphPoints);
   check('15. 飼い主: 犬体図の印が画像として届く',
     /^(blob:|data:image)/.test(ownerView.skinImage) ? 'ok' : `src=${ownerView.skinImage.slice(0, 40)}`, 'ok');
+  /* 犬体図②（マスター指示 2026-09-11「現状のしたにこの添付画像を追加して、
+     現状と同じ機能も付けろ」）。**①と同じ強さで見る。** */
+  check('15b. 飼い主: 犬体図②の印も画像として届く',
+    /^(blob:|data:image)/.test(ownerView.skinImage2) ? 'ok' : `src=${ownerView.skinImage2.slice(0, 40)}`, 'ok');
+  /* **①と②が同じ画像になっていないこと。** 同じなら、どちらかの面の印が
+     もう一方で上書きされている（配列を取り違えた形）。 */
+  check('15c. 飼い主: ①と②が別の絵として届いている',
+    ownerView.skinImage !== '' && ownerView.skinImage2 !== ''
+      && ownerView.skinImage !== ownerView.skinImage2 ? 'ok' : '同じか空', 'ok');
   check('16. 飼い主: 壊れた画像（ページURL）が出ていない', ownerView.pageUrlImgs, 0);
   check('16b. 飼い主: 使用オプション', ownerView.optionTags, INPUT.option);
 

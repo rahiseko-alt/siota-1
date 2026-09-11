@@ -11,7 +11,8 @@
 
 ```
 $ grep -o "data\.[A-Za-z_]*" backend/js/magazine-view.js | sort -u
-data.bestWeight  data.bodyLanguage  data.bodyMarkingImage  data.date
+data.bestWeight  data.bodyLanguage  data.bodyMarkingImage  data.bodyMarkingImage2
+data.date
 data.ear  data.heroPhotos  data.isoDate  data.nail  data.pet  data.skin
 data.staffNote  data.teeth  data.trimming  data.weights
 ```
@@ -47,7 +48,8 @@ $ sed -n '1749,1995p' src/index.html | grep -c "目標体重"
 | `ear` | 右耳・左耳の button（`right` / `left`） | ⚠️ 左右のみ。**コメント欄が無い** |
 | `teeth` | 歯の pill（`status`） | ⚠️ status のみ。**コメント欄が無い** |
 | `weights` | `#input-weight` | ⚠️ 1点のみ。**月（`ym`）の入力が無い**ので推移が描けない |
-| `bodyMarkingImage` | `App.exportBodyMarking()` | ✅ |
+| `bodyMarkingImage` | `App.exportBodyMarking(1)` | ✅ |
+| `bodyMarkingImage2` | `App.exportBodyMarking(2)` | ✅ 犬体図②（マスター指示 2026-09-11「現状のしたにこの添付画像を追加して、現状と同じ機能も付けろ」）。①とは別の入れ物（`App.marks2` → `__marks2`）で、⑥にも別の枠を足してある |
 | `trimming` | カットの長さ・スタイルの `select` 2つ | ⚠️ **写真の入力が無い** |
 | `date` / `isoDate` | — | ❌ **来店日の入力が無い** |
 | `bestWeight` | — | ❌ **目標体重の入力が無い** |

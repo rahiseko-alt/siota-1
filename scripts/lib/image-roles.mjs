@@ -56,9 +56,16 @@ export const IMAGE_ROLES = [
   {
     id: 'body-marking',
     file: 'body-marking.png',
-    what: '犬体図（手描きで印を付ける下絵）',
+    what: '犬体図①（手描きで印を付ける下絵・上側）',
     seenBy: 'トリマー ＋ 印が飼い主に届く',
     note: '**絵が変わると、過去に付けた印の位置の意味が変わる**——差し替えるなら同じ構図で',
+  },
+  {
+    id: 'body-marking-2',
+    file: 'body-marking-2.jpg',
+    what: '犬体図②（①の下に並ぶ2枚目の下絵・マスター提供 2026-09-11）',
+    seenBy: 'トリマー ＋ 印が飼い主に届く',
+    note: '①と同じ注意。**①とは別の印の入れ物**（`__marks2`）なので、混ぜて使わない',
   },
 ];
 

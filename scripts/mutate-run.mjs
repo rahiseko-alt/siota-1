@@ -419,6 +419,27 @@ export const MUTATIONS = [
     scripts: ['verify-report-roundtrip.mjs'],
   },
   {
+    /* 犬体図②を、①と同じ絵にしてしまう（マスター指示 2026-09-11 で2枚になった）。
+       画像は出るので `15b.` は緑のまま——**別の絵かどうか**を見ている `15c.` だけが赤になる。
+       取り違え（2枚目の印を①の配列に書く）と同じ結末を作る壊し方。 */
+    id: 'body-marking-2-same-as-1',
+    why: '**2枚目の犬体図に描いた所見が、1枚目の絵で上書きされて飼い主に届く**（描いたものが消える）',
+    file: 'src/js/ui.js',
+    find: '    const marking2 = this.exportBodyMarking(2);',
+    replace: '    const marking2 = this.exportBodyMarking(1);',
+    scripts: ['verify-report-roundtrip.mjs'],
+  },
+  {
+    /* 犬体図②を飼い主に渡さない。④は出しているのに⑥が受け取らない形。
+       `15b.` が赤になる（`15c.` も道連れで赤）。 */
+    id: 'body-marking-2-not-delivered',
+    why: '**2枚目の犬体図が飼い主の画面に出ない**（トリマーが描いた所見が届かない）',
+    file: 'backend/js/magazine-view.js',
+    find: "  setImage(container, 'skin-image-2-frame', 'skin-image-2', data.bodyMarkingImage2);",
+    replace: "  setImage(container, 'skin-image-2-frame', 'skin-image-2', '');",
+    scripts: ['verify-report-roundtrip.mjs'],
+  },
+  {
     /* 「予約はこちら」の行き先を入れない（マスター指示 2026-09-10）。文字は出たままなので、
        目で見ると在るように見える。行き先を見ている 4b./4c. だけが赤になる。 */
     id: 'revisit-book-href-off',

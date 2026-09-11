@@ -237,7 +237,7 @@ try {
   await shot('3_爪_前回から引き継ぎ', '.clinical-group:has([data-group="nail"])');
   await shot('4_耳と歯_前回から引き継ぎ', '.clinical-group:has([data-ear="right"])');
   await shot('5_体重とBCS_体重だけ空', '.clinical-group:has(#input-weight)');
-  await shot('6_犬体図_前回の印', '.body-marking-tool');
+  await shot('6_犬体図_前回の印', '#body-marking-tool');
 
   /* ── 触らずに閉じたら、下書きは生えていないか ────────────────── */
   const drafts = await countDrafts(worker.base, headers, petId);
@@ -313,7 +313,10 @@ try {
   const markCount = await page.evaluate(() => App.marks.length);
   check('引き継いだ印に、今回の印を足せる', markCount === 2, `marks=${markCount}`);
   /* 描いたら「保存する」で閉じる（開いたままだと覆いが確定ボタンを隠す）。 */
-  await page.locator('.body-marking-tool .annotate-save').click();
+  /* **id で指す。** 犬体図が2枚になった（マスター指示 2026-09-11）ので
+     `.body-marking-tool` は2つ当たる——Playwright は当たりが複数だと止まる。
+     ここで見たいのは①なので、`#body-marking-tool` と名指しする。 */
+  await page.locator('#body-marking-tool .annotate-save').click();
   await page.waitForTimeout(300);
 
   /* **確定に失敗しても、そこで検査を終わらせない。** 途中で throw すると、
