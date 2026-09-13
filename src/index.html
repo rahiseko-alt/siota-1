@@ -888,7 +888,8 @@ button, input, textarea, select {
 /* 閉じているあいだ（既定）: **絵は見えるが描けない**。道具の段は隠し、
    絵の上に入口だけを重ねる（マスター指示 2026-09-09）。 */
 .body-marking-tool:not(.is-open) .body-marking-only { display: none; }
-.body-marking-tool:not(.is-open) #marking-canvas { pointer-events: none; }
+.body-marking-tool:not(.is-open) #marking-canvas,
+.body-marking-tool:not(.is-open) #marking-canvas-2 { pointer-events: none; }
 .body-marking-open {
   position: absolute; inset: 0;
   border: 0; background: transparent; cursor: pointer;

@@ -56,6 +56,11 @@ const App = {
      **古い下書きにはスタンプしか入っていない**ので、`points` の有無で見分ける。 */
   marks: [],
   marks2: [],
+  /* いま選んでいる文字の印（マスター指示 2026-09-12「配置された文字をドラッグすると
+     位置が変えられる」「文字の色は変えられる様にしろ」）。`{ n, mark }` か `null`。
+     **添字ではなく印そのものを持つ**——1つ戻す・消しゴム・キャンセルの戻しで
+     配列の中身が入れ替わるので、番号で覚えると別の印を指してしまう。 */
+  selectedText: null,
   allWavesOpen: true,
 
   /* 実データで動いているときに backend から入る犬の一覧。
@@ -1467,6 +1472,7 @@ const App = {
     const tool = document.getElementById(surface.tool);
     if (!tool) return;
     /* 「キャンセル」で**開く前**に戻すための控え（マスター選択・歯と同じ3ボタン）。 */
+    this.clearTextSelection();
     this[surface.before] = JSON.stringify(this[surface.marks]);
     tool.classList.add('is-open');
     /* 器の大きさが変わるので測り直す。間の取り方は `goToStep()` と同じ。 */
@@ -1480,6 +1486,9 @@ const App = {
     if (!save && typeof this[surface.before] === 'string') {
       this[surface.marks] = JSON.parse(this[surface.before]);
     }
+    /* 閉じるときに必ず外す。キャンセルは `marks` を JSON から作り直すので、
+       選んだままだと**もう配列に無い印**を指し続ける。 */
+    this.selectedText = null;
     this[surface.before] = null;
     tool.classList.remove('is-open');
     setTimeout(() => this.resizeCanvas(n), 50);
@@ -1525,11 +1534,22 @@ const App = {
       }
 
       /* 文字（マスター指示 2026-09-07）。押した所に置く。
-         **何も打たなければ何も置かない**（空の印を残さない・`D-10`）。 */
+         **何も打たなければ何も置かない**（空の印を残さない・`D-10`）。
+
+         2026-09-12 のマスター指示で、**置いたあとも動かせる**ようにした。
+         すでに在る文字の上を押したら「新しく置く」ではなく「掴む」。
+         押した所に文字が無いときだけ、これまでどおり訊いて置く。
+         説明の文は出さない（「入れる文字という説明は消せ」）。 */
       if (this.markMode === '文字') {
-        const text = (globalThis.prompt && globalThis.prompt('入れる文字')) || '';
+        const held = this.findTextAt(point, n);
+        if (held) {
+          this.selectText(held, n);
+          drawingPointerId = event.pointerId;
+          return;
+        }
+        const text = (globalThis.prompt && globalThis.prompt('')) || '';
         if (!text.trim()) return;
-        marks().push({
+        const placed = {
           ...point,
           text: text.trim(),
           type: this.currentStamp,
@@ -1537,8 +1557,11 @@ const App = {
           width: this.penWidth,
           alpha: this.penAlpha,
           size: this.textSize(),
-        });
-        this.drawCanvas(n);
+        };
+        marks().push(placed);
+        /* 置いた直後は選んでいる状態にする——**置いてすぐ色を変えられる**
+           （そうしないと、置く→もう一度押す、の2手が要る）。 */
+        this.selectText(placed, n);
         return;
       }
 
@@ -1570,6 +1593,12 @@ const App = {
         this.eraseAt(pointAt(event), undefined, n);
         return;
       }
+      /* 掴んだ文字を運ぶ（マスター指示 2026-09-12）。**線には足さない**——
+         下の「末尾の線に点を足す」へ落とすと、文字の隣に見えない線が生える。 */
+      if (this.markMode === '文字') {
+        this.moveSelectedText(pointAt(event), n);
+        return;
+      }
       const last = marks()[marks().length - 1];
       if (!last || !last.points) return;
       last.points.push(pointAt(event));
@@ -1582,6 +1611,9 @@ const App = {
       if (event.pointerId !== drawingPointerId) return;
       drawingPointerId = null;
       if (this.markMode === '消しゴム') return;
+      /* 文字は運び終えただけ。**選んだままにする**——離した瞬間に外すと、
+         置いてから色を選ぶ間がない。線の後始末（下）にも掛けない。 */
+      if (this.markMode === '文字') return;
       const last = marks()[marks().length - 1];
       if (last && last.points && last.points.length < 2) {
         marks().pop();
@@ -1594,6 +1626,9 @@ const App = {
   },
 
   setStamp(type, btn) {
+    /* **先に選択を外す。** この下で `setPenColor` を呼ぶので、外さないと
+       「🔵 毛玉」を押しただけで、前に置いた文字の色が黙って変わる。 */
+    this.clearTextSelection();
     this.currentStamp = type;
     document.querySelectorAll('.stamp-btn').forEach(b => b.classList.remove('is-active'));
     if (btn) btn.classList.add('is-active');
@@ -1613,6 +1648,14 @@ const App = {
       const picker = document.getElementById(id);
       if (picker && picker.value !== color) picker.value = color;
     });
+    /* 文字を選んでいれば、**その文字の色も変える**（マスター指示 2026-09-12
+       「文字の色は変えられる様にしろ」）。色の欄は既に画面に在るので増やさない。
+       選んでいないときは何もしない——置いてある文字まで塗り替えない。 */
+    const chosen = this.selectedText;
+    if (chosen && chosen.mark) {
+      chosen.mark.color = color;
+      this.drawCanvas(chosen.n);
+    }
   },
 
   /* ペンの透過度を決める（0.1〜1.0）。数字は画面にも出す。 */
@@ -1651,6 +1694,9 @@ const App = {
   /* ペン／スタンプの切り替え。種類（赤み・しこり…）はそのままで、
      置き方だけを変える。 */
   setMarkMode(mode, btn) {
+    /* 文字の道具から離れたら、選んでいた文字は外す
+       （ペンの色を変えたつもりで、置いた文字まで変わらないように）。 */
+    if (mode !== '文字') this.clearTextSelection();
     this.markMode = mode;
     document.querySelectorAll('.mark-mode-btn').forEach(b => b.classList.remove('is-active'));
     if (btn) btn.classList.add('is-active');
@@ -1679,6 +1725,72 @@ const App = {
     return best;
   },
 
+  /* ── 置いた文字を掴む・運ぶ・選び直す（マスター指示 2026-09-12）─────────────
+     > ⑤配置された文字をドラッグすると位置が変えられる
+     > 文字の色は変えられる様にしろ
+     置いてしまうと二度と動かせず、書き損じたら消してもう一度打つしかなかった。
+     ──────────────────────────────────────────────────────────────────── */
+
+  /** 押した所に在る文字の印を返す（無ければ `null`）。
+      **当たり判定は文字の実寸で見る。** スタンプと同じ「中心から◯%」にすると、
+      長い文字は端を押しても掴めず、短い文字は離れていても掴めてしまう。 */
+  findTextAt(point, n) {
+    const surface = this.surface(n);
+    const canvas = document.getElementById(surface.canvas);
+    if (!canvas || !canvas.width || !canvas.height) return null;
+    const ctx = canvas.getContext('2d');
+    const list = this[surface.marks];
+    /* **後ろから見る。** 後に置いたものが上に描かれるので、重なっていたら
+       上に見えているほうが掴めないと、人の目と食い違う。 */
+    for (let i = list.length - 1; i >= 0; i -= 1) {
+      const m = list[i];
+      if (!m || !m.text) continue;
+      const size = m.size || 16;
+      ctx.font = this.textFont(size);
+      /* `measureText` が使えない場（テストの替え玉）では字数から見積もる。
+         **黙って「当たらない」にしない**——そうすると掴めないのに検査は緑になる。 */
+      const measured = ctx.measureText ? ctx.measureText(m.text) : null;
+      const textWidth = measured && Number.isFinite(measured.width)
+        ? measured.width
+        : m.text.length * size * 0.6;
+      const halfX = ((textWidth / 2) + (size * 0.25)) / canvas.width;
+      const halfY = (size * 0.75) / canvas.height;
+      if (Math.abs(point.x - m.x) <= halfX && Math.abs(point.y - m.y) <= halfY) return m;
+    }
+    return null;
+  },
+
+  /** 文字を選ぶ（どれを選んでいるかは画面にも出す）。 */
+  selectText(mark, n) {
+    /* 面の番号は `surface()` と同じ決め方にそろえる（不明な番号は①）。 */
+    this.selectedText = { n: n === 2 ? 2 : 1, mark };
+    this.drawCanvas(n);
+  },
+
+  /** 選ぶのをやめる。**取り出す絵に目印を焼き込まないため**にも要る。 */
+  clearTextSelection() {
+    const chosen = this.selectedText;
+    if (!chosen) return;
+    this.selectedText = null;
+    this.drawCanvas(chosen.n);
+  },
+
+  /** 掴んでいる文字を指の位置へ運ぶ。枠の外へは出さない。 */
+  moveSelectedText(point, n) {
+    const chosen = this.selectedText;
+    if (!chosen || !chosen.mark) return;
+    const clamp = (v) => Math.min(1, Math.max(0, v));
+    chosen.mark.x = clamp(point.x);
+    chosen.mark.y = clamp(point.y);
+    this.drawCanvas(n);
+  },
+
+  /** 文字を描くときの書体。**掴む判定と描くのとで同じものを使う**
+      ——別々に書くと、測った幅と見えている幅がずれて掴めなくなる。 */
+  textFont(size) {
+    return `700 ${size}px "Hiragino Mincho ProN", "Yu Mincho", YuMincho, "Times New Roman", serif`;
+  },
+
   /* 消しゴム（マスター指示 2026-09-07）。触れた印を取り除く。
 
      **画素を削らない。** 下絵（犬体4面図）や写真まで白くしてしまうと戻せないので、
@@ -1692,6 +1804,12 @@ const App = {
       if (Array.isArray(m.points)) return this.distanceToStroke(point, m.points) > reach;
       return Math.hypot(m.x - point.x, m.y - point.y) > reach;
     });
+    /* 選んでいた文字ごと消えたかもしれない。**消えた印を選んだままにしない**
+       （残っていると、色を変えたときに画面に無い印へ書き込む）。 */
+    const chosen = this.selectedText;
+    if (chosen && chosen.mark && !this[surface.marks].includes(chosen.mark)) {
+      this.selectedText = null;
+    }
     if (this[surface.marks].length !== before) this.drawCanvas(n);
     return before - this[surface.marks].length;
   },
@@ -1700,6 +1818,7 @@ const App = {
      最初からやり直しになる**（ペンの操作は1回が長い）。 */
   undoMark(n) {
     const surface = this.surface(n);
+    this.clearTextSelection();
     this[surface.marks].pop();
     this.drawCanvas(n);
     this.updateCompletionStatus();
@@ -1707,6 +1826,7 @@ const App = {
 
   clearCanvas(n) {
     const surface = this.surface(n);
+    this.clearTextSelection();
     this[surface.marks] = [];
     this.drawCanvas(n);
     this.updateCompletionStatus();
@@ -2201,7 +2321,10 @@ const App = {
         }
         /* 文字。**何も打たなければ何も置かない**（空の印を残さない・`D-10`）。 */
         if (mode === '文字') {
-          const typed = (globalThis.prompt && globalThis.prompt('入れる文字')) || '';
+          /* 説明の文は出さない（マスター指示 2026-09-12「入れる文字という説明は消せ」）。
+             犬体図側と同じ文言だったので、**こちらも合わせて消す**——片方だけ残すと、
+             同じ操作なのに画面によって出る言葉が違うことになる。 */
+          const typed = (globalThis.prompt && globalThis.prompt('')) || '';
           if (!typed.trim()) return;
           const at = pointFromEvent(event);
           strokes.push({
@@ -2350,6 +2473,9 @@ const App = {
     /* 描画面が 0×0 のままだと `toDataURL()` は `data:,` を返す。**中身が無い。**
        これを返すと「印を保存した」ことになってしまい、飼い主には空が届く
        ——`#3` そのもの。測り直しても駄目なら、黙って空を返さずに投げる。 */
+    /* **選んでいる目印を焼き込まない。** ここは canvas をそのまま PNG にするので、
+       破線の枠が付いたまま飼い主に届く（`D-12`——届いたものが正）。 */
+    this.clearTextSelection();
     this.resizeCanvas(n);
     if (!canvas.width || !canvas.height) {
       throw new Error('犬体図の大きさを取れないため、付けた印を保存できません');
@@ -2387,11 +2513,32 @@ const App = {
          ——人は押した所に文字が出ると思う。 */
       if (m.text) {
         const size = m.size || 16;
+        const px = m.x * canvas.width;
+        const py = m.y * canvas.height;
         ctx.fillStyle = m.color || this.markColor(m.type);
-        ctx.font = `700 ${size}px "Hiragino Mincho ProN", "Yu Mincho", YuMincho, "Times New Roman", serif`;
+        ctx.font = this.textFont(size);
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(m.text, m.x * canvas.width, m.y * canvas.height);
+        ctx.fillText(m.text, px, py);
+
+        /* いま掴んでいる文字だけ、破線の枠で囲う（マスター指示 2026-09-12）。
+           **どれを動かすのか／どれの色が変わるのかが見えないと操作できない。**
+           この枠は `exportBodyMarking()` の前に必ず外す——飼い主に届く絵に
+           作業中の目印が入ってはいけない。 */
+        if (this.selectedText && this.selectedText.mark === m) {
+          const measured = ctx.measureText ? ctx.measureText(m.text) : null;
+          const textWidth = measured && Number.isFinite(measured.width)
+            ? measured.width
+            : m.text.length * size * 0.6;
+          const padX = (textWidth / 2) + (size * 0.25);
+          const padY = size * 0.75;
+          ctx.globalAlpha = 1;
+          ctx.setLineDash([4, 3]);
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = '#121212';
+          ctx.strokeRect(px - padX, py - padY, padX * 2, padY * 2);
+          ctx.setLineDash([]);
+        }
         ctx.globalAlpha = 1;
         return;
       }
