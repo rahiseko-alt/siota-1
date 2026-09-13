@@ -45,6 +45,34 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
  * 証明の役に立たない（何を検出したのか言えないため）。
  */
 export const MUTATIONS = [
+  /* ── 2026-09-13・マスター指示「直せるものを先に治せ」
+     **確定済みカルテを直すと、飼い主の写真が壊れる。**
+     カルテを開くとき `asset://{id}` は絵を出すために `blob:` の一時的な住所へ
+     置き換わる。その住所はそのタブの中でしか通じず、閉じれば消える。
+     「② カルテ修正」はその中身を④の入力画面に流し込むので、原本を使わずに
+     置き換え後を使うと、住所が写真の値として保存され**飼い主の画面で写真が出なくなる**。
+     文字だけ直したときにも起きる。`12.` は枚数しか数えていないので**緑のまま**通る
+     ——それを捕まえるのが `12b.` `12c.`（`F-20260913-86`・`偽-5`）。 */
+  {
+    id: 'revise-photos-from-hydrated',
+    why: '**確定済みカルテを直すと、飼い主の画面から写真が消える**（文字だけ直したときも）',
+    file: 'src/js/ui.js',
+    find: '    const stored = (data && data.__stored) || data;',
+    replace: '    const stored = data;',
+    scripts: ['verify-photo-roundtrip.mjs'],
+  },
+  /* ── 2026-09-13・放置リスト `#60`
+     確定済みカルテへの写真追加は、保存の守りが「まだ下書きのときだけ受け付ける」
+     形になっていて**そもそも作られていない**。入口を閉じるのをやめると、店の人は
+     足せると思って選び、保存で落ちて**文字の修正まで巻き添えで消える**。 */
+  {
+    id: 'revise-photo-add-not-locked',
+    why: '**直しの画面で写真を足せてしまい、保存で落ちて文字の修正まで消える**',
+    file: 'src/js/ui.js',
+    find: '      this.lockPhotoAddForRevise();',
+    replace: '      /* (壊し方) 入口を閉じない */',
+    scripts: ['verify-photo-roundtrip.mjs'],
+  },
   /* **`shops-admin-update-rls-open` はここに在った**（30回目・2026-08-29）。
      「一般スタッフが店舗の既定来店間隔を書き換えられる」を捕まえる壊し方だったが、
      `admin` と `staff` の2権限は 2026-09-06 にマスターの判断で廃止され
