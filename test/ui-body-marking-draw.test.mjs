@@ -50,10 +50,13 @@ function loadCanvasScreen(typed = '要観察') {
     createElement: () => ({ style: {}, classList: { add() {}, remove() {} }, append() {} }),
     addEventListener: () => {},
   };
+  /* 入力を促すときに画面へ出した説明。**何を出したかを見る**ためだけに控える
+     （マスター指示 2026-09-12「入れる文字という説明は消せ」）。 */
+  const prompted = [];
   const sandbox = {
     document,
     /* 「文字」の道具が何を打たれたか（マスター指示 2026-09-07）。 */
-    prompt: () => typed,
+    prompt: (message) => { prompted.push(message); return typed; },
     window: { addEventListener: () => {}, DUMMY: { dogs: [] } },
     setTimeout: () => {},
     console,
@@ -69,7 +72,7 @@ function loadCanvasScreen(typed = '要観察') {
   const fire = (type, pointerId, clientX, clientY) => {
     for (const handler of handlers.get(type) || []) handler({ pointerId, clientX, clientY });
   };
-  return { App, fire, drawn };
+  return { App, fire, drawn, prompted };
 }
 
 test('ペンでなぞると、線が1本残る（点ではなく範囲が書ける）', () => {
@@ -297,4 +300,83 @@ test('文字の大きさは太さに連れて変わる（道具を増やさな�
   App.setMarkMode('文字', null);
   fire('pointerdown', 1, 100, 80);
   assert.equal(App.marks[0].size, 40);
+});
+
+/* ───────────────────────────────────────────────────────────────────
+   置いたあとの文字（マスター指示 2026-09-12）
+
+   > ⑤配置された文字をドラッグすると位置が変えられる
+   > 入れる文字という説明は消せ
+   > 文字の色は変えられる様にしろ
+
+   ①〜④（ボタン→入力→OK→配置）は既に在る。**足りないのは⑤**で、
+   置いてしまうと二度と動かせない——書き損じたら消してもう一度打つしかなかった。
+   ─────────────────────────────────────────────────────────────────── */
+
+test('置いた文字を掴んで動かすと、位置が変わる', () => {
+  const { App, fire } = loadCanvasScreen();
+  App.setMarkMode('文字', null);
+  fire('pointerdown', 1, 100, 80);
+  assert.equal(App.marks.length, 1, '前提: 文字が1件置かれている');
+  const before = { x: App.marks[0].x, y: App.marks[0].y };
+
+  /* 置いた文字の**上**を押してから動かす。 */
+  fire('pointerdown', 2, 100, 80);
+  fire('pointermove', 2, 240, 160);
+  fire('pointerup', 2, 240, 160);
+
+  assert.equal(App.marks.length, 1, '掴んだつもりが、新しい文字を置いてしまっている');
+  assert.ok(App.marks[0].x !== before.x || App.marks[0].y !== before.y, '動かしても位置が変わらない');
+  assert.ok(Math.abs(App.marks[0].x - (240 / 400)) < 0.01, '指の位置に来ていない（横）');
+  assert.ok(Math.abs(App.marks[0].y - (160 / 275)) < 0.01, '指の位置に来ていない（縦）');
+});
+
+test('文字の無い所を押したら、動かさずに新しい文字を置く', () => {
+  const { App, fire } = loadCanvasScreen();
+  App.setMarkMode('文字', null);
+  fire('pointerdown', 1, 100, 80);
+  fire('pointerdown', 2, 340, 230);
+  assert.equal(App.marks.length, 2, '離れた所を押しても新しい文字が置かれない');
+  assert.ok(Math.abs(App.marks[0].x - (100 / 400)) < 0.01, '1件目が動いてしまっている');
+});
+
+test('選んでいる文字の色を変えると、その文字の色が変わる', () => {
+  const { App, fire } = loadCanvasScreen();
+  App.setMarkMode('文字', null);
+  fire('pointerdown', 1, 100, 80);
+  assert.notEqual(App.marks[0].color, '#00bcd4', '前提: まだその色ではない');
+  App.setPenColor('#00bcd4');
+  assert.equal(App.marks[0].color, '#00bcd4', '選んでいる文字の色が変わらない');
+});
+
+test('選んでいない文字の色は、色を変えても変わらない', () => {
+  const { App, fire } = loadCanvasScreen();
+  App.setMarkMode('文字', null);
+  fire('pointerdown', 1, 100, 80);
+  const placed = App.marks[0].color;
+  /* ペンに持ち替えれば、もう文字は選んでいない。 */
+  App.setMarkMode('ペン', null);
+  App.setPenColor('#00bcd4');
+  assert.equal(App.marks[0].color, placed, '選んでいない文字まで色が変わっている');
+});
+
+test('入力を促すとき、説明の文は出さない', () => {
+  const { App, fire, prompted } = loadCanvasScreen();
+  App.setMarkMode('文字', null);
+  fire('pointerdown', 1, 100, 80);
+  assert.equal(prompted.length, 1, '前提: 1回だけ訊いている');
+  assert.equal(prompted[0], '', `説明が残っている: ${JSON.stringify(prompted[0])}`);
+});
+
+test('選んでいる目印は、飼い主に届く画像には焼き込まない', () => {
+  const { App, fire, drawn } = loadCanvasScreen();
+  App.setMarkMode('文字', null);
+  fire('pointerdown', 1, 100, 80);
+  /* 選んでいる間は、どれを選んでいるか分かる目印が出ている。 */
+  assert.ok(drawn.some(([op]) => op === 'setLineDash'), '前提: 選んでいる目印が描かれている');
+
+  const mark = drawn.length;
+  App.exportBodyMarking();
+  assert.ok(!drawn.slice(mark).some(([op]) => op === 'setLineDash'),
+    '取り出す絵に、選んでいる目印まで入っている');
 });
