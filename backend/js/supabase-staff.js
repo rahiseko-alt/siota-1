@@ -399,7 +399,18 @@ async function bootStaffPortal(PonchiApp) {
     client,
   );
   activeObjectUrls = hydrated.objectUrls;
-  globalThis.__REPORT__ = { ...hydrated.data, reportId: reportBody.report.id };
+  /* **原本も一緒に持っておく**（マスター指示 2026-09-13「直せるものを先に治せ」）。
+     `hydrateAssetReferences` は `asset://{id}` を `blob:` の一時的な住所に置き換える。
+     絵を出すにはそれが要るが、**その住所はこのタブの中でしか通じず、閉じれば消える**。
+     「② カルテ修正」はこの中身を④の入力画面に流し込むので、原本を渡さないと
+     `blob:` が写真の値として確定され、**飼い主の画面で写真が出なくなる**。
+     文字だけ直したときにも起きる（`F-20260913-86`）。
+     ここは絵のための `hydrated`、`__stored` は保存のための原本。 */
+  globalThis.__REPORT__ = {
+    ...hydrated.data,
+    reportId: reportBody.report.id,
+    __stored: reportBody.report.data,
+  };
   PonchiApp.show('report', {
     ...pet,
     reportId: route.reportId,

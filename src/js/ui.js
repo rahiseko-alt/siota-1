@@ -613,9 +613,18 @@ const App = {
        `teeth` は最大2枚の配列になった（マスター指示 2026-08-29・C-11）。 */
     this.photos = { trimming: [], ear: '', teeth: [] };
     const keep = (value) => (typeof value === 'string' && value.trim() !== '' ? value : '');
-    this.photos.trimming = ((data.trimming || {}).photos || []).filter((v) => keep(v));
-    this.photos.ear = keep((data.ear || {}).photo);
-    this.photos.teeth = ((data.teeth || {}).photos || []).filter((v) => keep(v)).slice(0, this.MAX_TEETH_PHOTOS);
+    /* **写真だけは原本から取る**（マスター指示 2026-09-13）。
+       「② カルテ修正」で流れてくる `data` は、絵を出すために `asset://{id}` を
+       `blob:` の一時的な住所に置き換えたもの。**その住所はこのタブの中でしか通じない。**
+       そのまま確定すると住所が写真の値として保存され、閉じた瞬間に指し先を失う
+       ——**飼い主の画面で写真が出なくなる**（文字だけ直したときも起きる・`F-20260913-86`）。
+       `__stored` は置き換える前の原本（`backend/js/supabase-staff.js` が添える）。
+       この画面は保存済みの写真を「保存済み」の札で出すだけで絵を使わないので、
+       原本に替えても**見た目は1つも変わらない**。 */
+    const stored = (data && data.__stored) || data;
+    this.photos.trimming = ((stored.trimming || {}).photos || []).filter((v) => keep(v));
+    this.photos.ear = keep((stored.ear || {}).photo);
+    this.photos.teeth = ((stored.teeth || {}).photos || []).filter((v) => keep(v)).slice(0, this.MAX_TEETH_PHOTOS);
     for (const kind of ['trimming', 'ear', 'teeth']) this.renderPhotoThumbs(kind);
 
     if (Array.isArray(data.__marks) && data.__marks.length > 0) {
@@ -658,6 +667,7 @@ const App = {
       this.renderOptionChips(pet.shopGroomingOptions || []);
       this.reviseReportId = reviseId;
       this.applyReport(report);
+      this.lockPhotoAddForRevise();
       /* **「前回比」を、HTML の初期値のまま残さない。**
          この経路は `resumeDraft()` を通らないので `currentDog.prevWeight` が入らず、
          画面には `src/index.html` の初期値「前回の記録なし」がそのまま残っていた
@@ -2077,6 +2087,26 @@ const App = {
        ファイルを選んだ瞬間に走る——縮小が終わる前なので、待たずに送ると
        写真の無い下書きが残る。処理が終わったここで、明示的に残す。 */
     this.saveDraft();
+  },
+
+  /* 「② カルテ修正」では、**写真を足せない**（マスター指示 2026-09-13「直せるものを先に治せ」）。
+
+     確定済みカルテへの写真の追加は、**そもそも作られていない**——保存の守りが
+     「まだ下書きのカルテにしか写真を受け付けない」形になっており、修正で足そうとすると
+     保存そのものが失敗して**文字の修正まで巻き添えで消える**（放置リスト `#60`）。
+     いまは整理整頓の期間で新しく作らない方針なので、**できないことを画面で言って止める**。
+     **既に付いている写真はそのまま残る**（消す `×` も今までどおり使える）。 */
+  lockPhotoAddForRevise() {
+    document.querySelectorAll('.photo-pick').forEach((box) => {
+      const input = box.querySelector('.photo-pick__input');
+      if (!input) return;
+      input.disabled = true;
+      const note = box.querySelector('.photo-pick__note');
+      if (note) {
+        note.textContent = 'カルテの修正では、写真を新しく足すことはできません。'
+          + 'いま付いている写真はそのまま残ります。';
+      }
+    });
   },
 
   removePhoto(kind, index) {
