@@ -283,6 +283,39 @@ try {
   ].filter(Boolean);
   check('12. 直したあとも写真5枚が残っている', revisedPhotos.length === 5, `${revisedPhotos.length}件`);
 
+  /* **枚数だけ数えても、写真が壊れたことは分からない**（マスター指示 2026-09-13）。
+     カルテを開くとき `asset://{id}` は絵を出すために `blob:` の一時的な住所に
+     置き換わる。その住所は**このタブの中でしか通じず、閉じれば消える**。
+     直した中身をそのまま保存すると住所が焼き付き、**飼い主の画面で写真が出なくなる**。
+     12 は `length === 5` しか見ておらず、住所が化けても 5 件のまま通っていた
+     （`偽-5`「中身の無い検査を EXIT 0 の根拠にする」・`F-20260913-86`）。 */
+  const notStored = revisedPhotos.filter((v) => !String(v).startsWith('asset://'));
+  check('12b. 直したあとの写真が、保存された実体を指している（一時的な住所になっていない）',
+    notStored.length === 0,
+    notStored.length ? `${notStored.length}件が別物: ${JSON.stringify(notStored.map((v) => String(v).slice(0, 24)))}` : '5件すべて asset://');
+
+  /* **届いたかどうかは、飼い主の画面で見る**（`D-12`）。
+     保存の形が正しくても、実際に絵が出なければ意味がない。 */
+  await ownerPage.reload({ waitUntil: 'networkidle' });
+  await ownerPage.waitForTimeout(1500);
+  const brokenAfterRevise = await ownerPage.evaluate(
+    () => [...document.querySelectorAll('img')]
+      .filter((i) => !i.currentSrc || i.naturalWidth === 0)
+      .map((i) => i.getAttribute('data-view') || i.className || '(名前なし)'),
+  );
+  check('12c. 直したあとも、飼い主の画面で写真が実際に出る',
+    brokenAfterRevise.length === 0,
+    brokenAfterRevise.length ? `${brokenAfterRevise.length}件が出ていない ${JSON.stringify(brokenAfterRevise)}` : '');
+
+  /* **修正では写真を足せないことを、画面で言っている**（放置リスト `#60`）。
+     黙って受け付けて保存で落ちると、文字の修正まで巻き添えで消える。 */
+  await page.goto(`${BASE}/edit/p/${pet.id}/${reportId}?revise=1`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('#screen-3.is-active', { timeout: 20_000 });
+  const pickers = await page.locator('.photo-pick__input').count();
+  const lockedPickers = await page.locator('.photo-pick__input[disabled]').count();
+  check('12d. 直しの画面では、写真を足す入口が閉じている',
+    pickers > 0 && lockedPickers === pickers, `${lockedPickers}/${pickers} が閉じている`);
+
   check('13. アプリ由来のエラーが無い', pageErrors.length === 0, pageErrors.join(' | '));
 } catch (error) {
   check('検査を最後まで実行できた', false, error.message);
