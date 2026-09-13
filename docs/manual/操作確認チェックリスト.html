@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>操作確認チェックリスト | SALTY DOG カルテ</title>
+<style>
+  :root{
+    --ink:#121212; --ink-2:#4a4a48; --ink-3:#8c8c88;
+    --line:#dcdcd6; --paper:#faf9f6; --band:#f2f2ef;
+    --accent:#4a7c59; --warn:#c85a32;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",system-ui,sans-serif;
+    line-height:1.8; -webkit-text-size-adjust:100%;
+  }
+  .wrap{max-width:880px; margin:0 auto; padding:32px 20px 64px}
+  header{border-bottom:3px solid var(--ink); padding-bottom:16px; margin-bottom:24px}
+  h1{font-size:26px; letter-spacing:.04em; margin:0 0 6px}
+  .sub{font-size:13.5px; color:var(--ink-2); margin:0}
+  .lead{background:#fff; border:1px solid var(--line); padding:14px 16px;
+        font-size:13.5px; color:var(--ink-2); margin:20px 0}
+  .lead b{color:var(--ink)}
+  .lead p{margin:0 0 8px}
+  .lead p:last-child{margin-bottom:0}
+  h2{font-size:15px; letter-spacing:.08em; color:var(--ink-3);
+     margin:34px 0 12px; padding-bottom:6px; border-bottom:1px solid var(--line)}
+
+  /* ── 1項目 ── */
+  .item{background:#fff; border:1px solid var(--line);
+        padding:14px 16px; margin-bottom:12px; page-break-inside:avoid}
+  .item.is-done{background:#f6faf7; border-color:#b8d2c0}
+  .item.is-ng{background:#fdf6f3; border-color:#e3bfae}
+  .item__head{display:flex; align-items:flex-start; gap:10px; margin:0 0 10px}
+  .marks{display:flex; gap:6px; flex:none; padding-top:1px}
+  .mark{
+    width:34px; height:32px; flex:none; cursor:pointer;
+    border:1px solid var(--line); background:var(--band);
+    font-size:15px; font-weight:700; color:var(--ink-3);
+    font-family:inherit; line-height:1; padding:0;
+  }
+  .mark[aria-pressed="true"]{background:var(--ink); color:#fff; border-color:var(--ink)}
+  .mark.is-ng[aria-pressed="true"]{background:var(--warn); border-color:var(--warn)}
+  .item__title{font-size:15.5px; font-weight:700; margin:0}
+  .item__title .no{color:var(--ink-3); font-weight:400; margin-right:5px}
+  .item__title .of{color:var(--accent)}
+
+  .rows{margin:0}
+  .row{display:flex; gap:10px; font-size:13px; margin:0 0 7px; align-items:baseline}
+  .row:last-child{margin-bottom:0}
+  .row__k{flex:none; width:7.4em; color:var(--ink-3); font-size:11.5px;
+          letter-spacing:.04em; text-align:right}
+  .row__v{flex:1; min-width:0}
+  .row.is-what .row__v{font-weight:700}
+  .row.is-ok .row__v{color:var(--accent); font-weight:700}
+  .step{display:inline-block; background:var(--band); border:1px solid var(--line);
+        padding:2px 8px; font-size:12.5px; margin:2px 0}
+  .arrow{color:var(--ink-3); font-size:12px; padding:0 2px}
+  .memo{display:block; width:100%; margin-top:2px; border:0; border-bottom:1px solid var(--line);
+        background:transparent; font-family:inherit; font-size:13px; color:var(--ink);
+        padding:2px 0; min-height:1.9em}
+  .memo:focus{outline:0; border-bottom-color:var(--ink)}
+
+  .bar{display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+       background:#fff; border:1px solid var(--line); padding:10px 14px;
+       font-size:13px; margin:20px 0}
+  .bar__count{font-weight:700}
+  .btn{font-family:inherit; font-size:12.5px; padding:5px 12px; cursor:pointer;
+       border:1px solid var(--line); background:var(--band); color:var(--ink-2)}
+  .known{background:#fff; border:1px solid var(--warn); padding:14px 16px; margin-top:12px}
+  .known h3{font-size:14px; margin:0 0 8px; color:var(--warn)}
+  .known ul{margin:0; padding-left:1.2em; font-size:13px; color:var(--ink-2)}
+  .known li{margin-bottom:5px}
+  .known b{color:var(--ink)}
+  footer{margin-top:40px; padding-top:14px; border-top:1px solid var(--line);
+         font-size:12px; color:var(--ink-3)}
+  @media print{
+    body{background:#fff}
+    .wrap{max-width:none; padding:0 8mm}
+    .item,.lead,.bar,.known{border-color:#bbb}
+    .item.is-done,.item.is-ng{background:#fff}
+    .mark{background:#fff !important; color:#000 !important; border-color:#666 !important}
+    .bar .btn{display:none}
+    h2{break-after:avoid}
+  }
+  @media (max-width:520px){
+    .wrap{padding:20px 14px 48px}
+    h1{font-size:21px}
+    .row{display:block}
+    .row__k{width:auto; text-align:left; display:block; margin-bottom:1px}
+    .item__title{font-size:15px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>操作確認チェックリスト</h1>
+  <p class="sub">SALTY DOG カルテ ／ 納品前に、端から端まで実際に触って確かめるための一覧</p>
+</header>
+
+<p class="lead">
+  <p><b>○ と × の付け方</b>：画面が出たかどうかではなく、<b>やりたかったことが最後までできたか</b>で決めてください。
+     途中で止まったら、そこが「繋がっていない」ところです。</p>
+  <p><b>用意するもの</b>：スマホ2台（お店用・お客様用）。1台しか無いときは、
+     お客様の確認だけブラウザのシークレットウィンドウで別のGoogleアカウントを使ってください。</p>
+  <p><b>ご注意</b>：本番で試すと<b>本物のデータが増えます</b>。
+     練習で作った飼い主・犬・カルテは、最後の「H 消す」で片づけられます。</p>
+  <p>押した印はこの端末に残ります（紙に印刷して使うこともできます）。<b>所要 40〜60分。</b></p>
+</p>
+
+<div class="bar">
+  <span class="bar__count"><span id="count-ok">0</span> ○ ／ <span id="count-ng">0</span> × ／ 全 <span id="count-all">0</span> 項目</span>
+  <button type="button" class="btn" id="reset">すべての印を消す</button>
+</div>
+
+<h2>A ── 最初に1回だけ</h2>
+
+<div class="item" data-id="a1">
+  <p class="item__title"><span class="no">1.</span><span class="of">お店の人としてログインする場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">お店の人と飼い主さんが、同じ入口から入って<b>自動で別々の画面に分かれる</b>こと。お店の人が飼い主用の画面に落ちない。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">ページを開く</span><span class="arrow">→</span><span class="step">Google でログイン</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">1回のログインで「02 カルテ検索」の一覧に着く（入口に戻されない）</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="a2">
+  <p class="item__title"><span class="no">2.</span><span class="of">次回のご来店時期の日数を決める場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">ここで決めた日数が、<b>あとで書くカルテの「次回のおすすめご来店時期」に反映される</b>こと。設定だけできて効かない、が無い。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">管理</span><span class="arrow">→</span><span class="step">④ 店舗設定</span><span class="arrow">→</span><span class="step">既定の来店間隔（日）</span><span class="arrow">→</span><span class="step">保存する</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">「保存しました。」が出て、あとで書いたカルテの日付が<b>来店日＋この日数</b>になっている</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="a3">
+  <p class="item__title"><span class="no">3.</span><span class="of">使用オプションの名前を決める場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">ここで足した名前が、<b>カルテ作成の「⑦ 使用オプション」にそのまま出る</b>こと。お店ごとのメニュー名を自分で変えられる。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">管理</span><span class="arrow">→</span><span class="step">④ 店舗設定</span><span class="arrow">→</span><span class="step">名前を打つ</span><span class="arrow">→</span><span class="step">＋ 追加</span><span class="arrow">→</span><span class="step">使用オプションを保存する</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">カルテ作成を開き直すと「⑦ 使用オプション」に足した名前のボタンが出て、押すと選べる</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<h2>B ── 新しいお客様（登録からお届けまで）</h2>
+
+<div class="item" data-id="b1">
+  <p class="item__title"><span class="no">4.</span><span class="of">新しい飼い主さんを登録する場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">飼い主さんを新しく作れること。<b>作った名前が、次の「犬の登録」のプルダウンに出てくる</b>こと。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">管理</span><span class="arrow">→</span><span class="step">② 新規</span><span class="arrow">→</span><span class="step">① 顧客アカウントの新規作成</span><span class="arrow">→</span><span class="step">お名前</span><span class="arrow">→</span><span class="step">登録する</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">「登録しました: ◯◯」が出る</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="b2">
+  <p class="item__title"><span class="no">5.</span><span class="of">新しい犬を登録する場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">犬が飼い主さんに<b>正しくひもづく</b>こと。同じ名前の飼い主さんが2人いても、プルダウンで<b>見分けが付く</b>こと。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">管理</span><span class="arrow">→</span><span class="step">② 新規</span><span class="arrow">→</span><span class="step">② ペットアカウントの新規作成</span><span class="arrow">→</span><span class="step">飼い主さまを選ぶ</span><span class="arrow">→</span><span class="step">わんちゃんのお名前</span><span class="arrow">→</span><span class="step">登録する</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">「02 カルテ検索」の一覧にその犬が出て、カードに<b>飼い主さんの名前</b>が正しく出ている</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="b3">
+  <p class="item__title"><span class="no">6.</span><span class="of">はじめての子のカルテを、最後まで書く場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">◎と①〜⑧の<b>全部の欄が実際に入力でき、入れた値が画面に残る</b>こと。前のカルテが無い子でも、空欄のまま最後まで行ける。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">一覧から犬を押す</span><span class="arrow">→</span><span class="step">◎ 来店日・コース</span><span class="arrow">→</span><span class="step">① 体重・BCS</span><span class="arrow">→</span><span class="step">② 爪（前・後）</span><span class="arrow">→</span><span class="step">③ 耳（左右＋写真）</span><span class="arrow">→</span><span class="step">④ 歯（＋写真）</span><span class="arrow">→</span><span class="step">⑤ 犬体図</span><span class="arrow">→</span><span class="step">⑥ 仕上がり写真</span><span class="arrow">→</span><span class="step">⑦ 使用オプション</span><span class="arrow">→</span><span class="step">⑧ メッセージ</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">画面いちばん下の帯が「<b>✓ 全項目入力完了</b>」になる（1つでも残っていれば「未記入 …」のまま）</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="b4">
+  <p class="item__title"><span class="no">7.</span><span class="of">書いたカルテを確定する場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">「確定」で<b>本当に保存される</b>こと。保存できていないのに「保存しました」と出ない（失敗したら理由が出て画面が動かない）。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">確定</span><span class="arrow">→</span><span class="step">04 顧客カルテ</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">確認画面に切り替わり、<b>入れた値がそのまま出ている</b>。いったん「02 カルテ検索」に戻ってその犬を開き直しても、消えていない</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="b5">
+  <p class="item__title"><span class="no">8.</span><span class="of">新しいお客様にカルテを届ける場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">お客様に渡すQR・URLが<b>実際に発行され、渡せる形になっている</b>こと（有効期限が出る・コピーできる）。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">02 カルテ検索</span><span class="arrow">→</span><span class="step">犬カードの 初回登録QR</span><span class="arrow">→</span><span class="step">URLをコピー</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">QRの絵と URL が出て、<b>有効期限（24時間後）</b>が表示され、「コピーしました。」が出る</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="b6">
+  <p class="item__title"><span class="no">9.</span><span class="of">新しいお客様が、初めて自分のカルテを見る場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">渡したURLから<b>お客様が自力でたどり着けて、自分の犬のカルテが見える</b>こと。<b>これが商品の本体です。</b></span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">お客様の端末でURLを開く</span><span class="arrow">→</span><span class="step">Google でログイン</span><span class="arrow">→</span><span class="step">犬のカードを押す</span><span class="arrow">→</span><span class="step">来店日を押す</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">「初回登録が完了しました。」が出て、カルテ本体まで着く。<b>他のお客様の犬は1頭も出ていない</b></span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="b7">
+  <p class="item__title"><span class="no">10.</span><span class="of">書いた内容が、1つも欠けずに届いているかを見る場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v"><b>書いた値と、お客様に見えている値が同じ</b>であること。押せた・出た、ではなく「同じ物が届いた」を見る。<b>ここが × なら他が全部○でも納品できません。</b></span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">お店の 04 顧客カルテ</span><span class="arrow">→</span><span class="step">お客様の画面</span><span class="arrow">→</span><span class="step">2つを並べて見比べる</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">体重・BCS・爪（前後）・耳（左右）・歯・犬体図の印・写真の枚数・使用オプション・メッセージが<b>すべて一致</b>し、書いていない項目に<b>例文や見本が出ていない</b></span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<h2>C ── 毎日の仕事（2回目以降）</h2>
+
+<div class="item" data-id="c1">
+  <p class="item__title"><span class="no">11.</span><span class="of">名前で子を探す場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">頭数が増えても<b>目当ての子にすぐ着ける</b>こと。飼い主名・犬名・犬種・担当者のどれでも引けること。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">02 カルテ検索</span><span class="arrow">→</span><span class="step">検索欄に打つ</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">打つたびに一覧が絞られ、<b>件数の数字</b>も一緒に変わる</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="c2">
+  <p class="item__title"><span class="no">12.</span><span class="of">手がふさがっていて、声で探す場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">犬を抱えたまま探せること。<b>使えない端末のとき、使えないと分かる</b>こと（黙って変な言葉が入らない）。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">02 カルテ検索</span><span class="arrow">→</span><span class="step">音声検索</span><span class="arrow">→</span><span class="step">犬の名前を言う</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">「録音中...」に変わり、話した言葉が検索欄に入って絞り込まれる</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="c3">
+  <p class="item__title"><span class="no">13.</span><span class="of">2回目以降の子のカルテを書き始める場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">前回の内容が引き継がれて<b>毎回ゼロから打ち直さずに済む</b>こと。そのうえで、<b>前回のまま確定しそうなときに止めてくれる</b>こと。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">02 カルテ検索</span><span class="arrow">→</span><span class="step">同じ犬をもう一度押す</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">爪・耳・歯・BCS・ベスト体重・犬体図の印が入った状態で開き、上に「<b>… は ◯月◯日 のカルテのままです。今回見た結果に直してから確定してください。</b>」の警告が出る</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="c4">
+  <p class="item__title"><span class="no">14.</span><span class="of">入れ忘れたまま確定しそうになった場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">入れ忘れが<b>気づける形で出る</b>こと。そして<b>その場所まで一発で飛べる</b>こと（探し回らずに済む）。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">わざと②爪を空にする</span><span class="arrow">→</span><span class="step">下の帯を見る</span><span class="arrow">→</span><span class="step">該当項目へ ➜</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">帯に「⚠️ 未記入 ②爪」と出て、ボタンでその欄まで画面が動く。コース未選択で「確定」を押すと「来店コースを選択してください。」で止まる</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="c5">
+  <p class="item__title"><span class="no">15.</span><span class="of">書いている途中で中断して、あとで続きを書く場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">次のお客様が来て画面を離れても、<b>書きかけが黙って消えない</b>こと。保存ボタンを押し忘れても残る。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">途中まで書く</span><span class="arrow">→</span><span class="step">02 カルテ検索 に戻る</span><span class="arrow">→</span><span class="step">同じ犬をもう一度押す</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">書いた内容が<b>そのまま戻っている</b>（犬体図の印・写真も）。ページを閉じて開き直しても残っている</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<h2>D ── 絵と写真への書き込み</h2>
+
+<div class="item" data-id="d1">
+  <p class="item__title"><span class="no">16.</span><span class="of">犬体図に、見つけた所見を描く場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">「ここからここまで赤い」という<b>範囲</b>が描けること。所見の種類で色が変わること。<b>下絵の犬を消してしまわない</b>こと。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">⑤ の ✏️ 書き込む</span><span class="arrow">→</span><span class="step">✏️ ペン でなぞる</span><span class="arrow">→</span><span class="step">📍 スタンプ を置く</span><span class="arrow">→</span><span class="step">🧽 消しゴム で1つ消す</span><span class="arrow">→</span><span class="step">保存する</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">線と印が残り、消しゴムで<b>触れた印だけ</b>が消えて<b>下絵の犬は残っている</b>。色・太さ・透明を変えると、<b>そのあと描いた分だけ</b>変わる</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="d2">
+  <p class="item__title"><span class="no">17.</span><span class="of">犬体図に文字を置いて、位置と色を直す場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">文字を置いたあとでも<b>動かせる・色を変えられる</b>こと（置き直しのために消して打ち直さずに済む）。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">🅰 文字</span><span class="arrow">→</span><span class="step">絵を押して打つ</span><span class="arrow">→</span><span class="step">置いた文字を押したまま動かす</span><span class="arrow">→</span><span class="step">色 を変える</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">文字が指についてきて、色を変えると<b>破線の枠が付いている文字だけ</b>の色が変わる。保存した絵に<b>破線の枠は入らない</b></span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="d3">
+  <p class="item__title"><span class="no">18.</span><span class="of">2枚目の犬体図を使う場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">2枚目が1枚目と<b>同じ道具を全部持っている</b>こと。そして<b>2枚の印が混ざらない</b>こと。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">下側の絵の ✏️ 書き込む</span><span class="arrow">→</span><span class="step">ペン・スタンプ・文字を試す</span><span class="arrow">→</span><span class="step">保存する</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">2枚目に描いた印が<b>2枚目だけ</b>に出て、1枚目は変わらない。お客様の画面にも<b>2枚とも</b>並んで届く</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="d4">
+  <p class="item__title"><span class="no">19.</span><span class="of">犬体図に描き間違えて、やめたい場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">間違えても<b>開く前の状態にまるごと戻せる</b>こと。1件ずつ取り消す道もあること。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">✏️ 書き込む</span><span class="arrow">→</span><span class="step">何本か描く</span><span class="arrow">→</span><span class="step">↩ 1つ戻す</span><span class="arrow">→</span><span class="step">キャンセル</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">「↩ 1つ戻す」で直前の1件だけ消え、「キャンセル」で<b>開く前の絵にそっくり戻る</b>（「やり直す」はその面を全部消す）</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="d5">
+  <p class="item__title"><span class="no">20.</span><span class="of">歯の写真に印を書き込む場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">撮った写真の上に<b>どこが問題かを直接示せる</b>こと。拡大して細かい所に書けること。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">④ の写真を入れる</span><span class="arrow">→</span><span class="step">✏️ 書き込む</span><span class="arrow">→</span><span class="step">2本指で拡大</span><span class="arrow">→</span><span class="step">ペンで囲む</span><span class="arrow">→</span><span class="step">保存する</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">書き込んだ写真がそのままお客様に届く。<b>※保存すると写真に焼き付いて元には戻せません</b>（やり直すなら保存前に「キャンセル」）</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="d6">
+  <p class="item__title"><span class="no">21.</span><span class="of">写真を入れる・間違えて入れたのを消す場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">耳・歯・仕上がりの3か所すべてで写真を入れられること。<b>間違えた写真を消せて、お客様に届かない</b>こと。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">③耳 に1枚</span><span class="arrow">→</span><span class="step">④歯 に2枚</span><span class="arrow">→</span><span class="step">⑥仕上がり に数枚</span><span class="arrow">→</span><span class="step">1枚の × を押す</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">× で消え、確定後のお客様の画面にも<b>消した写真は出ていない</b>。歯に3枚目を入れようとすると断られる</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="d7">
+  <p class="item__title"><span class="no">22.</span><span class="of">メッセージを声で書く場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">手を止めずに一言書けること。<b>2回目も同じように使える</b>こと（1回使うと止まらなくなる、が無い）。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">⑧ のマイクを押す</span><span class="arrow">→</span><span class="step">話す</span><span class="arrow">→</span><span class="step">もう一度押して止める</span><span class="arrow">→</span><span class="step">もう一度やる</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">話した言葉が欄に入り、<b>2回目・3回目も同じように</b>開始と停止ができる</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<h2>E ── 直す・あとで足す</h2>
+
+<div class="item" data-id="e1">
+  <p class="item__title"><span class="no">23.</span><span class="of">コメントを追記し忘れて、後で足す場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">確定したあとでも<b>書き足せる</b>こと。そして足したものが<b>お客様の画面にも出る</b>こと。同じ日のカルテが<b>2枚に増えない</b>こと。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">管理</span><span class="arrow">→</span><span class="step">① リピーター</span><span class="arrow">→</span><span class="step">② カルテ修正</span><span class="arrow">→</span><span class="step">犬を選ぶ</span><span class="arrow">→</span><span class="step">日付を選ぶ</span><span class="arrow">→</span><span class="step">⑧に足す</span><span class="arrow">→</span><span class="step">確定</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">お客様の画面を開き直すと<b>足した文が出ている</b>。「この子の過去カルテ」に<b>同じ日付が2つ並んでいない</b></span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="e2">
+  <p class="item__title"><span class="no">24.</span><span class="of">確定したカルテの判定そのものを直す場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">文章だけでなく<b>判定・数値・絵も直せる</b>こと。直した結果が<b>古い内容と混ざらずに</b>お客様へ届くこと。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">② カルテ修正</span><span class="arrow">→</span><span class="step">②爪の判定を変える</span><span class="arrow">→</span><span class="step">体重を変える</span><span class="arrow">→</span><span class="step">確定</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">お客様の画面に<b>直した値だけ</b>が出る。修正中は「カルテ修正中（前回比は出しません）」と出て、前回比が誤って出ない</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="e3">
+  <p class="item__title"><span class="no">25.</span><span class="of">次回のご来店時期がお客様に伝わるかを見る場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">お店で決めた日数が<b>実際の日付になってお客様に見える</b>こと。予約の入口がその場にあること。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">お客様の画面</span><span class="arrow">→</span><span class="step">いちばん下まで送る</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">「次回のおすすめご来店時期」に<b>来店日＋設定した日数</b>の日付が出て、その下に「予約はこちら」がある</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<h2>F ── お客様の画面</h2>
+
+<div class="item" data-id="f1">
+  <p class="item__title"><span class="no">26.</span><span class="of">お客様が、前回・前々回を見返す場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">過去のカルテが<b>ずっと残っていて、いつでも見返せる</b>こと（このアプリを続ける理由そのもの）。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">お客様の画面</span><span class="arrow">→</span><span class="step">過去のレポートを見返す の 表示する ▼</span><span class="arrow">→</span><span class="step">前の来店日を押す</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">過去の来店日が並び、押すと<b>その回の内容</b>が出る（今回の内容が出てしまわない）</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="f2">
+  <p class="item__title"><span class="no">27.</span><span class="of">お客様が写真を大きく見る場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">スマホの小さい画面でも<b>写真の中身が分かる</b>こと（耳・歯・犬体図・仕上がりの全部で）。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">写真を押す</span><span class="arrow">→</span><span class="step">閉じる</span><span class="arrow">→</span><span class="step">別の項目の写真も押す</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">押すと大きくなり、もう一度押すと閉じる。<b>書き込んだ印もちゃんと見える</b></span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="f3">
+  <p class="item__title"><span class="no">28.</span><span class="of">お客様が体重の移り変わりを見る場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">毎回の体重が<b>つながった線になって、目標との差が見える</b>こと（1回ぶんの数字だけでは意味がない）。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">同じ犬で2回以上カルテを確定しておく</span><span class="arrow">→</span><span class="step">お客様の画面の ⑤ 体重</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">折れ線に<b>測った回数ぶんの点と日付</b>（例 26/09/05・最大4回）が出て、<b>金色の破線「理想 ◯kg」</b>が引かれている</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="f4">
+  <p class="item__title"><span class="no">29.</span><span class="of">お客様が次回の予約をする場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">カルテを見た流れのまま<b>予約まで行ける</b>こと（見て終わりにしない）。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">お客様の画面</span><span class="arrow">→</span><span class="step">予約はこちら</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">別のタブが開く。<b>※飛び先は今は仮のページです</b>（本番の予約ページのURLをいただければ差し替えます）</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="f5">
+  <p class="item__title"><span class="no">30.</span><span class="of">登録したてで、まだカルテが1枚も無い子の場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">まだ何も無い子に、<b>ありもしない履歴や見本の文が出ない</b>こと。お客様は出ているものを<b>本当のこと</b>として読みます。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">犬だけ登録してカルテは書かない</span><span class="arrow">→</span><span class="step">お客様の画面でその子を開く</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">「まだカルテがありません。」と出るだけ。<b>体重・写真・メッセージに何も出ていない</b></span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<h2>G ── 間違えたときの戻り方</h2>
+
+<div class="item" data-id="g1">
+  <p class="item__title"><span class="no">31.</span><span class="of">違う子を選んで書き始めてしまった場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">間違いに気づいてから<b>2タッチ以内で正しい子のカルテを書き始められる</b>こと。<b>他人のカルテに書き込んだまま気づかない、が起きない。</b></span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">わざと違う犬を押す</span><span class="arrow">→</span><span class="step">02 カルテ検索</span><span class="arrow">→</span><span class="step">正しい犬を押す</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">画面の名前が正しい子に変わり、<b>2タッチ</b>で書き始められる。間違えた子に書いた分が正しい子に混ざっていない</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="g2">
+  <p class="item__title"><span class="no">32.</span><span class="of">別のお客様が間違えて登録してしまった場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">間違った人に<b>カルテが見え続けない</b>こと。誰が見られる状態なのかを<b>お店側が確認できる</b>こと。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">犬カードの 初回登録QR</span><span class="arrow">→</span><span class="step">このカルテを見られるアカウント</span><span class="arrow">→</span><span class="step">解除</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">「解除しました。」が出て、そのお客様の端末で開き直すと<b>もう見えない</b></span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="g3">
+  <p class="item__title"><span class="no">33.</span><span class="of">QRを渡し間違えた場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">渡してしまったQRを<b>後から無効にできる</b>こと（使われる前に止められる）。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">初回登録QR</span><span class="arrow">→</span><span class="step">この招待を取消</span><span class="arrow">→</span><span class="step">その URL を開いてみる</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">「招待を取り消しました。」が出て、そのURLを開くと<b>「この招待は使用済み・期限切れ・取消済み、または無効です。」</b>になる</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<h2>H ── 消す（練習で作ったものの片づけも、ここで）</h2>
+
+<div class="item" data-id="h1">
+  <p class="item__title"><span class="no">34.</span><span class="of">間違えて確定したカルテを1枚だけ消す場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">1枚だけ消せて<b>他の回は残る</b>こと。消したものが<b>お客様の画面からも消える</b>こと。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">管理</span><span class="arrow">→</span><span class="step">③ 削除</span><span class="arrow">→</span><span class="step">③ カルテ1枚単位削除</span><span class="arrow">→</span><span class="step">犬と日付を選ぶ</span><span class="arrow">→</span><span class="step">完全に削除する</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">「削除しました」が出て、<b>その回だけ</b>が一覧から消える。お客様の画面にも出ていない</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="h2">
+  <p class="item__title"><span class="no">35.</span><span class="of">登録した子を丸ごと消す場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">犬を消したら<b>カルテも写真も一緒に消える</b>こと。<b>写真だけがどこかに残らない</b>こと（お客様の情報が残り続けない）。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">③ 削除</span><span class="arrow">→</span><span class="step">② ペットアカウント全データ削除</span><span class="arrow">→</span><span class="step">犬を選ぶ</span><span class="arrow">→</span><span class="step">完全に削除する</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">一覧から消える。<b>お客様の画面でもその子が出てこない</b></span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="h3">
+  <p class="item__title"><span class="no">36.</span><span class="of">飼い主さんごと消す場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">飼い主さんを消すと<b>その方の犬もカルテも写真も全部</b>消えること（ばらばらに残らない）。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">③ 削除</span><span class="arrow">→</span><span class="step">① 顧客アカウント全データ削除</span><span class="arrow">→</span><span class="step">飼い主さまを選ぶ</span><span class="arrow">→</span><span class="step">完全に削除する</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">その方の犬が「02 カルテ検索」の一覧から<b>全部</b>消えている</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="h4">
+  <p class="item__title"><span class="no">37.</span><span class="of">うっかり消しそうになった場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">誤操作で<b>お客様のデータが飛ばない</b>こと。<b>名前を正確に打つまでボタンが押せない</b>こと。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">③ 削除</span><span class="arrow">→</span><span class="step">対象を選ぶ</span><span class="arrow">→</span><span class="step">名前を打たずにボタンを押してみる</span><span class="arrow">→</span><span class="step">わざと違う名前を打つ</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">赤字で「元に戻せません」と出て、<b>名前が一致するまで「完全に削除する」が押せない</b></span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<h2>I ── 終わり・困ったとき</h2>
+
+<div class="item" data-id="i1">
+  <p class="item__title"><span class="no">38.</span><span class="of">端末を別のスタッフに渡す場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">前の人のログインが<b>ちゃんと切れる</b>こと（そのまま次の人が使えてしまわない）。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">ログアウト</span><span class="arrow">→</span><span class="step">ページを開き直す</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">入口に戻り、ログインし直さないと<b>一覧もカルテも見えない</b></span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<div class="item" data-id="i2">
+  <p class="item__title"><span class="no">39.</span><span class="of">画面が古いまま変わらない場合</span></p>
+  <div class="rows">
+    <p class="row is-what"><span class="row__k">確かめること</span><span class="row__v">直したはずのものが出ないとき、<b>お店の方だけで直せる</b>こと（毎回こちらに連絡しなくて済む）。</span></p>
+    <p class="row"><span class="row__k">手順</span><span class="row__v"><span class="step">画面を強く更新する</span><span class="arrow">→</span><span class="step">パソコンは Ctrl + Shift + R</span><span class="arrow">→</span><span class="step">スマホは一度閉じて開き直す</span></span></p>
+    <p class="row is-ok"><span class="row__k">○ の条件</span><span class="row__v">新しい画面になる</span></p>
+    <p class="row"><span class="row__k">メモ</span><span class="row__v"><input class="memo" type="text"></span></p>
+  </div>
+</div>
+
+<h2>先に言っておくこと</h2>
+
+<div class="known">
+  <h3>ここは今も直っていません（確かめると × になります）</h3>
+  <ul>
+    <li><b>体重やメッセージが空のままでも「確定」が押せます。</b>警告は出ますが、ボタンは止まりません。</li>
+    <li><b>体重に上限がありません。</b>「9999」と打っても確定でき、お客様の画面にもそのまま出てグラフが崩れます。</li>
+    <li><b>同じ子・同じ日付で2枚目のカルテを確定できます。</b>過去カルテに同じ日が2つ並びます。</li>
+    <li><b>「② カルテ修正」で写真を足して確定すると、保存に失敗します。</b>文章や判定の修正は通ります（項目23は○になります）。</li>
+    <li><b>2人が同じカルテを同時に直すと、後に保存した方だけが残ります。</b>警告も履歴も出ません。</li>
+    <li><b>初回登録QRは何回でも発行できます。</b>古いものは「この招待を取消」で止めてください。</li>
+    <li><b>メッセージ欄に他のお客様のお名前を書いても、警告は出ません。</b>そのまま届きます。</li>
+    <li>お客様の画面でカルテからブラウザの「戻る」を1回押しても、犬の一覧には戻りません（もう1回押せば着きます）。</li>
+    <li>管理画面で1件を選んだ後にブラウザの「戻る」を押すと、一段多く戻ります。</li>
+    <li>スマホの幅だと、いちばん右のタブが「04 顧客カル」までしか読めません（押せば切り替わります）。</li>
+    <li>お客様の画面のいちばん上で、見出しと「表示する ▼」がくっついて読みにくいです（押せば開きます）。</li>
+    <li>URLを手で打ち間違えて犬を開くと、アプリの画面ではなくブラウザのエラー画面に落ちます。</li>
+    <li><b>「予約はこちら」の飛び先は仮のままです。</b>本番の予約ページのURLをいただければ差し替えます。</li>
+    <li>「④ 店舗設定」の説明文に「犬ごとに別の日数」と書いてありますが、<b>その画面は今はありません</b>（文言だけ残っています）。</li>
+  </ul>
+</div>
+
+<footer>
+  この一覧は、お店の方とお客様が<b>実際にする操作</b>だけで書いてあります。<br>
+  手順に出てくる言葉は、すべて画面に出ている文言そのままです。<br>
+  操作の道案内は <b>操作手順ナビ</b>（同じフォルダの別ファイル）をご覧ください。
+</footer>
+
+</div>
+
+<script>
+/* 押した印とメモは、この端末に覚える（サーバには送りません）。
+   使えない端末（シークレットウィンドウ等）でも、紙として使えるように必ず動かす。 */
+(function () {
+  var KEY = 'salty-dog-check-v1';
+  var state = {};
+  function load() {
+    try { state = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; }
+    catch (e) { state = {}; }
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* 覚えられない端末 */ }
+  }
+  load();
+
+  var items = Array.prototype.slice.call(document.querySelectorAll('.item'));
+  document.getElementById('count-all').textContent = String(items.length);
+
+  function paint() {
+    var ok = 0, ng = 0;
+    items.forEach(function (item) {
+      var got = state[item.dataset.id] || {};
+      item.classList.toggle('is-done', got.mark === 'ok');
+      item.classList.toggle('is-ng', got.mark === 'ng');
+      item.querySelectorAll('.mark').forEach(function (btn) {
+        btn.setAttribute('aria-pressed', got.mark === btn.dataset.mark ? 'true' : 'false');
+      });
+      var memo = item.querySelector('.memo');
+      if (memo && memo.value !== (got.memo || '')) memo.value = got.memo || '';
+      if (got.mark === 'ok') ok += 1;
+      if (got.mark === 'ng') ng += 1;
+    });
+    document.getElementById('count-ok').textContent = String(ok);
+    document.getElementById('count-ng').textContent = String(ng);
+  }
+
+  items.forEach(function (item) {
+    var id = item.dataset.id;
+    var marks = document.createElement('span');
+    marks.className = 'marks';
+    [['ok', '○'], ['ng', '×']].forEach(function (pair) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'mark' + (pair[0] === 'ng' ? ' is-ng' : '');
+      btn.dataset.mark = pair[0];
+      btn.textContent = pair[1];
+      btn.setAttribute('aria-pressed', 'false');
+      btn.setAttribute('aria-label', pair[0] === 'ok' ? 'できた' : 'できなかった');
+      btn.addEventListener('click', function () {
+        var got = state[id] || (state[id] = {});
+        /* もう一度押したら取り消す（付け間違えたときに戻せないと困る）。 */
+        got.mark = got.mark === pair[0] ? null : pair[0];
+        save();
+        paint();
+      });
+      marks.appendChild(btn);
+    });
+    var title = item.querySelector('.item__title');
+    var head = document.createElement('div');
+    head.className = 'item__head';
+    title.parentNode.insertBefore(head, title);
+    head.appendChild(marks);
+    head.appendChild(title);
+
+    var memo = item.querySelector('.memo');
+    if (memo) {
+      memo.addEventListener('input', function () {
+        var got = state[id] || (state[id] = {});
+        got.memo = memo.value;
+        save();
+      });
+    }
+  });
+
+  document.getElementById('reset').addEventListener('click', function () {
+    if (!window.confirm('付けた○×とメモを、すべて消します。よろしいですか？')) return;
+    state = {};
+    save();
+    items.forEach(function (item) {
+      var memo = item.querySelector('.memo');
+      if (memo) memo.value = '';
+    });
+    paint();
+  });
+
+  paint();
+})();
+</script>
+</body>
+</html>
