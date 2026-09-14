@@ -141,6 +141,7 @@
 - ui-body-marking-draw.test.mjs :: 入力を促すとき、説明の文は出さない
 - ui-body-marking-draw.test.mjs :: 選んでいる目印は、飼い主に届く画像には焼き込まない
 - verify-photo-roundtrip.mjs :: 12b. 直したあとの写真が、保存された実体を指している（一時的な住所になっていない）
+- verify-photo-roundtrip.mjs :: 12c. 直したあとも、飼い主に同じ写真が同じ色で届いている
 - verify-photo-roundtrip.mjs :: 12d. 直しの画面では、写真を足す入口が閉じている
   （2026-09-13・マスター指示「直せるものを先に治せ」。**この作業コンテナに docker が
    無いので、CI の `mutate` で赤を取った**（run 393・`docs/ops/mutate-run-partial.md`）。
@@ -148,6 +149,7 @@
    壊し方 `revise-photos-from-hydrated` — `applyReport` が原本ではなく
    `blob:` に置き換えたあとを使う＝直す前の状態に戻す:
        12b. 直したあとの写真が、保存された実体を指している   ← 赤
+       12c. 直したあとも、飼い主に同じ写真が同じ色で届いている   ← 赤（run 396・書き直した後の形で取り直した）
    壊し方 `revise-photo-add-not-locked` — 直しの画面で写真の入口を閉じない:
        12d. 直しの画面では、写真を足す入口が閉じている   ← 赤
 
@@ -3118,13 +3120,13 @@ $ node --test test/report-commit-guard.test.mjs      ← 直しを入れ直し�
 
 ## 未証明（**壊して赤になるところを、まだ見ていない**）
 
-- verify-photo-roundtrip.mjs :: 12c. 直したあとも、飼い主に同じ写真が同じ色で届いている
-  （2026-09-13。**中身は赤を見たが、名前と書き方を変えたので未証明に戻した。**
-   最初は「中身の無い img を全部数える」形で書き、`revise-photos-from-hydrated`
-   で赤になることを CI で確かめた（`docs/ops/mutate-run-partial.md`）。
-   ただしその形は犬体図の空欄と拡大用の器まで拾って**直しが入った状態でも赤**に
-   なったため、`6.` `8.` `9.` と同じ「色で確かめる」やり方に書き直した。
-   **書き直した後の赤は、まだ見ていない。** 次の `mutate` で取り直す。）
+- verify-report-roundtrip.mjs :: 21b. 桁違いの体重（9999kg）では確定できない
+- verify-report-roundtrip.mjs :: 21d. 体重が空のまま確定を押すと、そのことを言って訊いてくる
+  （2026-09-13 追加・マスター指示「直せるものを先に治せ」。放置リスト `#56` `#55`。
+   **この作業コンテナに docker が無く `verify:roundtrip` をここでは走らせられない**ので、
+   赤は CI の `mutate`（`weight-limit-off` / `blank-commit-not-asked`）で取る。
+   取れたらこの2行を「証明済み」へ移す。移すまで消さない。）
+
 
 - verify-admin.mjs :: 3b. メニューを押すと住所が変わる
 - verify-admin.mjs :: 3c. サブ画面（犬を選ぶ）でも住所が変わる

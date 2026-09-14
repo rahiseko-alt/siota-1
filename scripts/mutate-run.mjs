@@ -45,6 +45,28 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
  * 証明の役に立たない（何を検出したのか言えないため）。
  */
 export const MUTATIONS = [
+  /* ── 2026-09-13・放置リスト `#56`
+     体重の範囲の関所を外す。**保存は通る**ので他は壊れず、
+     「桁違いの体重では確定できない」だけが赤になる。 */
+  {
+    id: 'weight-limit-off',
+    why: '**9999kg のような桁違いの体重がそのまま飼い主に届き、体重の折れ線がつぶれる**',
+    file: 'src/js/ui.js',
+    find: '    if (outOfRange.length > 0) {',
+    replace: '    if (false && outOfRange.length > 0) {',
+    scripts: ['verify-report-roundtrip.mjs'],
+  },
+  /* ── 2026-09-13・放置リスト `#55`
+     空のまま確定できてしまう状態に戻す。帯は前から「未記入」と出していたが、
+     **ボタンが止まらなかった**ので気づかずに確定できていた。 */
+  {
+    id: 'blank-commit-not-asked',
+    why: '**体重や一言が空のまま、何も訊かれずに確定できてしまう**（空のカルテが飼い主に届く）',
+    file: 'src/js/ui.js',
+    find: '    if (blanks.length > 0 && globalThis.confirm',
+    replace: '    if (false && blanks.length > 0 && globalThis.confirm',
+    scripts: ['verify-report-roundtrip.mjs'],
+  },
   /* ── 2026-09-13・マスター指示「直せるものを先に治せ」
      **確定済みカルテを直すと、飼い主の写真が壊れる。**
      カルテを開くとき `asset://{id}` は絵を出すために `blob:` の一時的な住所へ

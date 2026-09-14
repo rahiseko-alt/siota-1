@@ -479,6 +479,35 @@ try {
     dialogs.length > dialogsBefore && page.url() === urlBefore ? 'ok'
       : `dialogs=${dialogs.length - dialogsBefore} url変化=${page.url() !== urlBefore}`, 'ok');
 
+  /* ── 21b〜21d 変なものを飼い主に届けない（マスター指示 2026-09-13「直せるものを先に治せ」）──
+     どれも同じ犬（コース未選択の子）で続けて確かめる。`dialog` は上で
+     dismiss しているので、**訊かれた＝進まない**が成立する。 */
+  await page.selectOption('[data-field="course"]', 'トリミングコース');
+  await page.fill('[data-field="staff-note"]', '今日の様子を一言。');
+
+  /* 21b. 体重の桁違い（`#56`）。`9999` は飼い主の画面にそのまま出て、
+     折れ線の目盛りを支配して実物の3〜5kg を1本の直線につぶす。 */
+  await page.fill('#input-weight', '9999');
+  const beforeBigWeight = dialogs.length;
+  const urlBigWeight = page.url();
+  await page.click('.dock-action-wrap .boxbutton');
+  await page.waitForTimeout(1_000);
+  check('21b. 桁違いの体重（9999kg）では確定できない',
+    dialogs.length > beforeBigWeight && page.url() === urlBigWeight ? 'ok'
+      : `dialogs=${dialogs.length - beforeBigWeight} url変化=${page.url() !== urlBigWeight}`, 'ok');
+
+  /* 21c. 空のまま（`#55`）。**止め切らずに一度訊く**——犬が怖がって量れない日も
+     あるので、訊いたうえで「はい」なら通す形。ここは dismiss するので進まない。 */
+  await page.fill('#input-weight', '');
+  const beforeBlank = dialogs.length;
+  const urlBlank = page.url();
+  await page.click('.dock-action-wrap .boxbutton');
+  await page.waitForTimeout(1_000);
+  const blankAsked = dialogs.slice(beforeBlank).join(' / ');
+  check('21d. 体重が空のまま確定を押すと、そのことを言って訊いてくる',
+    dialogs.length > beforeBlank && page.url() === urlBlank && blankAsked.includes('体重') ? 'ok'
+      : `dialogs=${dialogs.length - beforeBlank} url変化=${page.url() !== urlBlank} 文言=${JSON.stringify(blankAsked)}`, 'ok');
+
   check('18. アプリ由来のエラーが無い', pageErrors.length === 0 ? 'ok' : pageErrors.join(' | '), 'ok');
 } catch (error) {
   check('検査を最後まで実行できた', error.message, 'ok');

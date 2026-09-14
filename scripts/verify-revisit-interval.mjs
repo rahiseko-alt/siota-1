@@ -115,6 +115,11 @@ try {
   }, VISIT_DATE);
   await page.fill('[data-field="staff-note"]', '次回のおすすめ日を確かめる回。');
   await page.selectOption('[data-field="course"]', 'トリミングコース');
+  /* **本日の体重と一言も入れる**（マスター指示 2026-09-13・放置リスト `#55`）。
+     空のままだと確定の手前で「このまま確定しますか？」と一度訊くようにしたため、
+     ここを空で通していた台本は止まる。実際の業務でも空で確定することはまず無いので、
+     **本物に近い形に直す**（検査を弱めるのではなく、台本を現実に合わせる）。 */
+  await page.fill('#input-weight', '4.2');
   await Promise.all([
     page.waitForURL(/\/edit\/p\/[0-9a-f-]+\/[0-9a-f-]+/, { timeout: 30_000 }),
     page.click('.dock-action-wrap .boxbutton'),
