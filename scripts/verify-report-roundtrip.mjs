@@ -110,7 +110,16 @@ try {
      この検査では必ずコースを選んでから押すので出ないはずだが、
      出た場合に画面が固まって検査全体が timeout するのを防ぐ（`verify-admin.mjs` と同型）。 */
   const dialogs = [];
-  page.on('dialog', (d) => { dialogs.push(d.message()); d.dismiss().catch(() => {}); });
+  /* 既定は**断る**（「訊かれた＝進まない」で関所を確かめるため）。
+     ただし `20.` は**わざと体重を空のまま確定する**検査なので、そこだけ
+     `acceptNextDialog` を立てて「はい」と答える（マスター指示 2026-09-13 で
+     空のまま確定するときに一度訊くようにした・放置リスト `#55`）。 */
+  let acceptNextDialog = false;
+  page.on('dialog', (d) => {
+    dialogs.push(d.message());
+    if (acceptNextDialog) { acceptNextDialog = false; d.accept().catch(() => {}); return; }
+    d.dismiss().catch(() => {});
+  });
 
   /* ── トリマー側: ④カルテ作成に入って記入する ── */
   await page.goto(`${BASE}/my`);
@@ -439,6 +448,10 @@ try {
   await page.fill('[data-field="staff-note"]', '体重は量っていない回。');
   /* コースは必須（C-9）。選ばないと確定の `alert()` に止められる。 */
   await page.selectOption('[data-field="course"]', INPUT.course);
+  /* **この1回だけ「はい」と答える。** 体重が空なので確定の手前で訊かれる
+     （`#55`）。ここで見たいのは「量っていない体重が飼い主に出ないこと」で、
+     訊かれること自体は `21d.` が別に見ている。 */
+  acceptNextDialog = true;
   await Promise.all([
     page.waitForURL(/\/edit\/p\/[0-9a-f-]{36}\/[0-9a-f-]{36}$/, { timeout: 30_000 }),
     page.click('.dock-action-wrap .boxbutton'),
@@ -478,6 +491,35 @@ try {
   check('21. コースを選ばずに確定を押すと、案内が出て画面が進まない',
     dialogs.length > dialogsBefore && page.url() === urlBefore ? 'ok'
       : `dialogs=${dialogs.length - dialogsBefore} url変化=${page.url() !== urlBefore}`, 'ok');
+
+  /* ── 21b〜21d 変なものを飼い主に届けない（マスター指示 2026-09-13「直せるものを先に治せ」）──
+     どれも同じ犬（コース未選択の子）で続けて確かめる。`dialog` は上で
+     dismiss しているので、**訊かれた＝進まない**が成立する。 */
+  await page.selectOption('[data-field="course"]', 'トリミングコース');
+  await page.fill('[data-field="staff-note"]', '今日の様子を一言。');
+
+  /* 21b. 体重の桁違い（`#56`）。`9999` は飼い主の画面にそのまま出て、
+     折れ線の目盛りを支配して実物の3〜5kg を1本の直線につぶす。 */
+  await page.fill('#input-weight', '9999');
+  const beforeBigWeight = dialogs.length;
+  const urlBigWeight = page.url();
+  await page.click('.dock-action-wrap .boxbutton');
+  await page.waitForTimeout(1_000);
+  check('21b. 桁違いの体重（9999kg）では確定できない',
+    dialogs.length > beforeBigWeight && page.url() === urlBigWeight ? 'ok'
+      : `dialogs=${dialogs.length - beforeBigWeight} url変化=${page.url() !== urlBigWeight}`, 'ok');
+
+  /* 21c. 空のまま（`#55`）。**止め切らずに一度訊く**——犬が怖がって量れない日も
+     あるので、訊いたうえで「はい」なら通す形。ここは dismiss するので進まない。 */
+  await page.fill('#input-weight', '');
+  const beforeBlank = dialogs.length;
+  const urlBlank = page.url();
+  await page.click('.dock-action-wrap .boxbutton');
+  await page.waitForTimeout(1_000);
+  const blankAsked = dialogs.slice(beforeBlank).join(' / ');
+  check('21d. 体重が空のまま確定を押すと、そのことを言って訊いてくる',
+    dialogs.length > beforeBlank && page.url() === urlBlank && blankAsked.includes('体重') ? 'ok'
+      : `dialogs=${dialogs.length - beforeBlank} url変化=${page.url() !== urlBlank} 文言=${JSON.stringify(blankAsked)}`, 'ok');
 
   check('18. アプリ由来のエラーが無い', pageErrors.length === 0 ? 'ok' : pageErrors.join(' | '), 'ok');
 } catch (error) {

@@ -200,6 +200,12 @@ try {
 
   /* コースは必須（マスター指示 2026-08-29・C-9）。選ばないと確定できない。 */
   await page.selectOption('[data-field="course"]', 'トリミングコース');
+  /* **本日の体重と一言も入れる**（マスター指示 2026-09-13・放置リスト `#55`）。
+     空のままだと確定の手前で「このまま確定しますか？」と一度訊くようにしたため、
+     ここを空で通していた台本は止まる。実際の業務でも空で確定することはまず無いので、
+     **本物に近い形に直す**（検査を弱めるのではなく、台本を現実に合わせる）。 */
+  await page.fill('#input-weight', '4.2');
+  await page.fill('[data-field="staff-note"]', '今日の様子を一言。');
   /* ── ④ 確定 ── */
   await Promise.all([
     page.waitForURL((u) => /^\/edit\/p\/[0-9a-f-]{36}\/[0-9a-f-]{36}$/.test(u.pathname), { timeout: 60_000 }),
@@ -282,6 +288,42 @@ try {
     ...((revisedData.teeth || {}).photos || []),
   ].filter(Boolean);
   check('12. 直したあとも写真5枚が残っている', revisedPhotos.length === 5, `${revisedPhotos.length}件`);
+
+  /* **枚数だけ数えても、写真が壊れたことは分からない**（マスター指示 2026-09-13）。
+     カルテを開くとき `asset://{id}` は絵を出すために `blob:` の一時的な住所に
+     置き換わる。その住所は**このタブの中でしか通じず、閉じれば消える**。
+     直した中身をそのまま保存すると住所が焼き付き、**飼い主の画面で写真が出なくなる**。
+     12 は `length === 5` しか見ておらず、住所が化けても 5 件のまま通っていた
+     （`偽-5`「中身の無い検査を EXIT 0 の根拠にする」・`F-20260913-86`）。 */
+  const notStored = revisedPhotos.filter((v) => !String(v).startsWith('asset://'));
+  check('12b. 直したあとの写真が、保存された実体を指している（一時的な住所になっていない）',
+    notStored.length === 0,
+    notStored.length ? `${notStored.length}件が別物: ${JSON.stringify(notStored.map((v) => String(v).slice(0, 24)))}` : '5件すべて asset://');
+
+  /* **届いたかどうかは、飼い主の画面で見る**（`D-12`）。
+     保存の形が正しくても、実際に絵が出なければ意味がない。
+     **`6.` `8.` `9.` と同じ「色で確かめる」やり方をそのまま使う**——
+     はじめ「中身の無い img を全部数える」形で書いたところ、犬体図の空欄
+     （この検査は絵を描かない）と拡大表示用の器まで拾って赤くなった。
+     **もともと空のものを「壊れている」と数えない。** */
+  await ownerPage.reload({ waitUntil: 'networkidle' });
+  await ownerPage.waitForSelector('.magazine-container', { timeout: 20_000 });
+  const heroAfter = await pixelOf(ownerPage, 'hero-photo');
+  const earAfter = await pixelOf(ownerPage, 'ear-image');
+  const teethAfter = await pixelsOfGallery(ownerPage, 'teeth-gallery');
+  check('12c. 直したあとも、飼い主に同じ写真が同じ色で届いている',
+    near(heroAfter, COLOR.hero) && near(earAfter, COLOR.ear)
+      && teethAfter.length === 2 && near(teethAfter[0], COLOR.teeth) && near(teethAfter[1], COLOR.teeth2),
+    `表紙=${JSON.stringify(heroAfter)} 耳=${JSON.stringify(earAfter)} 歯=${JSON.stringify(teethAfter)}`);
+
+  /* **修正では写真を足せないことを、画面で言っている**（放置リスト `#60`）。
+     黙って受け付けて保存で落ちると、文字の修正まで巻き添えで消える。 */
+  await page.goto(`${BASE}/edit/p/${pet.id}/${reportId}?revise=1`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('#screen-3.is-active', { timeout: 20_000 });
+  const pickers = await page.locator('.photo-pick__input').count();
+  const lockedPickers = await page.locator('.photo-pick__input[disabled]').count();
+  check('12d. 直しの画面では、写真を足す入口が閉じている',
+    pickers > 0 && lockedPickers === pickers, `${lockedPickers}/${pickers} が閉じている`);
 
   check('13. アプリ由来のエラーが無い', pageErrors.length === 0, pageErrors.join(' | '));
 } catch (error) {

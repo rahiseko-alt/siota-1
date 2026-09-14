@@ -143,7 +143,13 @@ async function showInvitationDialog(body, label) {
   const artifact = await createInvitationArtifact(body);
   const dialog = newDialog(`${label}の初回登録`);
   const explanation = document.createElement('p');
-  explanation.textContent = '初回登録用です。有効期限24時間・1回のみ使用できます。毎日の閲覧には、登録後の「マイカルテ」をブックマークしてください。';
+  /* **「新しく出すと前のが使えなくなる」ことを、渡す前に言う**
+     （マスター指示 2026-09-13・放置リスト `#61`）。以前は何枚出しても全部有効で、
+     渡し間違えた古いQRが生き続けていた。いまは新しく出した時点で前のが無効になる
+     （`create_invitation` が入れる直前に取り消す）。 */
+  explanation.textContent = '初回登録用です。有効期限24時間・1回のみ使用できます。'
+    + '新しく発行すると、前のQR・URLは使えなくなります。'
+    + '毎日の閲覧には、登録後の「マイカルテ」をブックマークしてください。';
   const expiry = document.createElement('p');
   expiry.textContent = `有効期限: ${new Date(artifact.expiresAt).toLocaleString('ja-JP')}`;
   const qr = document.createElement('img');
@@ -399,7 +405,18 @@ async function bootStaffPortal(PonchiApp) {
     client,
   );
   activeObjectUrls = hydrated.objectUrls;
-  globalThis.__REPORT__ = { ...hydrated.data, reportId: reportBody.report.id };
+  /* **原本も一緒に持っておく**（マスター指示 2026-09-13「直せるものを先に治せ」）。
+     `hydrateAssetReferences` は `asset://{id}` を `blob:` の一時的な住所に置き換える。
+     絵を出すにはそれが要るが、**その住所はこのタブの中でしか通じず、閉じれば消える**。
+     「② カルテ修正」はこの中身を④の入力画面に流し込むので、原本を渡さないと
+     `blob:` が写真の値として確定され、**飼い主の画面で写真が出なくなる**。
+     文字だけ直したときにも起きる（`F-20260913-86`）。
+     ここは絵のための `hydrated`、`__stored` は保存のための原本。 */
+  globalThis.__REPORT__ = {
+    ...hydrated.data,
+    reportId: reportBody.report.id,
+    __stored: reportBody.report.data,
+  };
   PonchiApp.show('report', {
     ...pet,
     reportId: route.reportId,

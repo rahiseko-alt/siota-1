@@ -133,6 +133,18 @@ function renderPet(container, pet) {
   heading.dataset.testid = 'pet-name';
   heading.textContent = pet.name;
   container.append(heading);
+  /* **愛犬の一覧へ戻る道**（マスター指示 2026-09-13・放置リスト `#53`）。
+     この画面には戻る導線が1つも無く、複数頭を預けている飼い主は
+     **ブラウザの戻るしか手が無かった**（カルテ画面には `backLabel` が在るのに、
+     ここだけ抜けていた）。放置リストは「戻るが1回で戻らない」と書いていたが、
+     実際には履歴を二重に積んでいる場所は無く、**3段（一覧→犬→カルテ）どおりに
+     1段ずつ戻っていた**。足りなかったのは、この1本。 */
+  const toList = document.createElement('a');
+  toList.className = 'portal-back';
+  toList.dataset.view = 'to-pet-list';
+  toList.href = '/my';
+  toList.textContent = '← 愛犬の一覧へ';
+  container.append(toList);
   const reports = pet.reports || [];
   if (reports.length === 0) {
     const empty = document.createElement('p');
@@ -261,7 +273,10 @@ export async function bootProtectedPortal() {
       return;
     }
     const route = parseProtectedRoute(location.pathname);
-    if (!route) throw new Error('not available');
+    /* 住所の形が崩れている（打ち間違い・古いリンク）。**「あとで」ではない**
+       ——何度開き直しても直らないので、下の catch で「見つかりません」と言い、
+       愛犬の一覧へ戻す道を出す（マスター指示 2026-09-13・放置リスト `#48`）。 */
+    if (!route) throw new Error('route not found');
     let invitationMessage = '';
     const pendingInvitation = sessionStorage.getItem('pending_invitation');
     if (pendingInvitation) {
@@ -365,6 +380,18 @@ export async function bootProtectedPortal() {
       return;
     }
     show(content, false);
+    /* **「時間をおいて」と言ってよいのは、時間をおけば直るときだけ。**
+       住所の形が崩れているときは何度開き直しても直らないので、そう言わない
+       （マスター指示 2026-09-13・放置リスト `#48`）。愛犬の一覧へ戻す道も出す。 */
+    if (error.message === 'route not found') {
+      setMessage(status, 'このページは見つかりません。愛犬の一覧からお選びください。');
+      const back = document.createElement('a');
+      back.className = 'portal-back';
+      back.href = '/my';
+      back.textContent = '← 愛犬の一覧へ';
+      status.append(back);
+      return;
+    }
     setMessage(status, '表示できません。少し時間をおいて、このページを開き直してください');
   }
 }

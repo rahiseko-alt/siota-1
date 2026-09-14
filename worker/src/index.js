@@ -32,7 +32,6 @@ const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8' };
 // HTML は毎回最新を配信（修正が実機に確実に届くようキャッシュさせない）
 const HTML_HEADERS = { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' };
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const SUPABASE_EDIT_PATH_PATTERN = /^\/edit\/(?:o|p)\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?\/?$/i;
 
 function json(body, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(body), {
@@ -373,7 +372,17 @@ async function handleSupabaseMode(request, env, url, cors) {
   if (path === '/' || path === '') {
     return renderLoginPage(env);
   }
-  if (path === '/edit' || path === '/edit/' || SUPABASE_EDIT_PATH_PATTERN.test(path)) {
+  /* **`/edit` 配下は、形が崩れていても器を配る**（マスター指示 2026-09-13
+     「直せるものを先に治せ」・放置リスト `#48`）。
+     以前は `/edit/p/{UUID}` の形に合うものだけを拾い（`SUPABASE_EDIT_PATH_PATTERN`。
+     もうどこからも使わないので消した）、外れたものは
+     いちばん下の静的配信に落ちていた。`dist/` に `/edit/p/not-a-uuid` という
+     ファイルは無いので **404・本文0バイト＝ブラウザ自身のエラー画面**になり、
+     **お店の人がアプリの外に放り出されていた**（実測: `status=404 len=0`）。
+     戻る道は既に在る——器さえ配れば `parseStaffRoute()` が形の崩れを見て
+     `location.replace('/edit')`（犬の一覧）へ連れて行く。
+     `dist/` に `edit/` という置き場は無いので、ここで拾っても静的ファイルは食わない。 */
+  if (path === '/edit' || path.startsWith('/edit/')) {
     /* `backend` は**捨ててはいけない**——`window.__BACKEND__` のほうは読む側が無くて
        外したが（`deferred` #21）、この値は `renderAppPage` が
        **Supabase 用のスクリプトを載せるかどうか**を決めるのに使う。

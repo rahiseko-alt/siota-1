@@ -140,6 +140,33 @@
 - ui-body-marking-draw.test.mjs :: 選んでいない文字の色は、色を変えても変わらない
 - ui-body-marking-draw.test.mjs :: 入力を促すとき、説明の文は出さない
 - ui-body-marking-draw.test.mjs :: 選んでいる目印は、飼い主に届く画像には焼き込まない
+- verify-photo-roundtrip.mjs :: 12b. 直したあとの写真が、保存された実体を指している（一時的な住所になっていない）
+- verify-report-roundtrip.mjs :: 21b. 桁違いの体重（9999kg）では確定できない
+- verify-report-roundtrip.mjs :: 21d. 体重が空のまま確定を押すと、そのことを言って訊いてくる
+- verify-portal.mjs :: 13c. 犬のページから、愛犬の一覧へ戻る道が出ている
+- verify-admin.mjs :: 3g. カルテ一覧から戻ると、ちょうど1つ手前（犬を選ぶ）に戻る
+  （2026-09-14・マスター指示「直せるものを先に治せ」。CI の `mutate`（run 406）で取った赤:
+
+       weight-limit-off         → 21b. 赤（体重の範囲の関所を外す）
+       blank-commit-not-asked   → 21d. 赤（空のまま確定できる状態に戻す）
+       pet-page-no-way-back     → 13c. 赤（犬のページの戻る道を外す）
+       admin-substep-no-history → 3g.  赤（1件選んだ後に履歴を積まない）
+
+   直しを入れた状態では4件とも緑。**赤 → 緑 → 戻して赤**がそろっている。）
+- verify-photo-roundtrip.mjs :: 12c. 直したあとも、飼い主に同じ写真が同じ色で届いている
+- verify-photo-roundtrip.mjs :: 12d. 直しの画面では、写真を足す入口が閉じている
+  （2026-09-13・マスター指示「直せるものを先に治せ」。**この作業コンテナに docker が
+   無いので、CI の `mutate` で赤を取った**（run 393・`docs/ops/mutate-run-partial.md`）。
+
+   壊し方 `revise-photos-from-hydrated` — `applyReport` が原本ではなく
+   `blob:` に置き換えたあとを使う＝直す前の状態に戻す:
+       12b. 直したあとの写真が、保存された実体を指している   ← 赤
+       12c. 直したあとも、飼い主に同じ写真が同じ色で届いている   ← 赤（run 396・書き直した後の形で取り直した）
+   壊し方 `revise-photo-add-not-locked` — 直しの画面で写真の入口を閉じない:
+       12d. 直しの画面では、写真を足す入口が閉じている   ← 赤
+
+   直しを入れた状態の同じ実行では、12b が「5件すべて asset://」、
+   12d が「3/3 が閉じている」で緑。**赤 → 緑 → 戻して赤**がそろっている。）
 - ui-annotate-pinch.test.mjs :: 透過度を下げると、その薄さで引かれる
 - ui-annotate-pinch.test.mjs :: 薄さは1件ごとに戻す（次の線まで薄くならない）
 - ui-annotate-pinch.test.mjs :: 消しゴムは、触れた線を取り除く（写真は削らない）
@@ -3104,6 +3131,43 @@ $ node --test test/report-commit-guard.test.mjs      ← 直しを入れ直し�
 **下書きと確定の順番**だけで、サーバ側が 409 を返す条件そのものは SQL を読んで特定した。
 
 ## 未証明（**壊して赤になるところを、まだ見ていない**）
+
+- verify-admin.mjs :: 3g. カルテ一覧から戻ると、ちょうど1つ手前（犬を選ぶ）に戻る
+  （2026-09-13 追加・マスター指示「直せるものを先に治せ」。放置リスト `#49`。
+   赤は CI の `mutate`（`admin-substep-no-history`）で取る。移すまで消さない。）
+
+- verify-invitation.mjs :: 4c. 2枚目のQRは、1枚目とは別のものが出る
+- verify-invitation.mjs :: 4d. 「新しく発行すると前のQRは使えない」と画面で言っている
+- verify-invitation.mjs :: 4e. 1枚目のQRは、2枚目を出した時点で使えなくなっている
+  （2026-09-14。放置リスト `#61`。上の `#48` と同じ理由で取り直す
+   ——`invitation-old-stays-valid` は赤になったが「検査を最後まで実行できた」で、
+   **`4e.` が壊しに気づいたことの証明になっていない**。単独で走らせる。
+   **2026-09-14 後回しにした**（放置リスト `#66`・マスター指摘「意味不明な改善ばかりしてるけど？」）
+   ——これは帳簿付けで見える改善がゼロ、かつ `npm run check` を止めてもいない。）
+
+- verify-edit.mjs :: 18. 壊れた住所でも、アプリの画面が配られる（ブラウザの404に落ちない）
+- verify-edit.mjs :: 18b. 壊れた住所を開くと、犬の一覧まで連れ戻される
+- verify-portal.mjs :: 13b. 壊れた住所では「見つかりません」と言い、愛犬の一覧へ戻る道を出す
+  （2026-09-14。放置リスト `#48`。`mutate`（run 406）で `edit-broken-url-falls-out` は
+   **赤になったが、名前のついたこの3件ではなく「検査を最後まで実行できた」で赤になった**
+   ——`verify-edit` が途中で落ちたということで、**この3件が壊しに気づいたことの証明にならない**。
+   `mutate-run.mjs` は同じ名前を最初に取った壊し方にしか結び付けないので、
+   別の壊し方と同じ回に走らせると見分けが付かない。**この壊し方だけを単独で走らせて取り直す。**
+
+   **2026-09-14 追記①・単独で走らせても同じだった**（run 411・`docs/ops/mutate-run-partial.md`）。
+   原因は**壊し方が大雑把すぎること**——`path.startsWith('/edit/')` を `path === '/edit/'` に
+   すると**正しい住所（`/edit/p/{UUID}`）まで落ちる**ので、`verify-edit` は `18.` に着く前に崩れる。
+   取り直すなら **#48 を直す前の実物**（`git show 95ab801^:worker/src/index.js` の
+   `SUPABASE_EDIT_PATH_PATTERN`）をそのまま埋め込むこと。`F-20260912-85`
+   （「壊したのに赤にならない」は、まず自分の壊し方を疑う）の2回目。
+
+   **2026-09-14 追記②・`13b.` の括りは誤り**。`13b.` は `/my` 側
+   （`backend/js/supabase-auth.js` の `if (!route) throw new Error('route not found');`）で、
+   worker を壊す `edit-broken-url-falls-out` では**そもそも届かない**。
+   `13b.` には壊し方が1つも無い。**訂正として残す**（行は消さない）。
+
+   **2026-09-14 追記③・後回しにした**（放置リスト `#66`）。）
+
 
 - verify-admin.mjs :: 3b. メニューを押すと住所が変わる
 - verify-admin.mjs :: 3c. サブ画面（犬を選ぶ）でも住所が変わる

@@ -79,6 +79,15 @@ const App = {
 
   /* 口の写真1枚あたりの上限枚数（マスター指示 2026-08-29・C-11）。 */
   MAX_TEETH_PHOTOS: 2,
+  /* 体重の受け付ける範囲（マスター指示 2026-09-13・放置リスト `#56`）。
+     いちばん大きい犬種でも 90kg 台なので、100kg を上限にする。
+     下は 0.1kg——生まれたての子犬でもこれを下回らない。
+     **黙って丸めるのではなく、この外は受け付けずに理由を言う**（`D-12`）。 */
+  MIN_WEIGHT_KG: 0.1,
+  MAX_WEIGHT_KG: 100,
+  /* この犬の確定済みカルテ（`{ reportId, date, status }`）。同じ日の2枚目を
+     確かめるためだけに持つ（`#57`）。`renderPastReports()` が入れる。 */
+  pastReports: [],
 
   /* 犬体図の「面」。2枚目を足したときに作った（マスター指示 2026-09-11）。
 
@@ -230,6 +239,11 @@ const App = {
     const months = ((pet && pet.months) || [])
       .filter((m) => m && m.reportId && m.status === 'final')
       .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+
+    /* **確定の手前で「同じ日の2枚目か」を見るために、ここでしまう**（`#57`）。
+       新しく問い合わせない——`months` は犬を選んだ時点で既に手元に在る。
+       0件のときも空で入れ直す（前の犬の分を持ち越さない）。 */
+    this.pastReports = months;
 
     list.textContent = '';
     if (!petId || months.length === 0) {
@@ -613,9 +627,18 @@ const App = {
        `teeth` は最大2枚の配列になった（マスター指示 2026-08-29・C-11）。 */
     this.photos = { trimming: [], ear: '', teeth: [] };
     const keep = (value) => (typeof value === 'string' && value.trim() !== '' ? value : '');
-    this.photos.trimming = ((data.trimming || {}).photos || []).filter((v) => keep(v));
-    this.photos.ear = keep((data.ear || {}).photo);
-    this.photos.teeth = ((data.teeth || {}).photos || []).filter((v) => keep(v)).slice(0, this.MAX_TEETH_PHOTOS);
+    /* **写真だけは原本から取る**（マスター指示 2026-09-13）。
+       「② カルテ修正」で流れてくる `data` は、絵を出すために `asset://{id}` を
+       `blob:` の一時的な住所に置き換えたもの。**その住所はこのタブの中でしか通じない。**
+       そのまま確定すると住所が写真の値として保存され、閉じた瞬間に指し先を失う
+       ——**飼い主の画面で写真が出なくなる**（文字だけ直したときも起きる・`F-20260913-86`）。
+       `__stored` は置き換える前の原本（`backend/js/supabase-staff.js` が添える）。
+       この画面は保存済みの写真を「保存済み」の札で出すだけで絵を使わないので、
+       原本に替えても**見た目は1つも変わらない**。 */
+    const stored = (data && data.__stored) || data;
+    this.photos.trimming = ((stored.trimming || {}).photos || []).filter((v) => keep(v));
+    this.photos.ear = keep((stored.ear || {}).photo);
+    this.photos.teeth = ((stored.teeth || {}).photos || []).filter((v) => keep(v)).slice(0, this.MAX_TEETH_PHOTOS);
     for (const kind of ['trimming', 'ear', 'teeth']) this.renderPhotoThumbs(kind);
 
     if (Array.isArray(data.__marks) && data.__marks.length > 0) {
@@ -658,6 +681,7 @@ const App = {
       this.renderOptionChips(pet.shopGroomingOptions || []);
       this.reviseReportId = reviseId;
       this.applyReport(report);
+      this.lockPhotoAddForRevise();
       /* **「前回比」を、HTML の初期値のまま残さない。**
          この経路は `resumeDraft()` を通らないので `currentDog.prevWeight` が入らず、
          画面には `src/index.html` の初期値「前回の記録なし」がそのまま残っていた
@@ -1951,6 +1975,55 @@ const App = {
       courseEl.focus();
       return;
     }
+    /* **体重が桁違いのまま確定させない**（マスター指示 2026-09-13・放置リスト `#56`）。
+       `9999` と打てて、そのまま飼い主の画面に「9999kg」と出ていた。さらに体重の
+       折れ線は最小〜最大で目盛りを作るので、1点でも桁違いが混ざると
+       **実物の3〜5kg が全部つぶれて1本の直線**になり、理想体重の線とも重なって読めない。
+       **黙って丸めない**——打った値が勝手に変わるのは画面が嘘をつくのと同じ（`D-12`）。
+       受け付けずに理由を言う（歯の写真が3枚目を断るのと同じ形）。 */
+    const outOfRange = [
+      ['本日の体重', this.form.weight],
+      ['ベスト体重', this.form.bestWeight],
+    ].filter(([, kg]) => kg && (kg < this.MIN_WEIGHT_KG || kg > this.MAX_WEIGHT_KG));
+    if (outOfRange.length > 0) {
+      globalThis.alert(
+        `${outOfRange.map(([name, kg]) => `${name}に ${kg}kg`).join('、')} が入っています。\n\n`
+        + `${this.MIN_WEIGHT_KG}〜${this.MAX_WEIGHT_KG}kg の範囲で入れ直してください。`,
+      );
+      const el = document.getElementById(outOfRange[0][0] === 'ベスト体重' ? 'input-best-weight' : 'input-weight');
+      if (el) el.focus();
+      return;
+    }
+
+    /* **空のまま黙って確定させない**（マスター指示 2026-09-13・放置リスト `#55`）。
+       画面いちばん下の帯は前から「未記入 ①体重 ⑧メッセージ」と出していたが、
+       **ボタンは止まらなかった**ので、気づかずに確定できていた。
+       ただし**止め切らない**——犬が怖がって量れない日もあり、止めると先へ進めなくなる。
+       「このまま出しますか」と一度だけ訊いて、はいなら通す。 */
+    const blanks = [];
+    if (!this.form.weight) blanks.push('①体重');
+    const noteEl = document.querySelector('[data-field="staff-note"]');
+    if (noteEl && !String(noteEl.value || '').trim()) blanks.push('⑧メッセージ');
+    if (blanks.length > 0 && globalThis.confirm
+      && !globalThis.confirm(`${blanks.join(' と ')} が空のままです。\n\nこのまま確定しますか？`)) {
+      this.focusMissingSection();
+      return;
+    }
+
+    /* **同じ子の、同じ日の2枚目**（マスター指示 2026-09-13・放置リスト `#57`）。
+       確定すると「この子の過去カルテ」に同じ日付が2つ並び、飼い主にも2通届く。
+       ただし同じ日に2回来ることは在りうるので、止めずに一度だけ訊く。
+       **直しているときは訊かない**——`reviseReport` は2枚目を作らない
+       （「前回比を出さない」の見分けと同じ `reviseReportId` を使う）。 */
+    if (!this.reviseReportId) {
+      const today = this.today();
+      const sameDay = (this.pastReports || []).filter((m) => m && m.date === today);
+      if (sameDay.length > 0 && globalThis.confirm
+        && !globalThis.confirm(`${this.currentDog.name || 'この子'} の ${today} のカルテは、すでに ${sameDay.length}枚 あります。\n\nもう1枚つくりますか？`)) {
+        return;
+      }
+    }
+
     const staff = globalThis.TrimmerSupabaseStaff;
     const context = globalThis.__REPORT_CONTEXT__;
     if (!staff || !staff.saveReport || !context || !context.petId) {
@@ -2077,6 +2150,26 @@ const App = {
        ファイルを選んだ瞬間に走る——縮小が終わる前なので、待たずに送ると
        写真の無い下書きが残る。処理が終わったここで、明示的に残す。 */
     this.saveDraft();
+  },
+
+  /* 「② カルテ修正」では、**写真を足せない**（マスター指示 2026-09-13「直せるものを先に治せ」）。
+
+     確定済みカルテへの写真の追加は、**そもそも作られていない**——保存の守りが
+     「まだ下書きのカルテにしか写真を受け付けない」形になっており、修正で足そうとすると
+     保存そのものが失敗して**文字の修正まで巻き添えで消える**（放置リスト `#60`）。
+     いまは整理整頓の期間で新しく作らない方針なので、**できないことを画面で言って止める**。
+     **既に付いている写真はそのまま残る**（消す `×` も今までどおり使える）。 */
+  lockPhotoAddForRevise() {
+    document.querySelectorAll('.photo-pick').forEach((box) => {
+      const input = box.querySelector('.photo-pick__input');
+      if (!input) return;
+      input.disabled = true;
+      const note = box.querySelector('.photo-pick__note');
+      if (note) {
+        note.textContent = 'カルテの修正では、写真を新しく足すことはできません。'
+          + 'いま付いている写真はそのまま残ります。';
+      }
+    });
   },
 
   removePhoto(kind, index) {

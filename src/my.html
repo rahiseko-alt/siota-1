@@ -133,6 +133,21 @@
       margin-bottom: 24px;
       min-height: 1.8em;
     }
+    /* 住所の形が崩れたページから、愛犬の一覧へ戻る道（放置リスト `#48`）。
+       **行き止まりを作らない**——「見つかりません」とだけ出して終わると、
+       ブラウザの戻るしか手が無くなる。 */
+    .portal-back {
+      display: inline-block;
+      margin-top: 12px;
+      padding: 8px 16px;
+      border: 1px solid var(--border-subtle);
+      background: #ffffff;
+      color: var(--ink-body);
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .portal-back:hover { background: var(--ink-primary); color: #ffffff; border-color: var(--ink-primary); }
     .portal-status:empty { margin-bottom: 0; }
 
     .portal-content[hidden] { display: none; }

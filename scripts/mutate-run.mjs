@@ -45,6 +45,101 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
  * 証明の役に立たない（何を検出したのか言えないため）。
  */
 export const MUTATIONS = [
+  /* ── 2026-09-13・放置リスト `#49`
+     1件選んだ後の画面で履歴を積むのをやめる。**ブラウザの戻るが一段多く戻る**
+     （犬を選ぶ画面を飛び越してメニューへ）。 */
+  {
+    id: 'admin-substep-no-history',
+    why: '**管理画面で1件選んだ後、戻るが一段多く戻る**（犬を選び直すつもりがメニューまで飛ぶ）',
+    file: 'backend/js/supabase-admin.js',
+    find: "  history.pushState(null, '', location.pathname);",
+    replace: "  /* (壊し方) 履歴を積まない */",
+    scripts: ['verify-admin.mjs'],
+  },
+  /* ── 2026-09-13・放置リスト `#61`
+     新しいQRを出したときに前のQRを取り消すのをやめる。何枚出しても全部有効になり、
+     **渡し間違えた古いQRが生き続ける**（実測: 連続10回で10個とも有効だった状態）。 */
+  {
+    id: 'invitation-old-stays-valid',
+    why: '**新しいQRを出しても古いQRが使えたままになる**（渡し間違えたQRで第三者が先に開く）',
+    file: 'supabase/migrations/202609140014_single_open_invitation.sql',
+    find: '    and revoked_at is null;',
+    replace: '    and revoked_at is null and false;',
+    scripts: ['verify-invitation.mjs'],
+  },
+  /* ── 2026-09-13・放置リスト `#48`
+     `/edit` 配下の受け口を元の「形が合うものだけ」に戻す。形の崩れた住所が
+     静的配信に落ちて **404・本文0バイト**＝ブラウザ自身のエラー画面になり、
+     **お店の人がアプリの外に放り出される**。 */
+  {
+    id: 'edit-broken-url-falls-out',
+    why: '**打ち間違えた住所でアプリの外（ブラウザの404）に落ち、戻る手段が無くなる**',
+    file: 'worker/src/index.js',
+    find: "  if (path === '/edit' || path.startsWith('/edit/')) {",
+    replace: "  if (path === '/edit' || path === '/edit/') {",
+    scripts: ['verify-edit.mjs'],
+  },
+  /* ── 2026-09-13・放置リスト `#53`
+     犬のページから愛犬の一覧へ戻る道を外す。複数頭を預けている飼い主が
+     **ブラウザの戻るしか手が無くなる**。 */
+  {
+    id: 'pet-page-no-way-back',
+    why: '**犬のページから愛犬の一覧へ戻れなくなる**（複数頭の飼い主が行き止まる）',
+    file: 'backend/js/supabase-auth.js',
+    find: "  container.append(toList);",
+    replace: "  /* (壊し方) 戻る道を出さない */",
+    scripts: ['verify-portal.mjs'],
+  },
+  /* ── 2026-09-13・放置リスト `#56`
+     体重の範囲の関所を外す。**保存は通る**ので他は壊れず、
+     「桁違いの体重では確定できない」だけが赤になる。 */
+  {
+    id: 'weight-limit-off',
+    why: '**9999kg のような桁違いの体重がそのまま飼い主に届き、体重の折れ線がつぶれる**',
+    file: 'src/js/ui.js',
+    find: '    if (outOfRange.length > 0) {',
+    replace: '    if (false && outOfRange.length > 0) {',
+    scripts: ['verify-report-roundtrip.mjs'],
+  },
+  /* ── 2026-09-13・放置リスト `#55`
+     空のまま確定できてしまう状態に戻す。帯は前から「未記入」と出していたが、
+     **ボタンが止まらなかった**ので気づかずに確定できていた。 */
+  {
+    id: 'blank-commit-not-asked',
+    why: '**体重や一言が空のまま、何も訊かれずに確定できてしまう**（空のカルテが飼い主に届く）',
+    file: 'src/js/ui.js',
+    find: '    if (blanks.length > 0 && globalThis.confirm',
+    replace: '    if (false && blanks.length > 0 && globalThis.confirm',
+    scripts: ['verify-report-roundtrip.mjs'],
+  },
+  /* ── 2026-09-13・マスター指示「直せるものを先に治せ」
+     **確定済みカルテを直すと、飼い主の写真が壊れる。**
+     カルテを開くとき `asset://{id}` は絵を出すために `blob:` の一時的な住所へ
+     置き換わる。その住所はそのタブの中でしか通じず、閉じれば消える。
+     「② カルテ修正」はその中身を④の入力画面に流し込むので、原本を使わずに
+     置き換え後を使うと、住所が写真の値として保存され**飼い主の画面で写真が出なくなる**。
+     文字だけ直したときにも起きる。`12.` は枚数しか数えていないので**緑のまま**通る
+     ——それを捕まえるのが `12b.` `12c.`（`F-20260913-86`・`偽-5`）。 */
+  {
+    id: 'revise-photos-from-hydrated',
+    why: '**確定済みカルテを直すと、飼い主の画面から写真が消える**（文字だけ直したときも）',
+    file: 'src/js/ui.js',
+    find: '    const stored = (data && data.__stored) || data;',
+    replace: '    const stored = data;',
+    scripts: ['verify-photo-roundtrip.mjs'],
+  },
+  /* ── 2026-09-13・放置リスト `#60`
+     確定済みカルテへの写真追加は、保存の守りが「まだ下書きのときだけ受け付ける」
+     形になっていて**そもそも作られていない**。入口を閉じるのをやめると、店の人は
+     足せると思って選び、保存で落ちて**文字の修正まで巻き添えで消える**。 */
+  {
+    id: 'revise-photo-add-not-locked',
+    why: '**直しの画面で写真を足せてしまい、保存で落ちて文字の修正まで消える**',
+    file: 'src/js/ui.js',
+    find: '      this.lockPhotoAddForRevise();',
+    replace: '      /* (壊し方) 入口を閉じない */',
+    scripts: ['verify-photo-roundtrip.mjs'],
+  },
   /* **`shops-admin-update-rls-open` はここに在った**（30回目・2026-08-29）。
      「一般スタッフが店舗の既定来店間隔を書き換えられる」を捕まえる壊し方だったが、
      `admin` と `staff` の2権限は 2026-09-06 にマスターの判断で廃止され

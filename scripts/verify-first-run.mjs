@@ -140,6 +140,12 @@ try {
 
   await staff.locator('input[type="date"]:visible').first().fill('2026-09-02');
   await staff.locator('select:visible').first().selectOption({ index: 1 });
+  /* **本日の体重と一言も入れる**（マスター指示 2026-09-13・放置リスト `#55`）。
+     空のままだと確定の手前で「このまま確定しますか？」と一度訊くようにしたため、
+     ここを空で通していた台本は止まる。実際の業務でも空で確定することはまず無いので、
+     **本物に近い形に直す**（検査を弱めるのではなく、台本を現実に合わせる）。 */
+  await staff.fill('#input-weight', '4.2');
+  await staff.fill('[data-field="staff-note"]', '今日の様子を一言。');
   await staff.waitForTimeout(600);
   /* **⑦使用オプションに、指で届くか。** DOM に在るだけでは足りない
      ——ここが5セッション追いかけた場所（`F-20260901-63`）。 */

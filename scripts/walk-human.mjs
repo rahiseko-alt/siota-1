@@ -114,6 +114,15 @@ try {
       if (!date) missing.push('visit-date');
       else { date.value = '2026-08-29'; date.dispatchEvent(new Event('input', { bubbles: true })); }
 
+      /* **本日の体重も入れる**（マスター指示 2026-09-13「直せるものを先に治せ」）。
+         ここはベスト体重しか入れておらず、本日の体重は空のまま「確定」を押していた。
+         空でも確定できてしまうのが放置リスト `#55` で、それを止めると
+         **この台本だけは赤にならず、撮る写真が黙って確定前の画面になる**
+         ——絵だけが受入条件なので、いちばん気づけない形になる（`偽-12` の型）。 */
+      const weight = document.getElementById('input-weight');
+      if (!weight) missing.push('weight');
+      else { weight.value = '3.4'; weight.dispatchEvent(new Event('input', { bubbles: true })); }
+
       const bestWeight = document.getElementById('input-best-weight');
       if (!bestWeight) missing.push('best-weight');
       else { bestWeight.value = '3.2'; bestWeight.dispatchEvent(new Event('input', { bubbles: true })); }
