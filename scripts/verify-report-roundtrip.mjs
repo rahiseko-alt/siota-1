@@ -110,7 +110,16 @@ try {
      この検査では必ずコースを選んでから押すので出ないはずだが、
      出た場合に画面が固まって検査全体が timeout するのを防ぐ（`verify-admin.mjs` と同型）。 */
   const dialogs = [];
-  page.on('dialog', (d) => { dialogs.push(d.message()); d.dismiss().catch(() => {}); });
+  /* 既定は**断る**（「訊かれた＝進まない」で関所を確かめるため）。
+     ただし `20.` は**わざと体重を空のまま確定する**検査なので、そこだけ
+     `acceptNextDialog` を立てて「はい」と答える（マスター指示 2026-09-13 で
+     空のまま確定するときに一度訊くようにした・放置リスト `#55`）。 */
+  let acceptNextDialog = false;
+  page.on('dialog', (d) => {
+    dialogs.push(d.message());
+    if (acceptNextDialog) { acceptNextDialog = false; d.accept().catch(() => {}); return; }
+    d.dismiss().catch(() => {});
+  });
 
   /* ── トリマー側: ④カルテ作成に入って記入する ── */
   await page.goto(`${BASE}/my`);
@@ -439,6 +448,10 @@ try {
   await page.fill('[data-field="staff-note"]', '体重は量っていない回。');
   /* コースは必須（C-9）。選ばないと確定の `alert()` に止められる。 */
   await page.selectOption('[data-field="course"]', INPUT.course);
+  /* **この1回だけ「はい」と答える。** 体重が空なので確定の手前で訊かれる
+     （`#55`）。ここで見たいのは「量っていない体重が飼い主に出ないこと」で、
+     訊かれること自体は `21d.` が別に見ている。 */
+  acceptNextDialog = true;
   await Promise.all([
     page.waitForURL(/\/edit\/p\/[0-9a-f-]{36}\/[0-9a-f-]{36}$/, { timeout: 30_000 }),
     page.click('.dock-action-wrap .boxbutton'),
