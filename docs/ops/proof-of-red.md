@@ -140,6 +140,19 @@
 - ui-body-marking-draw.test.mjs :: 選んでいない文字の色は、色を変えても変わらない
 - ui-body-marking-draw.test.mjs :: 入力を促すとき、説明の文は出さない
 - ui-body-marking-draw.test.mjs :: 選んでいる目印は、飼い主に届く画像には焼き込まない
+- verify-photo-roundtrip.mjs :: 12b. 直したあとの写真が、保存された実体を指している（一時的な住所になっていない）
+- verify-photo-roundtrip.mjs :: 12d. 直しの画面では、写真を足す入口が閉じている
+  （2026-09-13・マスター指示「直せるものを先に治せ」。**この作業コンテナに docker が
+   無いので、CI の `mutate` で赤を取った**（run 393・`docs/ops/mutate-run-partial.md`）。
+
+   壊し方 `revise-photos-from-hydrated` — `applyReport` が原本ではなく
+   `blob:` に置き換えたあとを使う＝直す前の状態に戻す:
+       12b. 直したあとの写真が、保存された実体を指している   ← 赤
+   壊し方 `revise-photo-add-not-locked` — 直しの画面で写真の入口を閉じない:
+       12d. 直しの画面では、写真を足す入口が閉じている   ← 赤
+
+   直しを入れた状態の同じ実行では、12b が「5件すべて asset://」、
+   12d が「3/3 が閉じている」で緑。**赤 → 緑 → 戻して赤**がそろっている。）
 - ui-annotate-pinch.test.mjs :: 透過度を下げると、その薄さで引かれる
 - ui-annotate-pinch.test.mjs :: 薄さは1件ごとに戻す（次の線まで薄くならない）
 - ui-annotate-pinch.test.mjs :: 消しゴムは、触れた線を取り除く（写真は削らない）
@@ -3105,13 +3118,13 @@ $ node --test test/report-commit-guard.test.mjs      ← 直しを入れ直し�
 
 ## 未証明（**壊して赤になるところを、まだ見ていない**）
 
-- verify-photo-roundtrip.mjs :: 12b. 直したあとの写真が、保存された実体を指している（一時的な住所になっていない）
 - verify-photo-roundtrip.mjs :: 12c. 直したあとも、飼い主に同じ写真が同じ色で届いている
-- verify-photo-roundtrip.mjs :: 12d. 直しの画面では、写真を足す入口が閉じている
-  （2026-09-13 追加。**この作業コンテナに docker が無く、ローカル Supabase を
-   起動できないため `npm run verify:photo` をここでは1度も実行できない**。
-   赤は CI で見る——**直しを入れる前のコミットを先に push し、CI の `verify` が
-   赤になった出力を貼ってから「証明済み」へ移す**。移すまでこの行を消さない。）
+  （2026-09-13。**中身は赤を見たが、名前と書き方を変えたので未証明に戻した。**
+   最初は「中身の無い img を全部数える」形で書き、`revise-photos-from-hydrated`
+   で赤になることを CI で確かめた（`docs/ops/mutate-run-partial.md`）。
+   ただしその形は犬体図の空欄と拡大用の器まで拾って**直しが入った状態でも赤**に
+   なったため、`6.` `8.` `9.` と同じ「色で確かめる」やり方に書き直した。
+   **書き直した後の赤は、まだ見ていない。** 次の `mutate` で取り直す。）
 
 - verify-admin.mjs :: 3b. メニューを押すと住所が変わる
 - verify-admin.mjs :: 3c. サブ画面（犬を選ぶ）でも住所が変わる
