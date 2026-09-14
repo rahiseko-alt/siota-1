@@ -124,7 +124,11 @@ try {
   await staleContext.close();
 
   /* ── 新規のお客様が、その URL からカルテを見られるようになるまで ── */
-  const invitePath = new URL(artifact.url).pathname + new URL(artifact.url).search;
+  /* **いま有効なのは2枚目。** 上の `4c`〜`4e` で2枚目を出したので、
+     1枚目（`artifact.url`）はもう使えない（`#61` の直しどおりの動き）。
+     ここから先の「新規のお客様が自分のカルテを見られるようになるまで」は、
+     **いま渡すもの＝2枚目**で通す。 */
+  const invitePath = new URL(reissued.url).pathname + new URL(reissued.url).search;
 
   /* **招待リンクを開くのは、まだログインしていない人。**
      未ログインの `/my` は入口（`/`）へ出ていくようになった（`D-20260905-67`）。
