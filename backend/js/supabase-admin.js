@@ -484,7 +484,7 @@ function pickPetForRevise() {
     empty: 'まだ1頭も登録されていません。',
     testid: 'pick-pet',
     onBack: () => navigate('/admin/repeat', screenRepeat),
-    onPick: (item) => pickReportForRevise(item.pet),
+    onPick: (item) => pushStep(() => pickReportForRevise(item.pet)),
   }));
 }
 
@@ -675,7 +675,7 @@ function pickOwnerForDelete() {
     empty: '登録されている飼い主さまがいません。',
     testid: 'pick-owner',
     onBack: () => navigate('/admin/delete', screenDelete),
-    onPick: (item) => confirmDestructive({
+    onPick: (item) => pushStep(() => confirmDestructive({
       title: '顧客アカウント全データ削除',
       what: `${item.owner.name} さまと、ひもづく子・カルテ・写真をすべて消します。元に戻せません。`,
       /* 確認の画面にも**同じ見分けを出す**。名前を打たせるだけでは、同姓同名の
@@ -689,7 +689,7 @@ function pickOwnerForDelete() {
         await purgeOwnerAssets({ client: supabase, api, ownerId: item.owner.id });
         await api(`/api/owners/${encodeURIComponent(item.owner.id)}`, { method: 'DELETE' });
       },
-    }),
+    })),
   }));
 }
 
@@ -700,7 +700,7 @@ function pickPetForDelete() {
     empty: '登録されている子がいません。',
     testid: 'pick-pet',
     onBack: () => navigate('/admin/delete', screenDelete),
-    onPick: (item) => confirmDestructive({
+    onPick: (item) => pushStep(() => confirmDestructive({
       title: 'ペットアカウント全データ削除',
       what: `${item.pet.name} と、その子のカルテ・写真をすべて消します。元に戻せません。`,
       detail: item.note,
@@ -710,7 +710,7 @@ function pickPetForDelete() {
         await purgePetAssets({ client: supabase, api, petId: item.pet.id });
         await api(`/api/pets/${encodeURIComponent(item.pet.id)}`, { method: 'DELETE' });
       },
-    }),
+    })),
   }));
 }
 
@@ -721,7 +721,7 @@ function pickPetForReportDelete() {
     empty: '登録されている子がいません。',
     testid: 'pick-pet',
     onBack: () => navigate('/admin/delete', screenDelete),
-    onPick: (item) => pickReportForDelete(item.pet),
+    onPick: (item) => pushStep(() => pickReportForDelete(item.pet)),
   }));
 }
 
@@ -737,7 +737,7 @@ function pickReportForDelete(pet) {
     empty: 'この子にはカルテがまだありません。',
     testid: 'pick-report',
     onBack: () => navigate('/admin/delete/report', pickPetForReportDelete),
-    onPick: (item) => confirmDestructive({
+    onPick: (item) => pushStep(() => confirmDestructive({
       title: 'カルテ1枚削除',
       what: `${pet.name} の ${item.report.report_date} のカルテと、その写真を消します。元に戻せません。`,
       name: pet.name,
@@ -747,7 +747,7 @@ function pickReportForDelete(pet) {
       onConfirm: () => deleteReportAssets({
         client: supabase, api, petId: pet.id, reportId: item.report.id,
       }),
-    }),
+    })),
   }));
 }
 
@@ -786,6 +786,23 @@ function renderForPath(path) {
 /** メニュー画面への行き来だけ、住所バーも一緒に変える。 */
 function navigate(path, screenFn) {
   if (location.pathname !== path) history.pushState(null, '', path);
+  screenFn();
+}
+
+/* **1件選んだ後の画面にも、戻る1段ぶんを積む**
+   （マスター指示 2026-09-13「直せるものを先に治せ」・放置リスト `#49`）。
+
+   そのカルテ一覧・削除の確認は、URL を持たないまま関数を直に呼んでいた。
+   履歴が積まれないので、**ブラウザの戻るを押すと一段多く戻っていた**
+   （犬を選ぶ画面ではなく、その手前のメニューまで飛ぶ）。
+
+   住所は**一段手前のまま**にする——`ADMIN_ROUTES` には手を触れない。
+   そうすると戻るで `popstate` が起き、`renderForPath()` が
+   一段手前（犬を選ぶ画面）を描き直す＝**ちょうど1つ戻る**。
+   開き直したときも犬を選ぶ画面に着くので、**削除の確認画面へ直接飛べる**という
+   前からの心配（ここにコメントで残っていたもの）も起きない。 */
+function pushStep(screenFn) {
+  history.pushState(null, '', location.pathname);
   screenFn();
 }
 

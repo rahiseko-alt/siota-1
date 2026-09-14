@@ -219,6 +219,24 @@ try {
   check('3e. サブ画面の住所を直接開くと、その画面が出る（貼れる URL）',
     formShown && pathNow() === '/admin/new/owner', `path=${pathNow()} 出た=${formShown}`);
 
+  /* ── 3g **1件選んだ後の画面からも、戻るは1つだけ**
+     （マスター指示 2026-09-13・放置リスト `#49`）。
+     そのカルテ一覧・削除の確認は URL を持たず、履歴も積んでいなかったので、
+     **ブラウザの戻るで一段多く戻っていた**（犬を選ぶ画面を飛び越してメニューへ）。 ── */
+  await page.goto(`${BASE}/admin/delete/report`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('[data-admin-action="pick-pet"]', { timeout: 20_000 });
+  await page.locator('[data-admin-action="pick-pet"]').first().click();
+  const reportListShown = await page
+    .waitForSelector('[data-admin-action="pick-report"]', { timeout: 20_000 })
+    .then(() => true).catch(() => false);
+  await page.goBack({ waitUntil: 'domcontentloaded' });
+  const backToPetPick = await page
+    .waitForSelector('[data-admin-action="pick-pet"]', { timeout: 20_000 })
+    .then(() => true).catch(() => false);
+  check('3g. カルテ一覧から戻ると、ちょうど1つ手前（犬を選ぶ）に戻る',
+    reportListShown && backToPetPick && pathNow() === '/admin/delete/report',
+    `カルテ一覧=${reportListShown} 犬選び=${backToPetPick} path=${pathNow()}`);
+
   await page.goto(`${BASE}/admin/nowhere`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('.admin-menu__item', { timeout: 20_000 });
   const fallback = await menuTitles(page);

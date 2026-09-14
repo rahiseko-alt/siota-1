@@ -45,6 +45,17 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
  * 証明の役に立たない（何を検出したのか言えないため）。
  */
 export const MUTATIONS = [
+  /* ── 2026-09-13・放置リスト `#49`
+     1件選んだ後の画面で履歴を積むのをやめる。**ブラウザの戻るが一段多く戻る**
+     （犬を選ぶ画面を飛び越してメニューへ）。 */
+  {
+    id: 'admin-substep-no-history',
+    why: '**管理画面で1件選んだ後、戻るが一段多く戻る**（犬を選び直すつもりがメニューまで飛ぶ）',
+    file: 'backend/js/supabase-admin.js',
+    find: "  history.pushState(null, '', location.pathname);",
+    replace: "  /* (壊し方) 履歴を積まない */",
+    scripts: ['verify-admin.mjs'],
+  },
   /* ── 2026-09-13・放置リスト `#61`
      新しいQRを出したときに前のQRを取り消すのをやめる。何枚出しても全部有効になり、
      **渡し間違えた古いQRが生き続ける**（実測: 連続10回で10個とも有効だった状態）。 */

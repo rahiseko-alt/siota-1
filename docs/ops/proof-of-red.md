@@ -3120,6 +3120,10 @@ $ node --test test/report-commit-guard.test.mjs      ← 直しを入れ直し�
 
 ## 未証明（**壊して赤になるところを、まだ見ていない**）
 
+- verify-admin.mjs :: 3g. カルテ一覧から戻ると、ちょうど1つ手前（犬を選ぶ）に戻る
+  （2026-09-13 追加・マスター指示「直せるものを先に治せ」。放置リスト `#49`。
+   赤は CI の `mutate`（`admin-substep-no-history`）で取る。移すまで消さない。）
+
 - verify-invitation.mjs :: 4c. 2枚目のQRは、1枚目とは別のものが出る
 - verify-invitation.mjs :: 4d. 「新しく発行すると前のQRは使えない」と画面で言っている
 - verify-invitation.mjs :: 4e. 1枚目のQRは、2枚目を出した時点で使えなくなっている
