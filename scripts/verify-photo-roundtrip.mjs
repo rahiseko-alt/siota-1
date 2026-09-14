@@ -205,6 +205,7 @@ try {
      ここを空で通していた台本は止まる。実際の業務でも空で確定することはまず無いので、
      **本物に近い形に直す**（検査を弱めるのではなく、台本を現実に合わせる）。 */
   await page.fill('#input-weight', '4.2');
+  await page.fill('[data-field="staff-note"]', '今日の様子を一言。');
   /* ── ④ 確定 ── */
   await Promise.all([
     page.waitForURL((u) => /^\/edit\/p\/[0-9a-f-]{36}\/[0-9a-f-]{36}$/.test(u.pathname), { timeout: 60_000 }),
