@@ -80,7 +80,48 @@ try {
   });
   check('3. 押すと初回登録の URL が出る', /\/my\?invite=[0-9a-f]{64}$/.test(artifact.url), artifact.url.slice(0, 60));
   check('4. QR が画像として出ている', artifact.qrIsImage === true);
+
+  /* ── 4c/4d **新しく出したら、前のQRは使えなくなる**
+     （マスター指示 2026-09-13・放置リスト `#61`）。
+     以前は何枚出しても全部有効で、渡し間違えた古いQRが生き続けていた
+     （実測: 連続10回で10個とも有効）。「回数で止める」は正当な刷り直しが
+     できなくなるので採らず、**新しいのを出した時点で前のを無効にする**。 ── */
+  await staffPage.evaluate(() => {
+    const dialog = document.querySelector('dialog.supabase-dialog[open]');
+    [...dialog.querySelectorAll('button')].find((b) => b.textContent.trim() === '閉じる').click();
+  });
+  await staffPage.evaluate((petName) => {
+    const card = [...document.querySelectorAll('.karte-card')]
+      .find((el) => (el.querySelector('.karte-card__dog-name') || {}).textContent === petName);
+    card.querySelector('.btn-invite').click();
+  }, `新犬${stamp}`);
+  await staffPage.waitForSelector('dialog.supabase-dialog[open] img', { timeout: 20_000 });
+  const reissued = await staffPage.evaluate(() => {
+    const dialog = document.querySelector('dialog.supabase-dialog[open]');
+    return {
+      url: [...dialog.querySelectorAll('input[type="text"]')].map((el) => el.value).find(Boolean) || '',
+      説明: (dialog.querySelector('p') || {}).textContent || '',
+    };
+  });
+  check('4c. 2枚目のQRは、1枚目とは別のものが出る',
+    /\/my\?invite=[0-9a-f]{64}$/.test(reissued.url) && reissued.url !== artifact.url,
+    reissued.url === artifact.url ? '★ 同じURLが出た' : reissued.url.slice(0, 60));
+  check('4d. 「新しく発行すると前のQRは使えない」と画面で言っている',
+    reissued.説明.includes('新しく発行すると、前のQR・URLは使えなくなります'), reissued.説明.slice(0, 60));
   await staffPage.close();
+
+  /* **1枚目はもう使えない。** 別の人が1枚目を拾っても入れないこと。 */
+  const staleContext = await browser.newContext();
+  const stalePage = await staleContext.newPage();
+  await stalePage.goto(`${BASE}/my`);
+  await injectSession(stalePage, FIXTURE.ownerBEmail);
+  const stalePath = new URL(artifact.url).pathname + new URL(artifact.url).search;
+  await stalePage.goto(`${BASE}${stalePath}`, { waitUntil: 'networkidle' });
+  await stalePage.waitForTimeout(2_500);
+  const staleText = await stalePage.evaluate(() => document.body.innerText);
+  check('4e. 1枚目のQRは、2枚目を出した時点で使えなくなっている',
+    !staleText.includes(`新犬${stamp}`), '★ 古いQRでまだ入れた');
+  await staleContext.close();
 
   /* ── 新規のお客様が、その URL からカルテを見られるようになるまで ── */
   const invitePath = new URL(artifact.url).pathname + new URL(artifact.url).search;

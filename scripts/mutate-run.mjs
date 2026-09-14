@@ -45,6 +45,17 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
  * 証明の役に立たない（何を検出したのか言えないため）。
  */
 export const MUTATIONS = [
+  /* ── 2026-09-13・放置リスト `#61`
+     新しいQRを出したときに前のQRを取り消すのをやめる。何枚出しても全部有効になり、
+     **渡し間違えた古いQRが生き続ける**（実測: 連続10回で10個とも有効だった状態）。 */
+  {
+    id: 'invitation-old-stays-valid',
+    why: '**新しいQRを出しても古いQRが使えたままになる**（渡し間違えたQRで第三者が先に開く）',
+    file: 'supabase/migrations/202609140014_single_open_invitation.sql',
+    find: '    and revoked_at is null;',
+    replace: '    and revoked_at is null and false;',
+    scripts: ['verify-invitation.mjs'],
+  },
   /* ── 2026-09-13・放置リスト `#48`
      `/edit` 配下の受け口を元の「形が合うものだけ」に戻す。形の崩れた住所が
      静的配信に落ちて **404・本文0バイト**＝ブラウザ自身のエラー画面になり、

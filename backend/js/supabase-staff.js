@@ -143,7 +143,13 @@ async function showInvitationDialog(body, label) {
   const artifact = await createInvitationArtifact(body);
   const dialog = newDialog(`${label}の初回登録`);
   const explanation = document.createElement('p');
-  explanation.textContent = '初回登録用です。有効期限24時間・1回のみ使用できます。毎日の閲覧には、登録後の「マイカルテ」をブックマークしてください。';
+  /* **「新しく出すと前のが使えなくなる」ことを、渡す前に言う**
+     （マスター指示 2026-09-13・放置リスト `#61`）。以前は何枚出しても全部有効で、
+     渡し間違えた古いQRが生き続けていた。いまは新しく出した時点で前のが無効になる
+     （`create_invitation` が入れる直前に取り消す）。 */
+  explanation.textContent = '初回登録用です。有効期限24時間・1回のみ使用できます。'
+    + '新しく発行すると、前のQR・URLは使えなくなります。'
+    + '毎日の閲覧には、登録後の「マイカルテ」をブックマークしてください。';
   const expiry = document.createElement('p');
   expiry.textContent = `有効期限: ${new Date(artifact.expiresAt).toLocaleString('ja-JP')}`;
   const qr = document.createElement('img');
