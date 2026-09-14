@@ -3106,7 +3106,7 @@ $ node --test test/report-commit-guard.test.mjs      ← 直しを入れ直し�
 ## 未証明（**壊して赤になるところを、まだ見ていない**）
 
 - verify-photo-roundtrip.mjs :: 12b. 直したあとの写真が、保存された実体を指している（一時的な住所になっていない）
-- verify-photo-roundtrip.mjs :: 12c. 直したあとも、飼い主の画面で写真が実際に出る
+- verify-photo-roundtrip.mjs :: 12c. 直したあとも、飼い主に同じ写真が同じ色で届いている
 - verify-photo-roundtrip.mjs :: 12d. 直しの画面では、写真を足す入口が閉じている
   （2026-09-13 追加。**この作業コンテナに docker が無く、ローカル Supabase を
    起動できないため `npm run verify:photo` をここでは1度も実行できない**。

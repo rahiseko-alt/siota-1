@@ -295,17 +295,20 @@ try {
     notStored.length ? `${notStored.length}件が別物: ${JSON.stringify(notStored.map((v) => String(v).slice(0, 24)))}` : '5件すべて asset://');
 
   /* **届いたかどうかは、飼い主の画面で見る**（`D-12`）。
-     保存の形が正しくても、実際に絵が出なければ意味がない。 */
+     保存の形が正しくても、実際に絵が出なければ意味がない。
+     **`6.` `8.` `9.` と同じ「色で確かめる」やり方をそのまま使う**——
+     はじめ「中身の無い img を全部数える」形で書いたところ、犬体図の空欄
+     （この検査は絵を描かない）と拡大表示用の器まで拾って赤くなった。
+     **もともと空のものを「壊れている」と数えない。** */
   await ownerPage.reload({ waitUntil: 'networkidle' });
-  await ownerPage.waitForTimeout(1500);
-  const brokenAfterRevise = await ownerPage.evaluate(
-    () => [...document.querySelectorAll('img')]
-      .filter((i) => !i.currentSrc || i.naturalWidth === 0)
-      .map((i) => i.getAttribute('data-view') || i.className || '(名前なし)'),
-  );
-  check('12c. 直したあとも、飼い主の画面で写真が実際に出る',
-    brokenAfterRevise.length === 0,
-    brokenAfterRevise.length ? `${brokenAfterRevise.length}件が出ていない ${JSON.stringify(brokenAfterRevise)}` : '');
+  await ownerPage.waitForSelector('.magazine-container', { timeout: 20_000 });
+  const heroAfter = await pixelOf(ownerPage, 'hero-photo');
+  const earAfter = await pixelOf(ownerPage, 'ear-image');
+  const teethAfter = await pixelsOfGallery(ownerPage, 'teeth-gallery');
+  check('12c. 直したあとも、飼い主に同じ写真が同じ色で届いている',
+    near(heroAfter, COLOR.hero) && near(earAfter, COLOR.ear)
+      && teethAfter.length === 2 && near(teethAfter[0], COLOR.teeth) && near(teethAfter[1], COLOR.teeth2),
+    `表紙=${JSON.stringify(heroAfter)} 耳=${JSON.stringify(earAfter)} 歯=${JSON.stringify(teethAfter)}`);
 
   /* **修正では写真を足せないことを、画面で言っている**（放置リスト `#60`）。
      黙って受け付けて保存で落ちると、文字の修正まで巻き添えで消える。 */
