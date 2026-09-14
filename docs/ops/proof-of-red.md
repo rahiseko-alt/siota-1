@@ -141,6 +141,18 @@
 - ui-body-marking-draw.test.mjs :: 入力を促すとき、説明の文は出さない
 - ui-body-marking-draw.test.mjs :: 選んでいる目印は、飼い主に届く画像には焼き込まない
 - verify-photo-roundtrip.mjs :: 12b. 直したあとの写真が、保存された実体を指している（一時的な住所になっていない）
+- verify-report-roundtrip.mjs :: 21b. 桁違いの体重（9999kg）では確定できない
+- verify-report-roundtrip.mjs :: 21d. 体重が空のまま確定を押すと、そのことを言って訊いてくる
+- verify-portal.mjs :: 13c. 犬のページから、愛犬の一覧へ戻る道が出ている
+- verify-admin.mjs :: 3g. カルテ一覧から戻ると、ちょうど1つ手前（犬を選ぶ）に戻る
+  （2026-09-14・マスター指示「直せるものを先に治せ」。CI の `mutate`（run 406）で取った赤:
+
+       weight-limit-off         → 21b. 赤（体重の範囲の関所を外す）
+       blank-commit-not-asked   → 21d. 赤（空のまま確定できる状態に戻す）
+       pet-page-no-way-back     → 13c. 赤（犬のページの戻る道を外す）
+       admin-substep-no-history → 3g.  赤（1件選んだ後に履歴を積まない）
+
+   直しを入れた状態では4件とも緑。**赤 → 緑 → 戻して赤**がそろっている。）
 - verify-photo-roundtrip.mjs :: 12c. 直したあとも、飼い主に同じ写真が同じ色で届いている
 - verify-photo-roundtrip.mjs :: 12d. 直しの画面では、写真を足す入口が閉じている
   （2026-09-13・マスター指示「直せるものを先に治せ」。**この作業コンテナに docker が
@@ -3127,23 +3139,18 @@ $ node --test test/report-commit-guard.test.mjs      ← 直しを入れ直し�
 - verify-invitation.mjs :: 4c. 2枚目のQRは、1枚目とは別のものが出る
 - verify-invitation.mjs :: 4d. 「新しく発行すると前のQRは使えない」と画面で言っている
 - verify-invitation.mjs :: 4e. 1枚目のQRは、2枚目を出した時点で使えなくなっている
-  （2026-09-13 追加・マスター指示「直せるものを先に治せ」。放置リスト `#61`。
-   赤は CI の `mutate`（`invitation-old-stays-valid`）で取る。移すまで消さない。）
+  （2026-09-14。放置リスト `#61`。上の `#48` と同じ理由で取り直す
+   ——`invitation-old-stays-valid` は赤になったが「検査を最後まで実行できた」で、
+   **`4e.` が壊しに気づいたことの証明になっていない**。単独で走らせる。）
 
 - verify-edit.mjs :: 18. 壊れた住所でも、アプリの画面が配られる（ブラウザの404に落ちない）
 - verify-edit.mjs :: 18b. 壊れた住所を開くと、犬の一覧まで連れ戻される
 - verify-portal.mjs :: 13b. 壊れた住所では「見つかりません」と言い、愛犬の一覧へ戻る道を出す
-- verify-portal.mjs :: 13c. 犬のページから、愛犬の一覧へ戻る道が出ている
-  （2026-09-13 追加・マスター指示「直せるものを先に治せ」。放置リスト `#48` `#53`。
-   **この作業コンテナに docker が無い**ので、赤は CI の `mutate` で取る。
-   取れたらこの4行を「証明済み」へ移す。移すまで消さない。）
-
-- verify-report-roundtrip.mjs :: 21b. 桁違いの体重（9999kg）では確定できない
-- verify-report-roundtrip.mjs :: 21d. 体重が空のまま確定を押すと、そのことを言って訊いてくる
-  （2026-09-13 追加・マスター指示「直せるものを先に治せ」。放置リスト `#56` `#55`。
-   **この作業コンテナに docker が無く `verify:roundtrip` をここでは走らせられない**ので、
-   赤は CI の `mutate`（`weight-limit-off` / `blank-commit-not-asked`）で取る。
-   取れたらこの2行を「証明済み」へ移す。移すまで消さない。）
+  （2026-09-14。放置リスト `#48`。`mutate`（run 406）で `edit-broken-url-falls-out` は
+   **赤になったが、名前のついたこの3件ではなく「検査を最後まで実行できた」で赤になった**
+   ——`verify-edit` が途中で落ちたということで、**この3件が壊しに気づいたことの証明にならない**。
+   `mutate-run.mjs` は同じ名前を最初に取った壊し方にしか結び付けないので、
+   別の壊し方と同じ回に走らせると見分けが付かない。**この壊し方だけを単独で走らせて取り直す。**）
 
 
 - verify-admin.mjs :: 3b. メニューを押すと住所が変わる

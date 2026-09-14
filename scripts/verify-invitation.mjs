@@ -135,7 +135,9 @@ try {
      その途中で**招待と戻り先を落とすと、飼い主は自分の犬に一生たどり着けない**
      ——しかも画面には何も出ないので、誰も気づけない。この変更で唯一
      「静かに壊れる」経路なので、ここで見る。 */
-  const inviteToken = new URL(artifact.url).searchParams.get('invite');
+  /* **開いたのと同じ招待で突き合わせる。** ここは `invitePath`（＝2枚目）で開くので、
+     1枚目の `artifact.url` から取ると必ず食い違う（実際に CI で踏んだ）。 */
+  const inviteToken = new URL(reissued.url).searchParams.get('invite');
   const cold = await browser.newContext();
   const coldPage = await cold.newPage();
   await coldPage.goto(`${BASE}${invitePath}`, { waitUntil: 'domcontentloaded' });
