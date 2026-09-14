@@ -273,13 +273,19 @@ function screenHome() {
 }
 
 /* 「次回のおすすめご来店時期」の既定日数（マスター指示 2026-08-29・D-20260829-58）。
-   犬ごとの上書きはこの画面ではなく⑤カルテ確認画面（`magazine-view.js`）で直す
-   ——編集の場所は「その犬のカルテを見ているとき」がいちばん迷わない。 */
+
+   **犬ごとに日数を直す欄は、もう無い**（マスター指示 2026-09-10「日後も保存も不要だから
+   削除しろ。こんな機能を付けろと指示もしていない AI の誤爆だ」でコミット `923619d` にて削除）。
+   ここと下の説明文は、消えた画面を案内したまま 2026-09-13 まで残っていた
+   ——**画面が「そこでできます」と言っているのに、その画面が無い**（マスター指示
+   「直せるものを先に治せ」で発見）。案内する先が無い文は書かない。
+   `scripts/verify-revisit-interval.mjs` の `5.` が「犬ごとに日数を直す欄が、店の画面に無い」
+   を毎回見ているので、欄が戻ることはない。 */
 function screenShopSettings() {
   clear();
   contentEl.append(backButton(() => navigate('/admin', screenHome)));
   contentEl.append(heading('店舗設定'));
-  contentEl.append(note('「次回のおすすめご来店時期」は、カルテの来店日にこの日数を足して出します。犬ごとに別の日数を使いたいときは、その犬のカルテ確認画面で個別に設定できます。'));
+  contentEl.append(note('「次回のおすすめご来店時期」は、カルテの来店日にこの日数を足して出します。ここで決めた日数が、すべての犬のカルテに使われます。'));
   const field = el('label', 'admin-field');
   field.append(el('span', null, '既定の来店間隔（日）'));
   const input = document.createElement('input');

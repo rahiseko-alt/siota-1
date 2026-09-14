@@ -15,11 +15,11 @@ const TEMPLATE = `
 <div class="magazine-container">
   <div class="timeline-accordion-box" data-view="timeline-box" hidden>
     <div class="timeline-accordion-head" data-view="timeline-toggle">
-      <div style="display:flex;align-items:center;gap:8px">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+      <div style="display:flex;align-items:center;gap:8px;min-width:0">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex:0 0 auto"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
         <span>過去のレポートを見返す（来店履歴タイムライン）</span>
       </div>
-      <span style="font-size:11px;color:var(--ink-muted)" data-view="timeline-toggle-text">表示する ▼</span>
+      <span style="font-size:11px;color:var(--ink-muted);flex:0 0 auto;white-space:nowrap" data-view="timeline-toggle-text">表示する ▼</span>
     </div>
     <div class="timeline-chips-tray" data-view="timeline-tray" style="display:none"></div>
   </div>
@@ -236,7 +236,7 @@ const STYLE = `
 }
 .magazine-container{max-width:1040px;margin:0 auto;padding:24px 16px 100px;background:#fff;font-family:var(--font-sans);color:var(--ink-body)}
 .timeline-accordion-box{background:var(--bg-paper);border:1px solid var(--border-subtle);margin-bottom:28px}
-.timeline-accordion-head{padding:12px 16px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-weight:700;font-size:13px;color:var(--ink-primary);user-select:none}
+.timeline-accordion-head{padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer;font-weight:700;font-size:13px;color:var(--ink-primary);user-select:none}
 .timeline-accordion-head:hover{background:var(--bg-subtle)}
 .timeline-chips-tray{padding:12px 16px 16px;border-top:1px dashed var(--border-subtle);display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}
 .timeline-chips-tray::-webkit-scrollbar{display:none}

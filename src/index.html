@@ -1094,6 +1094,11 @@ button, input, textarea, select {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  /* 見出しと「表示する ▼」がぶつかるのを防ぐ（マスター指示 2026-09-13・放置リスト #63）。
+     **効いているのは `magazine-view.js` 側の写し**（描画時に head へ後から足されるので
+     後勝ち）。ここを直しても画面は変わらないが、揃えておかないと次に読む人が
+     「index.html を直したのに変わらない」で詰まる。 */
+  gap: 12px;
   cursor: pointer;
   font-weight: 700;
   font-size: 13px;
