@@ -45,6 +45,29 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
  * 証明の役に立たない（何を検出したのか言えないため）。
  */
 export const MUTATIONS = [
+  /* ── 2026-09-13・放置リスト `#48`
+     `/edit` 配下の受け口を元の「形が合うものだけ」に戻す。形の崩れた住所が
+     静的配信に落ちて **404・本文0バイト**＝ブラウザ自身のエラー画面になり、
+     **お店の人がアプリの外に放り出される**。 */
+  {
+    id: 'edit-broken-url-falls-out',
+    why: '**打ち間違えた住所でアプリの外（ブラウザの404）に落ち、戻る手段が無くなる**',
+    file: 'worker/src/index.js',
+    find: "  if (path === '/edit' || path.startsWith('/edit/')) {",
+    replace: "  if (path === '/edit' || path === '/edit/') {",
+    scripts: ['verify-edit.mjs'],
+  },
+  /* ── 2026-09-13・放置リスト `#53`
+     犬のページから愛犬の一覧へ戻る道を外す。複数頭を預けている飼い主が
+     **ブラウザの戻るしか手が無くなる**。 */
+  {
+    id: 'pet-page-no-way-back',
+    why: '**犬のページから愛犬の一覧へ戻れなくなる**（複数頭の飼い主が行き止まる）',
+    file: 'backend/js/supabase-auth.js',
+    find: "  container.append(toList);",
+    replace: "  /* (壊し方) 戻る道を出さない */",
+    scripts: ['verify-portal.mjs'],
+  },
   /* ── 2026-09-13・放置リスト `#56`
      体重の範囲の関所を外す。**保存は通る**ので他は壊れず、
      「桁違いの体重では確定できない」だけが赤になる。 */

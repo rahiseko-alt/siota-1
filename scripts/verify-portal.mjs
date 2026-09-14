@@ -143,6 +143,35 @@ try {
   });
   check('13. 他人の犬（Q）は見えない（RLS）', strangerBlocked);
 
+  /* ── 13b/13c 迷子にしない（マスター指示 2026-09-13・放置リスト `#48` `#53`）── */
+
+  /* 住所の形が崩れたとき。**何度開き直しても直らない**ので「時間をおいて」と
+     言ってはいけない。見つからないと言って、戻る道を出す。 */
+  await page.goto(`${BASE}/my/pets/not-a-uuid`, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(1_200);
+  const broken = await page.evaluate(() => ({
+    文言: document.querySelector('[data-portal-status]')?.textContent?.trim() || '',
+    戻る道: !!document.querySelector('[data-portal-status] a[href="/my"]'),
+  }));
+  check('13b. 壊れた住所では「見つかりません」と言い、愛犬の一覧へ戻る道を出す',
+    broken.文言.includes('見つかりません') && broken.戻る道 === true
+      && !broken.文言.includes('時間をおいて'),
+    JSON.stringify(broken));
+
+  /* 犬のページから愛犬の一覧へ戻る道。ここには戻る導線が1つも無く、
+     複数頭を預けている飼い主はブラウザの戻るしか手が無かった。 */
+  await page.goto(`${BASE}/my/pets/${FIXTURE.petX}`, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(1_200);
+  const backOnPet = await page.evaluate(() => {
+    const a = document.querySelector('[data-view="to-pet-list"]');
+    if (!a) return { 在る: false };
+    const r = a.getBoundingClientRect();
+    return { 在る: true, 押せる: r.width > 0 && r.height > 0, 行き先: new URL(a.href).pathname, 文言: a.textContent.trim() };
+  });
+  check('13c. 犬のページから、愛犬の一覧へ戻る道が出ている',
+    backOnPet.在る === true && backOnPet.押せる === true && backOnPet.行き先 === '/my',
+    JSON.stringify(backOnPet));
+
   // サインアウトでログイン画面に戻る
   await page.goto(`${BASE}/my`, { waitUntil: 'networkidle' });
   await page.waitForSelector('[data-sign-out]:not([hidden])', { timeout: 15000 });

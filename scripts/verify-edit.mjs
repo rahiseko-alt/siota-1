@@ -189,6 +189,22 @@ try {
     report.letterInputExists
       ? `★ 既定文が入っている: ${JSON.stringify(report.letterInputValue.slice(0, 30))}`
       : '★ #editor-trimmer-letter が無い（欄ごと消えた・名前が変わった）');
+
+  /* **住所の形が崩れていても、アプリの外に放り出さない**
+     （マスター指示 2026-09-13・放置リスト `#48`）。
+     以前は `/edit/p/not-a-uuid` が静的配信に落ちて **404・本文0バイト**
+     ＝ブラウザ自身のエラー画面になり、お店の人が戻る手段を失っていた（実測）。
+     器さえ配れば `parseStaffRoute()` が形の崩れを見て犬の一覧へ連れて行く。 */
+  const brokenRes = await fetch(`${BASE}/edit/p/not-a-uuid`);
+  const brokenHtml = await brokenRes.text();
+  check('18. 壊れた住所でも、アプリの画面が配られる（ブラウザの404に落ちない）',
+    brokenRes.status === 200 && brokenHtml.includes('SALTY DOG'),
+    `status=${brokenRes.status} 長さ=${brokenHtml.length}`);
+
+  await page.goto(`${BASE}/edit/p/not-a-uuid`, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(2_000);
+  check('18b. 壊れた住所を開くと、犬の一覧まで連れ戻される',
+    new URL(page.url()).pathname === '/edit', page.url());
 } catch (error) {
   check('検査を最後まで実行できた', false, error.message);
 } finally {
