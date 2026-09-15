@@ -1578,3 +1578,43 @@
 - 利用者が増え、自動化された大量のアカウント作成が実際に起きたとき
   （そのときは Captcha protection を有効にする）
 
+## D-20260915-79 — 暗号化されていない通信の穴を塞いだ（Cloudflare の設定3つ）
+
+- **日付**: 2026-09-15
+- **決めた人**: マスター（安全確認で不合格が出たため、その場で設定を変えた）
+
+- **何が問題だったか**: 安全確認（OWASP ASVS 5.0.0 L1）で3件が引っかかった。
+  - **v5.0.0-12.2.1**: `http://` で取りに行くと **200 が返り、中身がそのまま出ていた**。
+    暗号化されない通信でそのまま使えてしまう状態。**最も重い不備だった。**
+  - **v5.0.0-3.4.1**: 「以後この場所へは必ず暗号化して来い」と指示する見出し（HSTS）が無かった。
+  - **v5.0.0-12.1.1**: 通信の暗号化の最低の版が **TLS 1.0**（Cloudflare の既定値）だった。
+
+- **何が起こりえたか**: 利用者が `https://` を付けずにアドレスを打った、あるいは暗号化
+  されていないリンクを踏んだとき、そのまま暗号化なしでやり取りが始まる。店や自宅以外の
+  無線（カフェ・ホテル・コワーキング）を使っていると、**間に入った相手に画面の中身も
+  ログイン引換券もそのまま見える**。引換券を取られれば、なりすまして**カルテを読める**。
+
+- **人間**: マスターが Cloudflare の SSL/TLS → Edge Certificates で3つ変えた。
+  1. **Always Use HTTPS** を有効化
+  2. **HSTS** を有効化（Max Age 1年。subdomains と Preload は**意図的に無効のまま**——
+     やり直しが難しく、L1 は求めていないため）
+  3. **Minimum TLS Version** を `TLS 1.0` から `TLS 1.2` へ
+- **AI**: コードは1行も変えていない。設定だけで直る種類の不備だった。
+
+- **実測での確認**（2026-09-15）:
+
+  ```
+  $ curl -sS -o /dev/null -w 'http: code=%{http_code} 転送先=%{redirect_url}\n' http://trimmer-system.kouheikosehira.com
+  http: code=301 転送先=https://trimmer-system.kouheikosehira.com/
+
+  $ curl -sS -I -L https://trimmer-system.kouheikosehira.com | grep -i strict-transport-security
+  strict-transport-security: max-age=31536000
+  ```
+
+  **1 と 2 はこの実測で確かめた。3（最低の版）はマスターの操作報告による**——手元の道具が
+  TLS 1.0 / 1.1 を扱えないため、拒まれたのか送れなかったのかを区別できない。
+  設定を変えたときは、この台帳に追記すること。
+
+- **やらなかったこと**: `Opportunistic Encryption` `TLS 1.3` `Automatic HTTPS Rewrites`
+  は触っていない。今回の不備とは関係がないため。`No-Sniff Header` は L1 の要求外。
+
