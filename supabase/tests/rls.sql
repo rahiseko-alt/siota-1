@@ -71,13 +71,38 @@ insert into public.reports (id, shop_id, pet_id, report_date, status, data, crea
   ('ee000000-0000-0000-0000-0000000000a2', 'bb000000-0000-0000-0000-000000000001', 'dd000000-0000-0000-0000-00000000000a', '2026-08-02', 'draft', '{"memo":"A draft"}', 'aa000000-0000-0000-0000-000000000001'),
   ('ee000000-0000-0000-0000-00000000000b', 'bb000000-0000-0000-0000-000000000002', 'dd000000-0000-0000-0000-00000000000b', '2026-08-01', 'final', '{"memo":"B"}', 'aa000000-0000-0000-0000-000000000002');
 
+/* 「ログインしている」を作る道具。**通行証だけでなく、ログイン状態の行も要る**
+   （`202609170015_session_liveness.sql`）。`auth.sessions` は authenticated から
+   触れないので、役を切り替える前に security definer で用意する。
+   ログイン状態の行の id は、読みやすさのため利用者の id と同じ値にする。 */
+create or replace function pg_temp.login(actor uuid)
+returns void language plpgsql security definer set search_path = '' as $$
+begin
+  insert into auth.sessions (id, user_id) values (actor, actor) on conflict (id) do nothing;
+  perform pg_catalog.set_config('request.jwt.claim.sub', actor::text, true);
+  perform pg_catalog.set_config(
+    'request.jwt.claims',
+    pg_catalog.json_build_object('sub', actor, 'session_id', actor)::text,
+    true);
+end;
+$$;
+
+/* 「ログアウトした」を作る道具。通行証はそのまま、ログイン状態の行だけ消す
+   ——これが本番で起きていること（`signOut()` は行を消すが通行証は取り消せない）。 */
+create or replace function pg_temp.logout(actor uuid)
+returns void language plpgsql security definer set search_path = '' as $$
+begin
+  delete from auth.sessions where user_id = actor;
+end;
+$$;
+
 set local role authenticated;
 
 /* ── ① 店舗をまたげない（この製品で最も壊れてはいけない面）──
    **「0件見える」は、相手側に実在する行についてだけ意味を持つ。**
    だから id を名指しして「在るのに見えない」を見る。存在しない id を数えて
    0 でも、それは何も言っていない。 */
-select set_config('request.jwt.claim.sub', 'aa000000-0000-0000-0000-000000000002', true);
+select pg_temp.login('aa000000-0000-0000-0000-000000000002');
 select pg_temp.eq((select count(*)::integer from public.owners where id = 'cc000000-0000-0000-0000-00000000000a'), 0, '店舗Bのスタッフに、店舗Aの飼い主は見えない');
 select pg_temp.eq((select count(*)::integer from public.pets where id = 'dd000000-0000-0000-0000-00000000000a'), 0, '店舗Bのスタッフに、店舗Aの犬は見えない');
 select pg_temp.eq((select count(*)::integer from public.reports where id = 'ee000000-0000-0000-0000-00000000000a'), 0, '店舗Bのスタッフに、店舗Aのカルテは見えない');
@@ -99,7 +124,7 @@ with attempted as (
 select pg_temp.eq((select count(*)::integer from attempted), 0, '店舗Bのスタッフは、店舗Aの飼い主を消せない');
 
 /* ── ② 逆向き ── */
-select set_config('request.jwt.claim.sub', 'aa000000-0000-0000-0000-000000000001', true);
+select pg_temp.login('aa000000-0000-0000-0000-000000000001');
 select pg_temp.eq((select count(*)::integer from public.owners where id = 'cc000000-0000-0000-0000-00000000000b'), 0, '店舗Aのスタッフに、店舗Bの飼い主は見えない');
 select pg_temp.eq((select count(*)::integer from public.reports where id = 'ee000000-0000-0000-0000-00000000000b'), 0, '店舗Aのスタッフに、店舗Bのカルテは見えない');
 
@@ -110,16 +135,36 @@ select pg_temp.denied(
 );
 
 /* ── ④ 飼い主に見えるもの ── */
-select set_config('request.jwt.claim.sub', 'aa000000-0000-0000-0000-00000000000a', true);
+select pg_temp.login('aa000000-0000-0000-0000-00000000000a');
 select pg_temp.eq((select count(*)::integer from public.pets where id = 'dd000000-0000-0000-0000-00000000000a'), 1, '飼い主に、自分の犬は見える');
 select pg_temp.eq((select count(*)::integer from public.pets where id = 'dd000000-0000-0000-0000-00000000000b'), 0, '飼い主に、他所の犬は見えない');
 select pg_temp.eq((select count(*)::integer from public.reports where id = 'ee000000-0000-0000-0000-00000000000a'), 1, '飼い主に、確定したカルテは見える');
 select pg_temp.eq((select count(*)::integer from public.reports where id = 'ee000000-0000-0000-0000-0000000000a2'), 0, '飼い主に、下書きは見えない');
 
 /* ── ⑤ 招かれていない人には何も見えない ── */
-select set_config('request.jwt.claim.sub', 'aa000000-0000-0000-0000-00000000000b', true);
+select pg_temp.login('aa000000-0000-0000-0000-00000000000b');
 select pg_temp.eq((select count(*)::integer from public.pets where id = 'dd000000-0000-0000-0000-00000000000a'), 0, '別の飼い主に、他所の犬は見えない');
 select pg_temp.eq((select count(*)::integer from public.reports where id = 'ee000000-0000-0000-0000-00000000000a'), 0, '別の飼い主に、他所のカルテは見えない');
+
+/* ── ⑥ ログアウトしたあと、同じ通行証では何も見えないこと ──
+   **これがこの検査の新しい柱**（安全確認 ASVS v5.0.0-7.4.1 / D-20260915-76）。
+   通行証は取り消せないので、ログアウト後も最大1時間そのまま通ってしまっていた。
+   ログイン状態の行が消えたら、通行証が生きていても見えないことを見る。 */
+select pg_temp.login('aa000000-0000-0000-0000-000000000001');
+select pg_temp.eq((select count(*)::integer from public.owners where id = 'cc000000-0000-0000-0000-00000000000a'), 1, 'ログイン中のスタッフに、自分の店舗の飼い主は見える');
+
+select pg_temp.logout('aa000000-0000-0000-0000-000000000001');
+select pg_temp.eq((select count(*)::integer from public.owners where id = 'cc000000-0000-0000-0000-00000000000a'), 0, 'ログアウト後は、同じ通行証でも飼い主は見えない');
+select pg_temp.eq((select count(*)::integer from public.pets where id = 'dd000000-0000-0000-0000-00000000000a'), 0, 'ログアウト後は、同じ通行証でも犬は見えない');
+select pg_temp.eq((select count(*)::integer from public.reports where id = 'ee000000-0000-0000-0000-00000000000a'), 0, 'ログアウト後は、同じ通行証でもカルテは見えない');
+select pg_temp.eq((select count(*)::integer from public.shop_memberships where user_id = 'aa000000-0000-0000-0000-000000000001'), 0, 'ログアウト後は、同じ通行証でも自分の名簿の行すら見えない');
+
+/* 飼い主側も同じであること（守りは4本に分かれているため・`202607160007` の注記）。 */
+select pg_temp.login('aa000000-0000-0000-0000-00000000000a');
+select pg_temp.eq((select count(*)::integer from public.reports where id = 'ee000000-0000-0000-0000-00000000000a'), 1, 'ログイン中の飼い主に、確定したカルテは見える');
+select pg_temp.logout('aa000000-0000-0000-0000-00000000000a');
+select pg_temp.eq((select count(*)::integer from public.reports where id = 'ee000000-0000-0000-0000-00000000000a'), 0, 'ログアウト後は、同じ通行証でも確定したカルテは見えない');
+select pg_temp.eq((select count(*)::integer from public.pets where id = 'dd000000-0000-0000-0000-00000000000a'), 0, 'ログアウト後は、同じ通行証でも自分の犬は見えない');
 
 reset role;
 rollback;
