@@ -42,6 +42,26 @@ as $$
   select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid;
 $$;
 
+-- auth.sessions: ログイン中の端末1つにつき1行。ログアウトで消える。
+-- `202609170015_session_liveness.sql` が「まだ生きているか」をここで見る。
+create table if not exists auth.sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null,
+  created_at timestamptz not null default now()
+);
+
+-- auth.jwt(): 通行証の中身。検証中は request.jwt.claims をそのまま返す（既定は空）。
+create or replace function auth.jwt()
+returns jsonb
+language sql
+stable
+as $$
+  select coalesce(
+    nullif(current_setting('request.jwt.claims', true), '')::jsonb,
+    '{}'::jsonb
+  );
+$$;
+
 -- storage.buckets / storage.objects: 参照される列だけ。
 create table if not exists storage.buckets (
   id text primary key,
