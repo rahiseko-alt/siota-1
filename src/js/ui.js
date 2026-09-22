@@ -762,7 +762,6 @@ const App = {
         : this.selectKarte(dog.name, dog.owner, dog.breed));
       card.innerHTML =
         '<div class="karte-card-top-row">'
-        + '<div class="karte-card__avatar"></div>'
         + '<div class="karte-card__body">'
         +   '<div class="karte-card__name-line">'
         +     '<span class="karte-card__dog-name"></span>'
