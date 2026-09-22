@@ -2194,6 +2194,15 @@ button, input, textarea, select {
                 </div>
               </div>
             </div>
+
+            <!-- ②爪のコメント欄（棚卸しで追加）。⑥は前から `nail.comment` を
+                 読んでいた（`magazine-view.js`）が、④に入力欄が無く書けなかった。 -->
+            <div class="trimmer-textarea-wrap">
+              <textarea id="editor-nail-comment" data-field="nail-comment" class="trimmer-textarea" rows="3" placeholder="爪について、気づいたことを一言。" oninput="App.updateCompletionStatus()"></textarea>
+              <button class="btn-inline-mic" id="nail-comment-voice-btn" onclick="App.toggleEditorVoice('editor-nail-comment', 'nail-comment-voice-btn')">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+              </button>
+            </div>
           </div>
 
           <!-- 3. Ear Examination（6段階判定・マスター指示 2026-08-29・C-6） -->
@@ -2235,6 +2244,15 @@ button, input, textarea, select {
                      data-field="photo-ear" onchange="App.onPhotoPick('ear', this)">
               <div class="photo-pick__thumbs" data-photo-thumbs="ear"></div>
               <div class="photo-pick__note">飼い主のカルテの「耳」の欄に出ます。</div>
+            </div>
+
+            <!-- ③耳のコメント欄（棚卸しで追加）。⑥は前から `ear.comment` を
+                 読んでいた（`magazine-view.js`）が、④に入力欄が無く書けなかった。 -->
+            <div class="trimmer-textarea-wrap">
+              <textarea id="editor-ear-comment" data-field="ear-comment" class="trimmer-textarea" rows="3" placeholder="耳について、気づいたことを一言。" oninput="App.updateCompletionStatus()"></textarea>
+              <button class="btn-inline-mic" id="ear-comment-voice-btn" onclick="App.toggleEditorVoice('editor-ear-comment', 'ear-comment-voice-btn')">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+              </button>
             </div>
           </div>
 
@@ -2288,6 +2306,15 @@ button, input, textarea, select {
                      data-field="photo-teeth" onchange="App.onPhotoPick('teeth', this)">
               <div class="photo-pick__thumbs" data-photo-thumbs="teeth"></div>
               <div class="photo-pick__note">飼い主のカルテの「歯」の欄に出ます。写真の「✏️ 書き込む」から、ペンで書き込めます（色と太さを変えられます）。</div>
+            </div>
+
+            <!-- ④口・歯のコメント欄（棚卸しで追加）。⑥は前から `teeth.comment` を
+                 読んでいた（`magazine-view.js`）が、④に入力欄が無く書けなかった。 -->
+            <div class="trimmer-textarea-wrap">
+              <textarea id="editor-teeth-comment" data-field="teeth-comment" class="trimmer-textarea" rows="3" placeholder="口・歯について、気づいたことを一言。" oninput="App.updateCompletionStatus()"></textarea>
+              <button class="btn-inline-mic" id="teeth-comment-voice-btn" onclick="App.toggleEditorVoice('editor-teeth-comment', 'teeth-comment-voice-btn')">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+              </button>
             </div>
           </div>
 
@@ -2454,6 +2481,16 @@ button, input, textarea, select {
                   <button type="button" class="btn-inline annotate-save" onclick="App.closeBodyMarking(true, 2)">保存する</button>
                 </div>
               </div>
+            </div>
+
+            <!-- ①皮膚のコメント欄（棚卸しで追加・⑧と同じ道具の使い回し）。
+                 ⑥は前から `skin-comment` の段を持たず、犬体図の所見一覧
+                 （`skin-rows`）とは別に文章でも書けるようにする。 -->
+            <div class="trimmer-textarea-wrap">
+              <textarea id="editor-skin-comment" data-field="skin-comment" class="trimmer-textarea" rows="3" placeholder="皮膚について、気づいたことを一言。" oninput="App.updateCompletionStatus()"></textarea>
+              <button class="btn-inline-mic" id="skin-comment-voice-btn" onclick="App.toggleEditorVoice('editor-skin-comment', 'skin-comment-voice-btn')">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+              </button>
             </div>
           </div>
 

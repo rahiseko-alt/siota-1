@@ -82,6 +82,50 @@ test('耳は左右そろって1つのキーになる（片方だけ触っても�
   assert.deepEqual(plain(App.extractReport().ear), { right: 3, left: 0 });
 });
 
+test('①②③④のコメントは、それぞれ触った項目のキーに載る', () => {
+  const App = loadApp({
+    fields: {
+      'skin-comment': '背中に軽い赤みあり。',
+      'nail-comment': '前足の血管が近め。',
+      'ear-comment': '右耳がやや汚れ気味。',
+      'teeth-comment': '奥歯に軽い歯石。',
+    },
+  });
+  App.marks = [];
+  const out = App.extractReport();
+  assert.equal(out.skinComment, '背中に軽い赤みあり。');
+  assert.equal(out.nail.comment, '前足の血管が近め。');
+  assert.equal(out.ear.comment, '右耳がやや汚れ気味。');
+  assert.equal(out.teeth.comment, '奥歯に軽い歯石。');
+});
+
+test('レベルを選んでいなくても、コメントだけでキーが出る（爪・耳・歯）', () => {
+  const App = loadApp({
+    fields: {
+      'nail-comment': 'コメントのみ。',
+      'ear-comment': 'コメントのみ。',
+      'teeth-comment': 'コメントのみ。',
+    },
+  });
+  App.marks = [];
+  const out = App.extractReport();
+  assert.deepEqual(plain(out.nail), { front: 0, rear: 0, comment: 'コメントのみ。' });
+  assert.deepEqual(plain(out.ear), { right: 0, left: 0, comment: 'コメントのみ。' });
+  assert.deepEqual(plain(out.teeth), { comment: 'コメントのみ。' });
+});
+
+test('①②③④のコメントが空白だけなら、書かれていないものとして扱う', () => {
+  const App = loadApp({
+    fields: { 'skin-comment': '  ', 'nail-comment': '\n', 'ear-comment': '', 'teeth-comment': '  ' },
+  });
+  App.marks = [];
+  const out = App.extractReport();
+  assert.ok(!('skinComment' in out));
+  assert.ok(!('nail' in out));
+  assert.ok(!('ear' in out));
+  assert.ok(!('teeth' in out));
+});
+
 test('空白だけの一言は、書かれていないものとして扱う', () => {
   const App = loadApp({ fields: { 'staff-note': '   \n  ' } });
   App.marks = [];

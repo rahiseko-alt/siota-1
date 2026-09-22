@@ -109,3 +109,22 @@ $ sed -n '1749,1995p' src/index.html | grep -c "目標体重"
 | 新しいキー | ④の出どころ | 状態 |
 |---|---|---|
 | `` `options` `` | `#options-grid` の複数選択チップ（新設・`renderOptionChips()`） | 旧デザイン試作（`design-samples/ponchi-v2.html`。F1で削除済み）にあった「今月の使用オプション」の復活（マスター指示）。選べる名前は店舗ごとに管理者が④店舗設定（`shops.grooming_options`）で追加・編集する。⑤⑥とも「カット」カードにタグとして表示（`renderOptionTags()`）。1件も選ばれていなければキーごと出さない |
+
+## 追記（2026-09-22・棚卸し。①②③④のコメント欄が無かった穴を塞いだ）
+
+**本表がずっと「⚠️ コメント欄が無い」と書いていた `nail`/`ear`/`teeth` の穴を塞いだ。**
+⑥（`magazine-view.js`）は前から `data.nail.comment` / `data.ear.comment` /
+`data.teeth.comment` を読んでおり（`nail-comment`/`ear-comment`/`teeth-comment` の段）、
+**書く場所さえあれば繋がる状態**だった。④に `[data-field="nail-comment"]` 等の
+`textarea`（⑧担当メッセージと同じ道具 `trimmer-textarea-wrap` の使い回し）を足し、
+`extractReport()`/`applyReport()` を対応させた（マスター指示・棚卸しの一手）。
+
+| 新しいキー | ④の出どころ | 状態 |
+|---|---|---|
+| `` `skinComment` `` | `[data-field="skin-comment"]`（新設） | ①皮膚の一言。**`skin`（所見一覧の配列）とは別のキー**にした——同じキーに文字列を足すと `JSON.stringify` が配列の余剰プロパティを落とし、保存の瞬間にコメントが消える（配列の `.comment` は保存されない）。⑥は `renderSkinRows()` とは別に段の下へ表示する |
+
+既存キーの中身も変わった（キー名自体は変わらないので `key-parity.mjs` には出ない）:
+
+- `` `nail` `` — `comment`（任意）を追加。レベル未選択でもコメントだけで出す
+- `` `ear` `` — 同上
+- `` `teeth` `` — 同上

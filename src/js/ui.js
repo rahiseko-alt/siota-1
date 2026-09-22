@@ -563,6 +563,11 @@ const App = {
     };
     set('[data-field="staff-note"]', data.staffNote || '');
     set('[data-field="course"]', data.course || '');
+    /* ①②③④のコメント欄（棚卸しで追加）。`extractReport()` の逆。 */
+    set('[data-field="skin-comment"]', data.skinComment || '');
+    set('[data-field="nail-comment"]', (data.nail || {}).comment || '');
+    set('[data-field="ear-comment"]', (data.ear || {}).comment || '');
+    set('[data-field="teeth-comment"]', (data.teeth || {}).comment || '');
     /* **来店日を戻す**（マスター指示 2026-08-29・C-3）。`isoDate`/`date` のどちらかに
        入っている（⑥の受け手は両方読む・`magazine-view.js`）。 */
     set('#input-visit-date', data.isoDate || data.date || '');
@@ -1398,10 +1403,15 @@ const App = {
        2. **音声が使えない端末で、見本の文（ブラッシングの作り話）を書き込んでいた。**
           トリマーが消し忘れれば、
           **誰も言っていない文が担当者の名前で飼い主に届く**（`D-10`・`F-20260821-14`
-          と同じ型）。使えないなら、使えないと言う。作り話で埋めない。 */
-  toggleEditorVoice() {
-    const btn = document.getElementById('editor-voice-btn');
-    const ta = document.getElementById('editor-trimmer-letter');
+          と同じ型）。使えないなら、使えないと言う。作り話で埋めない。
+
+     ①②③④（皮膚・爪・耳・口）のコメント欄も、この同じ道具をそのまま使う
+     （マスター指示・放置リスト `#41` の隣で見つかった「⑧しか声で書けない」の解消）。
+     マイクは実機で1本しか無いので、`this.voiceRec` は元から共有のまま——
+     複数欄で同時に録音できる想定はしない（②を録音中に③を押すと②が止まる）。 */
+  toggleEditorVoice(targetId = 'editor-trimmer-letter', btnId = 'editor-voice-btn') {
+    const btn = document.getElementById(btnId);
+    const ta = document.getElementById(targetId);
     const stopped = () => {
       this.voiceRec = null;
       if (btn) btn.classList.remove('is-recording');
@@ -1426,8 +1436,12 @@ const App = {
       const text = e.results[0][0].transcript;
       if (ta) {
         ta.value += (ta.value ? ' ' : '') + text;
-        const preview = document.getElementById('mag-letter-content');
-        if (preview) preview.textContent = ta.value;
+        /* `mag-letter-content` は⑧の一言専用のプレビュー。②③④等の欄で
+           声を使っても、そこは書き換えない（別の欄の文言で上書きしない）。 */
+        if (targetId === 'editor-trimmer-letter') {
+          const preview = document.getElementById('mag-letter-content');
+          if (preview) preview.textContent = ta.value;
+        }
         this.updateCompletionStatus();
       }
     };
@@ -1891,6 +1905,13 @@ const App = {
     const course = text('[data-field="course"]');
     if (course) report.course = course;
 
+    /* ①皮膚のコメント（マスター指示・棚卸しで追加）。`skin` キーは既に
+       犬体図の所見一覧（部位・大きさ・種類・変化の配列）で使っており、
+       その形を壊さないよう**別のキー**にする。⑥は `renderSkinRows()` とは
+       別に `skinComment` を段の下へ表示する。 */
+    const skinComment = text('[data-field="skin-comment"]');
+    if (skinComment) report.skinComment = skinComment;
+
     /* 来店日（マスター指示 2026-08-29・C-3）。`report_date`（DB 列）は触らない
        ——トリマーのトークンでは書き換えられない設計のまま（`#33`）。
        体重の時系列は、この入力値を基準にする。未入力なら押した日のまま
@@ -1905,21 +1926,30 @@ const App = {
     if (this.form.bcs) report.bcs = this.form.bcs;
     if (this.form.bestWeight) report.bestWeight = this.form.bestWeight;
 
-    /* 爪は前足・後ろ足を分けて記録する（マスター指示 2026-08-29・C-5）。 */
-    if (this.form.nail.front || this.form.nail.rear) {
+    /* 爪は前足・後ろ足を分けて記録する（マスター指示 2026-08-29・C-5）。
+       ②のコメントは⑥が前から読んでいた（`data.nail.comment`）が、④に入力欄が
+       無く**書きようが無かった**（放置リスト `#41` の隣で見つかった穴）。
+       コメントだけ書いてレベルを選んでいない場合もキーを出す。 */
+    const nailComment = text('[data-field="nail-comment"]');
+    if (this.form.nail.front || this.form.nail.rear || nailComment) {
       report.nail = { front: this.form.nail.front, rear: this.form.nail.rear };
+      if (nailComment) report.nail.comment = nailComment;
     }
     /* **写真だけでもキーを出す。** レベルが未選択でも、撮った写真は届けたい。
        逆に、どちらも無ければキーごと出さない（空の器を出さない）。 */
-    if (this.form.ear.right || this.form.ear.left || this.photos.ear) {
+    const earComment = text('[data-field="ear-comment"]');
+    if (this.form.ear.right || this.form.ear.left || this.photos.ear || earComment) {
       report.ear = { right: this.form.ear.right, left: this.form.ear.left };
       if (this.photos.ear) report.ear.photo = this.photos.ear;
+      if (earComment) report.ear.comment = earComment;
     }
-    if (this.form.teeth || this.photos.teeth.length > 0) {
+    const teethComment = text('[data-field="teeth-comment"]');
+    if (this.form.teeth || this.photos.teeth.length > 0 || teethComment) {
       report.teeth = {};
       if (this.form.teeth) report.teeth.status = this.form.teeth;
       /* 口の写真は最大2枚（マスター指示 2026-08-29・C-11）。 */
       if (this.photos.teeth.length > 0) report.teeth.photos = [...this.photos.teeth];
+      if (teethComment) report.teeth.comment = teethComment;
     }
     /* **`ym` を必ず添える。** ⑥は `weights` を `w.ym` が在るものだけに絞ってから描く
        （`magazine-view.js:575`）ので、`kg` だけ出すと**体重は「未記録」になる**——
