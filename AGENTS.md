@@ -80,7 +80,7 @@ LEVEL D: REPOSITORY-SPECIFIC RULES (プロジェクト固有ルール)
 | **バリデーション** | Zod（唯一テンプレートから引き継いだもの） |
 | **テスト** | **`node --test`**（Vitest ではない）+ Playwright（E2E・`verify:*`） |
 | **Linter / Formatter** | **無し。** 導入されていない。整形は既存コードの書き方に合わせる |
-| **CI / CD** | **無し。** GitHub Actions は置かれていない。検査はローカルで走らせる |
+| **CI / CD** | **GitHub Actions あり**（`.github/workflows/ci.yml` 等）。`build`/`check`/`test` に加え `verify:*` 15本・`walk`・`mutate` も自動で走る。手元でも同じ検査を実行できる |
 
 **この表から外れる変更（TypeScript 化・フレームワーク導入・Linter 追加・CDN 参照）は、
 マスターの承認なしに行わない。** 「今どきの標準はこうだから」は理由にならない。
