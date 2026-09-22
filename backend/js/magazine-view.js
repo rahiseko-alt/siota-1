@@ -90,6 +90,7 @@ const TEMPLATE = `
           <div class="wave-body-img-frame" data-view="skin-image-2-frame" hidden><img data-view="skin-image-2" alt="皮膚チェック図（2枚目）"></div>
           <div data-view="skin-rows"></div>
         </div>
+        <p style="font-size:13.5px;line-height:1.8;color:var(--ink-body);margin-top:8px" data-view="skin-comment"></p>
       </div>
     </div>
 
@@ -794,6 +795,9 @@ export function renderMagazine(container, report, opts = {}) {
 
   const skinCount = renderSkinRows(container, data.skin, true);
   setText(container, 'skin-pill', skinCount > 0 ? `記録 ${skinCount}件` : '記録なし');
+  /* ①皮膚のコメント（棚卸しで追加）。所見一覧（`skin-rows`）とは別の、
+     自由記述の一言。②③④の `comment` と同じ「無ければ記録がありません」表示。 */
+  setText(container, 'skin-comment', esc(data.skinComment).trim() || '記録がありません。');
   setImage(container, 'skin-image-frame', 'skin-image', data.bodyMarkingImage);
   /* 犬体図②（マスター指示 2026-09-11「現状と同じ機能も付けろ」）。
      ④が出すのは `bodyMarkingImage2`。**出していないカルテでは枠ごと出ない**
