@@ -132,6 +132,33 @@ test('空白だけの一言は、書かれていないものとして扱う', ()
   assert.ok(!('staffNote' in App.extractReport()));
 });
 
+test('直しで犬体図に触っていなければ、読み込んだ参照をそのまま出す（焼き直さない）', () => {
+  const App = loadApp();
+  App.marks = [{ type: 'stamp', x: 0.2, y: 0.3 }];
+  App.marksOriginalJson = JSON.stringify(App.marks);
+  App.marksOriginalImage = 'asset://11111111-1111-1111-1111-111111111111';
+  const out = App.extractReport();
+  assert.equal(out.bodyMarkingImage, 'asset://11111111-1111-1111-1111-111111111111');
+});
+
+test('直しで犬体図に触っていれば、控えと違うので焼き直しに回す（新規アップロードの対象になる）', () => {
+  const App = loadApp();
+  /* キャンバスの実体は無いので、焼き直しに回った証拠は「投げること」で見る
+     （`exportBodyMarking()` は描き先が無いと必ず投げる）。控えを再利用していれば
+     ここには来ない。 */
+  App.marks = [{ type: 'stamp', x: 0.2, y: 0.3 }];
+  App.marksOriginalJson = JSON.stringify([{ type: 'stamp', x: 0.9, y: 0.9 }]);
+  App.marksOriginalImage = 'asset://11111111-1111-1111-1111-111111111111';
+  assert.throws(() => App.extractReport(), /犬体図が見つからない/);
+});
+
+test('新規作成（控えが無い）では、いつもどおり焼き直しに回す', () => {
+  const App = loadApp();
+  App.marks = [{ type: 'stamp', x: 0.2, y: 0.3 }];
+  assert.equal(App.marksOriginalJson, null);
+  assert.throws(() => App.extractReport(), /犬体図が見つからない/);
+});
+
 test('⑥が読むキーの外は出さない（届かないキーを作らない）', () => {
   const READ_BY_MAGAZINE = new Set(
     [...fs.readFileSync(path.join(ROOT, 'backend/js/magazine-view.js'), 'utf8')

@@ -575,6 +575,14 @@ async function saveReport(petId, reportData, reportDate, draftId) {
  *
  * 写真は `saveReport` と同じで、先に実体を上げてから中身を差し替える——
  * 上げる前に `asset://` を書き込むと、参照先の無い印を飼い主に届けることになる。
+ *
+ * `uploadReportAssets` は保存先を組み立てるのに `report.pet_id` / `report.shop_id`
+ * を見る（`buildAssetPath`）。`saveReport` は作った直後の応答（実物の行）をそのまま
+ * 渡せるが、直しは新しく作らないので手元に行が無い——**ここで一度だけ取得する**。
+ * 前は `{ id: reportId }` だけの器を渡しており、両方 `undefined` のまま
+ * `buildAssetPath` の UUID 検証で毎回 `invalid asset context` に落ちていた
+ * （犬体図に印がある回は確定のたびに絵を再生成するので、②③④の写真を
+ * 一切触らなくても踏む——「直そうとすると保存できない」の実体）。
  */
 async function reviseReport(petId, reportId, reportData) {
   const client = globalThis.TrimmerAuth && globalThis.TrimmerAuth.client;
@@ -583,7 +591,10 @@ async function reviseReport(petId, reportId, reportData) {
 
   const { data, assets } = await replaceDataUrlAssets(reportData);
   if (assets.length > 0) {
-    await uploadReportAssets({ client, api, report: { id: reportId }, petId, assets });
+    const existing = await api(`/api/pets/${encodeURIComponent(petId)}/reports/${encodeURIComponent(reportId)}`);
+    const report = existing && existing.report;
+    if (!report || !report.id) throw new Error('直す元のカルテが見つかりませんでした');
+    await uploadReportAssets({ client, api, report, petId, assets });
   }
   const revised = await api(
     `/api/pets/${encodeURIComponent(petId)}/reports/${encodeURIComponent(reportId)}/revise`,
