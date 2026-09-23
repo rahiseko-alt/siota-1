@@ -1744,3 +1744,16 @@ $ npm audit
   （耳の写真を新しい色に貼り替えて保存し、飼い主の画面にその新しい色で届くことを実測）。
   DBの守りを元（`draft` のみ）に戻すと同じ操作が保存失敗でタイムアウトすることを確認し、
   戻して再び緑になることも確認した（`docs/ops/proof-of-red.md`・`docs/ops/mutate-run-partial.md`）。
+
+### 本番反映（2026-09-23）
+
+- `deploy` run 38 でコードを本番へ出した（`build`/`check`/`test`/`wrangler deploy`/
+  `verify:prod` すべて成功）。
+- マスターが本番 Supabase（`bcodloqwnrhcuvevfguy`）の SQL Editor で
+  `202609230015_revise_report_photo_replace.sql` を実行（`A-1` のため migration の
+  適用はマスターの手作業）。
+- マスターが本番の実画面で「確定済みカルテを修正で開き、写真を貼り替えて保存する」を
+  実際に操作し、**成功**を確認した（`D-23`——コードやCIではなく人間の実操作による確認）。
+
+これで一連の対応（保存できない不具合の修正・写真の追加貼り替えの許可・本番反映・
+本番での実機確認）がすべて完了した。
