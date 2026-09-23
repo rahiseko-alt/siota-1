@@ -520,8 +520,8 @@ export const MUTATIONS = [
     id: 'body-marking-2-same-as-1',
     why: '**2枚目の犬体図に描いた所見が、1枚目の絵で上書きされて飼い主に届く**（描いたものが消える）',
     file: 'src/js/ui.js',
-    find: '    const marking2 = this.exportBodyMarking(2);',
-    replace: '    const marking2 = this.exportBodyMarking(1);',
+    find: '    const marking2 = this.bodyMarkingUnchanged(2) ? this.marksOriginalImage2 : this.exportBodyMarking(2);',
+    replace: '    const marking2 = this.bodyMarkingUnchanged(2) ? this.marksOriginalImage2 : this.exportBodyMarking(1);',
     scripts: ['verify-report-roundtrip.mjs'],
   },
   {

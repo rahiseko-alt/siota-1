@@ -56,6 +56,12 @@ const App = {
      **古い下書きにはスタンプしか入っていない**ので、`points` の有無で見分ける。 */
   marks: [],
   marks2: [],
+  /* 直しで開いたとき、犬体図が「読み込んだときのまま」かを見るための控え。
+     `applyReport()` が置く。新規作成では使わない（`null` のまま）。 */
+  marksOriginalJson: null,
+  marksOriginalJson2: null,
+  marksOriginalImage: null,
+  marksOriginalImage2: null,
   /* いま選んでいる文字の印（マスター指示 2026-09-12「配置された文字をドラッグすると
      位置が変えられる」「文字の色は変えられる様にしろ」）。`{ n, mark }` か `null`。
      **添字ではなく印そのものを持つ**——1つ戻す・消しゴム・キャンセルの戻しで
@@ -112,6 +118,16 @@ const App = {
       2枚目の印を①へ書き込むより、①に落とすほうが被害が小さい。 */
   surface(n) {
     return this.SURFACES[n === 2 ? 2 : 1];
+  },
+
+  /* **直しで、この面の犬体図に一度も触っていないか。** `applyReport()` が置いた
+     控えと、いまの `marks` が文字として同じなら「触っていない」——ペン・スタンプ・
+     文字・消しゴムのどれも一度も使っていないということ。新規作成（控えが無い）
+     では常に `false`（いつもどおり焼く）。 */
+  bodyMarkingUnchanged(n) {
+    const key = n === 2 ? 'marksOriginalJson2' : 'marksOriginalJson';
+    if (this[key] == null) return false;
+    return JSON.stringify(this[this.surface(n).marks]) === this[key];
   },
 
   /* 選ばれた写真。**中身は `data:image/jpeg` か、既に上がっている `asset://{id}`。**
@@ -654,6 +670,19 @@ const App = {
       this.marks2 = data.__marks2;
       this.resizeCanvas(2);
     }
+    /* **直しで、触っていない犬体図まで焼き直さない**（マスター報告
+       「カルテの修正をしようと思ったら保存できないと言われた」の実体）。
+       `exportBodyMarking()` は毎回 canvas から新しい PNG を作るので、絵の中身が
+       同じでも「新しい画像」として `uploadReportAssets` に上げようとする。
+       ところが確定済みカルテへの新規アップロードは、保存の守り
+       （`storage_path_staff_upload`: `report.status = 'draft'` のときだけ許す）
+       がDB側で止めている——**触っていなければ、読み込んだときの参照
+       （`asset://…`）をそのまま出す**。⑥に届くものは何も変わらない。
+       写真と同じ理由で、焼き直す前の原本（`__stored`）から取る。 */
+    this.marksOriginalJson = JSON.stringify(this.marks);
+    this.marksOriginalJson2 = JSON.stringify(this.marks2);
+    this.marksOriginalImage = keep(stored.bodyMarkingImage);
+    this.marksOriginalImage2 = keep(stored.bodyMarkingImage2);
     this.updateCompletionStatus();
   },
 
@@ -1971,13 +2000,18 @@ const App = {
     if (this.form.options.length > 0) report.options = [...this.form.options];
 
     /* 犬体図の印。**印が無ければキーごと出さない**（白紙の絵を「所見あり」にしない）。
-       印が在るのに描き先が無ければ `exportBodyMarking()` が投げる——握らない。 */
-    const marking = this.exportBodyMarking(1);
+       印が在るのに描き先が無ければ `exportBodyMarking()` が投げる——握らない。
+
+       **直しで、この面に一度も触っていなければ焼き直さない**——`bodyMarkingUnchanged()`。
+       毎回 canvas から作り直すと、絵の中身が同じでも「新しい画像」としてアップロード
+       しようとし、確定済みカルテへの新規アップロードを禁じるDBの守りに落ちて
+       保存そのものが失敗する（詳細は `applyReport()` のコメント）。 */
+    const marking = this.bodyMarkingUnchanged(1) ? this.marksOriginalImage : this.exportBodyMarking(1);
     if (marking) report.bodyMarkingImage = marking;
     /* 犬体図②（マスター指示 2026-09-11）。**①と同じ扱いで、別のキー**にする。
        ⑥（`magazine-view.js`）に `bodyMarkingImage2` の枠を足してあり、
        `key-parity` が「④が出す」と「⑥が読む」を毎回突き合わせる。 */
-    const marking2 = this.exportBodyMarking(2);
+    const marking2 = this.bodyMarkingUnchanged(2) ? this.marksOriginalImage2 : this.exportBodyMarking(2);
     if (marking2) report.bodyMarkingImage2 = marking2;
 
     return report;
