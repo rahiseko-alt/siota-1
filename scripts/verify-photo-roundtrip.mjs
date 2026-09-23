@@ -18,6 +18,9 @@
  *   6〜9  飼い主の画面で、表紙・ギャラリー枚数・耳・歯が**入れたとおり**
  *   10    壊れた画像（ページURL を指す img）が無い
  *   11〜12 **直し（revise）で写真が落ちない**——落とすと、届いていた写真が消える
+ *   12d〜12f **直し（revise）で写真を貼り替えられる**（マスター指示 2026-09-23）。
+ *            貼る画像を間違えたときに直せることが目的なので、貼り替えた写真が
+ *            **飼い主に新しい色で届くこと**まで見る（`202609230015_revise_report_photo_replace.sql`）
  *
  *   npm run verify:photo
  */
@@ -91,6 +94,7 @@ const COLOR = {
   ear: [40, 60, 200],       /* 耳 */
   teeth: [230, 180, 30],    /* 歯（1枚目） */
   teeth2: [180, 90, 220],   /* 歯（2枚目） */
+  earFixed: [90, 200, 210], /* 直しで耳の写真を貼り替えたあとの色（他のどれとも違う） */
 };
 
 const file = (name, color) => ({ name, mimeType: 'image/png', buffer: solidPng(color) });
@@ -316,14 +320,43 @@ try {
       && teethAfter.length === 2 && near(teethAfter[0], COLOR.teeth) && near(teethAfter[1], COLOR.teeth2),
     `表紙=${JSON.stringify(heroAfter)} 耳=${JSON.stringify(earAfter)} 歯=${JSON.stringify(teethAfter)}`);
 
-  /* **修正では写真を足せないことを、画面で言っている**（放置リスト `#60`）。
-     黙って受け付けて保存で落ちると、文字の修正まで巻き添えで消える。 */
+  /* **修正で写真を貼り替えられる**（マスター指示 2026-09-23・放置リスト `#60`）。
+     「貼る画像を間違えてその修正をしたい時に困る」に応えるため、DBの守り
+     （`private.storage_path_staff_upload`/`register_report_asset`）を緩めた
+     （`202609230015_revise_report_photo_replace.sql`）。**入口が開いていること**と、
+     **貼り替えた写真が実際に飼い主へ新しい色で届くこと**の両方を見る——
+     「押せた」で終わらせない（`D-12`）。 */
   await page.goto(`${BASE}/edit/p/${pet.id}/${reportId}?revise=1`, { waitUntil: 'networkidle' });
   await page.waitForSelector('#screen-3.is-active', { timeout: 20_000 });
   const pickers = await page.locator('.photo-pick__input').count();
   const lockedPickers = await page.locator('.photo-pick__input[disabled]').count();
-  check('12d. 直しの画面では、写真を足す入口が閉じている',
-    pickers > 0 && lockedPickers === pickers, `${lockedPickers}/${pickers} が閉じている`);
+  check('12d. 直しの画面で、写真を足す・貼り替える入口が開いている',
+    pickers > 0 && lockedPickers === 0, `${lockedPickers}/${pickers} が閉じている`);
+
+  /* 耳の写真（1枚だけの項目）を、貼り間違いに気づいて別の色へ貼り替える。 */
+  await page.locator('[data-field="photo-ear"]').setInputFiles(file('ear-fixed.png', COLOR.earFixed));
+  await page.waitForFunction(
+    () => document.querySelectorAll('[data-photo-thumbs="ear"] .photo-pick__thumb').length === 1,
+    null,
+    { timeout: 20_000 },
+  ).catch(() => {});
+  await Promise.all([
+    page.waitForURL((u) => /^\/edit\/p\/[0-9a-f-]{36}\/[0-9a-f-]{36}$/.test(u.pathname) && u.search === '', { timeout: 60_000 }),
+    page.click('.dock-action-wrap .boxbutton'),
+  ]);
+  const afterPhotoRevise = await (await fetch(
+    `${BASE}/api/pets/${pet.id}/reports/${reportId}`, { headers: authHeaders },
+  )).json();
+  const earAssetAfterRevise = ((afterPhotoRevise.report || {}).data || {}).ear && (afterPhotoRevise.report.data.ear.photo);
+  check('12e. 貼り替えた耳の写真が保存できた（実体を指している）',
+    typeof earAssetAfterRevise === 'string' && earAssetAfterRevise.startsWith('asset://'),
+    `${earAssetAfterRevise}`);
+
+  await ownerPage.reload({ waitUntil: 'networkidle' });
+  await ownerPage.waitForSelector('.magazine-container', { timeout: 20_000 });
+  const earFixed = await pixelOf(ownerPage, 'ear-image');
+  check('12f. 貼り替えた耳の写真が、飼い主に新しい色で届いている',
+    near(earFixed, COLOR.earFixed), `色=${JSON.stringify(earFixed)}`);
 
   check('13. アプリ由来のエラーが無い', pageErrors.length === 0, pageErrors.join(' | '));
 } catch (error) {

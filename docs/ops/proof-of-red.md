@@ -154,7 +154,6 @@
 
    直しを入れた状態では4件とも緑。**赤 → 緑 → 戻して赤**がそろっている。）
 - verify-photo-roundtrip.mjs :: 12c. 直したあとも、飼い主に同じ写真が同じ色で届いている
-- verify-photo-roundtrip.mjs :: 12d. 直しの画面では、写真を足す入口が閉じている
   （2026-09-13・マスター指示「直せるものを先に治せ」。**この作業コンテナに docker が
    無いので、CI の `mutate` で赤を取った**（run 393・`docs/ops/mutate-run-partial.md`）。
 
@@ -162,11 +161,39 @@
    `blob:` に置き換えたあとを使う＝直す前の状態に戻す:
        12b. 直したあとの写真が、保存された実体を指している   ← 赤
        12c. 直したあとも、飼い主に同じ写真が同じ色で届いている   ← 赤（run 396・書き直した後の形で取り直した）
-   壊し方 `revise-photo-add-not-locked` — 直しの画面で写真の入口を閉じない:
-       12d. 直しの画面では、写真を足す入口が閉じている   ← 赤
 
-   直しを入れた状態の同じ実行では、12b が「5件すべて asset://」、
-   12d が「3/3 が閉じている」で緑。**赤 → 緑 → 戻して赤**がそろっている。）
+   直しを入れた状態の同じ実行では、12b が「5件すべて asset://」で緑。
+   **赤 → 緑 → 戻して赤**がそろっている。
+
+   **2026-09-23 追記**: この節にはもともと「壊し方 `revise-photo-add-not-locked`
+   → `12d. 直しの画面では、写真を足す入口が閉じている`」の赤も並んでいた。
+   マスター指示（2026-09-23）で確定済みカルテへの写真追加・貼り替えを許可した
+   （`202609230015_revise_report_photo_replace.sql`）ため、**この検査名・壊し方は
+   もう実体に無い**（`lockPhotoAddForRevise()` を削除・`revise-photo-add-not-locked`
+   を `scripts/mutate-run.mjs` から削除）。**見た事実は消さない**（`F-20260911-84`）
+   ので、この注記として残す。新しい `12d.`〜`12f.` の赤緑は下に別途記載。）
+- verify-photo-roundtrip.mjs :: 12d. 直しの画面で、写真を足す・貼り替える入口が開いている
+- verify-photo-roundtrip.mjs :: 12e. 貼り替えた耳の写真が保存できた（実体を指している）
+- verify-photo-roundtrip.mjs :: 12f. 貼り替えた耳の写真が、飼い主に新しい色で届いている
+  （2026-09-23・マスター指示「画像の追加が出来るようにしたい。貼る画像を間違えてその
+   修正をしたい時に困る」。確定済みカルテへの写真追加・貼り替えを許可した
+   （`202609230015_revise_report_photo_replace.sql`・`docs/decisions.md` D-20260923-81）。
+
+   壊し方 `revise-photo-upload-still-draft-only` — `register_report_asset`/
+   `storage_path_staff_upload` を元の `status = 'draft'` のみに戻す（DBの守りを
+   緩める前の状態に戻す）:
+       12e./12f. 相当（耳の写真の貼り替え保存）が `検査を最後まで実行できた` で赤
+       （`page.waitForURL: Timeout 60000ms exceeded` — 保存が
+       `画像を保存できませんでした` で失敗し、確定後の画面へ遷移しない）
+
+   直しを入れた状態（`status in ('draft', 'final')`）に戻した同じ実行では
+   18/18 PASS、12d./12e./12f. すべて緑（12e. は `asset://…` を指す・12f. は
+   貼り替えた新しい色 `[89,200,211]` で飼い主に届く）。もう一度壊すと同じ箇所で
+   再び赤（`docs/ops/mutate-run-partial.md`）。**赤 → 緑 → 戻して赤**がそろっている。
+   実行はこの作業コンテナの本物のローカル Supabase（Docker）で行った——
+   `db reset` 直後は Kong が古い upstream を掴んで `/auth/v1/health` が
+   502 を返すことがあるため（`scripts/lib/local-stack.mjs` の既知の注意）、
+   `docker restart supabase_kong_trimmer-system` で 200 を確認してから実行した。）
 - ui-annotate-pinch.test.mjs :: 透過度を下げると、その薄さで引かれる
 - ui-annotate-pinch.test.mjs :: 薄さは1件ごとに戻す（次の線まで薄くならない）
 - ui-annotate-pinch.test.mjs :: 消しゴムは、触れた線を取り除く（写真は削らない）
