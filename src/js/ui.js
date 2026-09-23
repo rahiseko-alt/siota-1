@@ -715,7 +715,6 @@ const App = {
       this.renderOptionChips(pet.shopGroomingOptions || []);
       this.reviseReportId = reviseId;
       this.applyReport(report);
-      this.lockPhotoAddForRevise();
       /* **「前回比」を、HTML の初期値のまま残さない。**
          この経路は `resumeDraft()` を通らないので `currentDog.prevWeight` が入らず、
          画面には `src/index.html` の初期値「前回の記録なし」がそのまま残っていた
@@ -2213,26 +2212,6 @@ const App = {
        ファイルを選んだ瞬間に走る——縮小が終わる前なので、待たずに送ると
        写真の無い下書きが残る。処理が終わったここで、明示的に残す。 */
     this.saveDraft();
-  },
-
-  /* 「② カルテ修正」では、**写真を足せない**（マスター指示 2026-09-13「直せるものを先に治せ」）。
-
-     確定済みカルテへの写真の追加は、**そもそも作られていない**——保存の守りが
-     「まだ下書きのカルテにしか写真を受け付けない」形になっており、修正で足そうとすると
-     保存そのものが失敗して**文字の修正まで巻き添えで消える**（放置リスト `#60`）。
-     いまは整理整頓の期間で新しく作らない方針なので、**できないことを画面で言って止める**。
-     **既に付いている写真はそのまま残る**（消す `×` も今までどおり使える）。 */
-  lockPhotoAddForRevise() {
-    document.querySelectorAll('.photo-pick').forEach((box) => {
-      const input = box.querySelector('.photo-pick__input');
-      if (!input) return;
-      input.disabled = true;
-      const note = box.querySelector('.photo-pick__note');
-      if (note) {
-        note.textContent = 'カルテの修正では、写真を新しく足すことはできません。'
-          + 'いま付いている写真はそのまま残ります。';
-      }
-    });
   },
 
   removePhoto(kind, index) {

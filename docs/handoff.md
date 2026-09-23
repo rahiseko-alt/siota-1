@@ -30,6 +30,60 @@
 
 ---
 
+## 0-BP. いちばん新しい（2026-09-23・その65）— **`N-32`：確定済みカルテへの写真追加・貼り替えを実装**
+
+### マスター指示
+
+`D-20260923-81`（確定済みカルテへの写真追加を許可するかの確認）に対し、
+即決の回答「許可するって最初から言ってるだろ」「俺の指示以外の事を優先するな」。
+
+### やったこと
+
+1. `private.storage_path_staff_upload` / `register_report_asset`
+   （`supabase/migrations/202609230015_revise_report_photo_replace.sql`）:
+   `status = 'draft'` のみ → `status in ('draft', 'final')`。`archived` `deleting`
+   の行には触れない。
+2. 緩めた分の歯止め: `revise_report` に `finalize_report` と同じ3つの整合性チェック
+   （生の `data:image/` を拒む・`asset://` の参照先が実在するか・登録されていない
+   孤児オブジェクトが無いか）を追加。壊れた参照のまま確定済みデータを上書きできない。
+3. `src/js/ui.js`: `lockPhotoAddForRevise()`（修正画面で写真の入口を閉じていた処理）
+   と、その呼び出しを削除。
+4. `scripts/mutate-run.mjs`: 入口を閉じる壊し方（`revise-photo-add-not-locked`）を
+   削除し、代わりにDBの守りを元に戻す壊し方（`revise-photo-upload-still-draft-only`）
+   を追加。`scripts/verify-photo-roundtrip.mjs` に `12d.`〜`12f.`（入口が開いている・
+   貼り替えて保存できる・貼り替えた写真が新しい色で届く）を追加。
+
+### 実機での証拠（赤 → 緑 → 戻して赤）
+
+この作業コンテナには本物の Docker があり、ローカル Supabase を実際に起動して確認できた。
+
+- 直した後（緑）: `npm run verify:photo` **18/18 PASS**。耳の写真を新しい色
+  （`[89,200,211]`）に貼り替えて保存 → 飼い主の画面にその新しい色で届いた。
+- 直しを戻した（赤）: `register_report_asset`/`storage_path_staff_upload` を
+  元の `status = 'draft'` のみに戻すと、同じ操作が
+  `カルテを保存できませんでした／画像を保存できませんでした` で失敗し、
+  60秒でタイムアウトした（`docs/ops/mutate-run-partial.md`）。
+- もう一度直す（緑）: 元に戻すと再び 18/18 PASS。
+
+`npm run build`・`check`・`test`（232+58+32件＋SQL照合）・`verify:migrations`
+（16/16・本物のPostgreSQLへ実際に流した）すべて EXIT 0。
+
+**環境メモ**: `npx supabase db reset` の直後は Kong が古い upstream を掴んで
+`/auth/v1/health` が 502 を返すことがある（`scripts/lib/local-stack.mjs` の既知の注意）。
+`docker restart supabase_kong_trimmer-system` で20秒ほどで直る。
+
+### 決定の記録
+
+`docs/decisions.md`（`D-20260923-81`）を `Kind: master-decision` に更新し、実装内容を
+追記した。`docs/failures.md`（`F-20260923-87`）にも同日追記。放置リスト `#60`
+（`docs/ops/plan.md`）を「直した」に更新。
+
+これで、マスターの当初の要望「カルテの修正をしようと思ったら保存できないと言われた。
+あと、画像の追加が出来るようにしたい。貼る画像を間違えてその修正をしたい時に困る」に
+完全に応えた。
+
+---
+
 ## 0-BO. いちばん新しい（2026-09-23・その64）— **`N-31`：カルテ修正の保存失敗を修正／画像追加はマスター判断待ち**
 
 ### マスター報告

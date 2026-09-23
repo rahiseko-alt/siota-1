@@ -1731,3 +1731,19 @@ Storageの守りに止められる。マスターへ「画像の追加ができ�
 - **Status**: RESOLVED（①のJS例外は直した。②のDB制約は、犬体図が未変更なら
   再アップロードを避けることで実害を無くした。②の制約そのものを緩めるかは
   マスター判断待ち）
+
+### 追記（2026-09-23・同日中）: ②の制約自体もマスター指示で緩めた
+
+マスターから即決の回答「許可するって最初から言ってるだろ」。確定済みカルテへの
+写真の新規追加・貼り替えを許可した（`202609230015_revise_report_photo_replace.sql`・
+`docs/decisions.md` D-20260923-81）。`private.storage_path_staff_upload` /
+`register_report_asset` を `status in ('draft', 'final')` に緩め、緩めた分の歯止めとして
+`revise_report` に `finalize_report` と同じ整合性チェック（壊れた asset 参照を拒む）を足した。
+画面側の `lockPhotoAddForRevise()`（写真の入口を閉じていた処理）も削除した。
+
+実機で赤→緑→戻して赤を確認: 耳の写真を貼り替えて保存 → 飼い主の画面に新しい色で届く
+（`npm run verify:photo` 18/18 PASS）。DBの守りを元（`draft` のみ）に戻すと同じ操作が
+保存失敗でタイムアウトし、戻すと再び緑になることも確認した（`docs/ops/proof-of-red.md`）。
+
+これでマスターの当初の要望「画像の追加が出来るようにしたい。貼る画像を間違えてその
+修正をしたい時に困る」に完全に応えた。

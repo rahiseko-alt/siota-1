@@ -128,16 +128,27 @@ export const MUTATIONS = [
     replace: '    const stored = data;',
     scripts: ['verify-photo-roundtrip.mjs'],
   },
-  /* ── 2026-09-13・放置リスト `#60`
-     確定済みカルテへの写真追加は、保存の守りが「まだ下書きのときだけ受け付ける」
-     形になっていて**そもそも作られていない**。入口を閉じるのをやめると、店の人は
-     足せると思って選び、保存で落ちて**文字の修正まで巻き添えで消える**。 */
+  /* **`revise-photo-add-not-locked` はここに在った**（2026-09-13〜2026-09-23）。
+     確定済みカルテへの写真追加が保存の守り（DB）でそもそも拒まれていた時期に、
+     画面側の入口を閉じる `lockPhotoAddForRevise()` を壊す形で見張っていた。
+     マスター指示（2026-09-23）でDBの守りを緩め、修正画面での写真追加・貼り替えを
+     許可したため、`lockPhotoAddForRevise()` 自体を削除した——**壊す対象がもう無い**
+     ので、この壊し方も削除した（`202609230015_revise_report_photo_replace.sql`・
+     `docs/decisions.md` D-20260923-81）。いまの境界（`revise_report` が壊れた
+     asset 参照を拒む）は `verify-photo-roundtrip.mjs` の `12d.`〜`12f.` が見る。 */
   {
-    id: 'revise-photo-add-not-locked',
-    why: '**直しの画面で写真を足せてしまい、保存で落ちて文字の修正まで消える**',
-    file: 'src/js/ui.js',
-    find: '      this.lockPhotoAddForRevise();',
-    replace: '      /* (壊し方) 入口を閉じない */',
+    id: 'revise-photo-upload-still-draft-only',
+    sql: true,
+    why: '**修正で写真を貼り替えると、確定できているのに保存だけ失敗する**'
+      + '（DBの守りが緩んでいない＝マスター指示 2026-09-23 の穴が塞がっていない）',
+    file: 'supabase/migrations/202609230015_revise_report_photo_replace.sql',
+    edits: [
+      { find: "      and report.id = private.try_uuid((storage.foldername(object_name))[3])\n      and report.status in ('draft', 'final')",
+        replace: "      and report.id = private.try_uuid((storage.foldername(object_name))[3])\n      and report.status = 'draft'" },
+      { find: "  where report.id = target_report\n    and report.status in ('draft', 'final')\n    and private.is_shop_staff(report.shop_id)\n  for update;",
+        replace: "  where report.id = target_report\n    and report.status = 'draft'\n    and private.is_shop_staff(report.shop_id)\n  for update;" },
+    ],
+    extra: null,
     scripts: ['verify-photo-roundtrip.mjs'],
   },
   /* **`shops-admin-update-rls-open` はここに在った**（30回目・2026-08-29）。
