@@ -56,6 +56,32 @@ export const MUTATIONS = [
     replace: "  /* (壊し方) 履歴を積まない */",
     scripts: ['verify-admin.mjs'],
   },
+  /* ── 2026-09-24・マスター指示「招待ボタン復活させて」で新設した
+     スタッフ招待（`screenInviteStaff`）の3か所を見る。 */
+  {
+    id: 'admin-invite-staff-menu-missing',
+    why: '**管理画面の入口に「スタッフ招待」が出ない**（機能があっても押す場所が無い）',
+    file: 'backend/js/supabase-admin.js',
+    find: "    {\n      title: '⑤ スタッフ招待',\n      note: '新しいスタッフのGoogleアカウントを、この店のスタッフとして迎える',\n      testid: 'invite-staff',\n      onSelect: () => navigate('/admin/invite-staff', screenInviteStaff),\n    },\n",
+    replace: '',
+    scripts: ['verify-admin.mjs'],
+  },
+  {
+    id: 'admin-invite-staff-broken-endpoint',
+    why: '**スタッフ招待ボタンを押しても発行できない**（画面はあるのに機能が繋がっていない）',
+    file: 'backend/js/supabase-admin.js',
+    find: "      const response = await api('/api/invitations', {",
+    replace: "      const response = await api('/api/invitations-broken', {",
+    scripts: ['verify-admin.mjs'],
+  },
+  {
+    id: 'admin-invite-staff-no-warning',
+    why: '**招待すると相手が自分と全く同じ権限を持つことを、発行前に伝えていない**',
+    file: 'backend/js/supabase-admin.js',
+    find: "  contentEl.append(note('招待すると、その人はあなたと全く同じ権限（すべての飼い主・犬・カルテを見る・書く・消す）を持ちます。有効期限24時間・1回のみ使用できます。新しく発行すると、前のQR・URLは使えなくなります。'));",
+    replace: "  contentEl.append(note('招待すると、その人が使えるようになります。有効期限24時間・1回のみ使用できます。新しく発行すると、前のQR・URLは使えなくなります。'));",
+    scripts: ['verify-admin.mjs'],
+  },
   /* ── 2026-09-13・放置リスト `#61`
      新しいQRを出したときに前のQRを取り消すのをやめる。何枚出しても全部有効になり、
      **渡し間違えた古いQRが生き続ける**（実測: 連続10回で10個とも有効だった状態）。 */

@@ -22,7 +22,7 @@
 
 import zlib from 'node:zlib';
 import {
-  startLocalWorker, injectSession, passwordLogin, localServiceRoleKey,
+  startLocalWorker, injectSession, passwordLogin, localServiceRoleKey, createTestUser,
   FIXTURE, LOCAL_PASSWORD, LOCAL_SUPABASE_URL,
 } from './lib/local-stack.mjs';
 import { launchChromium } from './lib/chromium.mjs';
@@ -162,12 +162,13 @@ try {
 
   await page.waitForSelector('.admin-menu__item', { timeout: 20_000 });
 
-  /* ── ② 管理者ページの4つ（`#4` 店舗設定はマスター指示 2026-08-29・D-20260829-58 で新設） ── */
+  /* ── ② 管理者ページの5つ（`#4` 店舗設定はマスター指示 2026-08-29・D-20260829-58・
+     `#5` スタッフ招待はマスター指示 2026-09-24「招待ボタン復活させて」で新設） ── */
   const top = await menuTitles(page);
-  check('2. 管理画面に リピーター / 新規 / 削除 / 店舗設定 が在る',
-    top.length === 4
+  check('2. 管理画面に リピーター / 新規 / 削除 / 店舗設定 / スタッフ招待 が在る',
+    top.length === 5
     && top[0].includes('リピーター') && top[1].includes('新規') && top[2].includes('削除')
-    && top[3].includes('店舗設定'),
+    && top[3].includes('店舗設定') && top[4].includes('スタッフ招待'),
     `出た項目=${JSON.stringify(top)}`);
 
   /* ── ③ リピーター ── */
@@ -241,7 +242,7 @@ try {
   await page.waitForSelector('.admin-menu__item', { timeout: 20_000 });
   const fallback = await menuTitles(page);
   check('3f. 無い住所を開いても白い画面にならず、管理のトップが出る',
-    fallback.length === 4 && fallback[0].includes('リピーター'),
+    fallback.length === 5 && fallback[0].includes('リピーター'),
     `出た項目=${JSON.stringify(fallback)}`);
 
   await page.goto(`${BASE}/admin`, { waitUntil: 'domcontentloaded' });
@@ -533,6 +534,70 @@ try {
   const objects = await listed.json();
   check('18. 消した犬の写真が Storage に残っていない',
     Array.isArray(objects) && objects.length === 0, `${(objects || []).length}件`);
+
+  /* ── ⑤ スタッフ招待（マスター指示 2026-09-24「招待ボタン復活させて」） ──
+     「初回登録QR」（飼い主向け・`verify-invitation.mjs`）と同じ土台
+     （`POST /api/invitations`）を使うが、**この画面から呼べること自体**が
+     新設なので、ここで見る。**固定 fixture の口座を消化には使わない**
+     （`createTestUser` の注記参照）——消化した瞬間その口座が恒久的にスタッフに
+     なり、他の `verify:*` の前提を壊すため。 */
+  await page.goto(`${BASE}/admin`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.admin-menu__item', { timeout: 20_000 });
+  await tapByText(page, 'スタッフ招待');
+  await page.waitForSelector('[data-admin-action="create-staff-invitation"]', { timeout: 10_000 });
+  const explanation = await page.evaluate(() => (document.querySelector('.admin-note') || {}).textContent || '');
+  check('18b. スタッフ招待の画面で、招待される側の権限を発行前に伝えている',
+    explanation.includes('あなたと全く同じ権限'), `"${explanation.slice(0, 40)}"`);
+
+  await page.click('[data-admin-action="create-staff-invitation"]');
+  /* **失敗しても、ここだけで止めない。** 待たずに投げると外側の try/catch まで
+     抜けて残り全部（19〜21含む）が「検査を最後まで実行できた」1件に潰れてしまう
+     ——壊れた場所を名指しできなくなる（`F-20260912-85` と同じ型）。18c/18d/18e/18f を
+     個別に赤にするため、ここは失敗を飲んで下の check に判定させる。 */
+  await page.waitForSelector('[data-admin-action="copy-staff-invitation-url"]', { timeout: 20_000 }).catch(() => {});
+  const staffArtifact = await page.evaluate(() => {
+    const input = document.querySelector('.admin-result input[type="text"]');
+    const img = document.querySelector('.admin-result img');
+    return {
+      url: input ? input.value : '',
+      qrIsImage: img ? (img.getAttribute('src') || '').startsWith('data:image') : false,
+    };
+  });
+  check('18c. 発行すると スタッフ招待URL が出る',
+    /\/my\?invite=[0-9a-f]{64}$/.test(staffArtifact.url), staffArtifact.url.slice(0, 60));
+  check('18d. QR が画像として出ている', staffArtifact.qrIsImage === true);
+
+  /* **消化するのは、その場限りの新規アカウント**（固定 fixture ではない）。 */
+  const newStaffEmail = `new-staff-${Math.random().toString(36).slice(2, 8)}@local.test`;
+  await createTestUser(newStaffEmail);
+  const newStaffContext = await browser.newContext();
+  const newStaffPage = await newStaffContext.newPage();
+  await newStaffPage.goto(`${BASE}/my`, { waitUntil: 'domcontentloaded' });
+  await injectSession(newStaffPage, newStaffEmail);
+  /* **18c が既に赤ならURLが壊れている。** ここで `new URL()` に投げさせず、
+     18e/18f もちゃんと個別に赤にする（18c と同じ理由）。 */
+  const staffInviteUrl = /^https?:\/\//.test(staffArtifact.url) ? staffArtifact.url : null;
+  if (staffInviteUrl) {
+    const staffInvitePath = new URL(staffInviteUrl).pathname + new URL(staffInviteUrl).search;
+    await newStaffPage.goto(`${BASE}${staffInvitePath}`, { waitUntil: 'domcontentloaded' });
+    await newStaffPage.waitForURL((u) => u.pathname === '/edit', { timeout: 20_000 }).catch(() => {});
+  }
+  check('18e. 招待を消化すると、新しいアカウントがトリマーの作業画面に着く',
+    new URL(newStaffPage.url()).pathname === '/edit', `path=${new URL(newStaffPage.url()).pathname}`);
+
+  /* 「押せた」で合格にしない（`D-12`）——アプリ自身が使う判定口 `/api/session`
+     で数え直す（`shop_memberships` の直読みは `service_role` でも権限が無く、
+     この repo の他の検査もテーブルの直読みはしていない・自前APIで数え直す形に揃える）。 */
+  const newStaffSession = await passwordLogin(newStaffEmail);
+  const sessionAfterClaim = await (await fetch(`${BASE}/api/session`, {
+    headers: { Authorization: `Bearer ${newStaffSession.access_token}` },
+  })).json();
+  check('18f. その場で shop_memberships に有効な行が実際に作られている',
+    Array.isArray(sessionAfterClaim.memberships) && sessionAfterClaim.memberships.length === 1
+      && sessionAfterClaim.memberships[0].shop_id === FIXTURE.shopId
+      && sessionAfterClaim.memberships[0].active === true,
+    JSON.stringify(sessionAfterClaim.memberships));
+  await newStaffContext.close();
 
   /* ── ⑦ 権限の境目は**お店の人 / 飼い主**の1本だけ ──
      権限は2つになった（マスター判断 2026-09-06・`D-20260906-68`

@@ -102,6 +102,26 @@ export async function localServiceRoleKey() {
   return key;
 }
 
+/** `supabase/seed.sql` の固定口座（`uninvitedEmail` 等）を使い回さず、その場限りの
+ * 新規アカウントを作る。**招待の消化テストで固定口座を使うと、消化した瞬間に
+ * その口座の状態（無関係の他の検査が「まだ何にも紐付いていない」前提で使っている）が
+ * 恒久的に変わってしまう**——同じローカルDBを他の `verify:*` も使い回すため。
+ * `email_confirm: true` で確認メールの往復を省く（テスト専用の裏口）。 */
+export async function createTestUser(email, password = LOCAL_PASSWORD) {
+  const serviceKey = await localServiceRoleKey();
+  const res = await fetch(`${LOCAL_SUPABASE_URL}/auth/v1/admin/users`, {
+    method: 'POST',
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, password, email_confirm: true }),
+  });
+  if (!res.ok) throw new Error(`create test user failed for ${email}: ${res.status} ${await res.text()}`);
+  return res.json();
+}
+
 /** password grant でアクセストークンを取る。ログイン画面はGoogle認証のみを表示するので、
  * これはテスト専用の裏口（`supabase/seed.sql` 冒頭のコメント参照）。 */
 export async function passwordLogin(email, password = LOCAL_PASSWORD) {

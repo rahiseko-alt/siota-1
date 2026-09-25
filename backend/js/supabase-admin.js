@@ -6,11 +6,14 @@
  *     → ①リピーター → ①カルテ作成 ②カルテ修正
  *     → ②新規       → ①顧客アカウントの新規作成 ②ペットアカウントの新規作成
  *     → ③削除       → ①顧客アカウント全データ ②ペットアカウント全データ ③カルテ1枚
+ *     → ⑤スタッフ招待 → 招待QR/URLを発行する
  *
- * **管理者アカウントを作る機能はここに置かない。** 納品時に開発者が行うため、
- * アプリからは作れない（マスター指示）。招待の仕組み（`staff` 招待）は在るが、
- * この画面からは呼ばない。
+ * **2026-08-26 時点は「管理者アカウントを作る機能はここに置かない（納品時に
+ * 開発者が行う）」だったが、マスター指示（2026-09-24「招待ボタン復活させて」）で
+ * 方針転換した。** 招待されたスタッフは招待した側と全く同じ権限を持つ
+ * （役割の区別が無い・`202609060012_single_staff_role.sql`）。
  *
+
  * **新しい API は作っていない。** 使うのは全部いま在るもの——
  * 顧客作成 `POST /api/owners` ／ ペット作成 `POST /api/owners/{id}/pets` ／
  * 顧客削除 `DELETE /api/owners/{id}` ／ ペット削除 `DELETE /api/pets/{id}` ／
@@ -269,6 +272,12 @@ function screenHome() {
       testid: 'shop-settings',
       onSelect: () => navigate('/admin/settings', screenShopSettings),
     },
+    {
+      title: '⑤ スタッフ招待',
+      note: '新しいスタッフのGoogleアカウントを、この店のスタッフとして迎える',
+      testid: 'invite-staff',
+      onSelect: () => navigate('/admin/invite-staff', screenInviteStaff),
+    },
   ]));
 }
 
@@ -409,6 +418,82 @@ function appendGroomingOptionsEditor(root) {
       setMessage(saveResult, `保存できませんでした: ${error.message}`);
     } finally {
       saveButton.disabled = false;
+    }
+  };
+}
+
+/* スタッフ招待（マスター指示 2026-09-24「招待ボタン復活させて」）。
+   使うのは既に在る `POST /api/invitations`（`invitationType: 'staff'`）だけで、
+   新しいAPIは足していない——`backend/js/supabase-staff.js` の「初回登録QR」
+   （飼い主向け）と同じ土台。あちらのモーダルの器は流用しない。admin.html は
+   カルテ編集専用の重い依存（`supabase-staff.js` が読み込む asset 処理・
+   magazine-view 等）を持ち込んでいないため、URLの組み立てだけこの画面が
+   自前で持つ（1行だけの重複・`buildInvitationUrl` と同じ形）。 */
+function buildStaffInvitationUrl(token) {
+  return `${new URL(location.origin).origin}/my?invite=${encodeURIComponent(token.toLowerCase())}`;
+}
+
+function screenInviteStaff() {
+  clear();
+  contentEl.append(backButton(() => navigate('/admin', screenHome)));
+  contentEl.append(heading('スタッフ招待'));
+  /* **招待した相手が何を持つかを、発行前に言う**（`D-20` の精神・意見は率直に）。
+     この店にはスタッフの役割区分が無い（`202609060012_single_staff_role.sql`）ので、
+     招待された人はあなたと**全く同じ**権限（見る・書く・消す）を持つ。 */
+  contentEl.append(note('招待すると、その人はあなたと全く同じ権限（すべての飼い主・犬・カルテを見る・書く・消す）を持ちます。有効期限24時間・1回のみ使用できます。新しく発行すると、前のQR・URLは使えなくなります。'));
+  const button = submitButton('招待を発行する', 'create-staff-invitation');
+  const result = el('div', 'admin-result');
+  contentEl.append(button, result);
+
+  button.onclick = async () => {
+    button.disabled = true;
+    result.replaceChildren();
+    setMessage(result, '発行しています…');
+    try {
+      const response = await api('/api/invitations', {
+        method: 'POST',
+        body: JSON.stringify({ invitationType: 'staff' }),
+      });
+      const invitation = response.invitation;
+      const url = buildStaffInvitationUrl(invitation.token);
+      result.replaceChildren();
+      result.append(el('p', 'admin-note', `有効期限: ${new Date(invitation.expiresAt).toLocaleString('ja-JP')}`));
+      const img = document.createElement('img');
+      img.alt = 'スタッフ招待QRコード';
+      img.width = 240;
+      img.height = 240;
+      result.append(img);
+      const urlInput = document.createElement('input');
+      urlInput.type = 'text';
+      urlInput.readOnly = true;
+      urlInput.value = url;
+      urlInput.setAttribute('aria-label', 'スタッフ招待URL');
+      result.append(urlInput);
+      const copyButton = submitButton('URLをコピー', 'copy-staff-invitation-url');
+      const copyStatus = el('p', 'admin-result');
+      copyButton.onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(url);
+          setMessage(copyStatus, 'コピーしました。');
+        } catch {
+          urlInput.focus();
+          urlInput.select();
+          setMessage(copyStatus, 'URLを選択しました。端末のコピー操作をご利用ください。');
+        }
+      };
+      result.append(copyButton, copyStatus);
+      try {
+        img.src = await globalThis.TrimmerSupabaseVendor.QRCode.toDataURL(url, {
+          errorCorrectionLevel: 'M', width: 320, margin: 2,
+        });
+      } catch {
+        img.remove();
+        result.append(el('p', 'admin-note', 'QRコードは表示できませんでした。上のURLをお使いください。'));
+      }
+    } catch (error) {
+      setMessage(result, `発行できませんでした: ${error.message}`);
+    } finally {
+      button.disabled = false;
     }
   };
 }
@@ -777,6 +862,7 @@ const ADMIN_ROUTES = {
   '/admin/delete/pet': pickPetForDelete,
   '/admin/delete/report': pickPetForReportDelete,
   '/admin/settings': screenShopSettings,
+  '/admin/invite-staff': screenInviteStaff,
 };
 
 function renderForPath(path) {
