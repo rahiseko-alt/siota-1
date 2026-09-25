@@ -1113,7 +1113,22 @@ run #154: 赤 → 3回中2回赤）。`rls-drafts-leak` が今回**新たに** 0
 `verify-empty-pet.mjs :: 6.` は動かさない。もう一度0件が出たら
 `rls-any-owner-sees-any-dog` と同じ扱い（未証明へ戻して調べる）にする。
 
-- verify-admin.mjs :: 2. 管理画面に リピーター / 新規 / 削除 / 店舗設定 が在る
+- verify-admin.mjs :: 2. 管理画面に リピーター / 新規 / 削除 / 店舗設定 / スタッフ招待 が在る
+  （2026-09-24・マスター指示「招待ボタン復活させて」で `⑤ スタッフ招待` が増え、
+   検査名が5項目版に変わった。旧名「…店舗設定 が在る」は`admin-invite-staff-menu-missing`
+   の壊し方が指す実体では既に無いので、この行に統合する。）
+- verify-admin.mjs :: 3f. 無い住所を開いても白い画面にならず、管理のトップが出る
+- verify-admin.mjs :: 18b. スタッフ招待の画面で、招待される側の権限を発行前に伝えている
+- verify-admin.mjs :: 18c. 発行すると スタッフ招待URL が出る
+- verify-admin.mjs :: 18d. QR が画像として出ている
+- verify-admin.mjs :: 18e. 招待を消化すると、新しいアカウントがトリマーの作業画面に着く
+- verify-admin.mjs :: 18f. その場で shop_memberships に有効な行が実際に作られている
+  （2026-09-24・この作業コンテナの本物のローカル Supabase（Docker）で実測。
+   壊し方 `admin-invite-staff-menu-missing`（⑤の項目自体を消す）・
+   `admin-invite-staff-broken-endpoint`（発行APIの宛先を壊す）・
+   `admin-invite-staff-no-warning`（権限説明の文言を弱める）の3本で、
+   上記7件すべてが赤になることを確認し、戻すと18/18・34/34 で緑に戻ることも確認した。
+   `docs/ops/mutate-run-partial.md` に記録。）
 - verify-admin.mjs :: 3. リピーターに カルテ作成 / カルテ修正 が在る
 - verify-admin.mjs :: 4. 新規に 顧客アカウント作成 / ペットアカウント作成 が在る
 - verify-admin.mjs :: 13. 削除に 顧客 / ペット / カルテ の3つが在る
