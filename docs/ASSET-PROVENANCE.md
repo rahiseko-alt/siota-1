@@ -58,13 +58,20 @@ Google Fonts への直リンクを外すにあたり、日本語4ファミリは
 
 ---
 
+### 自作の画像 — `VERIFIED`
+
+| ファイル | 作り方 | 用途 | 備考 |
+|---|---|---|---|
+| `app-icon.png` | 黒地に白で「SALTY / DOG」の文字だけを描いて撮影（2026-09-26・マスター指示「文字だけ・黒地に白文字・フォントは揃えろ」） | PWA アイコン・favicon | 512x512。書体は Liberation Serif（SIL Open Font License 1.1・再配布可）。画面の欧文フォールバック Times New Roman と字幅互換の書体。画像に焼き込んだだけでフォント自体は同梱していない |
+
+---
+
 ## 3. AI 生成物 — `AI-GENERATED`
 
 ファイル内の C2PA コンテンツ認証情報から生成元が特定できたもの。
 
 | ファイル | 署名者 | 用途 | 備考 |
 |---|---|---|---|
-| `app-icon.png` | OpenAI Media Service API | PWA アイコン・favicon | 作成 2026-05-30。1254x1254 / 1.4MB |
 | `dog-doodle.jpg` | Google C2PA Media Services | 検索一覧のデモ用アバター | `c2pa.created` + `c2pa.edited` |
 | `dog-poodle.jpg` | Google C2PA Media Services | 同上 | 同上 |
 | `body-marking.png` | Google C2PA Media Services | 犬体図（Konva の下絵） | `c2pa.converted` あり |
@@ -158,7 +165,8 @@ URL を知っていれば誰でも取得でき、これは D-4「出所未確認
 - [x] **`photo-trim-action.jpg`（最優先）**: ログイン画面で使用中・
       ログイン前の誰にでも見える。**マスターが撮影したものと確認できた**
       （2026-08-27・実物を見せて確認）。`VERIFIED` に更新済み
-- [ ] AI 生成**2件**（`app-icon.png` / `body-marking.png`。使用中のもののみ）について、
+- [ ] AI 生成**1件**（`body-marking.png`。使用中のもののみ）について、
+      （`app-icon.png` は 2026-09-26 に自作の文字だけのアイコンへ差し替えて片づいた）
       生成したアカウントと当時の規約を確認する
       （**`nail-diagram` は 2026-09-11 にマスター提供のものへ差し替えて片づいた**）
 - [ ] 使用中の `UNVERIFIED`（`teeth-diagram.jpg` / `body-side.png`）の
