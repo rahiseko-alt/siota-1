@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>使い方ナビ | SALTY DOG カルテ</title>
+<style>
+  :root{
+    --ink:#121212; --ink-2:#4a4a48; --ink-3:#8c8c88;
+    --line:#dcdcd6; --paper:#faf9f6; --band:#f2f2ef;
+    --accent:#4a7c59; --accent-2:#7c9c85; --warn:#c85a32; --gold:#c59b27;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",system-ui,sans-serif;
+    line-height:1.8; -webkit-text-size-adjust:100%;
+  }
+  .wrap{max-width:880px; margin:0 auto; padding:32px 20px 64px}
+  header{border-bottom:3px solid var(--ink); padding-bottom:16px; margin-bottom:24px}
+  h1{font-size:26px; letter-spacing:.04em; margin:0 0 6px}
+  .sub{font-size:13.5px; color:var(--ink-2); margin:0}
+  .lead{background:#fff; border:1px solid var(--line); padding:14px 16px;
+        font-size:13.5px; color:var(--ink-2); margin:20px 0}
+  .lead p{margin:0 0 8px}
+  .lead p:last-child{margin-bottom:0}
+  .lead b{color:var(--ink)}
+  h2{font-size:15px; letter-spacing:.08em; color:var(--ink-3);
+     margin:38px 0 14px; padding-bottom:6px; border-bottom:1px solid var(--line)}
+  h2 .tag{display:inline-block; font-size:11px; letter-spacing:.06em; font-weight:700;
+     background:var(--ink); color:#fff; padding:2px 9px; margin-left:8px; vertical-align:2px;
+     border-radius:2px}
+  h2 .tag.is-owner{background:var(--accent)}
+  h3{font-size:14.5px; margin:26px 0 10px; color:var(--ink)}
+  p.desc{font-size:13.5px; color:var(--ink-2); margin:0 0 16px}
+
+  /* ── 流れ図（箱＋矢印） ── */
+  .flow{display:flex; flex-wrap:wrap; align-items:center; gap:0; margin:0 0 8px;
+        background:#fff; border:1px solid var(--line); padding:20px 16px}
+  .flow-box{
+    flex:none; background:var(--band); border:1px solid var(--line);
+    padding:10px 14px; font-size:13px; font-weight:700; text-align:center;
+    min-width:104px; line-height:1.5;
+  }
+  .flow-box small{display:block; font-weight:400; font-size:11px; color:var(--ink-3); margin-top:2px}
+  .flow-box.is-start{background:var(--ink); color:#fff; border-color:var(--ink)}
+  .flow-box.is-goal{background:var(--accent); color:#fff; border-color:var(--accent)}
+  .flow-box.is-owner-goal{background:var(--accent-2); color:#fff; border-color:var(--accent-2)}
+  .flow-arrow{flex:none; color:var(--ink-3); font-size:18px; padding:0 8px; font-weight:700}
+  .flow-break{flex-basis:100%; height:0}
+  .flow-note{font-size:12px; color:var(--ink-3); margin:0 0 24px; padding-left:2px}
+
+  /* 分岐図（管理メニュー） */
+  .split{display:flex; flex-wrap:wrap; align-items:flex-start; gap:14px 0;
+         background:#fff; border:1px solid var(--line); padding:20px 16px; margin-bottom:8px}
+  .split-in{flex:none; display:flex; align-items:center}
+  .split-out{flex:1 1 auto; display:flex; flex-wrap:wrap; gap:10px; padding-left:8px; min-width:240px}
+  .split-out .flow-box{min-width:132px}
+
+  /* ── 番号つき手順 ── */
+  .steps{counter-reset:step; list-style:none; margin:0 0 8px; padding:0}
+  .steps li{
+    counter-increment:step; position:relative; background:#fff; border:1px solid var(--line);
+    padding:12px 16px 12px 52px; margin-bottom:8px; font-size:13.5px;
+  }
+  .steps li::before{
+    content:counter(step); position:absolute; left:14px; top:50%; transform:translateY(-50%);
+    width:26px; height:26px; border-radius:50%; background:var(--ink); color:#fff;
+    font-size:12.5px; font-weight:700; display:flex; align-items:center; justify-content:center;
+  }
+  .steps li b{color:var(--ink)}
+  .steps li .memo{display:block; margin-top:6px; font-size:12px; color:var(--ink-3)}
+  .steps li .memo.is-warn{color:var(--warn)}
+
+  /* 管理メニュー説明カード */
+  .menu-card{background:#fff; border:1px solid var(--line); padding:12px 16px; margin-bottom:8px}
+  .menu-card__title{font-size:14px; font-weight:700; margin:0 0 6px}
+  .menu-card__title .num{display:inline-block; width:22px; height:22px; border-radius:50%;
+     background:var(--ink); color:#fff; font-size:12px; text-align:center; line-height:22px;
+     margin-right:8px}
+  .menu-card p{font-size:13px; color:var(--ink-2); margin:0}
+
+  .known{background:#fff; border:1px solid var(--warn); padding:14px 16px; margin-top:12px}
+  .known h3{font-size:14px; margin:0 0 8px; color:var(--warn)}
+  .known ul{margin:0; padding-left:1.2em; font-size:13px; color:var(--ink-2)}
+  .known li{margin-bottom:7px}
+  .known b{color:var(--ink)}
+
+  footer{margin-top:40px; padding-top:14px; border-top:1px solid var(--line);
+         font-size:12px; color:var(--ink-3)}
+
+  @media print{
+    body{background:#fff}
+    .wrap{max-width:none; padding:0 8mm}
+    .flow,.split,.steps li,.lead,.menu-card,.known{border-color:#bbb}
+  }
+  @media (max-width:520px){
+    .wrap{padding:20px 14px 48px}
+    h1{font-size:21px}
+    .flow-box{min-width:92px; font-size:12px; padding:9px 10px}
+    .flow-arrow{padding:0 4px}
+    .steps li{padding-left:46px; font-size:13px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>使い方ナビ</h1>
+  <p class="sub">SALTY DOG カルテ ／ お店の方むけ・全体の流れが一目でわかる案内</p>
+</header>
+
+<p class="lead">
+  <p><b>入口はいつも1つです。</b>URLを開いて Google アカウントでログインすると、
+     <b>お店のスタッフの方</b>と<b>飼い主さま（お客様）</b>で、自動でちがう画面に分かれます。
+     「お店用の画面」「お客様用の画面」という別々の入口はありません。</p>
+  <p>この案内は、上に<b>図</b>、下に<b>番号つきの手順</b>という順で、
+     「お店スタッフの方」「飼い主さま（お客様）」の2つに分けて説明しています。</p>
+  <p>ボタンを実際に押しながら試したいときは、同じフォルダの
+     <b>操作手順ナビ</b>（早見表）・<b>操作確認チェックリスト</b>（○×を付けて確かめる一覧）も
+     あわせてご覧ください。</p>
+</p>
+
+<h2>全体の入口</h2>
+<div class="flow">
+  <div class="flow-box is-start">URLを開く</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">Googleで<br>ログイン</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box is-goal">お店の作業画面<small>スタッフの方</small></div>
+</div>
+<div class="flow" style="margin-top:-8px">
+  <div class="flow-box is-start" style="visibility:hidden">URLを開く</div>
+  <div class="flow-arrow" style="visibility:hidden">→</div>
+  <div class="flow-box" style="visibility:hidden">Googleで<br>ログイン</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box is-owner-goal">愛犬の一覧<small>飼い主さま</small></div>
+</div>
+<p class="flow-note">どちらの画面に着くかは、そのGoogleアカウントが「お店のスタッフとして招待されているか」だけで自動的に決まります。ご自分で選ぶ場面はありません。</p>
+
+<h2>お店スタッフの方<span class="tag">スタッフ用</span></h2>
+<p class="desc">毎日のお仕事は、この5つの箱を左から順にたどるだけです。</p>
+
+<div class="flow">
+  <div class="flow-box is-start">ログイン</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">犬を選ぶ<small>一覧・検索</small></div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">カルテに<br>記入する</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">確認画面</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box is-goal">確定<small>飼い主さまに届く</small></div>
+</div>
+<p class="flow-note">「確定」を押した時点で、その内容がそのまま飼い主さまの画面に表示されます。お店からメールなどでお知らせする仕組みはありません。</p>
+
+<h3>くわしい手順</h3>
+<ol class="steps">
+  <li><b>ログイン画面を開く。</b>URLを開くと「Googleアカウントで安全にログインします」というボタンが出ます。</li>
+  <li><b>Googleアカウントでログインする。</b>お店のスタッフとして登録されているアカウントでログインすると、自動でお店の作業画面（犬の一覧）に着きます。</li>
+  <li><b>一覧からカルテを書きたい犬を探す。</b>名前で検索できるほか、手がふさがっているときはマイクのマークを押して声でも検索できます。</li>
+  <li><b>犬のカードを押して、カルテ作成画面を開く。</b>2回目以降の来店であれば、前回書いた爪・耳・歯・BCS（体格の評価）・体重の目標・犬体図の印が、あらかじめ入った状態で開きます。<span class="memo is-warn">前回の内容のまま確定すると、前回の所見がそのまま今回のものとして飼い主さまに届きます。今回見た内容に直してから確定してください。</span></li>
+  <li><b>上から順に記入する。</b>記入欄には <b>◎来店日・コース／①体重・コンディション／②爪／③耳／④口・歯／⑤皮膚・犬体図／⑥仕上がり写真／⑦使用オプション（店舗で登録している場合のみ）／⑧担当メッセージ</b> の番号が振ってあります。</li>
+  <li><b>②〜⑤には一言コメント欄があります。</b>手が離せないときは、コメント欄の横のマイクのボタンを押すと声で入力できます（⑧のメッセージ欄も同じ道具です）。</li>
+  <li><b>⑤の犬体図には、直接書き込めます。</b>「✏️ 書き込む」を押すと、<b>✏️ ペン</b>（範囲をなぞる）・<b>📍 スタンプ</b>（印を置く）・<b>🧽 消しゴム</b>（置いた印だけ消す。下絵の犬は消えません）・<b>🅰 文字</b>（文字を置いて、あとから位置と色を変えられる）の4つの道具が使えます。</li>
+  <li><b>③耳・④口の写真、⑥仕上がり写真を撮って入れる。</b>④口の写真は、入れたあとに「✏️ 書き込む」からペンで印をつけられます。</li>
+  <li><b>画面いちばん下の帯を確認する。</b>すべて記入すると「✓ 全項目入力完了」に変わります。足りない項目があるときは「未記入 ①体重」のように番号で出るので、その帯の「該当項目へ」を押すとその欄まで自動で画面が動きます。</li>
+  <li><b>「確定」を押す。</b>確認画面（そのまま飼い主さまに届く見た目）に切り替わり、書いた内容がすべて反映されます。</li>
+</ol>
+
+<h3>新しいお客様と犬を登録する場合</h3>
+<div class="flow">
+  <div class="flow-box is-start">画面上の<br>「管理」</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">② 新規</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">① 顧客<br>アカウント登録</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box is-goal">② ペット<br>アカウント登録</div>
+</div>
+<p class="flow-note">飼い主さまを先に登録しないと、犬を登録できません（順番があります）。登録すると、犬の一覧にすぐ出てきます。</p>
+
+<h3>カルテを見てもらう（招待URL・QRコードを渡す）</h3>
+<div class="flow">
+  <div class="flow-box is-start">犬のカード<br>「初回登録QR」</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">QR・URLを<br>お客様に渡す</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box is-goal">お客様がご自分の<br>スマホで開く</div>
+</div>
+<p class="flow-note">この招待は<b>有効期限24時間・1回だけ使えます</b>。渡す前に、いちばん最初にそのURLをクリックしたGoogleアカウントに結びつく点にご注意ください（渡す相手を間違えないこと）。新しく発行すると、前のQR・URLは自動的に使えなくなります。</p>
+
+<h2>管理画面の使い方<span class="tag">スタッフ用</span></h2>
+<p class="desc">お店のスタッフであれば誰でも、画面上部の「管理」から入れます。全員が同じ権限を持ちます（役職による違いはありません）。メニューは5つです。</p>
+<div class="split">
+  <div class="split-in"><div class="flow-box is-start">管理</div></div>
+  <div class="split-out">
+    <div class="flow-box">① リピーター</div>
+    <div class="flow-box">② 新規</div>
+    <div class="flow-box">③ 削除</div>
+    <div class="flow-box">④ 店舗設定</div>
+    <div class="flow-box">⑤ スタッフ招待</div>
+  </div>
+</div>
+
+<div class="menu-card">
+  <p class="menu-card__title"><span class="num">1</span>リピーター</p>
+  <p>すでにお預かりしている子について、①<b>カルテ作成</b>（今日の分を新しく書く）と②<b>カルテ修正</b>（確定済みのカルテの中身を直す）ができます。修正した内容は、飼い主さまの画面にもそのまま反映されます。</p>
+</div>
+<div class="menu-card">
+  <p class="menu-card__title"><span class="num">2</span>新規</p>
+  <p>①<b>顧客アカウントの新規作成</b>（飼い主さまの登録）と②<b>ペットアカウントの新規作成</b>（犬の登録）ができます。①を先に行ってください。</p>
+</div>
+<div class="menu-card">
+  <p class="menu-card__title"><span class="num">3</span>削除</p>
+  <p>①顧客アカウント全データ削除（飼い主さまと、その子・カルテ・写真をすべて消す）／②ペットアカウント全データ削除（その子とカルテ・写真を消す）／③カルテ1枚単位削除（そのカルテ1枚だけ消す）の3種類です。<b>元に戻せません。</b>押し間違いを防ぐため、名前を正確に入力しないと削除ボタンが押せない仕組みになっています。</p>
+</div>
+<div class="menu-card">
+  <p class="menu-card__title"><span class="num">4</span>店舗設定</p>
+  <p>「次回のおすすめご来店時期」を計算するための<b>既定の来店間隔（日数）</b>と、④カルテ作成画面の⑦使用オプションで選べる<b>名前の一覧</b>を、それぞれ設定・保存できます。</p>
+</div>
+<div class="menu-card">
+  <p class="menu-card__title"><span class="num">5</span>スタッフ招待</p>
+  <p>新しいスタッフのGoogleアカウントを、この店のスタッフとして迎えるためのQR・URLを発行します。<b>招待された人は、招待した人と全く同じ権限</b>（すべての飼い主・犬・カルテを見る・書く・消す）を持ちます。役職による権限の違いはありません。有効期限24時間・1回のみ使用でき、新しく発行すると前のQR・URLは使えなくなります。</p>
+</div>
+
+<h2>飼い主さま（お客様）の方<span class="tag is-owner">お客様用</span></h2>
+<p class="desc">お客様には、お店の作業画面は一切表示されません。ご自分の犬のカルテだけが見える、専用の画面です。</p>
+
+<div class="flow">
+  <div class="flow-box is-start">招待URL・QR<br>を受け取る</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">Googleで<br>ログイン</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">愛犬の一覧<br>から選ぶ</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">来店日を選ぶ</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box is-owner-goal">カルテを見る</div>
+</div>
+
+<h3>くわしい手順</h3>
+<ol class="steps">
+  <li><b>お店から渡されたQRコードまたはURLを、ご自分のスマホで開く。</b></li>
+  <li><b>Googleアカウントでログインする。</b>ここでログインしたアカウントに、以後そのカルテが結びつきます。</li>
+  <li><b>「初回登録が完了しました。」の表示を確認する。</b>これで次回からは、このページをブックマークするだけで見られるようになります（毎回QRを読む必要はありません）。</li>
+  <li><b>愛犬の一覧から、見たい犬の名前を押す。</b>複数頭を預けている場合は、ここに全頭が並びます。</li>
+  <li><b>来店日の一覧から、見たい回を押す。</b>まだ1回もカルテが確定していない子は「まだカルテがありません。」とだけ表示されます（見本の文章などは出ません）。</li>
+  <li><b>カルテの内容を確認する。</b>体重の推移（折れ線グラフ）、爪・耳・口・皮膚の状態、写真、担当スタッフからのメッセージなどが表示されます。写真は押すと大きく表示されます。</li>
+  <li><b>いちばん下までスクロールすると、「次回のおすすめご来店時期」が表示されます。</b>その下の「予約はこちら」を押すと予約ページが開きます。</li>
+  <li><b>別の犬・別の回を見たいときは、画面上の「← 愛犬の一覧へ」「このわんちゃんのカルテ一覧へ戻る」から戻れます。</b></li>
+</ol>
+
+<h2>先に知っておいていただきたいこと</h2>
+<div class="known">
+  <h3>この案内で「（未確認）」としている点</h3>
+  <ul>
+    <li><b>「予約はこちら」の飛び先は、現時点では仮のページです（未確認ではなく確定事項）。</b>本番の予約ページのURLをいただき次第、その1行を差し替えるだけで済むようにしてあります。</li>
+    <li><b>（未確認）</b>すでに飼い主として登録済みのGoogleアカウントに、スタッフ招待のURLを重ねて使った場合など、まれな組み合わせの細かい挙動までは、この案内をまとめる過程で実際に試せていません。通常どおり「お店の方の招待」「お客様の招待」を別々のアカウントで使う分には問題ありません。</li>
+    <li>アプリ自体には、カルテが確定したことをメールなどでお客様へ自動通知する仕組みはありません（コードを確認済み）。お知らせが必要な場合は、お店から直接お伝えください。</li>
+  </ul>
+</div>
+
+<footer>
+  この案内は、実際の画面のコード（お店の作業画面・管理画面・お客様の画面・ログインの仕組み）を読んで書いています。<br>
+  ボタンを押しながら1つずつ確かめたいときは<b>操作手順ナビ</b>を、納品前に○×を付けて全体を確かめたいときは<b>操作確認チェックリスト</b>をご覧ください（いずれも同じフォルダ）。
+</footer>
+
+</div>
+</body>
+</html>
