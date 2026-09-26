@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>機能チェックリスト | SALTY DOG カルテ</title>
+<style>
+  :root{
+    --ink:#121212; --ink-2:#4a4a48; --ink-3:#8c8c88;
+    --line:#dcdcd6; --paper:#faf9f6; --band:#f2f2ef;
+    --ok-bg:#f6faf7; --ok-line:#b8d2c0; --ok:#3f7a52;
+    --no-bg:#fdf6f3; --no-line:#e3bfae; --no:#c85a32;
+    --unk-bg:#fbf9f2; --unk-line:#dfd2a0; --unk:#9c7f1f;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",system-ui,sans-serif;
+    line-height:1.75; -webkit-text-size-adjust:100%;
+  }
+  .wrap{max-width:880px; margin:0 auto; padding:32px 20px 72px}
+  header{border-bottom:3px solid var(--ink); padding-bottom:16px; margin-bottom:20px}
+  h1{font-size:25px; letter-spacing:.04em; margin:0 0 6px}
+  .sub{font-size:13.5px; color:var(--ink-2); margin:0}
+
+  .lead{background:#fff; border:1px solid var(--line); padding:14px 16px;
+        font-size:13.5px; color:var(--ink-2); margin:20px 0}
+  .lead p{margin:0 0 8px}
+  .lead p:last-child{margin-bottom:0}
+  .lead b{color:var(--ink)}
+
+  .legend{display:flex; flex-wrap:wrap; gap:10px 18px; background:#fff;
+          border:1px solid var(--line); padding:12px 16px; margin:18px 0;
+          font-size:12.5px; color:var(--ink-2)}
+  .legend__item{display:flex; align-items:center; gap:7px; white-space:nowrap}
+  .chip{display:inline-flex; align-items:center; justify-content:center;
+        min-width:20px; height:20px; padding:0 5px; font-size:11.5px; font-weight:700;
+        border-radius:4px; flex:none}
+  .chip--ok{background:var(--ok); color:#fff}
+  .chip--no{background:var(--no); color:#fff}
+  .chip--unk{background:var(--unk); color:#fff}
+
+  .summary{display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+       background:var(--band); border:1px solid var(--line); padding:12px 16px;
+       font-size:13px; margin:18px 0}
+  .summary b{font-size:15px}
+
+  h2{font-size:15px; letter-spacing:.06em; color:var(--ink);
+     margin:32px 0 12px; padding:8px 12px; background:var(--band);
+     border-left:4px solid var(--ink)}
+  h2 .cat-note{display:block; font-size:11.5px; font-weight:400; color:var(--ink-3);
+     letter-spacing:0; margin-top:3px}
+
+  .item{background:#fff; border:1px solid var(--line); border-left:4px solid var(--line);
+        padding:12px 14px; margin-bottom:9px; display:flex; gap:10px; align-items:flex-start}
+  .item.is-ok{background:var(--ok-bg); border-color:var(--ok-line); border-left-color:var(--ok)}
+  .item.is-no{background:var(--no-bg); border-color:var(--no-line); border-left-color:var(--no)}
+  .item.is-unk{background:var(--unk-bg); border-color:var(--unk-line); border-left-color:var(--unk)}
+  .item__mark{flex:none; margin-top:1px}
+  .item__body{flex:1; min-width:0}
+  .item__title{font-size:14.5px; font-weight:700; margin:0}
+  .item__title .tag{font-weight:700; font-size:12.5px; margin-left:6px}
+  .tag--no{color:var(--no)}
+  .tag--unk{color:var(--unk)}
+  .item__note{font-size:12px; color:var(--ink-3); margin-top:5px; line-height:1.6}
+  .item__note code{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:11px;
+        background:var(--band); border:1px solid var(--line); border-radius:3px;
+        padding:0 4px}
+  .item__extra{font-size:12.5px; color:var(--ink-2); margin-top:6px; line-height:1.7}
+
+  .known{background:#fff; border:1px solid var(--no); padding:14px 16px; margin-top:14px}
+  .known h3{font-size:14px; margin:0 0 8px; color:var(--no)}
+  .known ul{margin:0; padding-left:1.2em; font-size:13px; color:var(--ink-2)}
+  .known li{margin-bottom:6px}
+  .known b{color:var(--ink)}
+
+  footer{margin-top:44px; padding-top:14px; border-top:1px solid var(--line);
+         font-size:12px; color:var(--ink-3)}
+
+  @media (max-width:480px){
+    .wrap{padding:22px 14px 56px}
+    h1{font-size:21px}
+    .legend{gap:8px 14px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>機能チェックリスト</h1>
+    <p class="sub">SALTY DOG カルテ — 実際のコードを読み、動くかどうかを1件ずつ確かめた記録（2026-09-26 時点）</p>
+  </header>
+
+  <div class="lead">
+    <p><b>これは何か。</b> お店のスタッフの方や飼い主の方が「使う機能」を、専門用語を使わずに1件ずつ並べたものです。</p>
+    <p><b>どうやって確かめたか。</b> 見た目の見本（デザイン案）は根拠にしていません。実際に動くコード（画面の中身・保存の仕組み・データベースの設定）を1つずつ読み、本当にその機能が繋がっているかを確認しました。</p>
+    <p><b>読み方。</b> 各項目の右下に小さく、確認の根拠にしたファイル名を書いています。専門的な内容なので、読み飛ばして構いません。気になる項目があれば、そのファイル名で担当のAIに聞いていただければ詳しく説明できます。</p>
+  </div>
+
+  <div class="legend">
+    <div class="legend__item"><span class="chip chip--ok">✓</span> 実装済み。コードを読み、実際に動く仕組みがあることを確認したもの</div>
+    <div class="legend__item"><span class="chip chip--no">✕</span> 未実装。まだ作られていない、または途中で繋がっていないもの</div>
+    <div class="legend__item"><span class="chip chip--unk">？</span> 未確認。判断がつかず、確信を持てなかったもの</div>
+  </div>
+
+  <div class="summary" id="summary">
+    <span>全 <b>42</b> 項目</span>
+    <span>｜</span>
+    <span><span class="chip chip--ok" style="margin-right:4px">✓</span>実装済み <b>39</b></span>
+    <span><span class="chip chip--no" style="margin-right:4px">✕</span>未実装 <b>2</b></span>
+    <span><span class="chip chip--unk" style="margin-right:4px">？</span>未確認 <b>1</b></span>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2>1. ログイン・権限
+    <span class="cat-note">誰が、どの画面に入れるか</span>
+  </h2>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">Googleアカウントで安全にログインできる</p>
+      <p class="item__note">根拠: <code>backend/js/supabase-auth.js</code>（<code>signInWithGoogle</code>）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">お店の人と飼い主が、別の権限でログインできる（お店の人はカルテを作る画面・管理画面へ、飼い主は自分の犬のカルテだけが見える画面へ振り分けられる）</p>
+      <p class="item__note">根拠: <code>backend/js/supabase-auth.js</code>／<code>backend/js/supabase-staff.js</code>（お店の所属＝<code>memberships</code>の有無で振り分け）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">お店の人の権限は1種類にそろえてある（以前あった「管理者」と「一般スタッフ」の区別は、マスターの判断でなくした）</p>
+      <p class="item__note">根拠: <code>supabase/migrations/202609060012_single_staff_role.sql</code>（<code>docs/decisions.md</code> D-20260906-68）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">管理画面から、新しいスタッフをQRコード・URLで招待して追加できる（招待された人は、招待した人と全く同じ権限を持つ）</p>
+      <p class="item__note">根拠: <code>backend/js/supabase-admin.js</code>（「⑤ スタッフ招待」画面）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">スタッフ招待も飼い主招待も、有効期限は24時間・1回だけ使える。新しく発行すると前の招待は自動的に使えなくなる（何個も発行され続けない）</p>
+      <p class="item__note">根拠: <code>supabase/migrations/202609140014_single_open_invitation.sql</code>（放置リスト #61・本番適用済み）</p>
+    </div>
+  </div>
+
+  <div class="item is-no">
+    <div class="item__mark"><span class="chip chip--no">✕</span></div>
+    <div class="item__body">
+      <p class="item__title">ホーム画面に追加したアイコンから開く入口が、本物のログインにつながっている<span class="tag tag--no">（未実装）</span></p>
+      <p class="item__note">いまはアイコンを押すと、実際のデータが入らない練習用の画面（架空の犬「ポンチ」等が出る）が開き、ログインボタンも機能しない。放置リスト <b>#39</b>。どちらの直し方にするか、マスターの判断待ち。</p>
+      <p class="item__note">根拠: <code>src/manifest.json</code>（<code>start_url</code>）／<code>worker/src/index.js</code></p>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2>2. カルテ作成・記入
+    <span class="cat-note">トリミング後に、スタッフが記録する画面</span>
+  </h2>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">本日の体重を記録し、前回との差・ベスト体重と比べて表示する</p>
+      <p class="item__note">根拠: <code>src/index.html</code>（①体重・コンディション）／<code>src/js/ui.js</code></p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">体重は0.1kg〜100kgの範囲外だと、理由を出して受け付けない（黙って丸めない）</p>
+      <p class="item__note">根拠: <code>src/js/ui.js</code>（<code>MIN_WEIGHT_KG</code> / <code>MAX_WEIGHT_KG</code>・放置リスト #56）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">ボディコンディションスコア（体型の5段階評価）を記録できる</p>
+      <p class="item__note">根拠: <code>src/index.html</code>（BCS 5段階）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">爪の状態を前足・後ろ足それぞれ3段階で記録し、コメントも書ける</p>
+      <p class="item__note">根拠: <code>src/index.html</code>（②爪のチェック）／<code>backend/js/magazine-view.js</code></p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">耳の状態を左右それぞれ6段階で記録し、コメントも書ける</p>
+      <p class="item__note">根拠: <code>src/index.html</code>（③耳のチェック）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">口・歯の状態を6段階で記録し、コメントも書ける</p>
+      <p class="item__note">根拠: <code>src/index.html</code>（④口・歯のチェック）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">皮膚の様子（赤み・しこり/イボ・毛玉・フケ）についてコメントを書ける</p>
+      <p class="item__note">根拠: <code>src/index.html</code>（⑤皮膚・スパ）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">担当スタッフからのメッセージを、音声入力でも書ける（マイクのボタンで話した内容を文字にする）</p>
+      <p class="item__note">根拠: <code>src/js/ui.js</code>（<code>toggleEditorVoice</code>・音声認識）／<code>src/index.html</code>（⑧担当メッセージ）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">未記入の項目があると、確定ボタンの近くに「何が未記入か」を項目名つきで表示する</p>
+      <p class="item__note">根拠: <code>src/js/ui.js</code>（<code>updateCompletionStatus</code> / 画面下部の帯）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">体重・メッセージが空欄のまま確定しようとすると、一度だけ確認を挟む（測れなかった日もあるため、止め切りはしない）</p>
+      <p class="item__note">根拠: <code>src/js/ui.js</code>（<code>commitReport</code>・放置リスト #55）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">同じ犬・同じ日付で、もう1枚カルテを確定しようとすると一度だけ確認を挟む（誤って重複して作らないため）</p>
+      <p class="item__note">根拠: <code>src/js/ui.js</code>（<code>commitReport</code>・放置リスト #57）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">「今回使用したオプション」を店舗ごとに管理画面で設定でき、1件も設定していない店舗には欄そのものを出さない</p>
+      <p class="item__note">根拠: <code>src/index.html</code>（⑦使用オプション・未設定時は非表示）／<code>backend/js/supabase-admin.js</code>（店舗設定）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">確定済みのカルテを、あとから「② カルテ修正」で開き直して直せる</p>
+      <p class="item__note">根拠: <code>backend/js/supabase-staff.js</code>（<code>reviseReport</code>）／<code>src/js/ui.js</code></p>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2>3. 写真
+    <span class="cat-note">耳・口・仕上がりの写真</span>
+  </h2>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">耳の写真を1枚添付できる</p>
+      <p class="item__note">根拠: <code>src/index.html</code>（③耳・<code>photo-ear</code>）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">口・歯の写真を2枚まで添付できる（超えた分は理由を出して受け付けない）</p>
+      <p class="item__note">根拠: <code>src/index.html</code>（④口・歯・<code>photo-teeth</code>）／<code>src/js/ui.js</code></p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">仕上がりの写真は枚数の制限なく添付でき、1枚目が飼い主のカルテの表紙になる</p>
+      <p class="item__note">根拠: <code>src/index.html</code>（⑥仕上がり写真・<code>photo-trimming</code>）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">口・歯の写真に、ペンで直接書き込める（色・太さ・透明度を変えられる。文字も置ける）</p>
+      <p class="item__note">根拠: <code>src/js/ui.js</code>（<code>openAnnotate</code>）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">確定済みのカルテでも、あとから写真を追加したり、貼り替えたりできる</p>
+      <p class="item__note">根拠: <code>supabase/migrations/202609230015_revise_report_photo_replace.sql</code>（放置リスト #60・本番適用済み）</p>
+    </div>
+  </div>
+
+  <div class="item is-no">
+    <div class="item__mark"><span class="chip chip--no">✕</span></div>
+    <div class="item__body">
+      <p class="item__title">2人のスタッフが同じ確定済みカルテを同時に開いて別々に保存しても、警告や変更履歴が出る<span class="tag tag--no">（未実装）</span></p>
+      <p class="item__note">後で保存した方だけが無警告で残り、先に保存した内容は変更履歴なく消える。実装は可能だがDBとAPI両方に手が要るため、「このお店では同時に2人が同じカルテを触ることが無い」というマスターの判断で、いまは対応しないと決定済み。放置リスト <b>#59</b>。</p>
+      <p class="item__note">根拠: <code>docs/ops/plan.md</code>（放置リスト #59・マスター判断 2026-09-14）</p>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2>4. 犬体図への書き込み
+    <span class="cat-note">4面図2枚に、ペンで所見を描く</span>
+  </h2>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">犬体4面図（皮膚チェック用）に2枚とも、ペンで書き込める</p>
+      <p class="item__note">根拠: <code>src/index.html</code>（<code>#marking-canvas</code> / <code>#marking-canvas-2</code>）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">ペンの色・太さ・透明度を、線ごとに覚えた状態で変えられる</p>
+      <p class="item__note">根拠: <code>src/js/ui.js</code>（<code>setPenColor</code> / <code>setPenWidth</code> / <code>setPenAlpha</code>）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">スタンプ（赤み・しこり/イボ・毛玉・フケ）を置ける</p>
+      <p class="item__note">根拠: <code>src/index.html</code>／<code>src/js/ui.js</code>（<code>setStamp</code>）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">消しゴムで、置いた印だけを消せる（下絵や写真そのものは消えない）</p>
+      <p class="item__note">根拠: <code>src/js/ui.js</code>（<code>eraseAt</code>）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">文字を置ける。置いたあとドラッグで動かせる（何も打たなければ置かれない）</p>
+      <p class="item__note">根拠: <code>src/js/ui.js</code>（<code>findTextAt</code> / <code>moveSelectedText</code>）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">1つ前の操作を取り消せる（1つ戻す）</p>
+      <p class="item__note">根拠: <code>src/js/ui.js</code>（<code>undoMark</code>）</p>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2>5. 飼い主向け画面
+    <span class="cat-note">スマホで見られる、愛犬のカルテ</span>
+  </h2>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">体重はグラフ（折れ線）で表示する。理想体重の目安ラインも重ねて出る</p>
+      <p class="item__note">根拠: <code>backend/js/magazine-view.js</code>（<code>renderWeightGraph</code>・放置リスト #45 #46）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">過去のカルテを、日付のタブから振り返って見られる</p>
+      <p class="item__note">根拠: <code>backend/js/magazine-view.js</code>（過去レポートのタイムライン帯）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">複数の犬を預けている飼い主は、カルテ画面から愛犬の一覧に戻る導線がある</p>
+      <p class="item__note">根拠: <code>backend/js/supabase-auth.js</code>（「← 愛犬の一覧へ」・放置リスト #48 #53）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">「次回のおすすめご来店時期」を、来店日と間隔（店舗の初期設定または犬ごとの上書き）から自動で計算して表示する</p>
+      <p class="item__note">根拠: <code>backend/js/magazine-view.js</code>／放置リスト #3（<code>D-20260829-58</code>）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">「予約はこちら」ボタンがある（ただし、飛び先はマスター指示による仮のページのまま。本物の予約ページのURLをもらい次第、1行だけ差し替える予定）</p>
+      <p class="item__note">根拠: <code>backend/js/magazine-view.js</code>（<code>RESERVATION_URL</code>・放置リスト #65）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">書いていない項目は空欄のまま表示する（見本の文章やデモの数値は出ない）</p>
+      <p class="item__note">根拠: <code>backend/js/magazine-view.js</code>（放置リスト #12〜#14）</p>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2>6. 管理画面
+    <span class="cat-note">お店の設定・登録・削除</span>
+  </h2>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">新しい飼い主・犬を登録できる</p>
+      <p class="item__note">根拠: <code>backend/js/supabase-admin.js</code>（「② 新規登録」）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">飼い主・犬・カルテを削除できる。削除は「写真を片付けてからデータを消す」正しい順序で行われる</p>
+      <p class="item__note">根拠: <code>backend/js/supabase-admin.js</code>（「③ 削除」）／<code>scripts/guard/delete-order.mjs</code></p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">お店の初期設定（次回来店の目安日数・使用オプションの一覧）を管理画面から編集できる</p>
+      <p class="item__note">根拠: <code>backend/js/supabase-admin.js</code>（「④ 店舗設定」）</p>
+    </div>
+  </div>
+
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
+    <div class="item__body">
+      <p class="item__title">飼い主の初回登録用のQRコード・URLを発行できる</p>
+      <p class="item__note">根拠: <code>backend/js/supabase-staff.js</code>（<code>createInvitationArtifact</code>）</p>
+    </div>
+  </div>
+
+  <div class="item is-unk">
+    <div class="item__mark"><span class="chip chip--unk">？</span></div>
+    <div class="item__body">
+      <p class="item__title">本番環境で「お試し用のダミー犬」がすべて削除されている<span class="tag tag--unk">（未確認）</span></p>
+      <p class="item__note">コード上は削除する手段（管理画面の削除機能）が実装されていることまでは確認できたが、<b>本番の実データが今どうなっているか</b>はこのリポジトリのコードを読むだけでは分からない。大計画（<code>docs/ops/roadmap.md</code>）でも「地図と手順書が食い違っている」として、確かめるまで判定を保留にしている項目（放置リスト <b>#51</b>）。本番の管理画面を開き、犬の一覧を見れば確認できる。</p>
+      <p class="item__note">根拠: <code>docs/ops/roadmap.md</code>「納品準備でやること」／<code>docs/ops/plan.md</code>（放置リスト #51）</p>
+    </div>
+  </div>
+
+  <div class="known">
+    <h3>参考: あえて直していないもの（マスター判断済み）</h3>
+    <ul>
+      <li><b>お客さまの名前を含む文章を、担当メッセージに書いても警告が出ない</b>（放置リスト #58）。名簿と照らすと同じ響きの犬の名前で誤検知が多発し、かえって読まれなくなるためマスターが不要と判断。書いてしまっても「② カルテ修正」で直せる。</li>
+      <li><b>体重9999kgのような異常値は直したが、その他の入力欄には同種の上限チェックを全項目には広げていない。</b> 対象は体重のみで確認済み（本チェックリスト「2. カルテ作成・記入」参照）。</li>
+    </ul>
+  </div>
+
+  <footer>
+    <p>作成日: 2026-09-26／確認方法: <code>src/</code>・<code>backend/js/</code>・<code>worker/src/</code>・<code>supabase/migrations/</code> の実際のコードを読み、動く経路があるかを確認（<code>design/</code> は見本のため判定に使っていません）。</p>
+  </footer>
+
+</div>
+</body>
+</html>
