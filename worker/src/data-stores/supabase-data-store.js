@@ -279,10 +279,14 @@ export class SupabaseDataStore {
       ここに下書きが混ざることはない（スタッフのトークンでも `eq.final` で絞る
       ——確定していない体重を推移に混ぜない）。 */
   async listWeightHistory(petId) {
+    /* `data` 全文ではなく `weights` だけを取る（放置リスト `#47`）。全文だと確定カルテ
+       40枚×1MB の犬で、カルテ1枚を開くたびに 40MB を読んで捨てていた。 */
     const rows = await this.request(
-      `/rest/v1/reports?select=report_date,data&pet_id=eq.${encodeURIComponent(petId)}&status=eq.final&order=report_date.asc`,
+      `/rest/v1/reports?select=report_date,weights:data->weights&pet_id=eq.${encodeURIComponent(petId)}&status=eq.final&order=report_date.asc`,
     );
-    return weightHistoryFromReports(rows);
+    return weightHistoryFromReports(
+      (rows || []).map((row) => ({ report_date: row.report_date, data: { weights: row.weights } })),
+    );
   }
 
   async getReport(petId, reportId) {
