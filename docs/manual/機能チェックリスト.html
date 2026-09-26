@@ -105,10 +105,10 @@
   </div>
 
   <div class="summary" id="summary">
-    <span>全 <b>42</b> 項目</span>
+    <span>全 <b>41</b> 項目</span>
     <span>｜</span>
-    <span><span class="chip chip--ok" style="margin-right:4px">✓</span>実装済み <b>39</b></span>
-    <span><span class="chip chip--no" style="margin-right:4px">✕</span>未実装 <b>2</b></span>
+    <span><span class="chip chip--ok" style="margin-right:4px">✓</span>実装済み <b>40</b></span>
+    <span><span class="chip chip--no" style="margin-right:4px">✕</span>未実装 <b>0</b></span>
     <span><span class="chip chip--unk" style="margin-right:4px">？</span>未確認 <b>1</b></span>
   </div>
 
@@ -157,11 +157,11 @@
     </div>
   </div>
 
-  <div class="item is-no">
-    <div class="item__mark"><span class="chip chip--no">✕</span></div>
+  <div class="item is-ok">
+    <div class="item__mark"><span class="chip chip--ok">✓</span></div>
     <div class="item__body">
-      <p class="item__title">ホーム画面に追加したアイコンから開く入口が、本物のログインにつながっている<span class="tag tag--no">（未実装）</span></p>
-      <p class="item__note">いまはアイコンを押すと、実際のデータが入らない練習用の画面（架空の犬「ポンチ」等が出る）が開き、ログインボタンも機能しない。放置リスト <b>#39</b>。どちらの直し方にするか、マスターの判断待ち。</p>
+      <p class="item__title">ホーム画面に追加したアイコンから開く入口が、本物のログインにつながっている</p>
+      <p class="item__note">アイコンを押すと、本物の「Google でログイン」の入口が開く（2026-09-26 に本番で開いて確認）。放置リスト <b>#39</b>。</p>
       <p class="item__note">根拠: <code>src/manifest.json</code>（<code>start_url</code>）／<code>worker/src/index.js</code></p>
     </div>
   </div>
@@ -317,15 +317,6 @@
     <div class="item__body">
       <p class="item__title">確定済みのカルテでも、あとから写真を追加したり、貼り替えたりできる</p>
       <p class="item__note">根拠: <code>supabase/migrations/202609230015_revise_report_photo_replace.sql</code>（放置リスト #60・本番適用済み）</p>
-    </div>
-  </div>
-
-  <div class="item is-no">
-    <div class="item__mark"><span class="chip chip--no">✕</span></div>
-    <div class="item__body">
-      <p class="item__title">2人のスタッフが同じ確定済みカルテを同時に開いて別々に保存しても、警告や変更履歴が出る<span class="tag tag--no">（未実装）</span></p>
-      <p class="item__note">後で保存した方だけが無警告で残り、先に保存した内容は変更履歴なく消える。実装は可能だがDBとAPI両方に手が要るため、「このお店では同時に2人が同じカルテを触ることが無い」というマスターの判断で、いまは対応しないと決定済み。放置リスト <b>#59</b>。</p>
-      <p class="item__note">根拠: <code>docs/ops/plan.md</code>（放置リスト #59・マスター判断 2026-09-14）</p>
     </div>
   </div>
 
