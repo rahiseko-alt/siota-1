@@ -102,7 +102,7 @@
   <p class="sub">SALTY DOG カルテ ／ 納品前に、端から端まで実際に触って確かめるための一覧</p>
 </header>
 
-<p class="lead">
+<div class="lead">
   <p><b>○ と × の付け方</b>：画面が出たかどうかではなく、<b>やりたかったことが最後までできたか</b>で決めてください。
      途中で止まったら、そこが「繋がっていない」ところです。</p>
   <p><b>用意するもの</b>：スマホ2台（お店用・お客様用）。1台しか無いときは、
@@ -110,7 +110,7 @@
   <p><b>ご注意</b>：本番で試すと<b>本物のデータが増えます</b>。
      練習で作った飼い主・犬・カルテは、最後の「H 消す」で片づけられます。</p>
   <p>押した印はこの端末に残ります（紙に印刷して使うこともできます）。<b>所要 40〜60分。</b></p>
-</p>
+</div>
 
 <div class="bar">
   <span class="bar__count"><span id="count-ok">0</span> ○ ／ <span id="count-ng">0</span> × ／ 全 <span id="count-all">0</span> 項目</span>
@@ -528,15 +528,12 @@
 <h2>先に言っておくこと</h2>
 
 <div class="known">
-  <h3>ここは今も直っていません（確かめると × になります）— 残り3件</h3>
+  <h3>ここは今も直っていません（確かめると × になります）— 残り2件</h3>
   <ul>
     <li><b>⑧メッセージ欄に、よそのお客様のお名前を書いても警告は出ません。</b>そのまま届きます。
         <b>これは「直さない」と決めた項目です</b>（2026-09-14）。書く人が気をつける運用で回します。
         書いてしまったときは「管理 → ① リピーター → ② カルテ修正」で直せます。</li>
     <li><b>「予約はこちら」の飛び先は仮のままです。</b>本番の予約ページのURLをいただければ差し替えます。</li>
-    <li><b>2人が同じカルテを同時に直すと、後に保存した方だけが残ります。</b>警告も履歴も出ません。
-        <b>これは「直さない」と決めた項目です</b>（2026-09-14・同時に触ることは無いため）。
-        スタッフが増えたり、複数の端末で同時に直すようになったら、あらためてご相談ください。</li>
   </ul>
 </div>
 
@@ -622,8 +619,18 @@
     }
   });
 
-  document.getElementById('reset').addEventListener('click', function () {
-    if (!window.confirm('付けた○×とメモを、すべて消します。よろしいですか？')) return;
+  /* 確認の窓は出せない場所（埋め込み表示など）があるので、2回押しで確かめる。 */
+  var resetBtn = document.getElementById('reset');
+  var armed = false;
+  resetBtn.addEventListener('click', function () {
+    if (!armed) {
+      armed = true;
+      resetBtn.textContent = 'もう一度押すと、すべての印とメモを消します';
+      setTimeout(function () { armed = false; resetBtn.textContent = 'すべての印を消す'; }, 4000);
+      return;
+    }
+    armed = false;
+    resetBtn.textContent = 'すべての印を消す';
     state = {};
     save();
     items.forEach(function (item) {

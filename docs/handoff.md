@@ -30,6 +30,20 @@
 
 ---
 
+## 0-BY. いちばん新しい（2026-09-27・その74）— **アイコンを本番へ・資料4点を PDF と Web ページに**
+
+- マスター指示「デプロイ」→ `deploy` run 41 成功。本番の `/assets/app-icon.png` が新アイコンとハッシュ一致。
+- マスター指示「資料はPDFにしろ。全て。あとWEBページのURLだせ」。`docs/manual/` の4点を A4 PDF にしてお渡しし、
+  Web ページ（claude.ai の非公開ページ・共有はマスターが各ページの共有メニューから行う）として公開:
+  使い方ナビ https://claude.ai/artifact/PbpkKdXYgK5dTtWaKJuxxW ／ 操作手順ナビ https://claude.ai/artifact/Uc2woeLi73bytdYwMcPBfJ ／
+  操作確認チェックリスト https://claude.ai/artifact/PB3GbSRnPmyQY1gLfZBecq ／ 機能チェックリスト https://claude.ai/artifact/JbchuCBVyVxdDLf7fRBc4J
+- 公開前に読み直して直したもの: 機能チェックリストの「？ ダミー犬」を ✓（`#51` マスター確認済み）→ 全41／✓41。
+  操作確認チェックリストの「残り」から「2人同時保存」を外した（予定機能ではない・機能リストと同じ判断）。
+  「すべての印を消す」を確認窓ではなく2回押しに（Web ページでは確認窓が出ないため）。冒頭の説明枠が空で出ていた崩れを直した。
+- PDF は `docs/manual/` の HTML から作る（同梱はしていない）。
+
+---
+
 ## 0-BX. いちばん新しい（2026-09-26・その73）— **機能チェックリストの ✕ を整理（マスター指示）**
 
 - マスター指示「✖️の2人が同時に、の項目は予定機能では無いのではずせ」。`docs/manual/機能チェックリスト.html` から削除（`#59`）。
