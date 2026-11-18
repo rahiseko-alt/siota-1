@@ -200,7 +200,7 @@ try {
   /* この時点では犬がまだ0頭のこともある（作るのは ④）。**行ではなく見出しを待つ**
      ——0件でも picker は必ず見出しを出す。 */
   const pickerShown = await page.waitForFunction(
-    () => (document.body.textContent || '').includes('カルテを書く子を選ぶ'),
+    () => (document.body.textContent || '').includes('レポートを作成する犬を選ぶ'),
     { timeout: 20_000 },
   ).then(() => true).catch(() => false);
   check('3c. サブ画面（犬を選ぶ）でも住所が変わる',
@@ -237,6 +237,30 @@ try {
   check('3g. カルテ一覧から戻ると、ちょうど1つ手前（犬を選ぶ）に戻る',
     reportListShown && backToPetPick && pathNow() === '/admin/delete/report',
     `カルテ一覧=${reportListShown} 犬選び=${backToPetPick} path=${pathNow()}`);
+
+  /* ── 3h **犬を名前・飼い主名で探して、そのままカルテ作成へ**
+     （クライアント指示 C-14・2026-11-18）。見るのは「打った文字で行が絞られる」
+     「合う行が無ければ無いと言う」「絞った行を押すとその子のカルテ作成に着く」の3つ。
+     fixture の飼い主 `Owner B` の犬は `Q` の1頭だけ（`supabase/seed.sql`）。 ── */
+  await page.goto(`${BASE}/admin/repeat/create`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('[data-admin-field="pet-search"]', { timeout: 20_000 });
+  const visibleRows = () => page.evaluate(() => [...document.querySelectorAll('[data-admin-action="pick-pet"]')]
+    .filter((row) => !row.hidden).map((row) => row.textContent));
+  const allRows = (await visibleRows()).length;
+  await page.fill('[data-admin-field="pet-search"]', 'owner b');
+  const ownerRows = await visibleRows();
+  check('3h. 飼い主の名前で打つと、その飼い主の犬だけに絞られる（大文字小文字は問わない）',
+    ownerRows.length >= 1 && ownerRows.length < allRows && ownerRows.every((t) => t.includes('Owner B')),
+    `全${allRows}行 → ${JSON.stringify(ownerRows)}`);
+  await page.fill('[data-admin-field="pet-search"]', 'zz-該当なし-zz');
+  const noneShown = await page.evaluate(() => (document.body.textContent || '').includes('該当する子がいません'));
+  check('3i. 合う犬がいなければ、0行で「該当する子がいません」と出る',
+    (await visibleRows()).length === 0 && noneShown, `行=${(await visibleRows()).length} 案内=${noneShown}`);
+  await page.fill('[data-admin-field="pet-search"]', 'owner b');
+  await page.locator('[data-admin-action="pick-pet"]:not([hidden])').first().click();
+  await page.waitForURL((url) => new URL(url).pathname.startsWith('/edit/p/'), { timeout: 20_000 }).catch(() => {});
+  check('3j. 絞った行を押すと、その犬のカルテ作成（/edit/p/…）に直接着く',
+    pathNow() === '/edit/p/40000000-0000-0000-0000-0000000000b1', `path=${pathNow()}`);
 
   await page.goto(`${BASE}/admin/nowhere`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('.admin-menu__item', { timeout: 20_000 });

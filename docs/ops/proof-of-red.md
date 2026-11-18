@@ -144,6 +144,17 @@
 - verify-report-roundtrip.mjs :: 21b. 桁違いの体重（9999kg）では確定できない
 - verify-report-roundtrip.mjs :: 21d. 体重が空のまま確定を押すと、そのことを言って訊いてくる
 - verify-portal.mjs :: 13c. 犬のページから、愛犬の一覧へ戻る道が出ている
+- verify-admin.mjs :: 3h. 飼い主の名前で打つと、その飼い主の犬だけに絞られる（大文字小文字は問わない）
+- verify-admin.mjs :: 3i. 合う犬がいなければ、0行で「該当する子がいません」と出る
+- verify-admin.mjs :: 3j. 絞った行を押すと、その犬のカルテ作成（/edit/p/…）に直接着く
+  （2026-11-18・クライアント指示 C-14。手元の実 Supabase で取った赤:
+   壊し方: `backend/js/supabase-admin.js` の検索窓で `row.hidden = !hit;` を `row.hidden = false;` にする（絞り込みを効かなくする）
+   出力:
+       FAIL  3h. 飼い主の名前で打つと、その飼い主の犬だけに絞られる（大文字小文字は問わない）  全4行 → ["X飼い主: Owner A","Y飼い主: Owner A","Z飼い主: Owner A","Q飼い主: Owner B"]
+       FAIL  3i. 合う犬がいなければ、0行で「該当する子がいません」と出る  行=4 案内=true
+       FAIL  3j. 絞った行を押すと、その犬のカルテ作成（/edit/p/…）に直接着く  path=/edit/p/40000000-0000-0000-0000-0000000000a1
+       34/37 PASS
+   戻すと 37/37 PASS。）
 - verify-admin.mjs :: 3g. カルテ一覧から戻ると、ちょうど1つ手前（犬を選ぶ）に戻る
   （2026-09-14・マスター指示「直せるものを先に治せ」。CI の `mutate`（run 406）で取った赤:
 
