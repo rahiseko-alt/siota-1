@@ -2117,6 +2117,7 @@ const App = {
         ? await staff.reviseReport(context.petId, this.reviseReportId, payload)
         : await staff.saveReport(
           context.petId, payload, this.today(), this.draftReportId,
+          (id) => { this.draftReportId = id; },
         );
       /* **番号が入っているところまで確かめてから移る。** `encodeURIComponent` は
          `null`／`undefined` を**文字列**に変えてしまうので、欠けていても URL は
