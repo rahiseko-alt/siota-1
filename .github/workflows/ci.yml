@@ -34,7 +34,9 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    # `ubuntu-latest` は 2026-11-18 に Ubuntu 26.04 へ切り替わり、Playwright 1.59.1 が未対応で
+    # `playwright install` が失敗した（F-20261118-89）。対応する版が出るまで 24.04 に固定する。
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
         with:
@@ -78,7 +80,7 @@ jobs:
   #
   # いまは土台そのものの検査だけ。飼い主に届く中身を見る9本は 4-0-d で足す。
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
@@ -234,7 +236,7 @@ jobs:
   # 証拠が採れたら docs/ops/proof-of-red.md へ人が移す。
   mutate:
     if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 70
     # 結果を枝へコミットして戻すので、書ける権限が要る。
     # 既定は読み取りだけで、push が `403 Write access to repository not granted` で落ちた
@@ -340,7 +342,7 @@ jobs:
         run: npx supabase stop
 
   walk:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
