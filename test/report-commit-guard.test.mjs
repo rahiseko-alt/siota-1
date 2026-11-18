@@ -243,3 +243,51 @@ test('確定に失敗したら、下書きをまた書ける状態に戻す（�
   await new Promise((r) => setTimeout(r, 10));
   assert.ok(order.includes('下書き:出た'), `失敗の後に下書きを書けていない: ${order.join(' → ')}`);
 });
+
+test('写真2枚目で通信が切れても下書きから写真3枚と所見を再送できる', async () => {
+  const { staff } = await loadStaff({});
+  const petId = crypto.randomUUID();
+  const report = { id: crypto.randomUUID(), shop_id: crypto.randomUUID(), pet_id: petId, status: 'draft', assets: [] };
+  const files = new Map();
+  let disconnect = true;
+  globalThis.TrimmerAuth.client.storage = { from: () => ({
+    upload: async (path, blob) => {
+      if (files.size === 1 && disconnect) throw new Error('offline');
+      assert.equal(files.has(path), false, '登録済みの画像を再送した');
+      files.set(path, blob);
+      return {};
+    },
+  }) };
+  let created = 0;
+  globalThis.TrimmerStaffApi.request = async (url, options = {}) => {
+    const body = options.body ? JSON.parse(options.body) : {};
+    if (url.endsWith('/assets')) {
+      const storage_path = [...files.keys()].find(path => path.includes(body.id));
+      assert.ok(storage_path);
+      report.assets.push({ ...body, storage_path, sort_order: body.sortOrder });
+      return { asset: body };
+    }
+    if (url.endsWith('/finalize')) report.status = 'final';
+    else if (url.endsWith('/reports') && options.method === 'POST') created++;
+    else if (url.endsWith('/reports')) return { reports: [report] };
+    if (body.data) report.data = body.data;
+    return { report };
+  };
+  const photos = [1, 2, 3].map(n => 'data:image/jpeg;base64,' + Buffer.from([255, 216, 255, n]).toString('base64'));
+  const input = { photos, staffNote: '右耳に赤み' };
+  await assert.rejects(staff.saveReport(petId, input, '2026-11-18', null), /offline/);
+  assert.equal(report.status, 'draft');
+  const draft = await staff.findDraft(petId);
+  assert.deepEqual(draft.data, input);
+  disconnect = false;
+  const result = await staff.saveReport(petId, draft.data, '2026-11-18', draft.id);
+  assert.equal(created, 1);
+  assert.equal(result.status, 'final');
+  assert.equal(result.data.staffNote, input.staffNote);
+  assert.equal(files.size, 3);
+  for (const [index, marker] of result.data.photos.entries()) {
+    const asset = result.assets.find(row => marker === 'asset://' + row.id);
+    const bytes = Buffer.from(await files.get(asset.storage_path).arrayBuffer());
+    assert.equal('data:image/jpeg;base64,' + bytes.toString('base64'), photos[index]);
+  }
+});

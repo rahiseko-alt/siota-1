@@ -529,33 +529,25 @@ async function findLastFinalReport(petId) {
   };
 }
 
-async function saveReport(petId, reportData, reportDate, draftId) {
+async function saveReport(petId, reportData, reportDate, draftId, onDraftSaved) {
   const client = globalThis.TrimmerAuth && globalThis.TrimmerAuth.client;
   const api = globalThis.TrimmerStaffApi && globalThis.TrimmerStaffApi.request;
   if (!client || typeof api !== 'function') throw new Error('保存できません（ログインし直してください）');
 
-  const { data, assets } = await replaceDataUrlAssets(reportData);
-  /* 下書きが在ればそれを確定させる。**新しく作らない**——作ると下書きが残り、
-     次に開いたときに古い記入が蘇る（`#15` の 3 が見ているのはそこ）。 */
-  const saved = draftId
-    ? await api(
-      `/api/pets/${encodeURIComponent(petId)}/reports/${encodeURIComponent(draftId)}`,
-      { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data }) },
-    )
-    : await api(`/api/pets/${encodeURIComponent(petId)}/reports`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ petId, reportDate, data }),
-    });
-  const report = saved.report;
-  if (!report || !report.id) throw new Error('カルテを作れませんでした');
-
+  // Keep the complete, editable snapshot until every photograph is registered.
+  const reportId = await saveDraft(petId, draftId, reportData, reportDate);
+  if (!reportId) throw new Error('カルテを作れませんでした');
+  onDraftSaved?.(reportId);
+  const path = `/api/pets/${encodeURIComponent(petId)}/reports/${encodeURIComponent(reportId)}`;
+  const { data, assets } = await replaceDataUrlAssets(reportData, { reportId });
   if (assets.length > 0) {
+    const { report } = await api(path);
     await uploadReportAssets({ client, api, report, petId, assets });
+    await saveDraft(petId, reportId, data, reportDate);
   }
 
   const finalized = await api(
-    `/api/pets/${encodeURIComponent(petId)}/reports/${encodeURIComponent(report.id)}/finalize`,
+    `${path}/finalize`,
     { method: 'POST' },
   );
   /* **器だけでなく番号まで見る。** 作る段（上の `!report.id`）と揃えた。

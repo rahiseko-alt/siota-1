@@ -58,17 +58,26 @@ function assetKind(path) {
   return path.join('.').replace(/[^a-z0-9_.-]/gi, '-').slice(0, 40) || 'image';
 }
 
+async function photoId(reportId, value) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(reportId + '/' + value));
+  const bytes = new Uint8Array(digest, 0, 16);
+  bytes[6] = (bytes[6] & 15) | 128;
+  bytes[8] = (bytes[8] & 63) | 128;
+  const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+  return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join('-');
+}
+
 export async function replaceDataUrlAssets(
   reportData,
-  { randomUUID = () => crypto.randomUUID() } = {},
+  { randomUUID = () => crypto.randomUUID(), reportId } = {},
 ) {
   const assets = [];
   const seen = new Map();
 
-  function visit(value, path = []) {
+  async function visit(value, path = []) {
     if (typeof value === 'string' && value.startsWith('data:image/')) {
       if (seen.has(value)) return seen.get(value);
-      const id = randomUUID();
+      const id = reportId ? await photoId(reportId, value) : randomUUID();
       if (!UUID_PATTERN.test(id)) throw new TypeError('invalid generated asset id');
       const blob = dataUrlBlob(value);
       const marker = `asset://${id}`;
@@ -76,14 +85,20 @@ export async function replaceDataUrlAssets(
       seen.set(value, marker);
       return marker;
     }
-    if (Array.isArray(value)) return value.map((entry, index) => visit(entry, [...path, String(index)]));
+    if (Array.isArray(value)) {
+      const result = [];
+      for (const [index, entry] of value.entries()) result.push(await visit(entry, [...path, String(index)]));
+      return result;
+    }
     if (value && typeof value === 'object') {
-      return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, visit(entry, [...path, key])]));
+      const entries = [];
+      for (const [key, entry] of Object.entries(value)) entries.push([key, await visit(entry, [...path, key])]);
+      return Object.fromEntries(entries);
     }
     return value;
   }
 
-  return { data: visit(reportData), assets };
+  return { data: await visit(reportData), assets };
 }
 
 export async function uploadReportAssets({
@@ -106,12 +121,17 @@ export async function uploadReportAssets({
         assetId: asset.id,
         mimeType: asset.mimeType,
       });
-      if (!asset.uploaded) {
+      const registered = report.assets?.find(row => row.id === asset.id && row.storage_path === storagePath);
+      if (registered && registered.kind === asset.kind && registered.sort_order === asset.sortOrder) {
+        completed.push(registered);
+        continue;
+      }
+      if (!asset.uploaded && !registered) {
         const { error } = await client.storage.from(bucket).upload(storagePath, asset.blob, {
           contentType: asset.mimeType,
           upsert: false,
         });
-        if (error) throw new Error('画像を保存できませんでした');
+        if (error && error.error !== 'Duplicate' && error.code !== 'Duplicate' && Number(error.statusCode) !== 409) throw new Error('画像を保存できませんでした');
         asset.uploaded = true;
       }
       if (!asset.registered) {
