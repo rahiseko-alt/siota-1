@@ -1777,3 +1777,23 @@ Storageの守りに止められる。マスターへ「画像の追加ができ�
 
 - **Status**: RESOLVED（再開で復旧）。再発防止はマスター判断待ち（`#67`）
 
+## F-20261118-89 — 自動検査が、中身と関係なく全部止まった（検査用の機械の OS が切り替わった）
+
+- **Date**: 2026-11-18
+- **Level**: 中（本番は無事。ただし検査・デプロイ・毎日の本番点検がすべて動かなくなる）
+- **見つけた人**: CI（`verify` と `walk` が数秒で失敗。記録だけの PR #130 で発覚）
+
+- **What happened**: `npx playwright install --with-deps chromium` が
+  `Playwright does not support chromium on ubuntu26.04-x64` で失敗。コードの中身は関係ない。
+
+- **Why it happened**: workflow が `runs-on: ubuntu-latest` だった。GitHub 側の `ubuntu-latest` が
+  Ubuntu 26.04 に切り替わり、使っている Playwright 1.59.1 がその OS にまだ対応していなかった。
+  **「latest」は、こちらが何もしなくても変わる。**
+
+- **Fixed**: 3つの workflow（`ci.yml`・`deploy.yml`・`watch-prod.yml`）を `ubuntu-24.04` に固定した。
+  Playwright が 26.04 に対応したら外せる。
+
+- **教訓**: 検査・デプロイの土台は「latest」にしない。同じ入れ物で毎回動くことが、検査の前提。
+
+- **Status**: RESOLVED（固定の push 後に CI 緑を確認する）
+
