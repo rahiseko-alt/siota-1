@@ -174,7 +174,7 @@ async function listFinalReports(petId) {
 }
 
 /** 一覧から1つ選ばせる。空なら**空だと言う**（在るふりをしない）。 */
-function picker({ items, label, empty, onPick, onBack, testid }) {
+function picker({ items, label, empty, onPick, onBack, testid, search }) {
   clear();
   contentEl.append(backButton(onBack));
   contentEl.append(heading(label));
@@ -182,13 +182,40 @@ function picker({ items, label, empty, onPick, onBack, testid }) {
     contentEl.append(el('p', null, empty));
     return;
   }
-  contentEl.append(menu(items.map((item) => ({
+  const list = menu(items.map((item) => ({
     title: item.title,
     note: item.note,
     danger: item.danger,
     testid,
     onSelect: () => onPick(item),
-  }))));
+  })));
+  /* **検索窓**（クライアント指示 C-14・2026-11-18「犬の名前・飼い主様の名前で検索」）。
+     打った文字を、各行に**表示している文字**（犬の名前・飼い主の名前）と突き合わせて、
+     合わない行を隠すだけ。サーバーには問い合わせない——一覧は既に全件読んである。
+     作業画面（`/edit`）の検索窓 `App.filterKarte()` と同じ考え方（表示文字の部分一致）。 */
+  if (search) {
+    const field = el('label', 'admin-field');
+    field.append(el('span', null, search));
+    const input = document.createElement('input');
+    input.type = 'search';
+    input.dataset.adminField = 'pet-search';
+    input.autocomplete = 'off';
+    field.append(input);
+    const none = el('p', 'admin-note', '該当する子がいません。名前を確かめてください。');
+    none.hidden = true;
+    input.addEventListener('input', () => {
+      const query = input.value.trim().toLowerCase();
+      let shown = 0;
+      for (const row of list.children) {
+        const hit = !query || row.textContent.toLowerCase().includes(query);
+        row.hidden = !hit;
+        if (hit) shown += 1;
+      }
+      none.hidden = shown > 0;
+    });
+    contentEl.append(field, none);
+  }
+  contentEl.append(list);
 }
 
 /* ── 消す前の確認 ────────────────────────────────────────────────
@@ -554,9 +581,10 @@ function petItems(pets) {
 function pickPetForCreate() {
   return withList(listPets, (pets) => picker({
     items: petItems(pets),
-    label: 'カルテを書く子を選ぶ',
+    label: 'レポートを作成する犬を選ぶ',
     empty: 'まだ1頭も登録されていません。「② 新規」から登録してください。',
     testid: 'pick-pet',
+    search: '犬の名前・飼い主様の名前で探す',
     onBack: () => navigate('/admin/repeat', screenRepeat),
     onPick: (item) => { location.href = `/edit/p/${encodeURIComponent(item.pet.id)}`; },
   }));
