@@ -306,8 +306,22 @@ export async function bootProtectedPortal() {
       throw failed;
     }
     const session = await sessionResponse.json();
+    /* **ログアウトは、どの画面よりも先に結線する。**（クライアント指示 C-13・2026-11-18
+       「スタッフアカウントで画面が動かなくなる」）
+       以前は下の「登録が見つからない」で return したあとに結線していたので、
+       招待を通らずにログインした人（招待の期限切れ・発行し直しで古くなった招待を含む）は
+       ログアウトが出ず、「TOPへ戻る」も入口が `/my` へ送り返すので、
+       **何を押してもこの画面に戻る行き止まり**だった（実測: ローカルで再現）。 */
+    if (signOutButton) signOutButton.onclick = async () => {
+      await supabase.auth.signOut();
+      /* **入口へ返す。** `/my` に留めると、飼い主の画面でログイン画面が出る形になり、
+         「入口は `/` の1本」（マスター指示 2026-09-04）とちぐはぐになる。 */
+      location.replace('/');
+    };
     if ((session.ownerLinks || []).length === 0 && (session.memberships || []).length === 0) {
-      setMessage(status, invitationMessage || '登録されたお客様情報が見つかりません');
+      setMessage(status, `${invitationMessage || '登録されたお客様情報が見つかりません'}`
+        + '　お店のスタッフの方は、管理者から新しい招待URLを受け取って開いてください。');
+      if (signOutButton) signOutButton.hidden = false;
       return;
     }
     /* **管理者を `/admin` へ強制的に飛ばすのをやめた**（マスター指示 2026-09-02:
@@ -341,12 +355,6 @@ export async function bootProtectedPortal() {
     show(content, true);
     show(signOutButton, true);
     setMessage(status, invitationMessage);
-    signOutButton.onclick = async () => {
-      await supabase.auth.signOut();
-      /* **入口へ返す。** `/my` に留めると、飼い主の画面でログイン画面が出る形になり、
-         「入口は `/` の1本」（マスター指示 2026-09-04）とちぐはぐになる。 */
-      location.replace('/');
-    };
   } catch (error) {
     /* セッション確認後（restored.state === 'signed-in'）にトークンが失効するなどして
        ここへ来た場合、ログインボタンはまだ結線されていない（それは signed-out 分岐でしか
