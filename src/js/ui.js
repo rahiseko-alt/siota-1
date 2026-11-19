@@ -212,7 +212,8 @@ const App = {
         ownerId: pet.ownerId || '',
         name: pet.petName || '',
         owner: pet.ownerName || '',
-        breed: '',
+        /* 犬種（`N-48`）。入っていない子は空のまま（`D-10`）。 */
+        breed: pet.breed || '',
         lastVisit: dates.length > 0 ? dates[dates.length - 1] : '',
         staff: '',
         incomplete: '',

@@ -89,7 +89,9 @@ export class SupabaseDataStore {
   async getSessionContext(userId) {
     const encodedUser = encodeURIComponent(userId);
     const [memberships, ownerLinks] = await Promise.all([
-      this.request(`/rest/v1/shop_memberships?select=shop_id,active&user_id=eq.${encodedUser}&active=eq.true`),
+      /* `role`（'admin' | 'staff'）は管理者画面がメニューを出し分けるのに読む（`N-49`）。
+         画面で隠すのは補助で、スタッフに許さない操作は DB が断る。 */
+      this.request(`/rest/v1/shop_memberships?select=shop_id,active,role&user_id=eq.${encodedUser}&active=eq.true`),
       this.request(`/rest/v1/owner_users?select=owner_id&user_id=eq.${encodedUser}`),
     ]);
     return { memberships, ownerLinks };
@@ -104,7 +106,7 @@ export class SupabaseDataStore {
      embed 構文で、pets_owner_shop_fkey を辿って飼い主名を1回の問い合わせで取得する。 */
   async listPetsWithOwner() {
     return this.request(
-      '/rest/v1/pets?select=id,shop_id,owner_id,name,template,active,revisit_days_override,created_at,owners(name)&active=eq.true&order=created_at.desc',
+      '/rest/v1/pets?select=id,shop_id,owner_id,name,breed,template,active,revisit_days_override,created_at,owners(name)&active=eq.true&order=created_at.desc',
     );
   }
 
@@ -136,7 +138,7 @@ export class SupabaseDataStore {
     return this.staffShopId;
   }
 
-  /** 「次回のおすすめご来店時期」の既定日数・使用オプション一覧。お店の人なら書き換えられる（RLS `shops_staff_update`）。 */
+  /** 「次回のおすすめご来店時期」の既定日数・使用オプション一覧。書き換えは管理者だけ（RLS `shops_admin_update`・`N-49`）。 */
   async getShop() {
     const shopId = await this.getStaffShopId();
     const rows = await this.request(
@@ -237,10 +239,14 @@ export class SupabaseDataStore {
   async createPet(ownerId, input) {
     const owner = await this.getOwner(ownerId);
     const rows = await this.request(
-      '/rest/v1/pets?select=id,shop_id,owner_id,name,template,active,revisit_days_override,created_at,updated_at',
+      '/rest/v1/pets?select=id,shop_id,owner_id,name,breed,template,active,revisit_days_override,created_at,updated_at',
       {
         method: 'POST',
-        body: { shop_id: owner.shop_id, owner_id: ownerId, name: input.name, template: input.template },
+        body: {
+          shop_id: owner.shop_id, owner_id: ownerId, name: input.name, template: input.template,
+          /* 犬種は任意（`N-48`）。入っていなければ送らない＝DB の既定（null）。 */
+          ...(input.breed !== undefined ? { breed: input.breed } : {}),
+        },
         prefer: 'return=representation',
       },
     );
@@ -252,7 +258,7 @@ export class SupabaseDataStore {
     const body = { ...rest };
     if ('revisitDaysOverride' in input) body.revisit_days_override = revisitDaysOverride;
     const rows = await this.request(
-      `/rest/v1/pets?id=eq.${encodeURIComponent(petId)}&select=id,shop_id,owner_id,name,template,active,revisit_days_override,created_at,updated_at`,
+      `/rest/v1/pets?id=eq.${encodeURIComponent(petId)}&select=id,shop_id,owner_id,name,breed,template,active,revisit_days_override,created_at,updated_at`,
       { method: 'PATCH', body, prefer: 'return=representation' },
     );
     return this.one(rows);

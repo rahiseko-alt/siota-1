@@ -8,8 +8,11 @@ const invitationMigrationUrl = new URL('../supabase/migrations/202607160003_invi
 const storageMigrationUrl = new URL('../supabase/migrations/202607160004_private_storage_lifecycle.sql', import.meta.url);
 const importMigrationUrl = new URL('../supabase/migrations/202607160005_import_ledger_rpc.sql', import.meta.url);
 /* 取り込み台帳の RPC は `202609060012` で**いまの形**に置き換わっている（権限が1本になった回）。
-   古い定義を読んだままだと、廃止した `is_shop_admin` を検査が名指しし続ける（`F-20260910-83`）。 */
+   古い `202607160005` の定義を読んだままだと、検査が古い形を名指しし続ける（`F-20260910-83`）。 */
 const singleStaffRoleMigrationUrl = new URL('../supabase/migrations/202609060012_single_staff_role.sql', import.meta.url);
+/* 店舗側を「管理者」と「スタッフ」に分け直した回（マスター指示 2026-11-19・plan.md `N-49`）。
+   `202609060012` で消した `is_shop_admin` と `role` 列は、ここで**作り直されている**。 */
+const adminStaffRolesMigrationUrl = new URL('../supabase/migrations/202611190017_admin_staff_roles.sql', import.meta.url);
 
 async function migrationSql() {
   return readFile(migrationUrl, 'utf8');
@@ -135,11 +138,15 @@ test('private storage lifecycle derives paths and keeps incomplete reports non-f
 
 test('migration ledger RPC is staff-scoped and never grants direct table access', async () => {
   /* **いまの定義を読む。** 中身（誰が呼べるか・何を弾くか）は `202609060012` が
-     `create or replace` で置き換えている。ここは以前 `202607160005` の古い定義を読み、
-     **廃止した `is_shop_admin` を名指ししていた**（`F-20260910-83`）。 */
+     `create or replace` で置き換えている。ここは以前 `202607160005` の古い定義を読んでいた
+     （`F-20260910-83`）。取り込み台帳は**スタッフにも許す側**のまま（`N-49` は削除・店舗設定・
+     スタッフ招待だけを管理者に絞った）なので、`is_shop_admin` で絞っていないことも見る。 */
   const sql = await readFile(singleStaffRoleMigrationUrl, 'utf8');
   assert.match(sql, /private\.is_shop_staff\(target_shop\)/i);
   assert.doesNotMatch(sql, /private\.is_shop_admin\(target_shop\)/i);
+  /* **後の回が定義し直していない**こと——していれば、上で読んだのは「いまの形」ではない。 */
+  const latest = await readFile(adminStaffRolesMigrationUrl, 'utf8');
+  assert.doesNotMatch(latest, /function public\.write_import_ledger/i, 'N-49 の回が取り込み台帳を定義し直している');
   assert.match(sql, /'cloudflare-kv:' \|\| target_shop::text/i);
   assert.match(sql, /on conflict \(source_system, entity_type, legacy_key\) do update/i);
   assert.match(sql, /target_source_hash !~ '\^\[0-9a-f\]\{64\}\$'/i);
@@ -212,4 +219,94 @@ test('紐付けを外す手段があり、他店舗には届かない', async ()
   assert.match(body, /grant execute on function public\.revoke_owner_link/, 'authenticated に実行権が無い');
   /* owner_users への直接 delete は与えない（他店舗の行に触れないことを関数側で保証する）。 */
   assert.doesNotMatch(sql, /grant\s+delete\s+on\s+public\.owner_users/i, 'テーブルに直接 delete を与えている');
+});
+
+/* ══════════════════════════════════════════════════════════════
+   店舗側の権限を「管理者」と「スタッフ」に分け直した
+   （マスター指示 2026-11-19・plan.md `N-49`・`202611190017`）
+
+   2026-09-06 の判断（`D-20260906-68`・権限は1本）を、マスターが改めて分け直した。
+   以前この帳面は「`is_shop_admin` が無いこと」を見ていたが、いまの正は逆で、
+   **スタッフにさせないのは 削除・店舗設定・スタッフ招待 の3つだけ**。
+   守るのはデータベースなので、その3つが `is_shop_admin` を通ることをここで見る。
+   ══════════════════════════════════════════════════════════════ */
+
+/** `create or replace function <name>(` から、その本体の終わり（`$$;`）までを切り出す。 */
+function functionBody(sql, name) {
+  const start = sql.indexOf(`create or replace function ${name}(`);
+  assert.ok(start >= 0, `${name} を定義していない`);
+  return sql.slice(start, sql.indexOf('$$;', start));
+}
+
+test('N-49: 役割の列と、管理者かどうかの判定を定義している', async () => {
+  const sql = await readFile(adminStaffRolesMigrationUrl, 'utf8');
+  assert.match(sql, /alter table public\.shop_memberships\s+add column role text not null default 'admin'\s+check \(role in \('admin', 'staff'\)\)/i);
+  const isAdmin = functionBody(sql, 'private.is_shop_admin');
+  assert.match(isAdmin, /security definer[\s\S]*set search_path = ''/i);
+  assert.match(isAdmin, /membership\.user_id = \(select auth\.uid\(\)\)/i, '呼んだ本人で絞っていない');
+  assert.match(isAdmin, /membership\.active/i, '無効なメンバーを管理者に数えている');
+  assert.match(isAdmin, /membership\.role = 'admin'/i, '役割を見ていない');
+  assert.match(sql, /revoke all on function private\.is_shop_admin\(uuid\) from public, anon/i);
+});
+
+test('N-49: 顧客・犬の FOR ALL を落とし、削除だけを管理者に絞っている', async () => {
+  const sql = await readFile(adminStaffRolesMigrationUrl, 'utf8');
+  for (const table of ['owners', 'pets']) {
+    /* FOR ALL が残っていると、下の delete 方針を足しても RLS は OR で通してしまう。 */
+    assert.match(sql, new RegExp(`drop policy if exists ${table}_staff_all on public\\.${table};`, 'i'),
+      `${table}_staff_all を落としていない`);
+    assert.match(sql, new RegExp(`create policy ${table}_admin_delete on public\\.${table}\\s+for delete to authenticated using \\(private\\.is_shop_admin\\(shop_id\\)\\)`, 'i'),
+      `${table} の削除が管理者に絞られていない`);
+    /* スタッフに残すもの（読む・作る・直す）を、落としたまま忘れていないか。 */
+    for (const op of ['select', 'insert', 'update']) {
+      assert.match(sql, new RegExp(`create policy ${table}_staff_${op} on public\\.${table}\\s+for ${op} to authenticated`, 'i'),
+        `${table} の ${op} がスタッフから消えた`);
+    }
+    assert.doesNotMatch(sql, new RegExp(`create policy \\w+ on public\\.${table}\\s+for all`, 'i'),
+      `${table} に FOR ALL を作り直している`);
+    assert.match(sql, new RegExp(`create trigger ${table}_guard_deactivate\\s+before update of active on public\\.${table}`, 'i'),
+      `${table} の「使わない」にする抜け道が開いている`);
+  }
+  const guard = functionBody(sql, 'private.guard_deactivate');
+  assert.match(guard, /old\.active and not new\.active and not private\.is_shop_admin\(new\.shop_id\)/i);
+  assert.match(sql, /drop policy if exists report_assets_storage_staff_delete on storage\.objects/i);
+  /* 写真の実体の削除は管理者だけ。判定は security definer の関数に閉じ込める
+     （ポリシーから `try_uuid` を直に呼ぶと、ログインした人に実行権が無く管理者まで断られた・実測）。 */
+  assert.match(sql, /create policy report_assets_storage_admin_delete on storage\.objects[\s\S]*?private\.storage_path_admin\(name\)/i);
+  assert.match(functionBody(sql, 'private.storage_path_admin'), /private\.is_shop_admin\(report\.shop_id\)/i);
+});
+
+test('N-49: カルテの削除と隠すことは管理者だけ', async () => {
+  const sql = await readFile(adminStaffRolesMigrationUrl, 'utf8');
+  for (const fn of ['public.mark_report_deleting', 'public.complete_report_deletion', 'public.archive_report']) {
+    const body = functionBody(sql, fn);
+    assert.match(body, /private\.is_shop_admin\(report\.shop_id\)/i, `${fn} が管理者で絞っていない`);
+    assert.doesNotMatch(body, /private\.is_shop_staff\(/i, `${fn} にスタッフの判定が残っている`);
+  }
+});
+
+test('N-49: 店舗設定は管理者だけ', async () => {
+  const sql = await readFile(adminStaffRolesMigrationUrl, 'utf8');
+  assert.match(sql, /drop policy if exists shops_staff_update on public\.shops/i);
+  assert.match(sql, /create policy shops_admin_update on public\.shops\s+for update to authenticated\s+using \(private\.is_shop_admin\(id\)\) with check \(private\.is_shop_admin\(id\)\)/i);
+});
+
+test('N-49: スタッフ招待を出す・取り消すのは管理者だけ（飼い主の招待はスタッフも）', async () => {
+  const sql = await readFile(adminStaffRolesMigrationUrl, 'utf8');
+  const create = functionBody(sql, 'public.create_invitation');
+  assert.match(create, /not private\.is_shop_staff\(target_shop\)/i, '店の人かどうかを見ていない');
+  /* **前の招待を取り消す update より前に断る**——後ろだと、断られたのに管理者の招待が消える。 */
+  const adminGuard = create.search(/if target_type = 'staff' and not private\.is_shop_admin\(target_shop\) then/i);
+  assert.ok(adminGuard > 0, 'スタッフ招待を管理者で絞っていない');
+  assert.ok(adminGuard < create.search(/update public\.invitations/i), '断る前に前の招待を取り消している');
+  const revoke = functionBody(sql, 'public.revoke_invitation');
+  assert.match(revoke, /invitation\.invitation_type = 'staff' and not private\.is_shop_admin\(invitation\.shop_id\)/i);
+  /* スタッフ招待で入った人は staff。既に居る人は降格させない（on conflict で role を書かない）。 */
+  const claim = functionBody(sql, 'public.claim_invitation');
+  assert.match(claim, /insert into public\.shop_memberships \(shop_id, user_id, active, role\)\s+values \(invitation\.shop_id, actor, true, 'staff'\)/i);
+  assert.match(claim, /on conflict \(shop_id, user_id\) do update set active = true;/i);
+  for (const op of ['insert', 'update', 'delete']) {
+    assert.match(sql, new RegExp(`drop policy if exists memberships_staff_${op} on public\\.shop_memberships`, 'i'));
+    assert.match(sql, new RegExp(`create policy memberships_admin_${op} on public\\.shop_memberships[\\s\\S]*?private\\.is_shop_admin\\(shop_id\\)`, 'i'));
+  }
 });

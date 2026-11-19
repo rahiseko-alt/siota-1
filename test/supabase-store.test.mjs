@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createPetSchema, parseJson } from '../worker/src/api-schemas.js';
+import { createPetSchema, updatePetSchema, parseJson } from '../worker/src/api-schemas.js';
 import { StoreError, SupabaseDataStore } from '../worker/src/data-stores/supabase-data-store.js';
 import worker from '../worker/src/index.js';
 
@@ -27,6 +27,24 @@ test('Zod parser rejects unknown fields and malformed UUIDs', async () => {
     method: 'POST', body: JSON.stringify({ ownerId: '../owner-a', name: 'X', template: 'ponchi' }),
   }), createPetSchema);
   assert.equal(invalid.ok, false);
+});
+
+test('犬種（N-48）: 任意・前後の空白を落とす・空は null・60文字まで・文字列以外は拒む', () => {
+  const owner = '30000000-0000-0000-0000-0000000000a1';
+  const base = { ownerId: owner, name: 'X', template: 'ponchi' };
+  assert.equal(createPetSchema.parse(base).breed, undefined);
+  assert.equal(createPetSchema.parse({ ...base, breed: '  柴  ' }).breed, '柴');
+  assert.equal(createPetSchema.parse({ ...base, breed: '   ' }).breed, null);
+  assert.equal(createPetSchema.parse({ ...base, breed: 'あ'.repeat(60) }).breed, 'あ'.repeat(60));
+  assert.equal(createPetSchema.safeParse({ ...base, breed: 'あ'.repeat(61) }).success, false);
+  assert.equal(createPetSchema.safeParse({ ...base, breed: 3 }).success, false);
+
+  assert.equal(updatePetSchema.parse({ breed: 'ミックス' }).breed, 'ミックス');
+  assert.equal(updatePetSchema.parse({ breed: null }).breed, null);
+  assert.equal(updatePetSchema.parse({ breed: '' }).breed, null);
+  assert.equal(updatePetSchema.safeParse({ breed: { $ne: 1 } }).success, false);
+  /* 犬種だけを送る変更も「何も変えない」扱いにしない（refine）。 */
+  assert.equal(updatePetSchema.safeParse({}).success, false);
 });
 
 test('JSON parser rejects oversized report bodies before parsing', async () => {
@@ -601,14 +619,43 @@ test('the Supabase store never calls fetch with itself as the receiver', async (
   }
 });
 
+/* **画面は `/api/session` の `role` で「管理者には5つ・スタッフには2つ」を出し分ける**
+   （店舗側を管理者とスタッフに分け直した・マスター指示 2026-11-19・`N-49`・`202611190017`）。
+   以前は `role` 列ごと消していた（`D-20260906-68`）ので、ここは何も見ていなかった。
+   役割を引かずに返すと、画面はスタッフにも削除の入口を出すか、管理者から隠す。
+   守るのは DB だが、人が迷わないために役割は必ず届ける。本人の行だけを引くことも見る。 */
+test('getSessionContext returns the caller own membership role (N-49)', async () => {
+  const urls = [];
+  const store = new SupabaseDataStore({
+    supabaseUrl: 'https://project.supabase.co',
+    publishableKey: 'publishable-key',
+    accessToken: 'user-jwt',
+    fetchImpl: (url) => {
+      urls.push(String(url));
+      if (String(url).includes('/shop_memberships?')) {
+        return Response.json([{ shop_id: '10000000-0000-0000-0000-000000000001', active: true, role: 'staff' }]);
+      }
+      return Response.json([]);
+    },
+  });
+
+  const context = await store.getSessionContext('20000000-0000-0000-0000-000000000003');
+  const membershipUrl = urls.find((u) => u.includes('/shop_memberships?'));
+  assert.ok(membershipUrl, 'shop_memberships を問い合わせていない');
+  const select = new URL(membershipUrl).searchParams.get('select') || '';
+  assert.ok(select.split(',').includes('role'), `役割を引いていない（select=${select}）`);
+  assert.match(membershipUrl, /user_id=eq\.20000000-0000-0000-0000-000000000003/, '本人の行で絞っていない');
+  assert.equal(context.memberships[0].role, 'staff', '引いた役割をそのまま返していない');
+});
+
 /* RLS の `memberships_authorized_select` は
    `user_id = auth.uid() or private.is_shop_staff(shop_id)` なので、**同じ店のメンバーには
    店舗の全メンバー行が返る**。getStaffShopId が user_id で絞っていないと、スタッフが2人に
    なった瞬間に 409 になり、飼い主の新規作成・招待の発行と一覧・スタッフ管理
    （退職者の停止）が全部使えなくなる。日々のカルテ作成はこの関数を通らないので気づけない。
 
-   （以前ここは `is_shop_admin` と「管理者だけが」と書いていた。その関数と `admin` 権限は
-   2026-09-06 に削除済み・`D-20260906-68`。読む人も機械も古い区別を拾わないよう直した。） */
+   （ここは「管理者かどうか」ではなく「この店の人か」だけを見る口。管理者だけに許す
+   削除・店舗設定・スタッフ招待は、DB の `is_shop_admin` が断る・`N-49`・2026-11-19。） */
 test('getStaffShopId asks only for the caller own membership', async () => {
   const urls = [];
   const store = new SupabaseDataStore({

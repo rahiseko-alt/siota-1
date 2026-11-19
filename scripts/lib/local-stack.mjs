@@ -20,7 +20,9 @@
  * パスワードはどれも同じ: LocalOnly-Password-2026!（本番の秘密情報ではない）
  */
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+
+const IS_WINDOWS = process.platform === 'win32';
 import net from 'node:net';
 
 /* **接続先は差し替えられるようにする**（`D-20260825-44`）。
@@ -42,7 +44,11 @@ export const LOCAL_PASSWORD = 'LocalOnly-Password-2026!';
 
 export const FIXTURE = {
   shopId: '10000000-0000-0000-0000-000000000001',
+  /* **管理者**（`N-49`）。名前は昔のまま——これまでの検査が削除・店舗設定まで通す口座。 */
   staffEmail: 'staff@local.test',
+  /* スタッフ権限（管理者ではない）。削除・店舗設定・スタッフ招待を断られる側（`N-49`）。 */
+  limitedStaffEmail: 'limited-staff@local.test',
+  limitedStaffUserId: '20000000-0000-0000-0000-000000000003',
   ownerAEmail: 'owner-a@local.test',
   ownerAOwnerId: '30000000-0000-0000-0000-0000000000a1',
   ownerBEmail: 'owner-b@local.test',
@@ -94,8 +100,10 @@ export async function ensureLocalSupabaseRunning() {
 export async function localServiceRoleKey() {
   const { execFile } = await import('node:child_process');
   const { promisify } = await import('node:util');
+  /* Windows では `npx` の正体が `npx.cmd` で、シェル無しでは起動できない（`spawn npx ENOENT`）。 */
   const { stdout } = await promisify(execFile)('npx', ['supabase', 'status', '-o', 'json'], {
     maxBuffer: 4 * 1024 * 1024,
+    shell: IS_WINDOWS,
   });
   const key = JSON.parse(stdout).SERVICE_ROLE_KEY;
   if (!key) throw new Error('supabase status から SERVICE_ROLE_KEY を読めなかった');
@@ -253,14 +261,15 @@ export async function startLocalWorker({ port = 8787, readyTimeoutMs = 90_000, c
     'wrangler', 'dev',
     '--config', cfg,
     '--port', String(port),
-  ], { stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+  ], { stdio: ['ignore', 'pipe', 'pipe'], detached: !IS_WINDOWS, shell: IS_WINDOWS });
 
   let log = '';
   const ready = new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`Worker が ${readyTimeoutMs / 1000}s で起動しなかった\n${log}`)), readyTimeoutMs);
     const watch = (chunk) => {
       log += chunk;
-      if (log.includes(`Ready on http://localhost:${port}`)) {
+      /* 合図のホスト名は環境で違う（Linux は `localhost`、Windows は `127.0.0.1`）。 */
+      if (new RegExp(`Ready on http://(localhost|127\\.0\\.0\\.1):${port}\\b`).test(log)) {
         clearTimeout(timer);
         resolve();
       }
@@ -276,13 +285,21 @@ export async function startLocalWorker({ port = 8787, readyTimeoutMs = 90_000, c
   async function stop() {
     if (worker.exitCode !== null || worker.signalCode !== null) return;
     const exited = new Promise((resolve) => worker.once('exit', resolve));
+    /* Windows にはプロセスグループが無いので、子の木ごと taskkill で止める。 */
+    const killTree = (signal) => {
+      if (IS_WINDOWS) {
+        spawnSync('taskkill', ['/pid', String(worker.pid), '/t', '/f'], { stdio: 'ignore' });
+      } else {
+        process.kill(-worker.pid, signal);
+      }
+    };
     try {
-      process.kill(-worker.pid, 'SIGTERM');
+      killTree('SIGTERM');
     } catch {
       return;
     }
     const hammer = setTimeout(() => {
-      try { process.kill(-worker.pid, 'SIGKILL'); } catch { /* もう居ない */ }
+      try { killTree('SIGKILL'); } catch { /* もう居ない */ }
     }, 5_000);
     await exited;
     clearTimeout(hammer);

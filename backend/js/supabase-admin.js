@@ -10,8 +10,12 @@
  *
  * **2026-08-26 時点は「管理者アカウントを作る機能はここに置かない（納品時に
  * 開発者が行う）」だったが、マスター指示（2026-09-24「招待ボタン復活させて」）で
- * 方針転換した。** 招待されたスタッフは招待した側と全く同じ権限を持つ
- * （役割の区別が無い・`202609060012_single_staff_role.sql`）。
+ * 方針転換した。**
+ *
+ * **店舗側は「管理者」と「スタッフ」に分かれる**（マスター指示 2026-11-19・`N-49`・
+ * `202611190017_admin_staff_roles.sql`）。スタッフ招待で入った人がスタッフで、
+ * ③削除・④店舗設定・⑤スタッフ招待はメニューに出さない。断るのは DB で、
+ * ここで隠すのは押せないものを見せないための補助。
  *
 
  * **新しい API は作っていない。** 使うのは全部いま在るもの——
@@ -32,6 +36,8 @@ import { deleteReportAssets, purgePetAssets, purgeOwnerAssets } from './supabase
 let supabase = null;
 let statusEl = null;
 let contentEl = null;
+/* 管理者か（`N-49`）。起動時に `/api/session` の `role` から決める。 */
+let isAdmin = true;
 
 function api(path, options = {}) {
   return authorizedFetch(supabase, path, options).then(async (response) => {
@@ -108,6 +114,7 @@ async function listPets() {
     name: pet.name || '',
     ownerName: (pet.owners && pet.owners.name) || '',
     ownerId: pet.owner_id || '',
+    breed: pet.breed || '',
   }));
 }
 
@@ -273,7 +280,7 @@ function confirmDestructive({ title, what, detail, name, onConfirm, onBack }) {
 
 function screenHome() {
   clear();
-  contentEl.append(menu([
+  const items = [
     {
       title: '① リピーター',
       note: 'すでにお預かりしている子のカルテを作る・直す',
@@ -305,7 +312,9 @@ function screenHome() {
       testid: 'invite-staff',
       onSelect: () => navigate('/admin/invite-staff', screenInviteStaff),
     },
-  ]));
+  ];
+  /* スタッフには①②だけを出す。番号は振り直さない（管理者と同じ呼び名で話せるように）。 */
+  contentEl.append(menu(isAdmin ? items : items.slice(0, 2)));
 }
 
 /* 「次回のおすすめご来店時期」の既定日数（マスター指示 2026-08-29・D-20260829-58）。
@@ -465,9 +474,9 @@ function screenInviteStaff() {
   contentEl.append(backButton(() => navigate('/admin', screenHome)));
   contentEl.append(heading('スタッフ招待'));
   /* **招待した相手が何を持つかを、発行前に言う**（`D-20` の精神・意見は率直に）。
-     この店にはスタッフの役割区分が無い（`202609060012_single_staff_role.sql`）ので、
-     招待された人はあなたと**全く同じ**権限（見る・書く・消す）を持つ。 */
-  contentEl.append(note('招待すると、その人はあなたと全く同じ権限（すべての飼い主・犬・カルテを見る・書く・消す）を持ちます。有効期限24時間・1回のみ使用できます。新しく発行すると、前のQR・URLは使えなくなります。'));
+     招待された人は**スタッフ**になり、削除・店舗設定・スタッフ招待ができない
+     （`202611190017_admin_staff_roles.sql`・`N-49`）。 */
+  contentEl.append(note('招待すると、その人は「スタッフ」になります。すべての飼い主・犬・カルテを見る・書く・直すことはできますが、削除・店舗設定・スタッフ招待はできません（管理者だけ）。有効期限24時間・1回のみ使用できます。新しく発行すると、前のQR・URLは使えなくなります。'));
   const button = submitButton('招待を発行する', 'create-staff-invitation');
   const result = el('div', 'admin-result');
   contentEl.append(button, result);
@@ -542,6 +551,12 @@ function screenRepeat() {
       testid: 'repeat-revise',
       onSelect: () => navigate('/admin/repeat/revise', pickPetForRevise),
     },
+    {
+      title: '③ 犬の情報を直す',
+      note: '犬種を入れる・直す',
+      testid: 'repeat-pet',
+      onSelect: () => navigate('/admin/repeat/pet', pickPetForEdit),
+    },
   ]));
 }
 
@@ -560,7 +575,9 @@ async function withList(loader, render) {
 function petItems(pets) {
   const items = pets.map((pet) => ({
     title: pet.name,
-    note: pet.ownerName ? `飼い主: ${pet.ownerName}` : '',
+    /* 犬種は入っている子だけ出す（クライアント指示 C-14「飼い主名・犬名・犬種」・`N-48`）。
+       行に出した文字は検索窓がそのまま探すので、犬種でも絞り込める。 */
+    note: [pet.ownerName ? `飼い主: ${pet.ownerName}` : '', pet.breed].filter(Boolean).join(' ・ '),
     pet,
   }));
   /* 犬の名前と飼い主の名前が**両方とも同じ**行があれば、そこだけ ID を足す
@@ -584,10 +601,56 @@ function pickPetForCreate() {
     label: 'レポートを作成する犬を選ぶ',
     empty: 'まだ1頭も登録されていません。「② 新規」から登録してください。',
     testid: 'pick-pet',
-    search: '犬の名前・飼い主様の名前で探す',
+    search: '犬の名前・飼い主様の名前・犬種で探す',
     onBack: () => navigate('/admin/repeat', screenRepeat),
     onPick: (item) => { location.href = `/edit/p/${encodeURIComponent(item.pet.id)}`; },
   }));
+}
+
+/* 登録済みの子に犬種を入れる・直す（`N-48`）。犬種の欄を足す前に登録された子は空から始まる。 */
+function pickPetForEdit() {
+  return withList(listPets, (pets) => picker({
+    items: petItems(pets),
+    label: '情報を直す犬を選ぶ',
+    empty: 'まだ1頭も登録されていません。「② 新規」から登録してください。',
+    testid: 'pick-pet',
+    search: '犬の名前・飼い主様の名前・犬種で探す',
+    onBack: () => navigate('/admin/repeat', screenRepeat),
+    onPick: (item) => pushStep(() => formEditPet(item.pet)),
+  }));
+}
+
+function formEditPet(pet) {
+  clear();
+  contentEl.append(backButton(() => navigate('/admin/repeat/pet', pickPetForEdit)));
+  contentEl.append(heading('犬の情報を直す'));
+  contentEl.append(el('p', null, pet.ownerName ? `${pet.name}（飼い主: ${pet.ownerName}）` : pet.name));
+  const breed = breedField(pet.breed);
+  contentEl.append(breed.field);
+  contentEl.append(note('空欄にして保存すると、犬種を消します。'));
+  const button = submitButton('保存する', 'save-pet');
+  const result = el('p', 'admin-result');
+  button.onclick = async () => {
+    const value = breed.input.value.trim();
+    button.disabled = true;
+    setMessage(result, '保存しています…');
+    try {
+      const body = await api(`/api/pets/${encodeURIComponent(pet.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ breed: value || null }),
+      });
+      const saved = (body.pet && body.pet.breed) || '';
+      pet.breed = saved;
+      breed.input.value = saved;
+      setMessage(result, saved ? `保存しました: ${saved}` : '犬種を消しました');
+    } catch (error) {
+      setMessage(result, `保存できませんでした: ${error.message}`);
+    } finally {
+      button.disabled = false;
+    }
+  };
+  contentEl.append(button);
+  contentEl.append(result);
 }
 
 function pickPetForRevise() {
@@ -648,6 +711,38 @@ function textField(labelText, testid) {
   input.dataset.adminField = testid;
   input.autocomplete = 'off';
   field.append(input);
+  return { field, input };
+}
+
+/* ── 犬種の欄（クライアント指示 C-14・マスター決定 案C・`N-48`） ─────────
+   打ち始めると候補が出る。候補に無い犬種（ミックスなど）はそのまま打てる。
+   ブラウザ標準の `<datalist>` で出すので、部品は足していない。
+   候補はクライアントへの回答案（`docs/ops/client-reply-C13-C14.md`）の一覧と同じ。 */
+export const BREED_CANDIDATES = [
+  'トイ・プードル', 'チワワ', 'ミニチュア・ダックスフンド', 'ポメラニアン', '柴',
+  'ミニチュア・シュナウザー', 'ヨークシャー・テリア', 'マルチーズ', 'シー・ズー',
+  'フレンチ・ブルドッグ', 'パピヨン', 'ビション・フリーゼ', 'ミニチュア・ピンシャー',
+  'キャバリア・キング・チャールズ・スパニエル', 'ウェルシュ・コーギー・ペンブローク',
+  'ジャック・ラッセル・テリア', 'ペキニーズ', '狆', 'ボーダー・コリー',
+  'ゴールデン・レトリーバー', 'ラブラドール・レトリーバー', 'ミックス',
+];
+
+/** 犬種の上限。DB の check 制約（`202611190016`）・`api-schemas.js` と同じ。 */
+const BREED_MAX = 60;
+
+function breedField(value = '') {
+  const { field, input } = textField('犬種（打つと候補が出ます。候補に無いときはそのまま入力）', 'pet-breed');
+  input.maxLength = BREED_MAX;
+  input.value = value;
+  const list = document.createElement('datalist');
+  list.id = 'admin-breed-candidates';
+  for (const breed of BREED_CANDIDATES) {
+    const option = document.createElement('option');
+    option.value = breed;
+    list.append(option);
+  }
+  input.setAttribute('list', list.id);
+  field.append(list);
   return { field, input };
 }
 
@@ -714,10 +809,13 @@ function formNewPet() {
 
     const { field, input } = textField('わんちゃんのお名前', 'pet-name');
     contentEl.append(field);
+    const breed = breedField();
+    contentEl.append(breed.field);
     const button = submitButton('登録する', 'create-pet');
     const result = el('p', 'admin-result');
     button.onclick = async () => {
       const name = input.value.trim();
+      const breedValue = breed.input.value.trim();
       const ownerId = select.value;
       if (!name) { setMessage(result, 'お名前を入力してください'); return; }
       button.disabled = true;
@@ -729,9 +827,10 @@ function formNewPet() {
            画面で選ばせる意味が無いので固定する。増えたらここに選択欄が要る。 */
         const body = await api(`/api/owners/${encodeURIComponent(ownerId)}/pets`, {
           method: 'POST',
-          body: JSON.stringify({ ownerId, name, template: 'ponchi' }),
+          body: JSON.stringify({ ownerId, name, template: 'ponchi', ...(breedValue ? { breed: breedValue } : {}) }),
         });
         input.value = '';
+        breed.input.value = '';
         button.disabled = false;
         setMessage(result, `登録しました: ${(body.pet && body.pet.name) || name}`);
       } catch (error) {
@@ -882,6 +981,7 @@ const ADMIN_ROUTES = {
   '/admin/repeat': screenRepeat,
   '/admin/repeat/create': pickPetForCreate,
   '/admin/repeat/revise': pickPetForRevise,
+  '/admin/repeat/pet': pickPetForEdit,
   '/admin/new': screenNew,
   '/admin/new/owner': formNewOwner,
   '/admin/new/pet': formNewPet,
@@ -893,7 +993,28 @@ const ADMIN_ROUTES = {
   '/admin/invite-staff': screenInviteStaff,
 };
 
+/* 管理者だけの画面（`N-49`）。スタッフが住所を直に開いた・戻る/進むで来たときは、
+   画面を描かずに理由と戻り道を出す（白い画面にしない・`D-14` の問2）。 */
+const ADMIN_ONLY_PATHS = new Set([
+  '/admin/delete',
+  '/admin/delete/owner',
+  '/admin/delete/pet',
+  '/admin/delete/report',
+  '/admin/settings',
+  '/admin/invite-staff',
+]);
+
+function screenAdminOnly() {
+  clear();
+  contentEl.append(backButton(() => navigate('/admin', screenHome)));
+  contentEl.append(note('この操作は管理者だけができます。管理者にお願いしてください。'));
+}
+
 function renderForPath(path) {
+  if (!isAdmin && ADMIN_ONLY_PATHS.has(path)) {
+    screenAdminOnly();
+    return;
+  }
   (ADMIN_ROUTES[path] || screenHome)();
 }
 
@@ -952,10 +1073,9 @@ export async function bootAdminPortal() {
     }
 
     const session = await api('/api/session');
-    /* **権限は「お店の人か / 飼い主か」の2つだけ**（マスター判断 2026-09-06・`D-20260906-68`
-       「管理者とスタッフは同一で良い」）。以前はここで `role === 'admin'` を見て
-       一般スタッフを追い返していたが、その区別は DB ごと削除した。
-       残る境目は**飼い主をここに入れない**ことだけ——それは越境なので必ず止める。 */
+    /* **飼い主をここに入れない**——それは越境なので必ず止める。
+       お店の人は管理者もスタッフもここに入る（`N-49`）。スタッフに出さないのは
+       ③削除・④店舗設定・⑤スタッフ招待だけで、それは下の `isAdmin` が決める。 */
     if ((session.memberships || []).length === 0) {
       /* 行き止まりにしない。その人が使える画面へ送る（`D-14` の問1）。 */
       setMessage(statusEl, 'この画面はお店の方だけが使えます。');
@@ -976,6 +1096,10 @@ export async function bootAdminPortal() {
       };
       return;
     }
+
+    /* `role` が無いのは役割を返さない古い Worker。そのときは今までどおり管理者として扱う
+       （DB が断るので、画面が多めに出ても裏で通ることは無い）。 */
+    isAdmin = session.memberships.some((membership) => (membership.role || 'admin') === 'admin');
 
     show(contentEl, true);
     show(signOutButton, true);
