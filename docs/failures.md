@@ -1850,3 +1850,23 @@ Storageの守りに止められる。マスターへ「画像の追加ができ�
   そのまま「人に起こること」と読んだ。
 - **Fixed**: マスター指示で `AGENTS.md` に `D-26`（権限は2つ）と `D-27`（1ページずつ進む・検証も同じ）を記録。
 - **Status**: RESOLVED（ルール化）。C-13 そのものは `N-41` で本番を1ページずつ確かめる
+
+---
+
+## F-20261119-93 — Windows のパソコンでは、チェックインも検査も最後まで走らなかった
+
+- **Date**: 2026-11-19
+- **Level**: 中（デスクトップでしかできない `N-43` に着手できなかった）
+- **見つけた人**: AI（`node scripts/guard/checkin.mjs` が `fatal: ambiguous argument` で落ちた）
+
+- **What happened**: 点検スクリプトがクラウドのコンテナ（Linux）でしか動かされておらず、Windows で始めたセッションで次の4つが同時に起きた。
+  ①`checkin.mjs` の `git branch -r --format='…'` の単引用符が cmd.exe で外れず、存在しないブランチ名として落ちた（印が書けず `npm run check` の1本目が赤）。
+  ②`scope.mjs` の `rel()` が `\` 区切りを返し、範囲内のファイルまで「範囲外」と止めた。
+  ③`sql-verified.mjs` の指紋にも `\` 区切りのパスが入り、中身が同じでも記録と不一致になった。
+  ④`design-isolation-guard.mjs` が `URL#pathname`（Windows では `/C:/…`）で自分自身を判定し、自分を違反として拾った。
+  さらに Windows の git 既定 `core.autocrlf=true` で改行が CRLF になり、テストが多数赤になった。
+- **Why it happened**: 点検スクリプトの書き方が POSIX のシェルと `/` 区切りを前提にしていた。Windows で一度も走らせていなかった。
+- **Fixed**: ①〜④を判定に効く箇所だけ直した（PR #134）。赤→緑→戻して赤を Windows 実機で確認。
+  改行はリポジトリを変えず、そのクローンで `git config --local core.autocrlf false` にして取り出し直した。
+- **Guardrail**: Windows で新しくクローンしたら、`npm ci` の前に `git config --local core.autocrlf false` → 取り出し直し。
+- **Status**: RESOLVED（①〜④）。改行はクローンごとの手作業のまま（`.gitattributes` を置くかは未判断）
