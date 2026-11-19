@@ -1870,3 +1870,14 @@ Storageの守りに止められる。マスターへ「画像の追加ができ�
   改行はリポジトリを変えず、そのクローンで `git config --local core.autocrlf false` にして取り出し直した。
 - **Guardrail**: Windows で新しくクローンしたら、`npm ci` の前に `git config --local core.autocrlf false` → 取り出し直し。
 - **Status**: RESOLVED（①〜④）。改行はクローンごとの手作業のまま（`.gitattributes` を置くかは未判断）
+
+## F-20261119-94 — 新しく書いた「写真の削除は管理者だけ」の守りが、管理者の削除まで止めていた
+
+- **Date**: 2026-11-19
+- **Level**: 中（本番に出す前に手元の検査で見つかった。出していたら、写真のある犬・顧客を誰も消せなかった）
+- **見つけた人**: AI（`verify:admin` の 16・17・18 が「写真の削除を再試行してください」で赤）
+- **What happened**: `202611190017` の Storage 削除ポリシーに、`private.try_uuid(...)` を**ポリシーから直接**書いた。ポリシーはログインした人の権限で評価されるが、`try_uuid` は `202607160001` で実行権を外してあるので、評価そのものが失敗し、**管理者の削除も断られた**。
+- **Why it happened**: 既存の `storage_path_staff` が security definer の関数の**中で** `try_uuid` を呼んでいるのを見ずに、同じ式をポリシーへ直に写した。SQL の検査（構文・RLS）は通るので、実際に消してみるまで分からなかった。
+- **Fixed**: 判定を `private.storage_path_admin(name)`（security definer・`storage_path_staff` と同じ形）に閉じ込め、ポリシーはそれを呼ぶだけにした。`verify:admin` 62/62・`verify:migrations` 18/18。
+- **Guardrail**: ポリシーに新しい判定を書くときは、既存のポリシーと同じく **security definer の関数経由**にする。`test/supabase-schema.test.mjs` が `storage_path_admin(name)` を呼ぶ形を見る。
+- **Status**: RESOLVED

@@ -718,12 +718,10 @@ try {
      スタッフにさせないのは 削除・店舗設定・スタッフ招待 の3つだけ。それ以外
      （顧客と犬の登録・犬の情報を直す）はこれまでどおりできることも、同じ口座で見る。
      **断られたことは状態コードだけで合格にしない**（`D-12`）。断られた後に、
-     消そうとした行が `service_role` で数えても残っているか・値が変わっていないかを見る。
+     消そうとした行が、管理者の鍵で数え直しても残っているか・値が変わっていないかを見る。
      対象はこの回にスタッフ自身が作った顧客と犬（fixture を消しかけない）。 */
   const limitedSession = await passwordLogin(FIXTURE.limitedStaffEmail, LOCAL_PASSWORD);
   const limitedHeaders = { Authorization: `Bearer ${limitedSession.access_token}`, 'Content-Type': 'application/json' };
-  /** `service_role` で行を引く。**引けなかったら null**（空配列にしない——空は
-      「消えた」と読めてしまう・W-1 の型）。投げずに返して、各 check を個別に赤にする。 */
   /* **管理者の鍵で、画面と同じ API から数え直す。** このリポジトリは service_role に
      表を読ませていない（`permission denied for table`・実測）ので、裏から行を数えられない。
      読めなかったら null を返し、検査側で赤にする（空で受けて合格にしない・`F-20260828-56`）。 */

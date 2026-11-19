@@ -269,7 +269,7 @@ export async function startLocalWorker({ port = 8787, readyTimeoutMs = 90_000, c
     const watch = (chunk) => {
       log += chunk;
       /* 合図のホスト名は環境で違う（Linux は `localhost`、Windows は `127.0.0.1`）。 */
-      if (new RegExp(`Ready on http://(localhost|127\.0\.0\.1):${port}`).test(log)) {
+      if (new RegExp(`Ready on http://(localhost|127\\.0\\.0\\.1):${port}\\b`).test(log)) {
         clearTimeout(timer);
         resolve();
       }

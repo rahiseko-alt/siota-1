@@ -83,6 +83,38 @@
 
 ## 証明済み（`- <ファイル> :: <検査の名前>`）
 
+### 犬種と管理者／スタッフ 21件（2026-11-19・実測・`N-48`・`N-49`）
+
+**10個の壊し方を1つずつ当て、各項が赤になるのを本物のローカル Supabase で見た。** 戻すと `verify-admin.mjs` 62/62。
+赤の出力（どの壊しで、どの項が赤になったか）は `docs/ops/mutate-run-N48-N49.md` に全件。代表:
+
+- `report-delete-admin-open`（カルテ削除の判定を `is_shop_staff` に戻す）→ `FAIL  22g. スタッフのカルテ削除は断られ、…`
+- `owner-pet-admin-delete-rls-open`（顧客・犬の削除をスタッフに開く）→ `FAIL  22i.` `FAIL  22j.`
+- `session-role-dropped`（`/api/session` から `role` を抜く）→ `FAIL  22b.` `FAIL  22f-1.`〜`22f-6.`
+- `pet-breed-not-sent`（登録で犬種を送らない）→ `FAIL  6b.` `FAIL  6c.` `FAIL  6e.` `FAIL  22d.`
+
+- verify-admin.mjs :: 22b. スタッフの管理画面には リピーター / 新規 の2つだけが出る（削除・店舗設定・スタッフ招待が無い）
+- verify-admin.mjs :: 22d. スタッフも新規で犬を作れて、打った犬種がそのまま保存される
+- verify-admin.mjs :: 22e. スタッフも「犬の情報を直す」で犬種を変えられる（サーバーの値が変わった）
+- verify-admin.mjs :: 22f-1. スタッフが /admin/delete を開くと「管理者だけ」の案内ともどるだけが出て、操作の部品が無い
+- verify-admin.mjs :: 22f-2. スタッフが /admin/delete/owner を開くと「管理者だけ」の案内ともどるだけが出て、操作の部品が無い
+- verify-admin.mjs :: 22f-3. スタッフが /admin/delete/pet を開くと「管理者だけ」の案内ともどるだけが出て、操作の部品が無い
+- verify-admin.mjs :: 22f-4. スタッフが /admin/delete/report を開くと「管理者だけ」の案内ともどるだけが出て、操作の部品が無い
+- verify-admin.mjs :: 22f-5. スタッフが /admin/settings を開くと「管理者だけ」の案内ともどるだけが出て、操作の部品が無い
+- verify-admin.mjs :: 22f-6. スタッフが /admin/invite-staff を開くと「管理者だけ」の案内ともどるだけが出て、操作の部品が無い
+- verify-admin.mjs :: 22g. スタッフのカルテ削除は断られ、カルテは消えず・削除中にもなっていない
+- verify-admin.mjs :: 22h. スタッフが犬を「使わない」にするのは断られ、犬は有効のまま（消す代わりの抜け道を塞ぐ）
+- verify-admin.mjs :: 22i. スタッフの DELETE /api/pets は断られ、犬は消えていない
+- verify-admin.mjs :: 22j. スタッフの DELETE /api/owners は断られ、顧客は消えていない
+- verify-admin.mjs :: 22k. スタッフの PATCH /api/shop は断られ、既定の来店間隔は変わっていない
+- verify-admin.mjs :: 22l. スタッフのスタッフ招待は断られ、招待は増えず・前の招待も取り消されていない
+- verify-admin.mjs :: 6a. 犬種の欄に、打つと出る候補が付いている
+- verify-admin.mjs :: 6b. 登録で手入力した犬種が、そのままの値で保存された
+- verify-admin.mjs :: 6c. 犬種で打つと、その犬種の子だけが出て、行に飼い主名・犬名・犬種が並ぶ
+- verify-admin.mjs :: 6e. 直す画面には、いまの犬種が入っている
+- verify-admin.mjs :: 6f. 直した犬種がサーバーに入った
+- verify-admin.mjs :: 6g. 空欄で保存すると犬種が消える（空文字ではなく「無し」）
+
 ### 決着した判断を判断待ちへ戻させない 3件（2026-09-09・実測）
 
 **3通りの壊し方すべてで赤を実測した**（`N-3`）。
@@ -1140,7 +1172,6 @@ run #154: 赤 → 3回中2回赤）。`rls-drafts-leak` が今回**新たに** 0
    `admin-invite-staff-no-warning`（権限説明の文言を弱める）の3本で、
    上記7件すべてが赤になることを確認し、戻すと18/18・34/34 で緑に戻ることも確認した。
    `docs/ops/mutate-run-partial.md` に記録。）
-- verify-admin.mjs :: 3. リピーターに カルテ作成 / カルテ修正 が在る
 - verify-admin.mjs :: 4. 新規に 顧客アカウント作成 / ペットアカウント作成 が在る
 - verify-admin.mjs :: 13. 削除に 顧客 / ペット / カルテ の3つが在る
 - verify-edit.mjs :: 1. /edit が配信される
@@ -3184,6 +3215,16 @@ $ node --test test/report-commit-guard.test.mjs      ← 直しを入れ直し�
 **下書きと確定の順番**だけで、サーバ側が 409 を返す条件そのものは SQL を読んで特定した。
 
 ## 未証明（**壊して赤になるところを、まだ見ていない**）
+
+- verify-admin.mjs :: 3. リピーターに カルテ作成 / カルテ修正 / 犬の情報を直す が在る
+- verify-admin.mjs :: 6d. 犬の情報を直す画面にも住所がある
+- verify-admin.mjs :: 6h. 直す画面からブラウザの戻るで、犬を選ぶ画面にちょうど1つ戻る
+- verify-admin.mjs :: 22a. スタッフも入口から「管理」を押して管理画面に着く
+- verify-admin.mjs :: 22c. スタッフも新規で顧客アカウントを作れる（サーバーに在る）
+  （2026-11-19・`N-48`/`N-49`。10個の壊し方のどれもこの5件には当たらなかった。
+   `3.` は「③ 犬の情報を直す」を足して名前と条件が変わったので、旧名の証明（2026-09-24）を引き継がない。
+   赤を見るには、メニューの項目を消す・`/admin/repeat/pet` を住所表から外す・`pushStep` を
+   `navigate` にする・スタッフの「管理」の入口を隠す・顧客の登録 API を壊す、の壊し方が要る。）
 
 - verify-admin.mjs :: 3g. カルテ一覧から戻ると、ちょうど1つ手前（犬を選ぶ）に戻る
   （2026-09-13 追加・マスター指示「直せるものを先に治せ」。放置リスト `#49`。
