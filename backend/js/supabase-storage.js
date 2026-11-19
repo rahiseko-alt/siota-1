@@ -58,9 +58,16 @@ function assetKind(path) {
   return path.join('.').replace(/[^a-z0-9_.-]/gi, '-').slice(0, 40) || 'image';
 }
 
+/* **再試行では、同じ写真に同じ番号を使う**（レビュー 2026-11-20 H1・H2・CWE-459）。
+   写真が Storage に上がった直後に登録だけ失敗すると、その写真は「登録されていない写真」として
+   カルテの置き場に残る。`finalize_report` / `revise_report` はそれが1つでもあると断るので、
+   再試行のたびに新しい番号で上げ直していた以前の作りでは、**そのカルテは二度と確定できなかった**
+   （ローカルで実測: 確定を2回押して2回とも 409）。
+   `cache`（呼ぶ側が同じカルテについて持ち続ける Map）を渡すと、前回の写真の番号と
+   「上げた／登録した」の印を引き継ぎ、残りの手順だけをやり直す。 */
 export async function replaceDataUrlAssets(
   reportData,
-  { randomUUID = () => crypto.randomUUID() } = {},
+  { randomUUID = () => crypto.randomUUID(), cache = null } = {},
 ) {
   const assets = [];
   const seen = new Map();
@@ -68,11 +75,21 @@ export async function replaceDataUrlAssets(
   function visit(value, path = []) {
     if (typeof value === 'string' && value.startsWith('data:image/')) {
       if (seen.has(value)) return seen.get(value);
+      const cached = cache && cache.get(value);
+      if (cached) {
+        cached.sortOrder = assets.length;
+        assets.push(cached);
+        const marker = `asset://${cached.id}`;
+        seen.set(value, marker);
+        return marker;
+      }
       const id = randomUUID();
       if (!UUID_PATTERN.test(id)) throw new TypeError('invalid generated asset id');
       const blob = dataUrlBlob(value);
       const marker = `asset://${id}`;
-      assets.push({ id, kind: assetKind(path), blob, mimeType: blob.type, byteSize: blob.size, sortOrder: assets.length });
+      const asset = { id, kind: assetKind(path), blob, mimeType: blob.type, byteSize: blob.size, sortOrder: assets.length };
+      assets.push(asset);
+      if (cache) cache.set(value, asset);
       seen.set(value, marker);
       return marker;
     }
@@ -111,7 +128,9 @@ export async function uploadReportAssets({
           contentType: asset.mimeType,
           upsert: false,
         });
-        if (error) throw new Error('画像を保存できませんでした');
+        /* 前回、上がったのに応答だけ届かなかった場合は「既に在る」と返る。上がっているので先へ進む。 */
+        const alreadyThere = error && (String(error.statusCode) === '409' || /already exists/i.test(String(error.message)));
+        if (error && !alreadyThere) throw new Error('画像を保存できませんでした');
         asset.uploaded = true;
       }
       if (!asset.registered) {

@@ -105,6 +105,49 @@ test('partial upload reports completed metadata and leaves the draft retryable',
   assert.match(uploads[0], new RegExp(`^${ids.shop}/${ids.pet}/${ids.report}/`));
 });
 
+test('再試行では同じ写真に同じ番号を使い、上げ済みは上げ直さず登録だけやり直す（レビュー 2026-11-20 H1）', async () => {
+  const pngHeader = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const dataUrl = `data:image/png;base64,${Buffer.from(pngHeader).toString('base64')}`;
+  const cache = new Map();
+  let sequence = 0;
+  const randomUUID = () => `60000000-0000-0000-0000-0000000000b${++sequence}`;
+  const first = await replaceDataUrlAssets({ heroPhotos: [dataUrl] }, { randomUUID, cache });
+
+  const uploads = [];
+  let registerFails = true;
+  const client = {
+    storage: {
+      from: () => ({
+        upload: async (path) => {
+          uploads.push(path);
+          /* 2回目に同じ場所へ上げると Supabase は「既に在る」で返す。 */
+          return uploads.length > 1 ? { error: { statusCode: '409', message: 'The resource already exists' } } : { error: null };
+        },
+      }),
+    },
+  };
+  const registered = [];
+  const api = async (path, options) => {
+    if (registerFails) { registerFails = false; throw new Error('network'); }
+    registered.push(JSON.parse(options.body).id);
+    return { asset: { id: JSON.parse(options.body).id } };
+  };
+  const report = { id: ids.report, pet_id: ids.pet, shop_id: ids.shop, status: 'draft' };
+  await assert.rejects(() => uploadReportAssets({ client, api, report, petId: ids.pet, assets: first.assets }));
+
+  const retry = await replaceDataUrlAssets({ heroPhotos: [dataUrl] }, { randomUUID, cache });
+  assert.equal(retry.data.heroPhotos[0], first.data.heroPhotos[0], '同じ写真は同じ番号のまま');
+  await uploadReportAssets({ client, api, report, petId: ids.pet, assets: retry.assets });
+  assert.equal(uploads.length, 1, '上げ済みの写真を上げ直さない');
+  assert.deepEqual(registered, ['60000000-0000-0000-0000-0000000000b1'], '残っていた写真をそのまま登録する');
+
+  /* 上げた応答だけが届かなかった場合（「既に在る」）も、先へ進んで登録する。 */
+  const lost = await replaceDataUrlAssets({ heroPhotos: [dataUrl.replace('base64,', 'base64,') + ''] }, { randomUUID });
+  lost.assets[0].uploaded = false;
+  await uploadReportAssets({ client, api, report, petId: ids.pet, assets: lost.assets });
+  assert.equal(registered.length, 2);
+});
+
 test('storage deletion failure never calls destructive completion', async () => {
   const apiCalls = [];
   const api = async (path) => {

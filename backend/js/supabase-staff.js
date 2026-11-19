@@ -531,12 +531,23 @@ async function findLastFinalReport(petId) {
   };
 }
 
+/* 同じカルテの再試行で、写真の番号を引き継ぐための置き場（`replaceDataUrlAssets` の `cache`）。
+   カルテ1枚ごと。確定・修正が済んだら捨てる。新しく作るカルテ（下書きが無い）は番号が決まって
+   いないので使わない——作り直しになれば前のカルテとは置き場が別なので、止まりはしない。 */
+const ASSET_CACHES = new Map();
+function assetCacheFor(key) {
+  if (!key) return null;
+  if (!ASSET_CACHES.has(key)) ASSET_CACHES.set(key, new Map());
+  return ASSET_CACHES.get(key);
+}
+
 async function saveReport(petId, reportData, reportDate, draftId) {
   const client = globalThis.TrimmerAuth && globalThis.TrimmerAuth.client;
   const api = globalThis.TrimmerStaffApi && globalThis.TrimmerStaffApi.request;
   if (!client || typeof api !== 'function') throw new Error('保存できません（ログインし直してください）');
 
-  const { data, assets } = await replaceDataUrlAssets(reportData);
+  const cacheKey = draftId ? `${petId}:${draftId}` : null;
+  const { data, assets } = await replaceDataUrlAssets(reportData, { cache: assetCacheFor(cacheKey) });
   /* 下書きが在ればそれを確定させる。**新しく作らない**——作ると下書きが残り、
      次に開いたときに古い記入が蘇る（`#15` の 3 が見ているのはそこ）。 */
   const saved = draftId
@@ -565,6 +576,7 @@ async function saveReport(petId, reportData, reportDate, draftId) {
      埋めて**文字列 `"null"`** を作り、例外も出ないまま `/edit/p/{id}/null` へ
      進む（`F-20260828-59`）。`D-2` を塞いだのは「空が返る」場合だけだった。 */
   if (!finalized || !finalized.report || !finalized.report.id) throw new Error('カルテを確定できませんでした');
+  if (cacheKey) ASSET_CACHES.delete(cacheKey);
   return finalized.report;
 }
 
@@ -591,7 +603,8 @@ async function reviseReport(petId, reportId, reportData) {
   const api = globalThis.TrimmerStaffApi && globalThis.TrimmerStaffApi.request;
   if (!client || typeof api !== 'function') throw new Error('保存できません（ログインし直してください）');
 
-  const { data, assets } = await replaceDataUrlAssets(reportData);
+  const cacheKey = `${petId}:revise:${reportId}`;
+  const { data, assets } = await replaceDataUrlAssets(reportData, { cache: assetCacheFor(cacheKey) });
   if (assets.length > 0) {
     const existing = await api(`/api/pets/${encodeURIComponent(petId)}/reports/${encodeURIComponent(reportId)}`);
     const report = existing && existing.report;
@@ -603,6 +616,7 @@ async function reviseReport(petId, reportId, reportData) {
     { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data }) },
   );
   if (!revised || !revised.report || !revised.report.id) throw new Error('カルテを直せませんでした');
+  ASSET_CACHES.delete(cacheKey);
   return revised.report;
 }
 
