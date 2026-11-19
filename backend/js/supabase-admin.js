@@ -10,8 +10,12 @@
  *
  * **2026-08-26 時点は「管理者アカウントを作る機能はここに置かない（納品時に
  * 開発者が行う）」だったが、マスター指示（2026-09-24「招待ボタン復活させて」）で
- * 方針転換した。** 招待されたスタッフは招待した側と全く同じ権限を持つ
- * （役割の区別が無い・`202609060012_single_staff_role.sql`）。
+ * 方針転換した。**
+ *
+ * **店舗側は「管理者」と「スタッフ」に分かれる**（マスター指示 2026-11-19・`N-49`・
+ * `202611190017_admin_staff_roles.sql`）。スタッフ招待で入った人がスタッフで、
+ * ③削除・④店舗設定・⑤スタッフ招待はメニューに出さない。断るのは DB で、
+ * ここで隠すのは押せないものを見せないための補助。
  *
 
  * **新しい API は作っていない。** 使うのは全部いま在るもの——
@@ -32,6 +36,8 @@ import { deleteReportAssets, purgePetAssets, purgeOwnerAssets } from './supabase
 let supabase = null;
 let statusEl = null;
 let contentEl = null;
+/* 管理者か（`N-49`）。起動時に `/api/session` の `role` から決める。 */
+let isAdmin = true;
 
 function api(path, options = {}) {
   return authorizedFetch(supabase, path, options).then(async (response) => {
@@ -274,7 +280,7 @@ function confirmDestructive({ title, what, detail, name, onConfirm, onBack }) {
 
 function screenHome() {
   clear();
-  contentEl.append(menu([
+  const items = [
     {
       title: '① リピーター',
       note: 'すでにお預かりしている子のカルテを作る・直す',
@@ -306,7 +312,9 @@ function screenHome() {
       testid: 'invite-staff',
       onSelect: () => navigate('/admin/invite-staff', screenInviteStaff),
     },
-  ]));
+  ];
+  /* スタッフには①②だけを出す。番号は振り直さない（管理者と同じ呼び名で話せるように）。 */
+  contentEl.append(menu(isAdmin ? items : items.slice(0, 2)));
 }
 
 /* 「次回のおすすめご来店時期」の既定日数（マスター指示 2026-08-29・D-20260829-58）。
@@ -466,9 +474,9 @@ function screenInviteStaff() {
   contentEl.append(backButton(() => navigate('/admin', screenHome)));
   contentEl.append(heading('スタッフ招待'));
   /* **招待した相手が何を持つかを、発行前に言う**（`D-20` の精神・意見は率直に）。
-     この店にはスタッフの役割区分が無い（`202609060012_single_staff_role.sql`）ので、
-     招待された人はあなたと**全く同じ**権限（見る・書く・消す）を持つ。 */
-  contentEl.append(note('招待すると、その人はあなたと全く同じ権限（すべての飼い主・犬・カルテを見る・書く・消す）を持ちます。有効期限24時間・1回のみ使用できます。新しく発行すると、前のQR・URLは使えなくなります。'));
+     招待された人は**スタッフ**になり、削除・店舗設定・スタッフ招待ができない
+     （`202611190017_admin_staff_roles.sql`・`N-49`）。 */
+  contentEl.append(note('招待すると、その人は「スタッフ」になります。すべての飼い主・犬・カルテを見る・書く・直すことはできますが、削除・店舗設定・スタッフ招待はできません（管理者だけ）。有効期限24時間・1回のみ使用できます。新しく発行すると、前のQR・URLは使えなくなります。'));
   const button = submitButton('招待を発行する', 'create-staff-invitation');
   const result = el('div', 'admin-result');
   contentEl.append(button, result);
@@ -985,7 +993,28 @@ const ADMIN_ROUTES = {
   '/admin/invite-staff': screenInviteStaff,
 };
 
+/* 管理者だけの画面（`N-49`）。スタッフが住所を直に開いた・戻る/進むで来たときは、
+   画面を描かずに理由と戻り道を出す（白い画面にしない・`D-14` の問2）。 */
+const ADMIN_ONLY_PATHS = new Set([
+  '/admin/delete',
+  '/admin/delete/owner',
+  '/admin/delete/pet',
+  '/admin/delete/report',
+  '/admin/settings',
+  '/admin/invite-staff',
+]);
+
+function screenAdminOnly() {
+  clear();
+  contentEl.append(backButton(() => navigate('/admin', screenHome)));
+  contentEl.append(note('この操作は管理者だけができます。管理者にお願いしてください。'));
+}
+
 function renderForPath(path) {
+  if (!isAdmin && ADMIN_ONLY_PATHS.has(path)) {
+    screenAdminOnly();
+    return;
+  }
   (ADMIN_ROUTES[path] || screenHome)();
 }
 
@@ -1044,10 +1073,9 @@ export async function bootAdminPortal() {
     }
 
     const session = await api('/api/session');
-    /* **権限は「お店の人か / 飼い主か」の2つだけ**（マスター判断 2026-09-06・`D-20260906-68`
-       「管理者とスタッフは同一で良い」）。以前はここで `role === 'admin'` を見て
-       一般スタッフを追い返していたが、その区別は DB ごと削除した。
-       残る境目は**飼い主をここに入れない**ことだけ——それは越境なので必ず止める。 */
+    /* **飼い主をここに入れない**——それは越境なので必ず止める。
+       お店の人は管理者もスタッフもここに入る（`N-49`）。スタッフに出さないのは
+       ③削除・④店舗設定・⑤スタッフ招待だけで、それは下の `isAdmin` が決める。 */
     if ((session.memberships || []).length === 0) {
       /* 行き止まりにしない。その人が使える画面へ送る（`D-14` の問1）。 */
       setMessage(statusEl, 'この画面はお店の方だけが使えます。');
@@ -1068,6 +1096,10 @@ export async function bootAdminPortal() {
       };
       return;
     }
+
+    /* `role` が無いのは役割を返さない古い Worker。そのときは今までどおり管理者として扱う
+       （DB が断るので、画面が多めに出ても裏で通ることは無い）。 */
+    isAdmin = session.memberships.some((membership) => (membership.role || 'admin') === 'admin');
 
     show(contentEl, true);
     show(signOutButton, true);

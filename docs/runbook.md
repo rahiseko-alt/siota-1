@@ -143,6 +143,30 @@ node scripts/swap-image.mjs login-photo /path/to/新しい写真.png
 
 **1 は決着済み。** 残りの2〜5は済で、この表は**状態の記録**であって承認待ちの一覧ではない。
 
+## 2-E. 犬種と「管理者／スタッフ」を本番に出す前に（`N-48`・`N-49`・2026-11-19）
+
+**順番を逆にすると本番が止まる**（`F-20260829-61`）。新しい Worker は犬の一覧で `breed` 列を、
+ログインの確認で `role` 列を読むので、**列が無い本番に Worker だけ出すと、犬の一覧とログインが壊れる**。
+
+1. **先に、誰が管理者・スタッフになるかを見る**（読むだけ・何も変えない）。本番の Supabase → SQL Editor に貼る:
+
+   ```sql
+   select u.email,
+          m.active,
+          case when exists (
+            select 1 from public.invitations i
+            where i.invitation_type = 'staff' and i.shop_id = m.shop_id and i.claimed_by = m.user_id
+          ) then 'スタッフ' else '管理者' end as これからの役割
+   from public.shop_memberships m
+   join auth.users u on u.id = m.user_id
+   order by これからの役割, u.email;
+   ```
+
+   **クライアントのオーナーが「スタッフ」に出たら、ここで止めてマスターに言う**（そのまま当てると削除・店舗設定・スタッフ招待ができなくなる）。
+2. マスターが一覧を見て「この振り分けでよい」と言ったら、migration を2本、この順で当てる:
+   `supabase/migrations/202611190016_pet_breed.sql` → `supabase/migrations/202611190017_admin_staff_roles.sql`
+3. そのあとで Worker を出す（下の 3. A-1）。`npm run verify:prod` が緑になること。
+
 ## 3. デプロイ手順（順序固定）
 
 > ⛔ **移設・統合フェーズのあいだ、本節の手順を実行するな。**

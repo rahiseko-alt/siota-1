@@ -1,9 +1,10 @@
 /**
  * verify-admin.mjs — 管理画面（マスター指示 2026-08-26）
  *
- * **権限は「お店の人 / 飼い主」の2つだけ**（マスター判断 2026-09-06・`D-20260906-68`）。
- * `admin` と `staff` の区別は DB ごと削除したので、下の ①〜⑥ は**ただのスタッフ口座**
- * （`staff@local.test`）で通す——お店の人なら誰でも全部できる、が仕様。
+ * **店舗側の権限は「管理者」と「スタッフ」に分け直した**（マスター指示 2026-11-19・`N-49`・
+ * `202611190017`）。下の ①〜⑥ は**管理者の口座**（`staff@local.test`・名前は昔のまま）で通す。
+ * スタッフ権限（`limited-staff@local.test`）が削除・店舗設定・スタッフ招待を
+ * 断られることは ⑧（`22*`）で見る。
  *
  * 見るもの:
  *   ① お店の人はカルテ画面に着き、ヘッダーの「管理」から管理画面へ入れる
@@ -12,7 +13,9 @@
  *   ④ 新規 → 顧客アカウント作成・ペットアカウント作成が**実際に効く**
  *   ⑤ 削除3種が**実際に消す**（写真の実体まで。`service_role` で数える）
  *   ⑥ カルテ修正が**確定済みを上書きする**（2枚目を作らない・飼い主に届く中身が変わる）
- *   ⑦ **飼い主はこの画面を使えず**、かつ行き止まりにならない（権限の境目はここだけ）
+ *   ⑦ **飼い主はこの画面を使えず**、かつ行き止まりにならない
+ *   ⑧ **スタッフ**は リピーター / 新規 だけを使え、削除・店舗設定・スタッフ招待は
+ *      画面でも API でも断られ、**断られた後も何も消えていない・変わっていない**
  *
  * **「押せた」で合格にしない**（`D-12`）。作った/消した/直したものを、
  * 作用の出た先（一覧・Storage の実体・飼い主の画面）で数え直す。
@@ -211,7 +214,7 @@ try {
   await page.waitForSelector('.admin-menu__item', { timeout: 20_000 });
   const backTitles = await menuTitles(page);
   check('3d. ブラウザの戻るで、ちょうど1つ手前（リピーター）に戻る',
-    pathNow() === '/admin/repeat' && backTitles.length === 2
+    pathNow() === '/admin/repeat' && backTitles.length === 3
     && backTitles[0].includes('カルテ作成'),
     `path=${pathNow()} 項目=${JSON.stringify(backTitles)}`);
 
@@ -637,7 +640,7 @@ try {
   await page.waitForSelector('[data-admin-action="create-staff-invitation"]', { timeout: 10_000 });
   const explanation = await page.evaluate(() => (document.querySelector('.admin-note') || {}).textContent || '');
   check('18b. スタッフ招待の画面で、招待される側の権限を発行前に伝えている',
-    explanation.includes('あなたと全く同じ権限'), `"${explanation.slice(0, 40)}"`);
+    explanation.includes('スタッフ') && explanation.includes('削除・店舗設定・スタッフ招待はできません'), `"${explanation.slice(0, 40)}"`);
 
   await page.click('[data-admin-action="create-staff-invitation"]');
   /* **失敗しても、ここだけで止めない。** 待たずに投げると外側の try/catch まで
@@ -689,14 +692,11 @@ try {
     JSON.stringify(sessionAfterClaim.memberships));
   await newStaffContext.close();
 
-  /* ── ⑦ 権限の境目は**お店の人 / 飼い主**の1本だけ ──
-     権限は2つになった（マスター判断 2026-09-06・`D-20260906-68`
-     「管理者とスタッフは同一で良い」）。`admin` と `staff` の区別は DB ごと削除したので、
-     **ここまでの 1〜18 は、ただのスタッフ口座（`staff@local.test`）で通っている**
-     ——お店の人なら誰でも飼い主登録・犬登録・カルテ修正・削除ができる、という形。
-
-     残る境目は**飼い主をここに入れない**ことだけ。ここが緩むと、お客様が
-     他人の顧客データを消せる越境になるので、必ず見る。 */
+  /* ── ⑦ 飼い主をここに入れない ──
+     ここまでの 1〜18 は**管理者の口座**（`staff@local.test`）で通っている
+     （店舗側を管理者とスタッフに分け直した・マスター指示 2026-11-19・`N-49`）。
+     スタッフの境目は下の ⑧ で見る。ここは**飼い主をここに入れない**こと。
+     ここが緩むと、お客様が他人の顧客データを消せる越境になるので、必ず見る。 */
   const ownerPage = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await ownerPage.goto(`${BASE}/my`, { waitUntil: 'domcontentloaded' });
   await injectSession(ownerPage, FIXTURE.ownerAEmail);
@@ -713,6 +713,260 @@ try {
   check('20. 飼い主を行き止まりにせず、愛犬のページへの入口を出している',
     ownerSees.denied === true && ownerSees.status.includes('お店の方だけ'),
     `status="${ownerSees.status.trim()}"`);
+
+  /* ── ⑧ スタッフ権限（管理者ではない）——マスター指示 2026-11-19・`N-49` ──
+     スタッフにさせないのは 削除・店舗設定・スタッフ招待 の3つだけ。それ以外
+     （顧客と犬の登録・犬の情報を直す）はこれまでどおりできることも、同じ口座で見る。
+     **断られたことは状態コードだけで合格にしない**（`D-12`）。断られた後に、
+     消そうとした行が `service_role` で数えても残っているか・値が変わっていないかを見る。
+     対象はこの回にスタッフ自身が作った顧客と犬（fixture を消しかけない）。 */
+  const limitedSession = await passwordLogin(FIXTURE.limitedStaffEmail, LOCAL_PASSWORD);
+  const limitedHeaders = { Authorization: `Bearer ${limitedSession.access_token}`, 'Content-Type': 'application/json' };
+  /** `service_role` で行を引く。**引けなかったら null**（空配列にしない——空は
+      「消えた」と読めてしまう・W-1 の型）。投げずに返して、各 check を個別に赤にする。 */
+  /* **管理者の鍵で、画面と同じ API から数え直す。** このリポジトリは service_role に
+     表を読ませていない（`permission denied for table`・実測）ので、裏から行を数えられない。
+     読めなかったら null を返し、検査側で赤にする（空で受けて合格にしない・`F-20260828-56`）。 */
+  const adminRead = async (path, pick) => {
+    const res = await fetch(`${BASE}${path}`, { headers: authHeaders }).catch(() => null);
+    if (!res || !res.ok) return null;
+    const body = await res.json().catch(() => null);
+    return body ? pick(body) : null;
+  };
+
+  const limitedContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const limitedPage = await limitedContext.newPage();
+  limitedPage.on('pageerror', (e) => pageErrors.push(`[スタッフ] ${e.message}`));
+  limitedPage.on('dialog', (d) => { dialogs.push(d.message()); d.dismiss().catch(() => {}); });
+  const limitedPath = () => new URL(limitedPage.url()).pathname;
+
+  /* 入口から人と同じ道で入る（`D-27`）——管理者の ① と同じ手順。 */
+  await limitedPage.goto(`${BASE}/my`, { waitUntil: 'domcontentloaded' });
+  await injectSession(limitedPage, FIXTURE.limitedStaffEmail);
+  await limitedPage.goto(`${BASE}/my`, { waitUntil: 'domcontentloaded' });
+  await limitedPage.waitForURL(/\/edit$/, { timeout: 20_000 }).catch(() => {});
+  await limitedPage.waitForSelector('.karte-card', { timeout: 30_000 }).catch(() => {});
+  const limitedAdminLink = limitedPage.locator('[data-admin-link]');
+  await limitedAdminLink.waitFor({ state: 'visible', timeout: 20_000 }).catch(() => {});
+  if (await limitedAdminLink.isVisible().catch(() => false)) await limitedAdminLink.click();
+  await limitedPage.waitForURL(/\/admin$/, { timeout: 20_000 }).catch(() => {});
+  check('22a. スタッフも入口から「管理」を押して管理画面に着く',
+    limitedPath() === '/admin', `path=${limitedPath()}`);
+
+  await limitedPage.waitForSelector('.admin-menu__item', { timeout: 20_000 }).catch(() => {});
+  const limitedTop = await menuTitles(limitedPage);
+  check('22b. スタッフの管理画面には リピーター / 新規 の2つだけが出る（削除・店舗設定・スタッフ招待が無い）',
+    limitedTop.length === 2 && limitedTop[0].includes('リピーター') && limitedTop[1].includes('新規'),
+    `出た項目=${JSON.stringify(limitedTop)}`);
+
+  /* 新規: 顧客 → 犬（スタッフにも許したままの操作が、本当に効くか）。 */
+  const limitedStamp = Math.random().toString(36).slice(2, 7);
+  const limitedOwnerName = `スタッフ登録飼い主${limitedStamp}`;
+  const limitedPetName = `スタッフ登録犬${limitedStamp}`;
+  const limitedBreed = `スタッフ手入力犬種${limitedStamp}`;
+  await tapByText(limitedPage, '新規');
+  await limitedPage.waitForSelector('.admin-menu__item', { timeout: 10_000 }).catch(() => {});
+  await tapByText(limitedPage, '顧客アカウントの新規作成');
+  await limitedPage.waitForSelector('[data-admin-field="owner-name"]', { timeout: 10_000 }).catch(() => {});
+  await limitedPage.fill('[data-admin-field="owner-name"]', limitedOwnerName).catch(() => {});
+  await limitedPage.click('[data-admin-action="create-owner"]').catch(() => {});
+  await limitedPage.waitForFunction(
+    () => (document.querySelector('.admin-result') || {}).textContent?.includes('登録しました'),
+    { timeout: 20_000 },
+  ).catch(() => {});
+  const limitedOwners = await (await fetch(`${BASE}/api/owners`, { headers: limitedHeaders })).json();
+  const limitedOwner = (limitedOwners.owners || []).find((o) => o.name === limitedOwnerName);
+  check('22c. スタッフも新規で顧客アカウントを作れる（サーバーに在る）', !!limitedOwner,
+    limitedOwner ? '' : `name=${limitedOwnerName} 画面の表示="${await resultText(limitedPage)}"`);
+
+  await tapByText(limitedPage, '◀ もどる');
+  await limitedPage.waitForSelector('.admin-menu__item', { timeout: 10_000 }).catch(() => {});
+  await tapByText(limitedPage, 'ペットアカウントの新規作成');
+  await limitedPage.waitForSelector('[data-admin-field="pet-name"]', { timeout: 20_000 }).catch(() => {});
+  if (limitedOwner) {
+    await limitedPage.selectOption('[data-admin-field="owner-select"]', limitedOwner.id).catch(() => {});
+  }
+  await limitedPage.fill('[data-admin-field="pet-name"]', limitedPetName).catch(() => {});
+  await limitedPage.fill('[data-admin-field="pet-breed"]', limitedBreed).catch(() => {});
+  await limitedPage.click('[data-admin-action="create-pet"]').catch(() => {});
+  await limitedPage.waitForFunction(
+    () => (document.querySelector('.admin-result') || {}).textContent?.includes('登録しました'),
+    { timeout: 20_000 },
+  ).catch(() => {});
+  const limitedPetOf = async () => {
+    const body = await (await fetch(`${BASE}/api/pets`, { headers: limitedHeaders })).json();
+    return (body.pets || []).find((p) => p.name === limitedPetName) || null;
+  };
+  const limitedPet = await limitedPetOf();
+  check('22d. スタッフも新規で犬を作れて、打った犬種がそのまま保存される',
+    !!limitedPet && limitedPet.breed === limitedBreed,
+    limitedPet ? `保存=${JSON.stringify(limitedPet.breed)}` : `作られていない 画面の表示="${await resultText(limitedPage)}"`);
+
+  /* 犬の情報を直す（リピーター）。メニューは押して戻る——住所へ飛ばない（`D-27`）。 */
+  await tapByText(limitedPage, '◀ もどる');
+  await limitedPage.waitForFunction(
+    () => [...document.querySelectorAll('.admin-menu__item strong')].some((el) => el.textContent.includes('ペットアカウント')),
+    { timeout: 10_000 },
+  ).catch(() => {});
+  await tapByText(limitedPage, '◀ もどる');
+  await limitedPage.waitForFunction(
+    () => [...document.querySelectorAll('.admin-menu__item strong')].some((el) => el.textContent.includes('リピーター')),
+    { timeout: 10_000 },
+  ).catch(() => {});
+  await tapByText(limitedPage, 'リピーター');
+  await limitedPage.waitForFunction(
+    () => [...document.querySelectorAll('.admin-menu__item strong')].some((el) => el.textContent.includes('犬の情報を直す')),
+    { timeout: 10_000 },
+  ).catch(() => {});
+  await tapByText(limitedPage, '犬の情報を直す');
+  await limitedPage.waitForSelector('[data-admin-field="pet-search"]', { timeout: 20_000 }).catch(() => {});
+  await limitedPage.fill('[data-admin-field="pet-search"]', limitedPetName).catch(() => {});
+  await limitedPage.locator('[data-admin-action="pick-pet"]:not([hidden])').first().click({ timeout: 10_000 }).catch(() => {});
+  await limitedPage.waitForSelector('[data-admin-action="save-pet"]', { timeout: 20_000 }).catch(() => {});
+  await limitedPage.fill('[data-admin-field="pet-breed"]', 'ミックス').catch(() => {});
+  await limitedPage.click('[data-admin-action="save-pet"]').catch(() => {});
+  await limitedPage.waitForFunction(
+    () => (document.querySelector('.admin-result') || {}).textContent?.includes('保存しました'),
+    { timeout: 20_000 },
+  ).catch(() => {});
+  const limitedEdited = await limitedPetOf();
+  check('22e. スタッフも「犬の情報を直す」で犬種を変えられる（サーバーの値が変わった）',
+    !!limitedEdited && limitedEdited.breed === 'ミックス',
+    `保存=${JSON.stringify(limitedEdited && limitedEdited.breed)} path=${limitedPath()}`);
+
+  /* ── 画面: 住所を直接開いても、管理者だけの画面の部品は出ない ──
+     **断る側の確認なので、ここだけは住所を直接開く**（人の道では押せる入口自体が無い。
+     入口が無いことは 22b で見た）。出てよいのは「もどる」と案内だけ。 */
+  const ADMIN_ONLY_CONTROLS = [
+    '[data-admin-action^="confirm"]', '[data-admin-field="confirm-name"]',
+    '[data-admin-action^="delete-"]', '[data-admin-action="pick-owner"]',
+    '[data-admin-action="pick-pet"]', '[data-admin-action="pick-report"]',
+    '[data-admin-action^="save-shop"]', '[data-admin-action="add-shop-option"]',
+    '[data-admin-field="shop-default-revisit-days"]',
+    '[data-admin-action="create-staff-invitation"]', '[data-admin-action="copy-staff-invitation-url"]',
+  ].join(', ');
+  const DENY_NOTE = 'この操作は管理者だけができます';
+  /** その住所を開いて、案内・もどる・部品の数を見る。**検査名は呼ぶ側に1本ずつ書く**
+      （`proof-of-red.mjs` が名前で台帳と突き合わせるので、名前を組み立てない）。 */
+  const deniedScreen = async (deniedPath) => {
+    await limitedPage.goto(`${BASE}${deniedPath}`, { waitUntil: 'domcontentloaded' });
+    await limitedPage.waitForFunction(
+      (needle) => (document.body.textContent || '').includes(needle),
+      DENY_NOTE, { timeout: 20_000 },
+    ).catch(() => {});
+    const seen = await limitedPage.evaluate(({ needle, controls }) => ({
+      note: [...document.querySelectorAll('.admin-note')].some((el) => (el.textContent || '').includes(needle)),
+      back: [...document.querySelectorAll('.admin-back')].some((el) => (el.textContent || '').includes('◀ もどる')),
+      controls: document.querySelectorAll(controls).length,
+    }), { needle: DENY_NOTE, controls: ADMIN_ONLY_CONTROLS });
+    return {
+      ok: seen.note && seen.back && seen.controls === 0,
+      why: `案内=${seen.note} もどる=${seen.back} 部品=${seen.controls} path=${limitedPath()}`,
+    };
+  };
+  const deniedDelete = await deniedScreen('/admin/delete');
+  check('22f-1. スタッフが /admin/delete を開くと「管理者だけ」の案内ともどるだけが出て、操作の部品が無い',
+    deniedDelete.ok, deniedDelete.why);
+  const deniedDeleteOwner = await deniedScreen('/admin/delete/owner');
+  check('22f-2. スタッフが /admin/delete/owner を開くと「管理者だけ」の案内ともどるだけが出て、操作の部品が無い',
+    deniedDeleteOwner.ok, deniedDeleteOwner.why);
+  const deniedDeletePet = await deniedScreen('/admin/delete/pet');
+  check('22f-3. スタッフが /admin/delete/pet を開くと「管理者だけ」の案内ともどるだけが出て、操作の部品が無い',
+    deniedDeletePet.ok, deniedDeletePet.why);
+  const deniedDeleteReport = await deniedScreen('/admin/delete/report');
+  check('22f-4. スタッフが /admin/delete/report を開くと「管理者だけ」の案内ともどるだけが出て、操作の部品が無い',
+    deniedDeleteReport.ok, deniedDeleteReport.why);
+  const deniedSettings = await deniedScreen('/admin/settings');
+  check('22f-5. スタッフが /admin/settings を開くと「管理者だけ」の案内ともどるだけが出て、操作の部品が無い',
+    deniedSettings.ok, deniedSettings.why);
+  const deniedInvite = await deniedScreen('/admin/invite-staff');
+  check('22f-6. スタッフが /admin/invite-staff を開くと「管理者だけ」の案内ともどるだけが出て、操作の部品が無い',
+    deniedInvite.ok, deniedInvite.why);
+
+  /* ── API: 画面を通らずに叩いても、データベースが断る（`N-49`「守るのはデータベース」） ──
+     429（回数制限）は「断られた」ではないので、拒否として数えない。 */
+  const refused = (status) => status >= 400 && status !== 429;
+  /* **fixture の犬を代わりに使わない**——断るはずが通ったとき fixture が壊れ、他の検査を巻き込む。
+     作れていなければ下の4本は対象無しとして赤にする。 */
+  const limitedPetId = limitedPet ? limitedPet.id : null;
+  const limitedOwnerId = limitedOwner ? limitedOwner.id : null;
+
+  /* カルテ削除の対象を、スタッフ自身が1枚作る（下書きの作成はスタッフにも許している）。 */
+  const draftRes = limitedPetId ? await fetch(`${BASE}/api/pets/${limitedPetId}/reports`, {
+    method: 'POST', headers: limitedHeaders,
+    body: JSON.stringify({ petId: limitedPetId, reportDate: new Date().toISOString().slice(0, 10), data: {} }),
+  }) : null;
+  const draft = draftRes && draftRes.ok ? ((await draftRes.json()).report || null) : null;
+  const reportDeleteRes = draft
+    ? await fetch(`${BASE}/api/pets/${limitedPetId}/reports/${draft.id}/delete`, { method: 'POST', headers: limitedHeaders })
+    : null;
+  const reportRows = draft ? await adminRead(`/api/pets/${limitedPetId}/reports`,
+    (b) => (b.reports || []).filter((r) => r.id === draft.id).map((r) => ({ id: r.id, status: r.status }))) : null;
+  check('22g. スタッフのカルテ削除は断られ、カルテは消えず・削除中にもなっていない',
+    !!draft && !!reportDeleteRes && refused(reportDeleteRes.status)
+    && Array.isArray(reportRows) && reportRows.length === 1 && reportRows[0].status === 'draft',
+    `下書き作成=${draftRes && draftRes.status} 削除=${reportDeleteRes && reportDeleteRes.status} 行=${JSON.stringify(reportRows)}`);
+
+  const deactivateRes = limitedPetId ? await fetch(`${BASE}/api/pets/${limitedPetId}`, {
+    method: 'PATCH', headers: limitedHeaders, body: JSON.stringify({ active: false }),
+  }) : null;
+  const activeRows = limitedPetId ? await adminRead(`/api/pets/${limitedPetId}`,
+    (b) => (b.pet ? [{ id: b.pet.id, active: b.pet.active }] : [])) : null;
+  check('22h. スタッフが犬を「使わない」にするのは断られ、犬は有効のまま（消す代わりの抜け道を塞ぐ）',
+    !!deactivateRes && refused(deactivateRes.status) && Array.isArray(activeRows) && activeRows.length === 1 && activeRows[0].active === true,
+    `PATCH=${deactivateRes && deactivateRes.status} 行=${JSON.stringify(activeRows)}`);
+
+  const petDeleteRes = limitedPetId
+    ? await fetch(`${BASE}/api/pets/${limitedPetId}`, { method: 'DELETE', headers: limitedHeaders })
+    : null;
+  const petRows = limitedPetId ? await adminRead('/api/pets',
+    (b) => (b.pets || []).filter((pet) => pet.id === limitedPetId)) : null;
+  check('22i. スタッフの DELETE /api/pets は断られ、犬は消えていない',
+    !!petDeleteRes && refused(petDeleteRes.status) && Array.isArray(petRows) && petRows.length === 1,
+    `DELETE=${petDeleteRes && petDeleteRes.status} 行=${JSON.stringify(petRows)}`);
+
+  const ownerDeleteRes = limitedOwnerId
+    ? await fetch(`${BASE}/api/owners/${limitedOwnerId}`, { method: 'DELETE', headers: limitedHeaders })
+    : null;
+  const limitedOwnerRows = limitedOwnerId ? await adminRead('/api/owners',
+    (b) => (b.owners || []).filter((owner) => owner.id === limitedOwnerId)) : null;
+  check('22j. スタッフの DELETE /api/owners は断られ、顧客は消えていない',
+    !!ownerDeleteRes && refused(ownerDeleteRes.status) && Array.isArray(limitedOwnerRows) && limitedOwnerRows.length === 1,
+    `DELETE=${ownerDeleteRes && ownerDeleteRes.status} 行=${JSON.stringify(limitedOwnerRows)}`);
+
+  const shopBefore = await adminRead('/api/shop', (b) => (b.shop ? [b.shop] : []));
+  const daysBefore = Array.isArray(shopBefore) && shopBefore[0] ? shopBefore[0].default_revisit_days : null;
+  const shopPatchRes = await fetch(`${BASE}/api/shop`, {
+    method: 'PATCH', headers: limitedHeaders,
+    body: JSON.stringify({ defaultRevisitDays: daysBefore === 77 ? 78 : 77 }),
+  });
+  const shopAfter = await adminRead('/api/shop', (b) => (b.shop ? [b.shop] : []));
+  const daysAfter = Array.isArray(shopAfter) && shopAfter[0] ? shopAfter[0].default_revisit_days : null;
+  check('22k. スタッフの PATCH /api/shop は断られ、既定の来店間隔は変わっていない',
+    refused(shopPatchRes.status) && daysBefore !== null && daysAfter === daysBefore,
+    `PATCH=${shopPatchRes.status} 前=${daysBefore} 後=${daysAfter}`);
+
+  /* スタッフ招待: 行が増えていないこと、**管理者が 18c で出した招待が取り消されていない**こと
+     （`create_invitation` は先に前の招待を取り消すので、断る位置が後ろだと巻き添えになる）。 */
+  const staffInvitations = (b) => (b.invitations || []).filter((i) => i.invitation_type === 'staff');
+  const invitesBefore = await adminRead('/api/invitations', staffInvitations);
+  const inviteRes = await fetch(`${BASE}/api/invitations`, {
+    method: 'POST', headers: limitedHeaders, body: JSON.stringify({ invitationType: 'staff' }),
+  });
+  const invitesAfter = await adminRead('/api/invitations', staffInvitations);
+  const openCount = (rows) => rows.filter((r) => r.revoked_at === null).length;
+  check('22l. スタッフのスタッフ招待は断られ、招待は増えず・前の招待も取り消されていない',
+    refused(inviteRes.status) && Array.isArray(invitesBefore) && Array.isArray(invitesAfter)
+    && invitesAfter.length === invitesBefore.length && openCount(invitesAfter) === openCount(invitesBefore),
+    `POST=${inviteRes.status} 件数 ${invitesBefore && invitesBefore.length}→${invitesAfter && invitesAfter.length}`
+    + ` 有効 ${invitesBefore && openCount(invitesBefore)}→${invitesAfter && openCount(invitesAfter)}`);
+
+  await limitedContext.close();
+  /* 後片付け: スタッフが作った顧客を**管理者の鍵で**消す（犬とカルテは消える側に連なる・
+     写真は上げていない）。合否には使わない——消せることは 17 で見ている。 */
+  if (limitedOwnerId) {
+    await fetch(`${BASE}/api/owners/${limitedOwnerId}`, { method: 'DELETE', headers: authHeaders }).catch(() => {});
+  }
 
   check('21. アプリ由来のエラーが無い', pageErrors.length === 0, pageErrors.join(' | '));
 } catch (error) {

@@ -89,7 +89,9 @@ export class SupabaseDataStore {
   async getSessionContext(userId) {
     const encodedUser = encodeURIComponent(userId);
     const [memberships, ownerLinks] = await Promise.all([
-      this.request(`/rest/v1/shop_memberships?select=shop_id,active&user_id=eq.${encodedUser}&active=eq.true`),
+      /* `role`（'admin' | 'staff'）は管理者画面がメニューを出し分けるのに読む（`N-49`）。
+         画面で隠すのは補助で、スタッフに許さない操作は DB が断る。 */
+      this.request(`/rest/v1/shop_memberships?select=shop_id,active,role&user_id=eq.${encodedUser}&active=eq.true`),
       this.request(`/rest/v1/owner_users?select=owner_id&user_id=eq.${encodedUser}`),
     ]);
     return { memberships, ownerLinks };
@@ -136,7 +138,7 @@ export class SupabaseDataStore {
     return this.staffShopId;
   }
 
-  /** 「次回のおすすめご来店時期」の既定日数・使用オプション一覧。お店の人なら書き換えられる（RLS `shops_staff_update`）。 */
+  /** 「次回のおすすめご来店時期」の既定日数・使用オプション一覧。書き換えは管理者だけ（RLS `shops_admin_update`・`N-49`）。 */
   async getShop() {
     const shopId = await this.getStaffShopId();
     const rows = await this.request(

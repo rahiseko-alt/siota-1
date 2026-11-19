@@ -76,9 +76,9 @@ export const MUTATIONS = [
   },
   {
     id: 'admin-invite-staff-no-warning',
-    why: '**招待すると相手が自分と全く同じ権限を持つことを、発行前に伝えていない**',
+    why: '**招待すると相手がスタッフになり、削除・店舗設定・スタッフ招待ができないことを、発行前に伝えていない**',
     file: 'backend/js/supabase-admin.js',
-    find: "  contentEl.append(note('招待すると、その人はあなたと全く同じ権限（すべての飼い主・犬・カルテを見る・書く・消す）を持ちます。有効期限24時間・1回のみ使用できます。新しく発行すると、前のQR・URLは使えなくなります。'));",
+    find: "  contentEl.append(note('招待すると、その人は「スタッフ」になります。すべての飼い主・犬・カルテを見る・書く・直すことはできますが、削除・店舗設定・スタッフ招待はできません（管理者だけ）。有効期限24時間・1回のみ使用できます。新しく発行すると、前のQR・URLは使えなくなります。'));",
     replace: "  contentEl.append(note('招待すると、その人が使えるようになります。有効期限24時間・1回のみ使用できます。新しく発行すると、前のQR・URLは使えなくなります。'));",
     scripts: ['verify-admin.mjs'],
   },
@@ -177,13 +177,69 @@ export const MUTATIONS = [
     extra: null,
     scripts: ['verify-photo-roundtrip.mjs'],
   },
-  /* **`shops-admin-update-rls-open` はここに在った**（30回目・2026-08-29）。
-     「一般スタッフが店舗の既定来店間隔を書き換えられる」を捕まえる壊し方だったが、
-     `admin` と `staff` の2権限は 2026-09-06 にマスターの判断で廃止され
-     （`D-20260906-68`）、`202609060012_single_staff_role.sql` が
-     `shops_admin_update` を落としている。**壊す対象がもう無い**ので削除した
-     （2026-09-11・マスター指示「機械も拾わないように削除しろ」・`F-20260910-83`）。
-     いまの境界（飼い主は変えられない）は `verify-revisit-interval.mjs` の `0.` が見る。 */
+  /* ── `N-49`（マスター指示 2026-11-19）: 店舗側を管理者とスタッフに分け直した ──
+     **`shops-admin-update-rls-open` を作り直した**（30回目・2026-08-29 に在った同名の壊し方は、
+     2026-09-06 に権限を1本にした `D-20260906-68` で対象ごと消え、2026-09-11 に削除していた）。
+     いまの境界は `202611190017_admin_staff_roles.sql`——スタッフにさせないのは
+     削除・店舗設定・スタッフ招待の3つ。1つずつ DB の判定を `is_shop_staff` に緩め、
+     `verify-admin.mjs` の `22g`〜`22l`（スタッフが叩いても断られ、何も変わらない）が赤になるかを見る。
+     飼い主が変えられない境界は、これまでどおり `verify-revisit-interval.mjs` の `0.` が見る。 */
+  {
+    id: 'shops-admin-update-rls-open',
+    sql: true,
+    why: '**スタッフが店舗設定（既定の来店間隔・使用オプション）を書き換えられる**——管理者だけに許したはずの設定が誰でも変わる',
+    file: 'supabase/migrations/202611190017_admin_staff_roles.sql',
+    find: '  using (private.is_shop_admin(id)) with check (private.is_shop_admin(id));',
+    replace: '  using (private.is_shop_staff(id)) with check (private.is_shop_staff(id));',
+    extra: null,
+    scripts: ['verify-admin.mjs'],
+  },
+  {
+    /* 顧客と犬の削除は RLS が2枚（顧客・犬）。顧客を消すと犬は連なって消えるので、
+       **両方を同時に開ける**（片方だけだと `22i` か `22j` の片方しか赤にならない）。 */
+    id: 'owner-pet-admin-delete-rls-open',
+    sql: true,
+    why: '**スタッフが顧客・犬を丸ごと消せる**——管理者だけに許したはずの削除が、裏から叩けば通る',
+    file: 'supabase/migrations/202611190017_admin_staff_roles.sql',
+    edits: [
+      { find: 'create policy owners_admin_delete on public.owners\n  for delete to authenticated using (private.is_shop_admin(shop_id));',
+        replace: 'create policy owners_admin_delete on public.owners\n  for delete to authenticated using (private.is_shop_staff(shop_id));' },
+      { find: 'create policy pets_admin_delete on public.pets\n  for delete to authenticated using (private.is_shop_admin(shop_id));',
+        replace: 'create policy pets_admin_delete on public.pets\n  for delete to authenticated using (private.is_shop_staff(shop_id));' },
+    ],
+    extra: null,
+    scripts: ['verify-admin.mjs'],
+  },
+  {
+    id: 'report-delete-admin-open',
+    sql: true,
+    why: '**スタッフがカルテを消せる**——管理者だけに許したはずのカルテ削除が、裏から叩けば通る',
+    file: 'supabase/migrations/202611190017_admin_staff_roles.sql',
+    find: "    and report.status in ('draft', 'final', 'archived', 'deleting')\n    and private.is_shop_admin(report.shop_id)",
+    replace: "    and report.status in ('draft', 'final', 'archived', 'deleting')\n    and private.is_shop_staff(report.shop_id)",
+    extra: null,
+    scripts: ['verify-admin.mjs'],
+  },
+  {
+    id: 'pet-deactivate-admin-open',
+    sql: true,
+    why: '**スタッフが犬・顧客を「使わない」にできる**——消すのと同じに見える抜け道が開く',
+    file: 'supabase/migrations/202611190017_admin_staff_roles.sql',
+    find: '  if old.active and not new.active and not private.is_shop_admin(new.shop_id) then',
+    replace: '  if false and old.active and not new.active and not private.is_shop_admin(new.shop_id) then',
+    extra: null,
+    scripts: ['verify-admin.mjs'],
+  },
+  {
+    id: 'staff-invitation-admin-open',
+    sql: true,
+    why: '**スタッフがスタッフ招待を出せる**——管理者の知らないうちに、店に人を入れられる（前の招待も取り消される）',
+    file: 'supabase/migrations/202611190017_admin_staff_roles.sql',
+    find: "  if target_type = 'staff' and not private.is_shop_admin(target_shop) then",
+    replace: "  if false and target_type = 'staff' and not private.is_shop_admin(target_shop) then",
+    extra: null,
+    scripts: ['verify-admin.mjs'],
+  },
   /* ── 29回目: 店舗の既定来店間隔が変えられなくなる（PATCH /api/shop が死ぬ）
      （2026-08-29・手元で実測） PATCH 分岐を丸ごと落とすので、応答は 404 に落ちる。 */
   {
@@ -714,12 +770,59 @@ export const MUTATIONS = [
   },
   /* **`admin-lands-elsewhere` はここに在った**（1回目・2026-09-02 に足した）。
      注入していたのは `(session.memberships || []).some((m) => m.role === 'admin')` で、
-     その `role` 列は 2026-09-06 にマスターの判断で**削除**されている
-     （`D-20260906-68`・`202609060012_single_staff_role.sql`）。
-     いま注入しても `m.role` は常に `undefined` ＝ 行き先は変わらず、**壊しても赤にならない**。
-     壊す対象が無い壊し方は残さない（2026-09-11・マスター指示「機械も拾わないように削除しろ」）。
+     その `role` 列は 2026-09-06 に一度**削除**された（`D-20260906-68`）ので 2026-09-11 に消した。
      `verify-admin.mjs :: 1.` を当時この壊し方で赤にした記録は `proof-of-red.md` の
-     「28回目」にそのまま残す（見た事実は消さない）。 */
+     「28回目」にそのまま残す（見た事実は消さない）。
+     **`role` は `N-49`（マスター指示 2026-11-19・`202611190017`）で戻った**。いまは
+     画面がその値で「管理者には5つ・スタッフには2つ」を出し分けるので、**サーバーが
+     役割を返さなくなる**壊し方を置く。どちらに倒れても、管理者の `2.`/`3f.` か
+     スタッフの `22b.` のどちらかが赤になる。 */
+  /* ── 2026-11-19・`N-48` 犬種（クライアント指示 C-14・案C） ── */
+  {
+    id: 'pet-breed-not-sent',
+    why: '**登録で打った犬種が保存されない**——欄はあるのにサーバーへ送っていない（「押せた」と「届いた」の違い・`D-12`）',
+    file: 'backend/js/supabase-admin.js',
+    find: "body: JSON.stringify({ ownerId, name, template: 'ponchi', ...(breedValue ? { breed: breedValue } : {}) }),",
+    replace: "body: JSON.stringify({ ownerId, name, template: 'ponchi' }),",
+    extra: null,
+    scripts: ['verify-admin.mjs'],
+  },
+  {
+    id: 'pet-breed-not-in-row',
+    why: '**犬を選ぶ画面の行に犬種が出ない**——犬種で探しても見つからない（C-14「飼い主名・犬名・犬種」）',
+    file: 'backend/js/supabase-admin.js',
+    find: "note: [pet.ownerName ? `飼い主: ${pet.ownerName}` : '', pet.breed].filter(Boolean).join(' ・ '),",
+    replace: "note: pet.ownerName ? `飼い主: ${pet.ownerName}` : '',",
+    extra: null,
+    scripts: ['verify-admin.mjs'],
+  },
+  {
+    id: 'pet-breed-edit-ignored',
+    why: '**「犬の情報を直す」で保存しても犬種が変わらない**——サーバーが犬種を受け取らない',
+    file: 'worker/src/api-schemas.js',
+    find: "  revisitDaysOverride: z.number().int().min(1).max(3650).nullable().optional(),\n  breed: breedSchema.optional(),",
+    replace: "  revisitDaysOverride: z.number().int().min(1).max(3650).nullable().optional(),",
+    extra: null,
+    scripts: ['verify-admin.mjs'],
+  },
+  {
+    id: 'pet-breed-no-candidates',
+    why: '**犬種の欄に候補が出ない**——案C（打つと候補が出る）になっていない',
+    file: 'backend/js/supabase-admin.js',
+    find: "  input.setAttribute('list', list.id);",
+    replace: "",
+    extra: null,
+    scripts: ['verify-admin.mjs'],
+  },
+  {
+    id: 'session-role-dropped',
+    why: '**画面に「管理者かスタッフか」が届かない**——スタッフに削除の入口が出るか、管理者から削除・店舗設定・招待が消える',
+    file: 'worker/src/data-stores/supabase-data-store.js',
+    find: 'select=shop_id,active,role&user_id=eq.',
+    replace: 'select=shop_id,active&user_id=eq.',
+    extra: null,
+    scripts: ['verify-admin.mjs'],
+  },
   {
     /* `admin-link-hidden` は入口ごと消すので、押した先を見る `1c` まで届かない
        （検査がそこで死ぬ）。**押せるが行き先が違う**形を別に用意する。 */
@@ -1163,8 +1266,9 @@ export function applyMutation(root, m) {
   };
 }
 
+/* Windows では `npx` の正体が `npx.cmd` で、シェル無しでは起動できない（`db reset` が黙って落ちた・実測）。 */
 const run = (cmd, args) => spawnSync(cmd, args, {
-  cwd: ROOT, encoding: 'utf8', timeout: 600_000, env: process.env,
+  cwd: ROOT, encoding: 'utf8', timeout: 600_000, env: process.env, shell: process.platform === 'win32',
 });
 
 /** 検査の出力から、赤になった項の名前を拾う。 */

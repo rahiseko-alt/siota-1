@@ -149,7 +149,8 @@ async function handleSupabaseApi(request, store, path, cors, env) {
   }
 
   /* 「次回のおすすめご来店時期」の既定日数・使用オプション一覧。書き換えは RLS
-     `shops_staff_update` がお店の人に絞る（飼い主の PATCH は upstream_rejected になる）。 */
+     `shops_admin_update` が管理者に絞る（`N-49`）。スタッフの PATCH は0行更新になり
+     `one()` が 404 にする（飼い主の PATCH は upstream_rejected になる）。 */
   if (path === '/api/shop') {
     if (request.method === 'GET') return json({ shop: await store.getShop() }, 200, cors);
     if (request.method === 'PATCH') {

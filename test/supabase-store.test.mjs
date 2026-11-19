@@ -619,14 +619,43 @@ test('the Supabase store never calls fetch with itself as the receiver', async (
   }
 });
 
+/* **画面は `/api/session` の `role` で「管理者には5つ・スタッフには2つ」を出し分ける**
+   （店舗側を管理者とスタッフに分け直した・マスター指示 2026-11-19・`N-49`・`202611190017`）。
+   以前は `role` 列ごと消していた（`D-20260906-68`）ので、ここは何も見ていなかった。
+   役割を引かずに返すと、画面はスタッフにも削除の入口を出すか、管理者から隠す。
+   守るのは DB だが、人が迷わないために役割は必ず届ける。本人の行だけを引くことも見る。 */
+test('getSessionContext returns the caller own membership role (N-49)', async () => {
+  const urls = [];
+  const store = new SupabaseDataStore({
+    supabaseUrl: 'https://project.supabase.co',
+    publishableKey: 'publishable-key',
+    accessToken: 'user-jwt',
+    fetchImpl: (url) => {
+      urls.push(String(url));
+      if (String(url).includes('/shop_memberships?')) {
+        return Response.json([{ shop_id: '10000000-0000-0000-0000-000000000001', active: true, role: 'staff' }]);
+      }
+      return Response.json([]);
+    },
+  });
+
+  const context = await store.getSessionContext('20000000-0000-0000-0000-000000000003');
+  const membershipUrl = urls.find((u) => u.includes('/shop_memberships?'));
+  assert.ok(membershipUrl, 'shop_memberships を問い合わせていない');
+  const select = new URL(membershipUrl).searchParams.get('select') || '';
+  assert.ok(select.split(',').includes('role'), `役割を引いていない（select=${select}）`);
+  assert.match(membershipUrl, /user_id=eq\.20000000-0000-0000-0000-000000000003/, '本人の行で絞っていない');
+  assert.equal(context.memberships[0].role, 'staff', '引いた役割をそのまま返していない');
+});
+
 /* RLS の `memberships_authorized_select` は
    `user_id = auth.uid() or private.is_shop_staff(shop_id)` なので、**同じ店のメンバーには
    店舗の全メンバー行が返る**。getStaffShopId が user_id で絞っていないと、スタッフが2人に
    なった瞬間に 409 になり、飼い主の新規作成・招待の発行と一覧・スタッフ管理
    （退職者の停止）が全部使えなくなる。日々のカルテ作成はこの関数を通らないので気づけない。
 
-   （以前ここは `is_shop_admin` と「管理者だけが」と書いていた。その関数と `admin` 権限は
-   2026-09-06 に削除済み・`D-20260906-68`。読む人も機械も古い区別を拾わないよう直した。） */
+   （ここは「管理者かどうか」ではなく「この店の人か」だけを見る口。管理者だけに許す
+   削除・店舗設定・スタッフ招待は、DB の `is_shop_admin` が断る・`N-49`・2026-11-19。） */
 test('getStaffShopId asks only for the caller own membership', async () => {
   const urls = [];
   const store = new SupabaseDataStore({

@@ -13,7 +13,9 @@ insert into auth.users (
   -- スタッフかつ飼い主。本番のマスター自身がこの形（D-20260823-06）で、
   -- **この組み合わせだけ**が「/my に留まるのにトリマー画面へ行けない」穴に落ちていた。
   -- fixture がこの形を持っていなかったので、検査5本すべてが素通りしていた。
-  ('00000000-0000-0000-0000-000000000000', '20000000-0000-0000-0000-0000000000c1', 'authenticated', 'authenticated', 'staff-owner@local.test', extensions.crypt('LocalOnly-Password-2026!', extensions.gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}', '{"full_name":"Staff And Owner"}', now(), now(), '', '', '', '')
+  ('00000000-0000-0000-0000-000000000000', '20000000-0000-0000-0000-0000000000c1', 'authenticated', 'authenticated', 'staff-owner@local.test', extensions.crypt('LocalOnly-Password-2026!', extensions.gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}', '{"full_name":"Staff And Owner"}', now(), now(), '', '', '', ''),
+  -- スタッフ権限（管理者ではない）の口座（`N-49`・2026-11-19）。削除・店舗設定・スタッフ招待を断られる側。
+  ('00000000-0000-0000-0000-000000000000', '20000000-0000-0000-0000-000000000003', 'authenticated', 'authenticated', 'limited-staff@local.test', extensions.crypt('LocalOnly-Password-2026!', extensions.gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}', '{"full_name":"Limited Staff"}', now(), now(), '', '', '', '')
 on conflict (id) do nothing;
 
 insert into auth.identities (
@@ -31,7 +33,8 @@ from (values
   ('21000000-0000-0000-0000-0000000000a1'::uuid, '20000000-0000-0000-0000-0000000000a1'::uuid, 'owner-a@local.test'),
   ('21000000-0000-0000-0000-0000000000b1'::uuid, '20000000-0000-0000-0000-0000000000b1'::uuid, 'owner-b@local.test'),
   ('21000000-0000-0000-0000-0000000000f1'::uuid, '20000000-0000-0000-0000-0000000000f1'::uuid, 'uninvited@local.test'),
-  ('21000000-0000-0000-0000-0000000000c1'::uuid, '20000000-0000-0000-0000-0000000000c1'::uuid, 'staff-owner@local.test')
+  ('21000000-0000-0000-0000-0000000000c1'::uuid, '20000000-0000-0000-0000-0000000000c1'::uuid, 'staff-owner@local.test'),
+  ('21000000-0000-0000-0000-000000000003'::uuid, '20000000-0000-0000-0000-000000000003'::uuid, 'limited-staff@local.test')
 ) fixture(identity_id, user_id, email)
 on conflict (provider_id, provider) do nothing;
 
@@ -39,14 +42,18 @@ insert into public.shops (id, name, slug)
 values ('10000000-0000-0000-0000-000000000001', 'Local SALTY DOG', 'local-salty-dog')
 on conflict (id) do nothing;
 
-/* 権限は「お店の人か / 飼い主か」の2つだけ（`D-20260906-68`）。
-   `admin` と `staff` の区別は無いので、**「管理者」の口座も置かない**
-   （2026-09-11・マスター指示「機械も拾わないように削除しろ」）。
-   置いていた `admin@local.test` は、権限が同じなのに名前だけ「管理者」で、
-   検査がそれを本物の区別だと読んでいた（`F-20260910-83`）。 */
+/* 店舗側の権限は「管理者」と「スタッフ」（`N-49`・2026-11-19・`202611190017`）。
+   `staff@local.test` と `staff-owner@local.test` は**管理者**（列の既定 `admin`）——
+   名前は昔のままだが、これまでの検査はこの2つで削除や店舗設定まで通しているので、
+   役割を変えずに残す。**スタッフ権限で断られる側**は `limited-staff@local.test` で見る。
+   （名前だけ「管理者」で中身が同じ口座を置いて検査が読み違えた `F-20260910-83` とは逆で、
+   今回は役割が本当に違う。） */
 insert into public.shop_memberships (shop_id, user_id) values
   ('10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000002'),
   ('10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-0000000000c1')
+on conflict (shop_id, user_id) do nothing;
+insert into public.shop_memberships (shop_id, user_id, role) values
+  ('10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000003', 'staff')
 on conflict (shop_id, user_id) do nothing;
 
 insert into public.owners (id, shop_id, name, legacy_slug) values
