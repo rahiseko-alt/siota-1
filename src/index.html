@@ -325,6 +325,22 @@ button, input, textarea, select {
   display: block;
 }
 
+/* 店側の画面は、通信が返って画面が1枚出るまで中身が空白になる（N-44）。
+   表示中の画面が1枚も無い間だけ、読み込み中だと分かる一文を出す。 */
+.boot-loading {
+  display: none;
+  padding: 120px 20px;
+  text-align: center;
+  font-family: var(--font-serif);
+  font-size: 14px;
+  letter-spacing: 0.1em;
+  color: var(--ink-muted);
+}
+
+.main-wrapper:not(:has(.screen-panel.is-active)) .boot-loading {
+  display: block;
+}
+
 @keyframes panelFadeIn {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
@@ -1920,6 +1936,8 @@ button, input, textarea, select {
 </nav>
 
 <main class="main-wrapper">
+
+  <p class="boot-loading" role="status">読み込み中…</p>
 
   <!-- SCREEN 1: AUTH (独創切り替えボタン削除) -->
   <section class="screen-panel is-active" id="screen-1">
