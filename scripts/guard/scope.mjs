@@ -79,7 +79,8 @@ export function rel(root, p) {
   if (!p) return null;
   const r = path.relative(root, path.resolve(root, String(p).replace(/^['"]|['"]$/g, '')));
   if (!r || r.startsWith('..') || path.isAbsolute(r)) return null;
-  return r;
+  /* 範囲の一覧は `/` 区切り。Windows の `\` 区切りのままだと範囲内でも外と判定される。 */
+  return r.split(path.sep).join('/');
 }
 
 const under = (r, list) =>

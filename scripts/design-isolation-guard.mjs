@@ -21,6 +21,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(process.argv[2] || process.cwd());
 const DESIGN = path.join(ROOT, 'design');
@@ -36,7 +37,8 @@ const REFERENCE = /(?<![\w-])design\//;
 
 /* このファイル自身は scripts/ に居て、かつ design/ の話をしないと成立しない。
    自分を検査対象から外す。除外はここ1件だけで、増やさない。 */
-const SELF = path.resolve(new URL(import.meta.url).pathname);
+/* `URL#pathname` は Windows で `/C:/…` になり自分と一致しない。fileURLToPath を使う。 */
+const SELF = path.resolve(fileURLToPath(import.meta.url));
 
 const problems = [];
 

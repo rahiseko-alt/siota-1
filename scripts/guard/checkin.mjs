@@ -43,7 +43,7 @@ process.stdout.write('\n【チェックイン】前回の続きから始めら�
 /* ── 1. master に取り込まれていない作業ブランチが無いか ──
    **系譜だけで見てはいけない**（squash マージは中身が入っても祖先関係にならない・
    放置リスト `#40`＝`checkout.mjs` 項目3と同じ穴。`merged-by-content.mjs` に判定を集約）。 */
-const remotes = sh("git branch -r --format='%(refname:short)'")
+const remotes = sh('git branch -r --format="%(refname:short)"')
   .split('\n').map((s) => s.trim())
   .filter((b) => b && b !== 'origin/master' && !b.includes('->'));
 const unmerged = remotes.filter((b) => quiet(`git merge-base --is-ancestor ${b} origin/master`) !== 0
