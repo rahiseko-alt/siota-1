@@ -456,7 +456,22 @@ async function bootLoginPage() {
      一度出したら消す。次に開いたときまで残ると、直った後も出続ける。 */
   const notice = sessionStorage.getItem('entry_notice');
   if (notice) sessionStorage.removeItem('entry_notice');
-  if (note) note.textContent = notice || 'Googleアカウントで安全にログインします';
+  /* **Google から失敗で戻されたときも、黙らない。**（`N-46`・放置リスト `#69`）
+     アカウント選択を開いたまま時間が経つと、戻り先に `?error=…&error_code=bad_oauth_state`
+     が付くだけで画面はふつうの入口のまま——人には「押したのに進まない」としか見えなかった
+     （2026-11-19 本番で実際に起きた）。上と同じく理由を出し、一度出したら URL から消す
+     （招待の印など他の値は残す）。 */
+  const params = new URLSearchParams(location.search);
+  const oauthFailed = params.has('error');
+  if (oauthFailed) {
+    ['error', 'error_code', 'error_description'].forEach((key) => params.delete(key));
+    const rest = params.toString();
+    history.replaceState(null, '', `${location.pathname}${rest ? `?${rest}` : ''}${location.hash}`);
+  }
+  const failedNotice = oauthFailed
+    ? 'ログインが完了しませんでした。お手数ですが、もう一度「Google でログイン」を押してください。'
+    : '';
+  if (note) note.textContent = notice || failedNotice || 'Googleアカウントで安全にログインします';
 }
 
 if (typeof document !== 'undefined') {
