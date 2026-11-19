@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createPetSchema, parseJson } from '../worker/src/api-schemas.js';
+import { createPetSchema, updatePetSchema, parseJson } from '../worker/src/api-schemas.js';
 import { StoreError, SupabaseDataStore } from '../worker/src/data-stores/supabase-data-store.js';
 import worker from '../worker/src/index.js';
 
@@ -27,6 +27,24 @@ test('Zod parser rejects unknown fields and malformed UUIDs', async () => {
     method: 'POST', body: JSON.stringify({ ownerId: '../owner-a', name: 'X', template: 'ponchi' }),
   }), createPetSchema);
   assert.equal(invalid.ok, false);
+});
+
+test('犬種（N-48）: 任意・前後の空白を落とす・空は null・60文字まで・文字列以外は拒む', () => {
+  const owner = '30000000-0000-0000-0000-0000000000a1';
+  const base = { ownerId: owner, name: 'X', template: 'ponchi' };
+  assert.equal(createPetSchema.parse(base).breed, undefined);
+  assert.equal(createPetSchema.parse({ ...base, breed: '  柴  ' }).breed, '柴');
+  assert.equal(createPetSchema.parse({ ...base, breed: '   ' }).breed, null);
+  assert.equal(createPetSchema.parse({ ...base, breed: 'あ'.repeat(60) }).breed, 'あ'.repeat(60));
+  assert.equal(createPetSchema.safeParse({ ...base, breed: 'あ'.repeat(61) }).success, false);
+  assert.equal(createPetSchema.safeParse({ ...base, breed: 3 }).success, false);
+
+  assert.equal(updatePetSchema.parse({ breed: 'ミックス' }).breed, 'ミックス');
+  assert.equal(updatePetSchema.parse({ breed: null }).breed, null);
+  assert.equal(updatePetSchema.parse({ breed: '' }).breed, null);
+  assert.equal(updatePetSchema.safeParse({ breed: { $ne: 1 } }).success, false);
+  /* 犬種だけを送る変更も「何も変えない」扱いにしない（refine）。 */
+  assert.equal(updatePetSchema.safeParse({}).success, false);
 });
 
 test('JSON parser rejects oversized report bodies before parsing', async () => {

@@ -108,6 +108,7 @@ async function listPets() {
     name: pet.name || '',
     ownerName: (pet.owners && pet.owners.name) || '',
     ownerId: pet.owner_id || '',
+    breed: pet.breed || '',
   }));
 }
 
@@ -542,6 +543,12 @@ function screenRepeat() {
       testid: 'repeat-revise',
       onSelect: () => navigate('/admin/repeat/revise', pickPetForRevise),
     },
+    {
+      title: '③ 犬の情報を直す',
+      note: '犬種を入れる・直す',
+      testid: 'repeat-pet',
+      onSelect: () => navigate('/admin/repeat/pet', pickPetForEdit),
+    },
   ]));
 }
 
@@ -560,7 +567,9 @@ async function withList(loader, render) {
 function petItems(pets) {
   const items = pets.map((pet) => ({
     title: pet.name,
-    note: pet.ownerName ? `飼い主: ${pet.ownerName}` : '',
+    /* 犬種は入っている子だけ出す（クライアント指示 C-14「飼い主名・犬名・犬種」・`N-48`）。
+       行に出した文字は検索窓がそのまま探すので、犬種でも絞り込める。 */
+    note: [pet.ownerName ? `飼い主: ${pet.ownerName}` : '', pet.breed].filter(Boolean).join(' ・ '),
     pet,
   }));
   /* 犬の名前と飼い主の名前が**両方とも同じ**行があれば、そこだけ ID を足す
@@ -584,10 +593,56 @@ function pickPetForCreate() {
     label: 'レポートを作成する犬を選ぶ',
     empty: 'まだ1頭も登録されていません。「② 新規」から登録してください。',
     testid: 'pick-pet',
-    search: '犬の名前・飼い主様の名前で探す',
+    search: '犬の名前・飼い主様の名前・犬種で探す',
     onBack: () => navigate('/admin/repeat', screenRepeat),
     onPick: (item) => { location.href = `/edit/p/${encodeURIComponent(item.pet.id)}`; },
   }));
+}
+
+/* 登録済みの子に犬種を入れる・直す（`N-48`）。犬種の欄を足す前に登録された子は空から始まる。 */
+function pickPetForEdit() {
+  return withList(listPets, (pets) => picker({
+    items: petItems(pets),
+    label: '情報を直す犬を選ぶ',
+    empty: 'まだ1頭も登録されていません。「② 新規」から登録してください。',
+    testid: 'pick-pet',
+    search: '犬の名前・飼い主様の名前・犬種で探す',
+    onBack: () => navigate('/admin/repeat', screenRepeat),
+    onPick: (item) => pushStep(() => formEditPet(item.pet)),
+  }));
+}
+
+function formEditPet(pet) {
+  clear();
+  contentEl.append(backButton(() => navigate('/admin/repeat/pet', pickPetForEdit)));
+  contentEl.append(heading('犬の情報を直す'));
+  contentEl.append(el('p', null, pet.ownerName ? `${pet.name}（飼い主: ${pet.ownerName}）` : pet.name));
+  const breed = breedField(pet.breed);
+  contentEl.append(breed.field);
+  contentEl.append(note('空欄にして保存すると、犬種を消します。'));
+  const button = submitButton('保存する', 'save-pet');
+  const result = el('p', 'admin-result');
+  button.onclick = async () => {
+    const value = breed.input.value.trim();
+    button.disabled = true;
+    setMessage(result, '保存しています…');
+    try {
+      const body = await api(`/api/pets/${encodeURIComponent(pet.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ breed: value || null }),
+      });
+      const saved = (body.pet && body.pet.breed) || '';
+      pet.breed = saved;
+      breed.input.value = saved;
+      setMessage(result, saved ? `保存しました: ${saved}` : '犬種を消しました');
+    } catch (error) {
+      setMessage(result, `保存できませんでした: ${error.message}`);
+    } finally {
+      button.disabled = false;
+    }
+  };
+  contentEl.append(button);
+  contentEl.append(result);
 }
 
 function pickPetForRevise() {
@@ -648,6 +703,38 @@ function textField(labelText, testid) {
   input.dataset.adminField = testid;
   input.autocomplete = 'off';
   field.append(input);
+  return { field, input };
+}
+
+/* ── 犬種の欄（クライアント指示 C-14・マスター決定 案C・`N-48`） ─────────
+   打ち始めると候補が出る。候補に無い犬種（ミックスなど）はそのまま打てる。
+   ブラウザ標準の `<datalist>` で出すので、部品は足していない。
+   候補はクライアントへの回答案（`docs/ops/client-reply-C13-C14.md`）の一覧と同じ。 */
+export const BREED_CANDIDATES = [
+  'トイ・プードル', 'チワワ', 'ミニチュア・ダックスフンド', 'ポメラニアン', '柴',
+  'ミニチュア・シュナウザー', 'ヨークシャー・テリア', 'マルチーズ', 'シー・ズー',
+  'フレンチ・ブルドッグ', 'パピヨン', 'ビション・フリーゼ', 'ミニチュア・ピンシャー',
+  'キャバリア・キング・チャールズ・スパニエル', 'ウェルシュ・コーギー・ペンブローク',
+  'ジャック・ラッセル・テリア', 'ペキニーズ', '狆', 'ボーダー・コリー',
+  'ゴールデン・レトリーバー', 'ラブラドール・レトリーバー', 'ミックス',
+];
+
+/** 犬種の上限。DB の check 制約（`202611190016`）・`api-schemas.js` と同じ。 */
+const BREED_MAX = 60;
+
+function breedField(value = '') {
+  const { field, input } = textField('犬種（打つと候補が出ます。候補に無いときはそのまま入力）', 'pet-breed');
+  input.maxLength = BREED_MAX;
+  input.value = value;
+  const list = document.createElement('datalist');
+  list.id = 'admin-breed-candidates';
+  for (const breed of BREED_CANDIDATES) {
+    const option = document.createElement('option');
+    option.value = breed;
+    list.append(option);
+  }
+  input.setAttribute('list', list.id);
+  field.append(list);
   return { field, input };
 }
 
@@ -714,10 +801,13 @@ function formNewPet() {
 
     const { field, input } = textField('わんちゃんのお名前', 'pet-name');
     contentEl.append(field);
+    const breed = breedField();
+    contentEl.append(breed.field);
     const button = submitButton('登録する', 'create-pet');
     const result = el('p', 'admin-result');
     button.onclick = async () => {
       const name = input.value.trim();
+      const breedValue = breed.input.value.trim();
       const ownerId = select.value;
       if (!name) { setMessage(result, 'お名前を入力してください'); return; }
       button.disabled = true;
@@ -729,9 +819,10 @@ function formNewPet() {
            画面で選ばせる意味が無いので固定する。増えたらここに選択欄が要る。 */
         const body = await api(`/api/owners/${encodeURIComponent(ownerId)}/pets`, {
           method: 'POST',
-          body: JSON.stringify({ ownerId, name, template: 'ponchi' }),
+          body: JSON.stringify({ ownerId, name, template: 'ponchi', ...(breedValue ? { breed: breedValue } : {}) }),
         });
         input.value = '';
+        breed.input.value = '';
         button.disabled = false;
         setMessage(result, `登録しました: ${(body.pet && body.pet.name) || name}`);
       } catch (error) {
@@ -882,6 +973,7 @@ const ADMIN_ROUTES = {
   '/admin/repeat': screenRepeat,
   '/admin/repeat/create': pickPetForCreate,
   '/admin/repeat/revise': pickPetForRevise,
+  '/admin/repeat/pet': pickPetForEdit,
   '/admin/new': screenNew,
   '/admin/new/owner': formNewOwner,
   '/admin/new/pet': formNewPet,

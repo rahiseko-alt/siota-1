@@ -175,8 +175,9 @@ try {
   await tapByText(page, 'リピーター');
   await page.waitForSelector('.admin-menu__item', { timeout: 10_000 });
   const repeat = await menuTitles(page);
-  check('3. リピーターに カルテ作成 / カルテ修正 が在る',
-    repeat.length === 2 && repeat[0].includes('カルテ作成') && repeat[1].includes('カルテ修正'),
+  check('3. リピーターに カルテ作成 / カルテ修正 / 犬の情報を直す が在る',
+    repeat.length === 3 && repeat[0].includes('カルテ作成') && repeat[1].includes('カルテ修正')
+    && repeat[2].includes('犬の情報を直す'),
     `出た項目=${JSON.stringify(repeat)}`);
   await tapByText(page, '◀ もどる');
   await page.waitForSelector('.admin-menu__item', { timeout: 10_000 });
@@ -305,6 +306,18 @@ try {
   await page.waitForSelector('[data-admin-field="pet-name"]', { timeout: 20_000 });
   await page.selectOption('[data-admin-field="owner-select"]', createdOwner.id);
   await page.fill('[data-admin-field="pet-name"]', petName);
+  /* 犬種（`N-48`・案C）。**候補に無い犬種を手で打つ**——候補からしか入らない作りなら
+     ここで落ちる。 */
+  const breedTyped = `手入力犬種${stamp}`;
+  const breedCandidates = await page.evaluate(() => {
+    const input = document.querySelector('[data-admin-field="pet-breed"]');
+    const list = input && input.list;
+    return list ? [...list.options].map((o) => o.value) : [];
+  });
+  check('6a. 犬種の欄に、打つと出る候補が付いている',
+    breedCandidates.length >= 20 && breedCandidates.includes('トイ・プードル') && breedCandidates.includes('ミックス'),
+    `候補${breedCandidates.length}件`);
+  await page.fill('[data-admin-field="pet-breed"]', breedTyped);
   await page.click('[data-admin-action="create-pet"]');
   await page.waitForFunction(
     () => (document.querySelector('.admin-result') || {}).textContent?.includes('登録しました'),
@@ -315,6 +328,59 @@ try {
   const createdPet = (petsAfter.pets || []).find((p) => p.name === petName);
   check('6. ペットアカウントが実際に作られた', !!createdPet, `name=${petName}`);
   if (!createdPet) throw new Error('犬が作られていないので先へ進めない');
+  /* **画面の文字で合格にしない**（`D-12`）。打った犬種がサーバーに同じ値で入ったかを見る。 */
+  check('6b. 登録で手入力した犬種が、そのままの値で保存された', createdPet.breed === breedTyped,
+    `保存=${JSON.stringify(createdPet.breed)}`);
+
+  /* ── 6c 犬を選ぶ画面の行に犬種が出て、犬種でも探せる（C-14「飼い主名・犬名・犬種」） ── */
+  await page.goto(`${BASE}/admin/repeat/create`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('[data-admin-field="pet-search"]', { timeout: 20_000 });
+  await page.fill('[data-admin-field="pet-search"]', breedTyped.toLowerCase());
+  const breedRows = await page.evaluate(() => [...document.querySelectorAll('[data-admin-action="pick-pet"]')]
+    .filter((row) => !row.hidden).map((row) => row.textContent));
+  check('6c. 犬種で打つと、その犬種の子だけが出て、行に飼い主名・犬名・犬種が並ぶ',
+    breedRows.length === 1 && breedRows[0].includes(petName) && breedRows[0].includes(ownerName)
+    && breedRows[0].includes(breedTyped),
+    JSON.stringify(breedRows));
+
+  /* ── 6d 登録済みの子の犬種を直す・消す（`N-48`「犬の情報を直す」） ── */
+  await page.goto(`${BASE}/admin/repeat`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.admin-menu__item', { timeout: 20_000 });
+  await tapByText(page, '犬の情報を直す');
+  await page.waitForSelector('[data-admin-field="pet-search"]', { timeout: 20_000 });
+  check('6d. 犬の情報を直す画面にも住所がある', pathNow() === '/admin/repeat/pet', `path=${pathNow()}`);
+  await page.fill('[data-admin-field="pet-search"]', petName);
+  await page.locator('[data-admin-action="pick-pet"]:not([hidden])').first().click();
+  await page.waitForSelector('[data-admin-action="save-pet"]', { timeout: 20_000 });
+  const prefilled = await page.inputValue('[data-admin-field="pet-breed"]');
+  check('6e. 直す画面には、いまの犬種が入っている', prefilled === breedTyped, `欄=${JSON.stringify(prefilled)}`);
+  await page.fill('[data-admin-field="pet-breed"]', 'ミックス');
+  await page.click('[data-admin-action="save-pet"]');
+  await page.waitForFunction(
+    () => (document.querySelector('.admin-result') || {}).textContent?.includes('保存しました'),
+    { timeout: 20_000 },
+  ).catch(() => {});
+  const breedOf = async () => {
+    const body = await (await fetch(`${BASE}/api/pets`, { headers: authHeaders })).json();
+    const pet = (body.pets || []).find((p) => p.id === createdPet.id);
+    return pet ? pet.breed : 'missing';
+  };
+  const afterEdit = await breedOf();
+  check('6f. 直した犬種がサーバーに入った', afterEdit === 'ミックス', `保存=${JSON.stringify(afterEdit)}`);
+  await page.fill('[data-admin-field="pet-breed"]', '');
+  await page.click('[data-admin-action="save-pet"]');
+  await page.waitForFunction(
+    () => (document.querySelector('.admin-result') || {}).textContent?.includes('消しました'),
+    { timeout: 20_000 },
+  ).catch(() => {});
+  const afterClear = await breedOf();
+  check('6g. 空欄で保存すると犬種が消える（空文字ではなく「無し」）', afterClear === null,
+    `保存=${JSON.stringify(afterClear)}`);
+  await page.goBack({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('[data-admin-field="pet-search"]', { timeout: 20_000 }).catch(() => {});
+  check('6h. 直す画面からブラウザの戻るで、犬を選ぶ画面にちょうど1つ戻る',
+    pathNow() === '/admin/repeat/pet' && (await page.locator('[data-admin-field="pet-search"]').count()) === 1,
+    `path=${pathNow()}`);
 
   /* ── ⑥ カルテ修正 — 確定済みを上書きする ──
      まず1枚確定させる（製品の道で作る。検査用の別経路を書かない）。 */

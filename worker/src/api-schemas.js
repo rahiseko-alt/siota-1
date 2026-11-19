@@ -13,10 +13,18 @@ export const updateOwnerSchema = z.object({
   active: z.boolean().optional(),
 }).strict().refine((value) => value.name !== undefined || value.active !== undefined);
 
+/* 犬種（クライアント指示 C-14・plan.md `N-48`）。候補から選べて手でも打てる（案C）ので、
+   決まった一覧には縛らず長さだけを見る。**空は null で表す**——DB の check 制約
+   （`202611190016`）が空文字を拒むので、消したいときの「空欄で保存」をここで null に直す。 */
+const breedSchema = z.string().trim().max(60)
+  .transform((value) => (value === '' ? null : value))
+  .nullable();
+
 export const createPetSchema = z.object({
   ownerId: uuidSchema,
   name: z.string().trim().min(1).max(120),
   template: z.string().trim().min(1).max(50),
+  breed: breedSchema.optional(),
 }).strict();
 
 export const updatePetSchema = z.object({
@@ -24,9 +32,10 @@ export const updatePetSchema = z.object({
   template: z.string().trim().min(1).max(50).optional(),
   active: z.boolean().optional(),
   revisitDaysOverride: z.number().int().min(1).max(3650).nullable().optional(),
+  breed: breedSchema.optional(),
 }).strict().refine((value) => (
   value.name !== undefined || value.template !== undefined || value.active !== undefined
-    || value.revisitDaysOverride !== undefined
+    || value.revisitDaysOverride !== undefined || value.breed !== undefined
 ));
 
 export const updateShopSchema = z.object({

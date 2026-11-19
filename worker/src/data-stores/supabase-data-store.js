@@ -104,7 +104,7 @@ export class SupabaseDataStore {
      embed 構文で、pets_owner_shop_fkey を辿って飼い主名を1回の問い合わせで取得する。 */
   async listPetsWithOwner() {
     return this.request(
-      '/rest/v1/pets?select=id,shop_id,owner_id,name,template,active,revisit_days_override,created_at,owners(name)&active=eq.true&order=created_at.desc',
+      '/rest/v1/pets?select=id,shop_id,owner_id,name,breed,template,active,revisit_days_override,created_at,owners(name)&active=eq.true&order=created_at.desc',
     );
   }
 
@@ -237,10 +237,14 @@ export class SupabaseDataStore {
   async createPet(ownerId, input) {
     const owner = await this.getOwner(ownerId);
     const rows = await this.request(
-      '/rest/v1/pets?select=id,shop_id,owner_id,name,template,active,revisit_days_override,created_at,updated_at',
+      '/rest/v1/pets?select=id,shop_id,owner_id,name,breed,template,active,revisit_days_override,created_at,updated_at',
       {
         method: 'POST',
-        body: { shop_id: owner.shop_id, owner_id: ownerId, name: input.name, template: input.template },
+        body: {
+          shop_id: owner.shop_id, owner_id: ownerId, name: input.name, template: input.template,
+          /* 犬種は任意（`N-48`）。入っていなければ送らない＝DB の既定（null）。 */
+          ...(input.breed !== undefined ? { breed: input.breed } : {}),
+        },
         prefer: 'return=representation',
       },
     );
@@ -252,7 +256,7 @@ export class SupabaseDataStore {
     const body = { ...rest };
     if ('revisitDaysOverride' in input) body.revisit_days_override = revisitDaysOverride;
     const rows = await this.request(
-      `/rest/v1/pets?id=eq.${encodeURIComponent(petId)}&select=id,shop_id,owner_id,name,template,active,revisit_days_override,created_at,updated_at`,
+      `/rest/v1/pets?id=eq.${encodeURIComponent(petId)}&select=id,shop_id,owner_id,name,breed,template,active,revisit_days_override,created_at,updated_at`,
       { method: 'PATCH', body, prefer: 'return=representation' },
     );
     return this.one(rows);

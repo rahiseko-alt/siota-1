@@ -48,6 +48,8 @@ export function mapPet(pet) {
     id: pet.id,
     slug: pet.id,
     petName: pet.name,
+    /* 犬種（`N-48`）。/api/pets（listPetsWithOwner）だけが返す。無ければ空。 */
+    breed: pet.breed || '',
     ownerId: pet.owner_id,
     ownerSlug: pet.owner_id,
     /* /api/pets（listPetsWithOwner）が owners(name) を embed しているときだけ入る。
