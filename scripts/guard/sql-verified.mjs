@@ -46,7 +46,8 @@ export function sqlFiles(root) {
 export function sqlFingerprint(root) {
   const hash = crypto.createHash('sha256');
   for (const file of sqlFiles(root)) {
-    hash.update(path.relative(root, file));
+    /* 記録は `/` 区切りで作られている。OS で指紋が変わらないよう揃える。 */
+    hash.update(path.relative(root, file).split(path.sep).join('/'));
     hash.update('\0');
     hash.update(fs.readFileSync(file));
     hash.update('\0');
