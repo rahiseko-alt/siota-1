@@ -165,6 +165,17 @@ node scripts/swap-image.mjs login-photo /path/to/新しい写真.png
    **クライアントのオーナーが「スタッフ」に出たら、ここで止めてマスターに言う**（そのまま当てると削除・店舗設定・スタッフ招待ができなくなる）。
 2. マスターが一覧を見て「この振り分けでよい」と言ったら、migration を2本、この順で当てる:
    `supabase/migrations/202611190016_pet_breed.sql` → `supabase/migrations/202611190017_admin_staff_roles.sql`
+   **当てた直後に、マスターが「管理者」と決めた人を管理者に戻す**（スタッフ招待で入っていても管理者にする人）。
+   本番の SQL Editor で、1人ずつ:
+
+   ```sql
+   update public.shop_memberships m set role = 'admin'
+   from auth.users u
+   where u.id = m.user_id and u.email = '<マスターが決めたメールアドレス>';
+   ```
+
+   **メールアドレスはこの手順書にもコードにも書かない**（実在の人の情報・`AGENTS.md` A-2）。誰を管理者にするかは
+   `docs/ops/plan.md` の `N-47` に「誰の」とだけ書く。流したあと、上の 1. の一覧をもう一度出して確かめる。
 3. そのあとで Worker を出す（下の 3. A-1）。`npm run verify:prod` が緑になること。
 
 ## 3. デプロイ手順（順序固定）
