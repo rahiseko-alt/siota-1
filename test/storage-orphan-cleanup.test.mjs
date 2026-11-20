@@ -96,3 +96,26 @@ test('別の犬のカルテを渡されたら、何も触らずに投げる', as
   );
   assert.equal(calls.list.length, 0);
 });
+
+test('上げたばかり（数分以内）の未登録の写真は消さない——別のタブが確定している最中かもしれない', async () => {
+  const removed = [];
+  const now = Date.parse('2026-11-20T10:00:00Z');
+  const client = {
+    storage: {
+      from: () => ({
+        list: async () => ({
+          data: [
+            { name: `${ids.orphan}.webp`, created_at: '2026-11-20T09:50:00Z' },
+            { name: '60000000-0000-0000-0000-0000000000a4.png', created_at: '2026-11-20T09:59:00Z' },
+          ],
+          error: null,
+        }),
+        remove: async (paths) => { removed.push(...paths); return { error: null }; },
+      }),
+    },
+    from: () => ({ select: () => ({ eq: async () => ({ data: [], error: null }) }) }),
+  };
+  const result = await removeUnregisteredAssets({ client, report, petId: ids.pet, now });
+  assert.deepEqual(removed, [`${prefix}/${ids.orphan}.webp`], '10分前のものだけ消え、1分前のものは残る');
+  assert.equal(result.removed, 1);
+});

@@ -165,12 +165,17 @@ export async function uploadReportAssets({
    上げたが登録がまだ、という途中の状態がありうる（`cache` から引き継いだもの）ので残す。
    Storage 側も `report_assets_storage_staff_orphan_delete`（`202611200019`）が登録済みの写真の削除を断る。
    **失敗は投げる**——黙って進むと、確定が `null` で断られて理由が分からなくなる（`D-2` と同じ考え方）。 */
+/** 「上げたばかり」とみなす長さ。登録は上げた直後に続くので、数分あれば終わっている。 */
+export const ORPHAN_GRACE_MS = 3 * 60 * 1000;
+
 export async function removeUnregisteredAssets({
   client,
   report,
   petId,
   keepIds = [],
   bucket = 'report-assets',
+  now = Date.now(),
+  graceMs = ORPHAN_GRACE_MS,
 }) {
   if (!client || !report?.id || !report.shop_id || report.pet_id !== petId) throw new TypeError('invalid report context');
   const prefix = `${report.shop_id}/${petId}/${report.id}`;
@@ -187,6 +192,10 @@ export async function removeUnregisteredAssets({
   const paths = (listed || [])
     .filter((item) => item?.name)
     .filter((item) => !keep.has(item.name.replace(/\.[^.]*$/, '')))
+    /* **上げたばかりの写真は消さない。** 別のタブ（別の端末）が同じカルテを確定している最中だと、
+       上げてから登録するまでの間は「未登録」に見える。それを消すと、そちらの登録が失敗し続ける
+       （#75 の担当が指摘・2026-11-20）。数分たっても未登録のものだけを残り物とみなす。 */
+    .filter((item) => !(item.created_at && now - Date.parse(item.created_at) < graceMs))
     .map((item) => `${prefix}/${item.name}`)
     .filter((path) => !registered.has(path));
   if (paths.length === 0) return { removed: 0 };
