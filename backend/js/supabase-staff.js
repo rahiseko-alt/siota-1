@@ -1,5 +1,10 @@
 import { authorizedFetch, createAuthClient } from './supabase-auth.js';
-import { hydrateAssetReferences, replaceDataUrlAssets, uploadReportAssets } from './supabase-storage.js';
+import {
+  hydrateAssetReferences,
+  removeUnregisteredAssets,
+  replaceDataUrlAssets,
+  uploadReportAssets,
+} from './supabase-storage.js';
 import { renderMagazine } from './magazine-view.js';
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
@@ -563,6 +568,13 @@ async function saveReport(petId, reportData, reportDate, draftId) {
   const report = saved.report;
   if (!report || !report.id) throw new Error('カルテを作れませんでした');
 
+  /* 前に閉じたタブが上げたまま登録しなかった写真を先に片付ける。残っていると確定が必ず断られる
+     （放置リスト `#75`）。今回の写真（番号を引き継いだものを含む）は残す。
+     新しく作ったカルテ（下書きが無い）は番号が今できたばかりで、置き場に何も無いので見ない。 */
+  if (draftId) {
+    await removeUnregisteredAssets({ client, report, petId, keepIds: assets.map((asset) => asset.id) });
+  }
+
   if (assets.length > 0) {
     await uploadReportAssets({ client, api, report, petId, assets });
   }
@@ -605,10 +617,13 @@ async function reviseReport(petId, reportId, reportData) {
 
   const cacheKey = `${petId}:revise:${reportId}`;
   const { data, assets } = await replaceDataUrlAssets(reportData, { cache: assetCacheFor(cacheKey) });
+  /* 元のカルテは写真が無い回も取る。置き忘れの写真があると、写真を触らない直しでも
+     `revise_report` が断るので、毎回片付ける必要がある（放置リスト `#75`）。 */
+  const existing = await api(`/api/pets/${encodeURIComponent(petId)}/reports/${encodeURIComponent(reportId)}`);
+  const report = existing && existing.report;
+  if (!report || !report.id) throw new Error('直す元のカルテが見つかりませんでした');
+  await removeUnregisteredAssets({ client, report, petId, keepIds: assets.map((asset) => asset.id) });
   if (assets.length > 0) {
-    const existing = await api(`/api/pets/${encodeURIComponent(petId)}/reports/${encodeURIComponent(reportId)}`);
-    const report = existing && existing.report;
-    if (!report || !report.id) throw new Error('直す元のカルテが見つかりませんでした');
     await uploadReportAssets({ client, api, report, petId, assets });
   }
   const revised = await api(

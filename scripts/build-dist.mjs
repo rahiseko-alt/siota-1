@@ -17,7 +17,9 @@ const DIST = path.join(ROOT, 'dist');
 
 /** src からの相対パスで、dist に置くもの。ここに無いものは配信されない。 */
 /* 入口は3つ: index.html（トリマー）/ my.html（飼い主）/ admin.html（管理者）。 */
-const ENTRIES = ['index.html', 'my.html', 'admin.html', 'manifest.json', 'js', 'assets'];
+/* `_headers` は Cloudflare が直接配る静的ファイルにセキュリティヘッダを付ける設定（放置リスト #78）。
+   ファイル自体は公開されない（Workers Static Assets の仕様）。 */
+const ENTRIES = ['index.html', 'my.html', 'admin.html', 'manifest.json', '_headers', 'js', 'assets'];
 
 function copy(from, to) {
   const stat = fs.statSync(from);

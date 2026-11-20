@@ -272,6 +272,9 @@
     }
     .admin-field { display: block; margin-bottom: 14px; }
     .admin-field span { display: block; font-size: 12px; color: var(--ink-secondary); margin-bottom: 4px; }
+    /* 欄の中に置いたボタン（⑥ スタッフ管理の「利用を止める」など）の文字まで灰色にしない。
+       上の規則がボタンの中の文字にも効いて、黒地に濃い灰色で押せないボタンに見えた（独立検証④・2026-11-20）。 */
+    .admin-field .boxbutton span { color: #ffffff; font-size: inherit; margin-bottom: 0; }
     .admin-field input, .admin-field select {
       width: 100%;
       padding: 10px 12px;

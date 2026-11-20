@@ -21,6 +21,7 @@ import {
   createReportAssetSchema,
   createReportSchema,
   parseJson,
+  setMemberActiveSchema,
   updateOwnerSchema,
   updatePetSchema,
   updateReportSchema,
@@ -33,11 +34,78 @@ const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8' };
 const HTML_HEADERS = { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' };
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/* JSON は**既定で `Cache-Control: no-store`**（放置リスト #78・ASVS 14.4 / CWE-524）。
+   `/api/*` の中身は飼い主の名前・連絡先・カルテといった個人情報で、ログインした本人にしか
+   返さない。指示が無いと、ブラウザや途中の共有キャッシュが残してしまい、共用端末で
+   ログアウトした後でも「戻る」で前の人のデータが見える。呼び出し側が明示的に
+   `Cache-Control` を渡したときだけ、そちらを優先する（`extraHeaders` が後勝ち）。 */
 function json(body, status = 200, extraHeaders = {}) {
+  /* `no-store` は**成功した応答（個人情報が入る）だけ**に付ける。エラーの応答（`{"error":"not available"}`
+     など）には個人情報が入らない。しかも 404 に `no-store` を付けると、検査の道具（Playwright）が
+     その通信を「終わっていない」と数え、「通信が静かになるまで待つ」が終わらなくなった
+     （`verify:portal` 11/12・2026-11-20 実測。ブラウザでは 0.1 秒で返っていた）。 */
+  const cache = status < 400 ? { 'Cache-Control': 'no-store' } : {};
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...JSON_HEADERS, ...extraHeaders },
+    headers: { ...JSON_HEADERS, ...cache, ...extraHeaders },
   });
+}
+
+/* ██ 全レスポンスに付けるセキュリティヘッダ（放置リスト #78・review M3/M8）。██
+
+   以前はどの応答にも1つも付いていなかった。よそのサイトが `<iframe>` でこのアプリを
+   透明に重ね、お店の人に気づかれずボタンを押させる（クリックジャッキング・CWE-1021）
+   ことを止める手段が無かった。
+
+   **CSP の `script-src` に `'unsafe-inline'` が要る理由**: `src/index.html` は
+   `onclick="…"` などのインライン属性を多数持ち、Worker 自身も `<script>` を本文へ
+   差し込んで初期状態（`window.__REPORT__` 等）を渡している。これを外すと画面が
+   1つも動かなくなる。インラインを無くすのは F4 の範囲外（機能を書き換える作業）なので、
+   ここでは**外部からの読み込みを自分自身と Supabase だけに絞る**ところまでにする。
+
+   Supabase は `env.SUPABASE_URL` から作る——本番とローカル（127.0.0.1:54321）で
+   違うので、固定値にするとどちらかが通信できなくなる。写真は Storage から
+   `download()` して `blob:` で見せ、撮った写真は `data:` で持つので img-src に両方要る。
+   Google ログインは Supabase へのページ遷移（fetch ではない）なので CSP は止めない。
+   realtime（wss）は使っていない（`.channel(` が 0 件）ので connect-src に足さない。 */
+function contentSecurityPolicy(env) {
+  const supabase = env.SUPABASE_URL ? ` ${new URL(env.SUPABASE_URL).origin}` : '';
+  return [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline'",
+    `img-src 'self' data: blob:${supabase}`,
+    `connect-src 'self'${supabase}`,
+    "font-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join('; ');
+}
+
+function withSecurityHeaders(response, request, env) {
+  /* `env.ASSETS.fetch()` の応答はヘッダが書き換え不可なので、必ず作り直してから足す。 */
+  const res = new Response(response.body, response);
+  /* CSP だけは**上書き**する。`dist/_headers` は本番の Supabase しか知らないので、
+     ローカルの Worker が配るページではこちらの（env から作った）値を正にする。 */
+  res.headers.set('Content-Security-Policy', contentSecurityPolicy(env));
+  const defaults = {
+    'X-Frame-Options': 'DENY',
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'no-referrer',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  };
+  /* http で HSTS を返しても意味が無い（ブラウザが無視する）うえ、ローカル開発を
+     https に縛りかねないので、https で来たときだけ付ける。 */
+  if (new URL(request.url).protocol === 'https:') {
+    defaults['Strict-Transport-Security'] = 'max-age=31536000';
+  }
+  /* 道ごとに意図して付けたものは消さない（足りないものだけ足す）。 */
+  for (const [name, value] of Object.entries(defaults)) {
+    if (!res.headers.has(name)) res.headers.set(name, value);
+  }
+  return res;
 }
 
 // localhost 開発（wrangler dev）時のみ CORS 許可。本番は同一オリジンで preflight 不要
@@ -73,6 +141,8 @@ function supabaseError(error, cors = {}) {
                理由が1文字も出ず、原因を辿る手掛かりが無かった（`F-20260907-75`）。 */
             : error.code === 'archive_returned_no_row' ? 'report was not archived'
             : error.code === 'revise_returned_no_row' ? 'report was not revised'
+            /* 自分を止める・店の最後の管理者を止める、を DB が断った（`#76`）。 */
+            : error.code === 'member_change_refused' ? 'member change refused'
             : 'shop selection required'
       )
         : status === 429 ? 'too many requests' : 'data request failed';
@@ -146,6 +216,21 @@ async function handleSupabaseApi(request, store, path, cors, env) {
     && isUuid(parts[2]) && parts[3] === 'revoke' && request.method === 'POST'
   ) {
     return json(await store.revokeInvitation(parts[2]), 200, cors);
+  }
+
+  /* お店の人の一覧と、利用を止める・再開する（放置リスト `#76`・レビュー M1）。
+     どちらも管理者だけ——判定は RPC（`202611200020`）が持ち、スタッフには 404 を返す。
+     `202609060013` で消した `PATCH /api/staff/{id}`（誰でも書けた口）は戻さない。 */
+  if (path === '/api/staff' && request.method === 'GET') {
+    return json({ members: await store.listShopMembers() }, 200, { ...cors, 'Cache-Control': 'no-store' });
+  }
+  if (
+    parts.length === 4 && parts[0] === 'api' && parts[1] === 'staff'
+    && isUuid(parts[2]) && parts[3] === 'active' && request.method === 'POST'
+  ) {
+    const parsed = await parseJson(request, setMemberActiveSchema);
+    if (!parsed.ok) return invalidJsonResult(parsed, cors);
+    return json({ member: await store.setMemberActive(parts[2], parsed.data.active) }, 200, cors);
   }
 
   /* 「次回のおすすめご来店時期」の既定日数・使用オプション一覧。書き換えは RLS
@@ -277,6 +362,11 @@ async function handleSupabaseApi(request, store, path, cors, env) {
             await enforceRateLimit(store, 'report_write', request, env);
             return json({ report: await store.updateReport(petId, reportId, parsed.data) }, 200, cors);
           }
+        }
+        /* 確定済みカルテの「直す前の中身」（放置リスト `#77`）。読めるのは管理者だけ——
+           それは DB の RLS（`is_shop_admin`）が決めるので、スタッフには空配列が返る。 */
+        if (parts.length === 6 && parts[5] === 'revisions' && request.method === 'GET') {
+          return json({ revisions: await store.listReportRevisions(petId, reportId) }, 200, cors);
         }
         if (parts.length === 6 && request.method === 'POST') {
           if (parts[5] === 'assets') {
@@ -602,7 +692,7 @@ async function renderAppPage(env, state) {
   return new Response(injectedHtml, { status: 200, headers: HTML_HEADERS });
 }
 
-export default {
+const app = {
   async fetch(request, env) {
     const url = new URL(request.url);
     const path = url.pathname;
@@ -626,5 +716,13 @@ export default {
     }
 
     return handleSupabaseMode(request, env, url, cors);
+  },
+};
+
+/* 道の処理（`app.fetch`）が返した応答に、最後に1か所でセキュリティヘッダを足す。
+   道ごとに付けると、新しい道を足したときに付け忘れる。 */
+export default {
+  async fetch(request, env) {
+    return withSecurityHeaders(await app.fetch(request, env), request, env);
   },
 };

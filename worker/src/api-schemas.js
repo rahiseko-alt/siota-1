@@ -73,6 +73,13 @@ export const createInvitationSchema = z.discriminatedUnion('invitationType', [
   z.object({ invitationType: z.literal('staff') }).strict(),
 ]);
 
+/* お店の人の利用を止める・再開する（放置リスト `#76`）。送ってよいのは `active` だけ。
+   役割（管理者／スタッフ）はここでは変えない——変える道を作ると、スタッフが管理者に
+   なる抜け道の入口になる。 */
+export const setMemberActiveSchema = z.object({
+  active: z.boolean(),
+}).strict();
+
 export const claimInvitationSchema = z.object({
   token: z.string().regex(/^[0-9a-f]{64}$/i),
 }).strict();
