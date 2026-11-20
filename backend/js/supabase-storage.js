@@ -157,6 +157,44 @@ export async function uploadReportAssets({
   }
 }
 
+/* **置き忘れの写真を片付ける**（放置リスト `#75`・レビュー 2026-11-20 H1 の残り・`F-20261120-95`）。
+   確定の途中でタブを閉じると、上げただけで登録されていない写真がカルテの置き場に残り、
+   `finalize_report` / `revise_report` がいつまでも断る。番号の引き継ぎ（`cache`）は同じ画面の中でしか
+   効かないので、開き直した後はここで消すしかない。
+   消すのは「登録されていない」かつ「今回上げる写真（`keepIds`）でもない」ものだけ。今回の写真は
+   上げたが登録がまだ、という途中の状態がありうる（`cache` から引き継いだもの）ので残す。
+   Storage 側も `report_assets_storage_staff_orphan_delete`（`202611200019`）が登録済みの写真の削除を断る。
+   **失敗は投げる**——黙って進むと、確定が `null` で断られて理由が分からなくなる（`D-2` と同じ考え方）。 */
+export async function removeUnregisteredAssets({
+  client,
+  report,
+  petId,
+  keepIds = [],
+  bucket = 'report-assets',
+}) {
+  if (!client || !report?.id || !report.shop_id || report.pet_id !== petId) throw new TypeError('invalid report context');
+  const prefix = `${report.shop_id}/${petId}/${report.id}`;
+  const storage = client.storage.from(bucket);
+  const { data: listed, error: listError } = await storage.list(prefix, { limit: 1000 });
+  if (listError) throw new Error('写真一覧の取得を再試行してください');
+  const { data: rows, error: rowError } = await client
+    .from('report_assets')
+    .select('storage_path')
+    .eq('report_id', report.id);
+  if (rowError) throw new Error('写真の登録状況を読み取れませんでした');
+  const registered = new Set((rows || []).map((row) => row.storage_path));
+  const keep = new Set(keepIds);
+  const paths = (listed || [])
+    .filter((item) => item?.name)
+    .filter((item) => !keep.has(item.name.replace(/\.[^.]*$/, '')))
+    .map((item) => `${prefix}/${item.name}`)
+    .filter((path) => !registered.has(path));
+  if (paths.length === 0) return { removed: 0 };
+  const { error } = await storage.remove(paths);
+  if (error) throw new Error('残っていた写真を片付けられませんでした');
+  return { removed: paths.length };
+}
+
 async function replaceMarkers(value, urls) {
   if (typeof value === 'string') {
     const match = value.match(ASSET_MARKER_PATTERN);
@@ -305,6 +343,7 @@ globalThis.TrimmerSupabaseStorage = {
   hydrateAssetReferences,
   purgeOwnerAssets,
   purgePetAssets,
+  removeUnregisteredAssets,
   replaceDataUrlAssets,
   uploadReportAssets,
 };
