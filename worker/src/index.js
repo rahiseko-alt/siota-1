@@ -21,6 +21,7 @@ import {
   createReportAssetSchema,
   createReportSchema,
   parseJson,
+  setMemberActiveSchema,
   updateOwnerSchema,
   updatePetSchema,
   updateReportSchema,
@@ -73,6 +74,8 @@ function supabaseError(error, cors = {}) {
                理由が1文字も出ず、原因を辿る手掛かりが無かった（`F-20260907-75`）。 */
             : error.code === 'archive_returned_no_row' ? 'report was not archived'
             : error.code === 'revise_returned_no_row' ? 'report was not revised'
+            /* 自分を止める・店の最後の管理者を止める、を DB が断った（`#76`）。 */
+            : error.code === 'member_change_refused' ? 'member change refused'
             : 'shop selection required'
       )
         : status === 429 ? 'too many requests' : 'data request failed';
@@ -146,6 +149,21 @@ async function handleSupabaseApi(request, store, path, cors, env) {
     && isUuid(parts[2]) && parts[3] === 'revoke' && request.method === 'POST'
   ) {
     return json(await store.revokeInvitation(parts[2]), 200, cors);
+  }
+
+  /* お店の人の一覧と、利用を止める・再開する（放置リスト `#76`・レビュー M1）。
+     どちらも管理者だけ——判定は RPC（`202611200020`）が持ち、スタッフには 404 を返す。
+     `202609060013` で消した `PATCH /api/staff/{id}`（誰でも書けた口）は戻さない。 */
+  if (path === '/api/staff' && request.method === 'GET') {
+    return json({ members: await store.listShopMembers() }, 200, { ...cors, 'Cache-Control': 'no-store' });
+  }
+  if (
+    parts.length === 4 && parts[0] === 'api' && parts[1] === 'staff'
+    && isUuid(parts[2]) && parts[3] === 'active' && request.method === 'POST'
+  ) {
+    const parsed = await parseJson(request, setMemberActiveSchema);
+    if (!parsed.ok) return invalidJsonResult(parsed, cors);
+    return json({ member: await store.setMemberActive(parts[2], parsed.data.active) }, 200, cors);
   }
 
   /* 「次回のおすすめご来店時期」の既定日数・使用オプション一覧。書き換えは RLS

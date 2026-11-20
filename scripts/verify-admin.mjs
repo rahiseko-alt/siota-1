@@ -16,6 +16,8 @@
  *   ⑦ **飼い主はこの画面を使えず**、かつ行き止まりにならない
  *   ⑧ **スタッフ**は リピーター / 新規 だけを使え、削除・店舗設定・スタッフ招待は
  *      画面でも API でも断られ、**断られた後も何も消えていない・変わっていない**
+ *   ⑨ **スタッフ管理**: 管理者が辞めた人の利用を止めると、その人の鍵で店のデータが
+ *      取れなくなり、再開すると戻る。自分は止められない。スタッフには出ない（`#76`）
  *
  * **「押せた」で合格にしない**（`D-12`）。作った/消した/直したものを、
  * 作用の出た先（一覧・Storage の実体・飼い主の画面）で数え直す。
@@ -83,6 +85,8 @@ function check(name, pass, detail) {
 
 const { base: BASE, stop } = await startLocalWorker({ port: Number(process.env.ADMIN_PORT || 8797) });
 let browser = null;
+/* ⑨ で止めたスタッフの口座を戻す手順。止める直前に入れ、finally で必ず呼ぶ。 */
+let restoreLimitedStaff = null;
 
 /** 画面の文字でボタンを選ぶ（人と同じ探し方）。日本語はセレクタに連結しない（`D-9`）。 */
 const tapByText = (page, text) => page.evaluate((needle) => {
@@ -165,13 +169,14 @@ try {
 
   await page.waitForSelector('.admin-menu__item', { timeout: 20_000 });
 
-  /* ── ② 管理者ページの5つ（`#4` 店舗設定はマスター指示 2026-08-29・D-20260829-58・
-     `#5` スタッフ招待はマスター指示 2026-09-24「招待ボタン復活させて」で新設） ── */
+  /* ── ② 管理者ページの6つ（`#4` 店舗設定はマスター指示 2026-08-29・D-20260829-58・
+     `#5` スタッフ招待はマスター指示 2026-09-24「招待ボタン復活させて」で新設・
+     `#6` スタッフ管理は放置リスト `#76`・レビュー M1 で復活） ── */
   const top = await menuTitles(page);
-  check('2. 管理画面に リピーター / 新規 / 削除 / 店舗設定 / スタッフ招待 が在る',
-    top.length === 5
+  check('2. 管理画面に リピーター / 新規 / 削除 / 店舗設定 / スタッフ招待 / スタッフ管理 が在る',
+    top.length === 6
     && top[0].includes('リピーター') && top[1].includes('新規') && top[2].includes('削除')
-    && top[3].includes('店舗設定') && top[4].includes('スタッフ招待'),
+    && top[3].includes('店舗設定') && top[4].includes('スタッフ招待') && top[5].includes('スタッフ管理'),
     `出た項目=${JSON.stringify(top)}`);
 
   /* ── ③ リピーター ── */
@@ -270,7 +275,7 @@ try {
   await page.waitForSelector('.admin-menu__item', { timeout: 20_000 });
   const fallback = await menuTitles(page);
   check('3f. 無い住所を開いても白い画面にならず、管理のトップが出る',
-    fallback.length === 5 && fallback[0].includes('リピーター'),
+    fallback.length === 6 && fallback[0].includes('リピーター'),
     `出た項目=${JSON.stringify(fallback)}`);
 
   await page.goto(`${BASE}/admin`, { waitUntil: 'domcontentloaded' });
@@ -966,10 +971,158 @@ try {
     await fetch(`${BASE}/api/owners/${limitedOwnerId}`, { method: 'DELETE', headers: authHeaders }).catch(() => {});
   }
 
+  /* ── ⑨ スタッフ管理 — 辞めた人の利用を止める・再開する（放置リスト `#76`・レビュー M1） ──
+     **⑧ のあとに置く。** ⑧ はスタッフの口座（`limited-staff@local.test`）が有効なことを
+     前提にしているので、止めるのはその後。止めた口座は**合否にかかわらず最後に戻す**
+     （下の後片付け）——他の verify が同じ口座を使う。
+     **「押せた」で合格にしない**（`D-12`）: 止めた人の鍵で、本当に店のデータが取れなく
+     なったか・再開で取れるようになったかを API で数え直す。 */
+  const LIMITED_ID = FIXTURE.limitedStaffUserId;
+  const memberRow = (targetPage, userId) => targetPage.evaluate((id) => {
+    const button = document.querySelector(`[data-admin-action="member-toggle"][data-admin-user="${id}"]`);
+    const row = button ? button.closest('.admin-field') : null;
+    return row ? { text: (row.textContent || '').trim(), button: (button.textContent || '').trim() } : null;
+  }, userId);
+  const waitRowText = (needle) => page.waitForFunction(({ id, text }) => {
+    const button = document.querySelector(`[data-admin-action="member-toggle"][data-admin-user="${id}"]`);
+    const row = button ? button.closest('.admin-field') : null;
+    return !!row && (row.textContent || '').includes(text);
+  }, { id: LIMITED_ID, text: needle }, { timeout: 20_000 }).catch(() => {});
+  /** その人の鍵で、店の犬が取れるか。断られたら count は null、取れたら件数。 */
+  const limitedPetCount = async () => {
+    const res = await fetch(`${BASE}/api/pets`, { headers: limitedHeaders }).catch(() => null);
+    if (!res || !res.ok) return { status: res ? res.status : 0, count: null };
+    const body = await res.json().catch(() => ({}));
+    return { status: res.status, count: Array.isArray(body.pets) ? body.pets.length : null };
+  };
+  const petsBeforeStop = await limitedPetCount();
+  /* 後片付けの予約: 止めた口座は、**途中で落ちても**最後（finally）に必ず有効へ戻す
+     （合否には使わない——戻ることは 23e で見ている）。他の verify と次の回が同じ口座を使う。 */
+  restoreLimitedStaff = () => fetch(`${BASE}/api/staff/${LIMITED_ID}/active`, {
+    method: 'POST', headers: authHeaders, body: JSON.stringify({ active: true }),
+  });
+
+  await page.goto(`${BASE}/admin`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.admin-menu__item', { timeout: 20_000 }).catch(() => {});
+  await tapByText(page, 'スタッフ管理');
+  await page.waitForSelector('[data-admin-action="member-toggle"]', { timeout: 20_000 }).catch(() => {});
+  const listedRow = await memberRow(page, LIMITED_ID);
+  check('23a. 管理者が ⑥ スタッフ管理 を押して開くと、limited-staff@local.test が「スタッフ・利用中」で出る',
+    pathNow() === '/admin/staff' && !!listedRow && listedRow.text.includes(FIXTURE.limitedStaffEmail)
+    && listedRow.text.includes('スタッフ・利用中') && listedRow.button === '利用を止める',
+    `path=${pathNow()} 行=${JSON.stringify(listedRow)}`);
+
+  const ownRow = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll('.admin-menu .admin-field')]
+      .filter((row) => [...row.querySelectorAll('span')].some((span) => span.textContent.trim() === 'あなた'));
+    return rows.map((row) => ({ text: (row.textContent || '').trim(), buttons: row.querySelectorAll('button').length }));
+  });
+  check('23b. 管理者自身の行は「あなた」と出て、止めるボタンが無い',
+    ownRow.length === 1 && ownRow[0].text.includes(FIXTURE.staffEmail) && ownRow[0].buttons === 0,
+    `自分の行=${JSON.stringify(ownRow)}`);
+
+  await page.click(`[data-admin-action="member-toggle"][data-admin-user="${LIMITED_ID}"]`, { timeout: 10_000 }).catch(() => {});
+  await page.waitForSelector('[data-admin-action="confirm-member-stop"]', { timeout: 10_000 }).catch(() => {});
+  const confirmShown = await page.evaluate(() => ({
+    detail: (document.querySelector('[data-admin-field="confirm-detail"]') || {}).textContent || '',
+    button: !!document.querySelector('[data-admin-action="confirm-member-stop"]'),
+  }));
+  await page.click('[data-admin-action="confirm-member-stop"]', { timeout: 10_000 }).catch(() => {});
+  await page.waitForFunction(
+    () => [...document.querySelectorAll('.admin-result')].some((el) => el.textContent.includes('利用を止めました')),
+    { timeout: 20_000 },
+  ).catch(() => {});
+  await waitRowText('停止中');
+  const stoppedRow = await memberRow(page, LIMITED_ID);
+  check('23c. 「利用を止める」は確認の画面でもう1回押すと効き、一覧で「停止中」・「再開する」に変わる',
+    confirmShown.button && confirmShown.detail.includes(FIXTURE.limitedStaffEmail)
+    && !!stoppedRow && stoppedRow.text.includes('停止中') && stoppedRow.button === '再開する',
+    `確認=${JSON.stringify(confirmShown)} 行=${JSON.stringify(stoppedRow)}`);
+
+  const petsWhileStopped = await limitedPetCount();
+  const sessionWhileStopped = await fetch(`${BASE}/api/session`, { headers: limitedHeaders })
+    .then((res) => res.json()).catch(() => null);
+  check('23d. 止めた人の鍵では /api/pets が断られるか店の犬が1件も返らず、お店の人として扱われない',
+    petsBeforeStop.count > 0
+    && (petsWhileStopped.count === null || petsWhileStopped.count === 0)
+    && !!sessionWhileStopped && Array.isArray(sessionWhileStopped.memberships)
+    && sessionWhileStopped.memberships.length === 0,
+    `止める前=${JSON.stringify(petsBeforeStop)} 止めた後=${JSON.stringify(petsWhileStopped)}`
+    + ` メンバー=${JSON.stringify(sessionWhileStopped && sessionWhileStopped.memberships)}`);
+
+  await page.click(`[data-admin-action="member-toggle"][data-admin-user="${LIMITED_ID}"]`, { timeout: 10_000 }).catch(() => {});
+  await page.waitForFunction(
+    () => [...document.querySelectorAll('.admin-result')].some((el) => el.textContent.includes('再開しました')),
+    { timeout: 20_000 },
+  ).catch(() => {});
+  await waitRowText('利用中');
+  const resumedRow = await memberRow(page, LIMITED_ID);
+  const petsAfterResume = await limitedPetCount();
+  check('23e. 「再開する」を押すと「利用中」に戻り、その人の鍵で店の犬が再び取れる',
+    !!resumedRow && resumedRow.text.includes('利用中') && resumedRow.button === '利用を止める'
+    && petsAfterResume.count === petsBeforeStop.count && petsAfterResume.count > 0,
+    `行=${JSON.stringify(resumedRow)} 再開後=${JSON.stringify(petsAfterResume)}`);
+
+  /* 管理者は自分を止められない——画面にボタンが無いだけでなく、API でも DB が断る。 */
+  const adminSession = await fetch(`${BASE}/api/session`, { headers: authHeaders }).then((res) => res.json()).catch(() => null);
+  const adminId = adminSession && adminSession.user ? adminSession.user.id : null;
+  const selfStopRes = adminId ? await fetch(`${BASE}/api/staff/${adminId}/active`, {
+    method: 'POST', headers: authHeaders, body: JSON.stringify({ active: false }),
+  }) : null;
+  const adminAfter = await fetch(`${BASE}/api/session`, { headers: authHeaders }).then((res) => res.json()).catch(() => null);
+  check('23f. 管理者が API で自分を止めようとしても断られ、管理者のまま使える',
+    !!selfStopRes && refused(selfStopRes.status)
+    && !!adminAfter && (adminAfter.memberships || []).some((m) => m.active && m.role === 'admin'),
+    `POST=${selfStopRes && selfStopRes.status} メンバー=${JSON.stringify(adminAfter && adminAfter.memberships)}`);
+
+  /* スタッフには ⑥ が出ない・住所を直に開いても部品が出ない・API も断られる。
+     入口から人と同じ道で入る（`D-27`）。断る画面だけは ⑧ の `22f-*` と同じく住所を直に開く。 */
+  const staffMgmtContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const staffMgmtPage = await staffMgmtContext.newPage();
+  staffMgmtPage.on('pageerror', (e) => pageErrors.push(`[スタッフ・⑨] ${e.message}`));
+  await staffMgmtPage.goto(`${BASE}/my`, { waitUntil: 'domcontentloaded' });
+  await injectSession(staffMgmtPage, FIXTURE.limitedStaffEmail);
+  await staffMgmtPage.goto(`${BASE}/my`, { waitUntil: 'domcontentloaded' });
+  await staffMgmtPage.waitForURL(/\/edit$/, { timeout: 20_000 }).catch(() => {});
+  await staffMgmtPage.waitForSelector('.karte-card', { timeout: 30_000 }).catch(() => {});
+  const staffMgmtLink = staffMgmtPage.locator('[data-admin-link]');
+  await staffMgmtLink.waitFor({ state: 'visible', timeout: 20_000 }).catch(() => {});
+  if (await staffMgmtLink.isVisible().catch(() => false)) await staffMgmtLink.click();
+  await staffMgmtPage.waitForSelector('.admin-menu__item', { timeout: 20_000 }).catch(() => {});
+  const staffMgmtTop = await menuTitles(staffMgmtPage);
+  await staffMgmtPage.goto(`${BASE}/admin/staff`, { waitUntil: 'domcontentloaded' });
+  await staffMgmtPage.waitForFunction(
+    (needle) => (document.body.textContent || '').includes(needle),
+    DENY_NOTE, { timeout: 20_000 },
+  ).catch(() => {});
+  const staffMgmtDenied = await staffMgmtPage.evaluate((needle) => ({
+    note: [...document.querySelectorAll('.admin-note')].some((el) => (el.textContent || '').includes(needle)),
+    back: [...document.querySelectorAll('.admin-back')].some((el) => (el.textContent || '').includes('◀ もどる')),
+    controls: document.querySelectorAll('[data-admin-action="member-toggle"], [data-admin-action="confirm-member-stop"]').length,
+  }), DENY_NOTE);
+  check('23g. スタッフには ⑥ スタッフ管理 が出ず、/admin/staff を開くと「管理者だけ」の案内ともどるだけが出る',
+    staffMgmtTop.length === 2 && !staffMgmtTop.some((title) => title.includes('スタッフ管理'))
+    && staffMgmtDenied.note && staffMgmtDenied.back && staffMgmtDenied.controls === 0,
+    `メニュー=${JSON.stringify(staffMgmtTop)} 案内=${staffMgmtDenied.note} もどる=${staffMgmtDenied.back} 部品=${staffMgmtDenied.controls}`);
+  await staffMgmtContext.close();
+
+  /* **対象は管理者**（スタッフが管理者を止められたら店ごと乗っ取れる）。管理者の id が
+     取れていなければ赤にする——別の相手に置き換えて合格にしない。 */
+  const staffListRes = await fetch(`${BASE}/api/staff`, { headers: limitedHeaders });
+  const staffStopRes = adminId ? await fetch(`${BASE}/api/staff/${adminId}/active`, {
+    method: 'POST', headers: limitedHeaders, body: JSON.stringify({ active: false }),
+  }) : null;
+  const adminStill = await fetch(`${BASE}/api/session`, { headers: authHeaders }).then((res) => res.json()).catch(() => null);
+  check('23h. スタッフの GET /api/staff と、管理者を止める POST は断られ、管理者は止まっていない',
+    refused(staffListRes.status) && !!staffStopRes && refused(staffStopRes.status)
+    && !!adminStill && (adminStill.memberships || []).some((m) => m.active && m.role === 'admin'),
+    `GET=${staffListRes.status} POST=${staffStopRes && staffStopRes.status} 管理者=${JSON.stringify(adminStill && adminStill.memberships)}`);
+
   check('21. アプリ由来のエラーが無い', pageErrors.length === 0, pageErrors.join(' | '));
 } catch (error) {
   check('検査を最後まで実行できた', false, error.message);
 } finally {
+  if (restoreLimitedStaff) await restoreLimitedStaff().catch(() => {});
   if (browser) await browser.close();
   await stop();
 }

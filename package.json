@@ -32,7 +32,7 @@
     "test:sql": "node scripts/guard/sql-verified.mjs",
     "plan": "node scripts/plan.mjs",
     "walk": "node scripts/build-dist.mjs && node scripts/walk-human.mjs",
-    "test:schema": "node --test test/supabase-schema.test.mjs test/supabase-storage.test.mjs test/supabase-store.test.mjs",
+    "test:schema": "node --test test/supabase-schema.test.mjs test/supabase-storage.test.mjs test/supabase-store.test.mjs test/member-active.test.mjs",
     "serve": "node scripts/serve-ui.mjs",
     "guard": "node scripts/guard/run.mjs"
   },

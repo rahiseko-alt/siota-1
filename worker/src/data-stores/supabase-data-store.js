@@ -77,7 +77,15 @@ export class SupabaseDataStore {
     } catch {
       throw new StoreError(503, 'unavailable');
     }
-    if (!response.ok) throw new StoreError(response.status, 'upstream_rejected');
+    if (!response.ok) {
+      const error = new StoreError(response.status, 'upstream_rejected');
+      /* **理由の番号（SQLSTATE の5文字）だけを拾う。** PostgREST は `raise ... P0002` を
+         500 で返すので、状態コードだけでは「その人はいない」と「壊れた」が区別できない
+         （`setMemberActive`）。本文の `message` `details` は捨てたまま——画面にも応答にも出さない。 */
+      const body = await response.json().catch(() => null);
+      if (body && typeof body.code === 'string' && /^[0-9A-Z]{5}$/.test(body.code)) error.sqlState = body.code;
+      throw error;
+    }
     if (response.status === 204) return null;
     try {
       return await response.json();
@@ -456,6 +464,46 @@ export class SupabaseDataStore {
     });
     if (revoked !== true) throw new StoreError(404, 'not_found');
     return { ok: true };
+  }
+
+  /**
+   * この店のお店の人の一覧（放置リスト `#76`）。**管理者にしか返らない**——
+   * `list_shop_members` が `is_shop_admin` で断る（42501 → 403 → 画面には 404）。
+   */
+  async listShopMembers() {
+    const shopId = await this.getStaffShopId();
+    const rows = await this.request('/rest/v1/rpc/list_shop_members', {
+      method: 'POST', body: { target_shop: shopId },
+    });
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  /**
+   * 辞めた人の利用を止める・再開する（`#76`）。断る判定はすべて `set_member_active` が持つ。
+   * ここは理由の番号を、人に返せる形に直すだけ:
+   *   42501（管理者でない）・P0002（その店の人ではない）→ 404（在るかどうかを教えない）
+   *   22023（自分を止める・最後の管理者を止める）      → 409 `member_change_refused`
+   */
+  async setMemberActive(userId, active) {
+    const shopId = await this.getStaffShopId();
+    let result;
+    try {
+      result = await this.request('/rest/v1/rpc/set_member_active', {
+        method: 'POST', body: { target_shop: shopId, target_user: userId, new_active: active },
+      });
+    } catch (error) {
+      if (error instanceof StoreError && (error.sqlState === '42501' || error.sqlState === 'P0002')) {
+        throw new StoreError(404, 'not_found');
+      }
+      if (error instanceof StoreError && error.sqlState === '22023') {
+        throw new StoreError(409, 'member_change_refused');
+      }
+      throw error;
+    }
+    /* RPC の戻りは1行でも配列でも来る（`oneFromRpc` と同じ理由）。メンバー行には `id` が無い。 */
+    const row = Array.isArray(result) ? result[0] : result;
+    if (!row || !row.user_id) throw new StoreError(409, 'member_change_refused');
+    return { userId: row.user_id, role: row.role, active: row.active };
   }
 
   async registerReportAsset(petId, reportId, input) {
