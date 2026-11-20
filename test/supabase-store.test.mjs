@@ -429,6 +429,11 @@ test('invitation listing requests only safe columns and never token material', a
    `D-20260823-05`「とりあえず残す」のまま、**押す場所が1つも無い**状態で残っていた。
    画面と一緒に `/api/staff` も落としたので、**その口が本当に閉じたこと**を見る
    ——残っていると、誰も呼ばないのに membership を書き換えられる口になる。 */
+/* **仕様が変わった**（放置リスト `#76`・レビュー M1）。以前は「`/api/staff` が丸ごと無い」を
+   見ていたが、辞めた人を止める道が無いこと自体が穴だったので、`GET /api/staff` は
+   **管理者だけが通る RPC `list_shop_members` 経由**で戻した（`test/member-active.test.mjs`）。
+   ここで見続けるのは、消した側が戻っていないこと——誰でも書けた `PATCH /api/staff/{id}` と
+   `update_staff_membership`、そして一覧が店のメンバー表を直に読まないこと。 */
 test('the staff-management endpoints are gone (no way in)', async () => {
   const seen = [];
   const env = () => supabaseEnv(async (url) => {
@@ -454,7 +459,14 @@ test('the staff-management endpoints are gone (no way in)', async () => {
     },
   ), env());
 
-  assert.equal(list.status, 404, 'GET /api/staff がまだ在る');
+  assert.notEqual(list.status, 200, 'GET /api/staff が管理者の RPC を通らずに一覧を返した');
+  assert.equal(
+    seen.some((url) => url.includes('/rest/v1/shop_memberships?') && !url.includes('user_id=eq.')),
+    false,
+    'GET /api/staff が店のメンバー表を直に読んだ',
+  );
+  assert.equal(seen.some((url) => url.endsWith('/rest/v1/rpc/list_shop_members')), true,
+    'GET /api/staff が管理者だけの RPC を通っていない');
   assert.equal(patch.status, 404, 'PATCH /api/staff/{id} がまだ在る');
   assert.equal(
     seen.some((url) => url.includes('update_staff_membership')),

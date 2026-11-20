@@ -7,6 +7,7 @@
  *     → ②新規       → ①顧客アカウントの新規作成 ②ペットアカウントの新規作成
  *     → ③削除       → ①顧客アカウント全データ ②ペットアカウント全データ ③カルテ1枚
  *     → ⑤スタッフ招待 → 招待QR/URLを発行する
+ *     → ⑥スタッフ管理 → お店の人を一覧し、利用を止める・再開する（放置リスト `#76`）
  *
  * **2026-08-26 時点は「管理者アカウントを作る機能はここに置かない（納品時に
  * 開発者が行う）」だったが、マスター指示（2026-09-24「招待ボタン復活させて」）で
@@ -14,7 +15,7 @@
  *
  * **店舗側は「管理者」と「スタッフ」に分かれる**（マスター指示 2026-11-19・`N-49`・
  * `202611190017_admin_staff_roles.sql`）。スタッフ招待で入った人がスタッフで、
- * ③削除・④店舗設定・⑤スタッフ招待はメニューに出さない。断るのは DB で、
+ * ③削除・④店舗設定・⑤スタッフ招待・⑥スタッフ管理はメニューに出さない。断るのは DB で、
  * ここで隠すのは押せないものを見せないための補助。
  *
 
@@ -38,6 +39,9 @@ let statusEl = null;
 let contentEl = null;
 /* 管理者か（`N-49`）。起動時に `/api/session` の `role` から決める。 */
 let isAdmin = true;
+/* ログインしている人（`/api/session` の `user.id`）。⑥スタッフ管理で自分の行に
+   「止める」を出さないのに使う（自分を止める操作は DB も断る・`202611200020`）。 */
+let myUserId = '';
 
 function api(path, options = {}) {
   return authorizedFetch(supabase, path, options).then(async (response) => {
@@ -312,6 +316,12 @@ function screenHome() {
       testid: 'invite-staff',
       onSelect: () => navigate('/admin/invite-staff', screenInviteStaff),
     },
+    {
+      title: '⑥ スタッフ管理',
+      note: 'お店の人を一覧し、利用を止める・再開する',
+      testid: 'staff-manage',
+      onSelect: () => navigate('/admin/staff', screenStaffManage),
+    },
   ];
   /* スタッフには①②だけを出す。番号は振り直さない（管理者と同じ呼び名で話せるように）。 */
   contentEl.append(menu(isAdmin ? items : items.slice(0, 2)));
@@ -531,6 +541,93 @@ function screenInviteStaff() {
     } finally {
       button.disabled = false;
     }
+  };
+}
+
+/* ── ⑥ スタッフ管理（放置リスト `#76`・レビュー M1） ───────────────────
+   **辞めた人を止める道が無かった。** `202609060013` でスタッフ管理の画面ごと消したので、
+   辞めた人の Google アカウントがそのまま店の全データを読み書きできた。
+   止めるのは**消すことではない**——行も監査記録も残り、「再開する」で元に戻せる。
+   断るのは DB（`set_member_active`）で、ここで自分の行にボタンを出さないのは補助。 */
+function memberLabel(member) {
+  return member.display_name || member.email || '（名前もメールも登録されていません）';
+}
+
+function screenStaffManage() {
+  return withList(async () => (await api('/api/staff')).members || [], (members) => {
+    clear();
+    contentEl.append(backButton(() => navigate('/admin', screenHome)));
+    contentEl.append(heading('スタッフ管理'));
+    contentEl.append(note('「利用を止める」と、その人はすぐにこの店の飼い主・犬・カルテを見ることも書くこともできなくなります。消すのではないので、「再開する」で元どおり使えるようになります。'));
+    if (members.length === 0) {
+      contentEl.append(el('p', null, 'お店の人が登録されていません。'));
+      return;
+    }
+    const list = el('div', 'admin-menu');
+    for (const member of members) {
+      const row = el('div', 'admin-field');
+      /* 同じ名前の人がいても取り違えないよう、名前とメールの両方を出す（`#36` と同じ考え方）。 */
+      row.append(el('strong', null, memberLabel(member)));
+      if (member.display_name && member.email) row.append(el('span', null, member.email));
+      row.append(el('span', null, `${member.role === 'admin' ? '管理者' : 'スタッフ'}・${member.active ? '利用中' : '停止中'}`));
+      if (member.user_id === myUserId) {
+        row.append(el('span', null, 'あなた'));
+      } else {
+        const button = submitButton(member.active ? '利用を止める' : '再開する', 'member-toggle');
+        /* 値は UUID（ASCII）だけ（`D-9`）。名前は入れない。 */
+        button.dataset.adminUser = member.user_id;
+        button.onclick = () => {
+          if (member.active) {
+            pushStep(() => confirmMemberStop(member));
+            return;
+          }
+          /* 再開は取り返しのつく側なので、確認を挟まずにその場で効かせる。 */
+          button.disabled = true;
+          setMemberActive(member, true, row);
+        };
+        row.append(button);
+      }
+      list.append(row);
+    }
+    contentEl.append(list);
+  });
+}
+
+async function setMemberActive(member, active, where) {
+  const result = el('p', 'admin-result', active ? '再開しています…' : '止めています…');
+  where.append(result);
+  try {
+    await api(`/api/staff/${encodeURIComponent(member.user_id)}/active`, {
+      method: 'POST',
+      body: JSON.stringify({ active }),
+    });
+    setMessage(result, active ? '再開しました' : '利用を止めました');
+    /* 変わったことを**一覧で**見せる（`confirmDestructive` と同じ）。 */
+    setTimeout(() => navigate('/admin/staff', screenStaffManage), 600);
+    return true;
+  } catch (error) {
+    setMessage(result, `${active ? '再開' : '停止'}できませんでした: ${error.message}`);
+    return false;
+  }
+}
+
+/** 止める前の確認。**打ち直しは求めない**（止めても戻せるので）が、押し間違いの1タッチで
+    止まらないよう、誰を止めるかを見せてからもう1回押させる。 */
+function confirmMemberStop(member) {
+  clear();
+  contentEl.append(backButton(() => navigate('/admin/staff', screenStaffManage)));
+  contentEl.append(heading('利用を止める'));
+  contentEl.append(note(`${memberLabel(member)} さんの利用を止めます。止めるとすぐに、この店のデータを見ることも書くこともできなくなります。あとから「再開する」で戻せます。`, true));
+  const detail = el('p', 'admin-note',
+    [member.email, member.role === 'admin' ? '管理者' : 'スタッフ'].filter(Boolean).join(' ・ '));
+  detail.dataset.adminField = 'confirm-detail';
+  contentEl.append(detail);
+  const button = submitButton('利用を止める', 'confirm-member-stop');
+  contentEl.append(button);
+  button.onclick = async () => {
+    button.disabled = true;
+    const done = await setMemberActive(member, false, contentEl);
+    if (!done) button.disabled = false;
   };
 }
 
@@ -991,6 +1088,7 @@ const ADMIN_ROUTES = {
   '/admin/delete/report': pickPetForReportDelete,
   '/admin/settings': screenShopSettings,
   '/admin/invite-staff': screenInviteStaff,
+  '/admin/staff': screenStaffManage,
 };
 
 /* 管理者だけの画面（`N-49`）。スタッフが住所を直に開いた・戻る/進むで来たときは、
@@ -1002,6 +1100,7 @@ const ADMIN_ONLY_PATHS = new Set([
   '/admin/delete/report',
   '/admin/settings',
   '/admin/invite-staff',
+  '/admin/staff',
 ]);
 
 function screenAdminOnly() {
@@ -1075,7 +1174,7 @@ export async function bootAdminPortal() {
     const session = await api('/api/session');
     /* **飼い主をここに入れない**——それは越境なので必ず止める。
        お店の人は管理者もスタッフもここに入る（`N-49`）。スタッフに出さないのは
-       ③削除・④店舗設定・⑤スタッフ招待だけで、それは下の `isAdmin` が決める。 */
+       ③削除・④店舗設定・⑤スタッフ招待・⑥スタッフ管理だけで、それは下の `isAdmin` が決める。 */
     if ((session.memberships || []).length === 0) {
       /* 行き止まりにしない。その人が使える画面へ送る（`D-14` の問1）。 */
       setMessage(statusEl, 'この画面はお店の方だけが使えます。');
@@ -1100,6 +1199,7 @@ export async function bootAdminPortal() {
     /* `role` が無いのは役割を返さない古い Worker。そのときは今までどおり管理者として扱う
        （DB が断るので、画面が多めに出ても裏で通ることは無い）。 */
     isAdmin = session.memberships.some((membership) => (membership.role || 'admin') === 'admin');
+    myUserId = (session.user && session.user.id) || '';
 
     show(contentEl, true);
     show(signOutButton, true);
