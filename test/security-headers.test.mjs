@@ -36,12 +36,19 @@ function assertSecurityHeaders(response, { https = true } = {}) {
   );
 }
 
-test('API の JSON（未ログインの 401）にもセキュリティヘッダと no-store が付く', async () => {
+test('API の JSON（未ログインの 401）にもセキュリティヘッダが付く。エラーには個人情報が無いので no-store は付けない', async () => {
   const response = await worker.fetch(new Request('https://test.local/api/pets'), env());
   assert.equal(response.status, 401);
   assert.match(response.headers.get('Content-Type'), /application\/json/);
-  assert.equal(response.headers.get('Cache-Control'), 'no-store');
+  /* 404 等に no-store を付けると、検査の道具が通信を終わらないものと数えた（2026-11-20 実測）。 */
+  assert.equal(response.headers.get('Cache-Control'), null);
   assertSecurityHeaders(response);
+});
+
+test('成功した API の JSON（個人情報が入る）には no-store が付く', async () => {
+  const response = await worker.fetch(new Request('https://test.local/api/ping'), env());
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('Cache-Control'), 'no-store');
 });
 
 test('入口 `/`（Worker が組み立てる HTML）にもセキュリティヘッダが付く', async () => {

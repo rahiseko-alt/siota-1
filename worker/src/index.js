@@ -40,9 +40,14 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
    ログアウトした後でも「戻る」で前の人のデータが見える。呼び出し側が明示的に
    `Cache-Control` を渡したときだけ、そちらを優先する（`extraHeaders` が後勝ち）。 */
 function json(body, status = 200, extraHeaders = {}) {
+  /* `no-store` は**成功した応答（個人情報が入る）だけ**に付ける。エラーの応答（`{"error":"not available"}`
+     など）には個人情報が入らない。しかも 404 に `no-store` を付けると、検査の道具（Playwright）が
+     その通信を「終わっていない」と数え、「通信が静かになるまで待つ」が終わらなくなった
+     （`verify:portal` 11/12・2026-11-20 実測。ブラウザでは 0.1 秒で返っていた）。 */
+  const cache = status < 400 ? { 'Cache-Control': 'no-store' } : {};
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...JSON_HEADERS, 'Cache-Control': 'no-store', ...extraHeaders },
+    headers: { ...JSON_HEADERS, ...cache, ...extraHeaders },
   });
 }
 
