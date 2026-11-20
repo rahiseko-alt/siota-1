@@ -358,6 +358,11 @@ async function handleSupabaseApi(request, store, path, cors, env) {
             return json({ report: await store.updateReport(petId, reportId, parsed.data) }, 200, cors);
           }
         }
+        /* 確定済みカルテの「直す前の中身」（放置リスト `#77`）。読めるのは管理者だけ——
+           それは DB の RLS（`is_shop_admin`）が決めるので、スタッフには空配列が返る。 */
+        if (parts.length === 6 && parts[5] === 'revisions' && request.method === 'GET') {
+          return json({ revisions: await store.listReportRevisions(petId, reportId) }, 200, cors);
+        }
         if (parts.length === 6 && request.method === 'POST') {
           if (parts[5] === 'assets') {
             const parsed = await parseJson(request, createReportAssetSchema);
