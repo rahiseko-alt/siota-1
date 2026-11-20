@@ -136,4 +136,73 @@ $$;
 revoke all on function public.list_shop_members(uuid) from public, anon;
 grant execute on function public.list_shop_members(uuid) to authenticated;
 
+/* ------------------------------------------------------------------
+   止めた人が、まだ使われていないスタッフ招待で黙って再開できないようにする
+   （独立検証①・CVSS 3.1）。本体は `202611190017` の `claim_invitation` のまま、
+   「止められている人なら断る」と「既に居る人の行は書き換えない」の2点だけを変えた。
+   ------------------------------------------------------------------ */
+create or replace function public.claim_invitation(raw_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  actor uuid := (select auth.uid());
+  invitation public.invitations%rowtype;
+begin
+  if actor is null or raw_token is null or raw_token !~ '^[0-9a-f]{64}$' then
+    raise exception using errcode = 'P0002', message = 'invitation unavailable';
+  end if;
+
+  select candidate.* into invitation
+  from public.invitations candidate
+  where candidate.token_hash = encode(extensions.digest(lower(raw_token), 'sha256'), 'hex')
+    and candidate.claimed_at is null
+    and candidate.revoked_at is null
+    and candidate.expires_at > now()
+  for update skip locked;
+
+  if not found then
+    raise exception using errcode = 'P0002', message = 'invitation unavailable';
+  end if;
+
+  update public.invitations
+  set claimed_at = now(), claimed_by = actor
+  where id = invitation.id and claimed_at is null;
+
+  if not found then
+    raise exception using errcode = 'P0002', message = 'invitation unavailable';
+  end if;
+
+  if invitation.invitation_type = 'owner' then
+    insert into public.owner_users (owner_id, user_id)
+    values (invitation.owner_id, actor)
+    on conflict (owner_id, user_id) do nothing;
+  else
+    /* **止められた人は、招待から入り直しても再開しない**（独立検証①の指摘・2026-11-20）。
+       再開は管理者の「⑥ スタッフ管理」（`set_member_active`）だけ。ここで断ると上の
+       「使った」印もまとめて取り消される（同じ取引の中）ので、招待は使われないまま残る。 */
+    if exists (
+      select 1 from public.shop_memberships membership
+      where membership.shop_id = invitation.shop_id and membership.user_id = actor and not membership.active
+    ) then
+      raise exception using errcode = 'P0002', message = 'invitation unavailable';
+    end if;
+    insert into public.shop_memberships (shop_id, user_id, active, role)
+    values (invitation.shop_id, actor, true, 'staff')
+    on conflict (shop_id, user_id) do nothing;
+  end if;
+
+  insert into public.audit_logs (shop_id, actor_user_id, action, entity_type, entity_id)
+  values (invitation.shop_id, actor, 'invitation.claimed', 'invitation', invitation.id);
+
+  return jsonb_build_object(
+    'type', invitation.invitation_type,
+    'shopId', invitation.shop_id,
+    'ownerId', invitation.owner_id
+  );
+end;
+$$;
+
 commit;

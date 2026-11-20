@@ -777,6 +777,52 @@ export const MUTATIONS = [
      画面がその値で「管理者には5つ・スタッフには2つ」を出し分けるので、**サーバーが
      役割を返さなくなる**壊し方を置く。どちらに倒れても、管理者の `2.`/`3f.` か
      スタッフの `22b.` のどちらかが赤になる。 */
+  /* ── 2026-11-20・放置リスト `#76` 管理者だけがスタッフを止める・再開する ── */
+  {
+    id: 'member-active-anyone',
+    sql: true,
+    why: '**スタッフが管理者を止められる**——管理者だけに許したはずの「利用を止める」が、裏から叩けば誰でも通る',
+    file: 'supabase/migrations/202611200020_admin_set_member_active.sql',
+    find: "grant execute on function public.list_shop_members(uuid) to authenticated;\n",
+    replace: "grant execute on function public.list_shop_members(uuid) to authenticated;\n"
+      + "create or replace function public.set_member_active(target_shop uuid, target_user uuid, new_active boolean)\n"
+      /* 本文の囲みは `$fn$`。`$$` と書くと、壊す道具の文字置き換え（String.replace）が `$` 1つに
+         縮めてしまい、SQL が壊れて db reset から落ちた（2026-11-20 実測）。 */
+      + "returns public.shop_memberships language sql security definer set search_path = '' as $fn$\n"
+      + "  update public.shop_memberships set active = new_active where shop_id = target_shop and user_id = target_user returning *;\n"
+      + "$fn$;\n",
+    extra: null,
+    scripts: ['verify-admin.mjs'],
+  },
+  {
+    id: 'member-self-stop-allowed',
+    sql: true,
+    why: '**管理者が自分を止められる**——押し間違い1回で、店の管理者が誰も入れなくなる',
+    file: 'supabase/migrations/202611200020_admin_set_member_active.sql',
+    find: "  if target_user = actor then\n    raise exception using errcode = '22023', message = 'cannot change own membership';\n  end if;\n",
+    replace: '',
+    extra: null,
+    scripts: ['verify-admin.mjs'],
+  },
+  {
+    id: 'member-stop-ignored',
+    sql: true,
+    why: '**「利用を止める」を押しても止まらない**——辞めた人が店の全データを見続ける',
+    file: 'supabase/migrations/202611200020_admin_set_member_active.sql',
+    find: '  set active = new_active\n',
+    replace: '  set active = membership.active\n',
+    extra: null,
+    scripts: ['verify-admin.mjs'],
+  },
+  {
+    id: 'staff-manage-visible-to-staff',
+    why: '**スタッフにも ⑥ スタッフ管理 の画面が出る**（断るのはデータベースだが、押せる画面を見せない）',
+    file: 'backend/js/supabase-admin.js',
+    find: "  '/admin/staff',\n",
+    replace: '',
+    extra: null,
+    scripts: ['verify-admin.mjs'],
+  },
   /* ── 2026-11-19・`N-48` 犬種（クライアント指示 C-14・案C） ── */
   {
     id: 'pet-breed-not-sent',

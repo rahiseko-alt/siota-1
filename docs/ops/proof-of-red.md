@@ -83,6 +83,18 @@
 
 ## 証明済み（`- <ファイル> :: <検査の名前>`）
 
+### 管理者だけがスタッフを止める 6件（2026-11-20・実測・`N-50`・放置リスト `#76`）
+
+壊し方4つ（`member-active-anyone`・`member-self-stop-allowed`・`member-stop-ignored`・`staff-manage-visible-to-staff`）を1つずつ当て、
+各項が赤になるのを本物のローカル Supabase で見た。戻すと `verify-admin.mjs` 70/70。出力は `docs/ops/mutate-run-N50.md`。
+
+- verify-admin.mjs :: 23c. 「利用を止める」は確認の画面でもう1回押すと効き、一覧で「停止中」・「再開する」に変わる
+- verify-admin.mjs :: 23d. 止めた人の鍵では /api/pets が断られるか店の犬が1件も返らず、お店の人として扱われない
+- verify-admin.mjs :: 23e. 「再開する」を押すと「利用中」に戻り、その人の鍵で店の犬が再び取れる
+- verify-admin.mjs :: 23f. 管理者が API で自分を止めようとしても断られ、管理者のまま使える
+- verify-admin.mjs :: 23g. スタッフには ⑥ スタッフ管理 が出ず、/admin/staff を開くと「管理者だけ」の案内ともどるだけが出る
+- verify-admin.mjs :: 23h. スタッフの GET /api/staff と、管理者を止める POST は断られ、管理者は止まっていない
+
 ### 犬種と管理者／スタッフ 21件（2026-11-19・実測・`N-48`・`N-49`）
 
 **10個の壊し方を1つずつ当て、各項が赤になるのを本物のローカル Supabase で見た。** 戻すと `verify-admin.mjs` 62/62。
@@ -3217,6 +3229,10 @@ $ node --test test/report-commit-guard.test.mjs      ← 直しを入れ直し�
 **下書きと確定の順番**だけで、サーバ側が 409 を返す条件そのものは SQL を読んで特定した。
 
 ## 未証明（**壊して赤になるところを、まだ見ていない**）
+
+- verify-admin.mjs :: 23a. 管理者が ⑥ スタッフ管理 を押して開くと、limited-staff@local.test が「スタッフ・利用中」で出る
+- verify-admin.mjs :: 23b. 管理者自身の行は「あなた」と出て、止めるボタンが無い
+  （2026-11-20・`#76`。4つの壊し方のどれもこの2件には当たらなかった。赤を見るには、⑥ の項目を消す・自分の行にもボタンを出す、の壊し方が要る。）
 
 - verify-admin.mjs :: 3. リピーターに カルテ作成 / カルテ修正 / 犬の情報を直す が在る
 - verify-admin.mjs :: 6d. 犬の情報を直す画面にも住所がある

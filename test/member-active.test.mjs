@@ -190,3 +190,14 @@ test('消した PATCH /api/staff/{id} と update_staff_membership は戻して�
   assert.equal(response.status, 404);
   assert.equal(calls.some((call) => call.url.includes('update_staff_membership')), false);
 });
+
+test('止められた人は、スタッフ招待から入り直しても再開しない（独立検証①・2026-11-20）', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const sql = await readFile(new URL('../supabase/migrations/202611200020_admin_set_member_active.sql', import.meta.url), 'utf8');
+  const start = sql.indexOf('create or replace function public.claim_invitation(raw_token text)');
+  assert.ok(start > 0, 'claim_invitation をこの migration で定義し直している');
+  const body = sql.slice(start, sql.indexOf('$$;', start));
+  assert.match(body, /not membership\.active[\s\S]*?raise exception using errcode = 'P0002'/);
+  assert.match(body, /on conflict \(shop_id, user_id\) do nothing/);
+  assert.doesNotMatch(body, /do update set active = true/);
+});
