@@ -42,7 +42,7 @@
 ・それでも止まる場合は、止まった日時・お使いの端末（iPhone／Android／パソコン）・止まった画面を教えていただけると、原因をすぐに絞り込めます。画面の写真があると助かります。
 
 確認の手順は、こちらにまとめました。
-https://docs.google.com/document/d/1NBtPXLXS5veB87vgUcxKaSkiaMtpQdQFLHzqgWSUHaw/edit
+https://docs.google.com/document/d/1kzkOni5cVrMt-ImuHgtUe86JzhnUIJCldw2gyeD6zLg/edit
 
 ■2. カルテを書く犬を選ぶ画面の検索
 
