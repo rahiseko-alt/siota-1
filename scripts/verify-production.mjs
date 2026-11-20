@@ -69,7 +69,10 @@ function distFiles() {
       else out.push(full);
     }
   })(DIST);
-  return out.sort();
+  /* `dist/_headers` は Cloudflare への設定（どの道にどのヘッダーを付けるか）で、**配信されない**
+     のが正しい（本番で 404・放置リスト `#78`）。配信物の照合から外し、代わりに中身が効いているか
+     （守りのヘッダーが付いているか）は `test/security-headers.test.mjs` と本番の応答で見る。 */
+  return out.filter((file) => path.relative(DIST, file) !== '_headers').sort();
 }
 
 const toUrlPath = (file) => `/${path.relative(DIST, file).split(path.sep).join('/')}`;
@@ -137,7 +140,9 @@ if (fs.existsSync(myLocal)) {
 const deletedUiPaths = [
   ...new Set(
     execSync(
-      "git log --diff-filter=D --name-only --format= -- 'src/js/*.js' 'src/design-samples/*.html' 'src/*.html'",
+      /* 二重引用符で囲む。単引用符は Windows（cmd.exe）では外れず、git が1本も拾えなかった
+         （`F-20261119-93` と同じ型・2026-11-20 実測）。二重引用符は sh でも cmd でも外れる。 */
+      'git log --diff-filter=D --name-only --format= -- "src/js/*.js" "src/design-samples/*.html" "src/*.html"',
       { stdio: ['ignore', 'pipe', 'ignore'] },
     )
       .toString()
