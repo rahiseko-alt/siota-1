@@ -17,7 +17,7 @@ const TEMPLATE = `
     <div class="timeline-accordion-head" data-view="timeline-toggle">
       <div style="display:flex;align-items:center;gap:8px;min-width:0">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex:0 0 auto"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-        <span>過去のレポートを見返す（来店履歴タイムライン）</span>
+        <span>過去のカルテを見返す（来店履歴タイムライン）</span>
       </div>
       <span style="font-size:11px;color:var(--ink-muted);flex:0 0 auto;white-space:nowrap" data-view="timeline-toggle-text">表示する ▼</span>
     </div>
