@@ -2118,6 +2118,8 @@ const App = {
         ? await staff.reviseReport(context.petId, this.reviseReportId, payload)
         : await staff.saveReport(
           context.petId, payload, this.today(), this.draftReportId,
+          /* 下書きの番号を受け取っておく。写真の途中で切れてやり直すとき、同じ下書きを使う（`N-52`）。 */
+          (id) => { this.draftReportId = id; },
         );
       /* **番号が入っているところまで確かめてから移る。** `encodeURIComponent` は
          `null`／`undefined` を**文字列**に変えてしまうので、欠けていても URL は
