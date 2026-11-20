@@ -390,6 +390,17 @@ export class SupabaseDataStore {
     );
   }
 
+  /* 確定済みカルテを直す前の中身（`report_revisions`・放置リスト `#77`）。新しい順。
+     読めるのは管理者だけで、それは RLS（`is_shop_admin`）が決める——スタッフのトークンでは
+     空配列が返る。先に `getReport` を通すのは reviseReport と同じ理由（その犬のカルテかを
+     確かめてから、reportId だけで引く）。 */
+  async listReportRevisions(petId, reportId) {
+    await this.getReport(petId, reportId);
+    return this.request(
+      `/rest/v1/report_revisions?select=id,report_id,previous_data,revised_by,revised_at&report_id=eq.${encodeURIComponent(reportId)}&order=revised_at.desc`,
+    );
+  }
+
   async consumeRateLimit(scope, ipHash = null) {
     const result = await this.request('/rest/v1/rpc/consume_rate_limit', {
       method: 'POST',
