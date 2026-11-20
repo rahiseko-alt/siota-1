@@ -474,6 +474,12 @@ async function bootStaffPortal(PonchiApp) {
  * 戻り値は下書きの id。呼び出し側は次回からそれを渡すこと。
  */
 async function saveDraft(petId, reportId, reportData, reportDate) {
+  return (await putDraft(petId, reportId, reportData, reportDate)).id;
+}
+
+/* 下書きを書き、**カルテ1枚まるごと**（店・犬・番号）を返す。確定（`saveReport`）は写真の置き場を
+   組み立てるのにこれが要る。 */
+async function putDraft(petId, reportId, reportData, reportDate) {
   const api = globalThis.TrimmerStaffApi && globalThis.TrimmerStaffApi.request;
   if (typeof api !== 'function') throw new Error('下書きを保存できません');
   if (reportId) {
@@ -481,16 +487,16 @@ async function saveDraft(petId, reportId, reportData, reportDate) {
       `/api/pets/${encodeURIComponent(petId)}/reports/${encodeURIComponent(reportId)}`,
       { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: reportData }) },
     );
-    if (!updated || !updated.report) throw new Error('下書きを保存できませんでした');
-    return updated.report.id;
+    if (!updated || !updated.report || !updated.report.id) throw new Error('下書きを保存できませんでした');
+    return updated.report;
   }
   const created = await api(`/api/pets/${encodeURIComponent(petId)}/reports`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ petId, reportDate, data: reportData }),
   });
-  if (!created || !created.report) throw new Error('下書きを作れませんでした');
-  return created.report.id;
+  if (!created || !created.report || !created.report.id) throw new Error('下書きを作れませんでした');
+  return created.report;
 }
 
 /** その犬の、確定していない下書きを1件返す（無ければ null）。 */
@@ -536,9 +542,8 @@ async function findLastFinalReport(petId) {
   };
 }
 
-/* 同じカルテの再試行で、写真の番号を引き継ぐための置き場（`replaceDataUrlAssets` の `cache`）。
-   カルテ1枚ごと。確定・修正が済んだら捨てる。新しく作るカルテ（下書きが無い）は番号が決まって
-   いないので使わない——作り直しになれば前のカルテとは置き場が別なので、止まりはしない。 */
+/* 同じカルテの再試行で、写真の番号と「上げた／登録した」の印を引き継ぐ置き場（`replaceDataUrlAssets` の `cache`）。
+   カルテ1枚ごと。確定が済んだら捨てる。 */
 const ASSET_CACHES = new Map();
 function assetCacheFor(key) {
   if (!key) return null;
@@ -546,41 +551,44 @@ function assetCacheFor(key) {
   return ASSET_CACHES.get(key);
 }
 
-async function saveReport(petId, reportData, reportDate, draftId) {
+/* onDraftSaved(id) — 下書きの番号が決まったら呼ぶ。呼ぶ側はそれを持ち、やり直しのときに渡す
+   （渡さないと、やり直すたびに下書きがもう1枚できる）。 */
+async function saveReport(petId, reportData, reportDate, draftId, onDraftSaved) {
   const client = globalThis.TrimmerAuth && globalThis.TrimmerAuth.client;
   const api = globalThis.TrimmerStaffApi && globalThis.TrimmerStaffApi.request;
   if (!client || typeof api !== 'function') throw new Error('保存できません（ログインし直してください）');
 
-  const cacheKey = draftId ? `${petId}:${draftId}` : null;
-  const { data, assets } = await replaceDataUrlAssets(reportData, { cache: assetCacheFor(cacheKey) });
-  /* 下書きが在ればそれを確定させる。**新しく作らない**——作ると下書きが残り、
-     次に開いたときに古い記入が蘇る（`#15` の 3 が見ているのはそこ）。 */
-  const saved = draftId
-    ? await api(
-      `/api/pets/${encodeURIComponent(petId)}/reports/${encodeURIComponent(draftId)}`,
-      { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data }) },
-    )
-    : await api(`/api/pets/${encodeURIComponent(petId)}/reports`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ petId, reportDate, data }),
-    });
-  const report = saved.report;
-  if (!report || !report.id) throw new Error('カルテを作れませんでした');
+  /* **写真を上げる前に、書いたものをそのまま（写真は `data:` のまま）下書きに残す**（`N-52`）。
+     以前は先に下書きを `asset://…`（まだ上がっていない写真の番号）で上書きしていたので、
+     写真の途中で電波が切れてタブを閉じると、下書きの写真は「どこにも無い番号」だけになり、
+     次に開いたとき写真が消えていた。下書きが在ればそれを使い、**新しく作らない**——作ると
+     下書きが残り、次に開いたときに古い記入が蘇る（`#15` の 3）。 */
+  const report = await putDraft(petId, draftId, reportData, reportDate);
+  if (typeof onDraftSaved === 'function') onDraftSaved(report.id);
+  const reportPath = `/api/pets/${encodeURIComponent(petId)}/reports/${encodeURIComponent(report.id)}`;
+
+  /* 写真の番号は「このカルテ × この写真」で決まる（`reportId`）。別のタブ・次の日にやり直しても
+     同じ番号になるので、前回もう上がって登録された写真は送り直さない。 */
+  const cacheKey = `${petId}:${report.id}`;
+  const { data, assets } = await replaceDataUrlAssets(reportData, { cache: assetCacheFor(cacheKey), reportId: report.id });
 
   /* 前に閉じたタブが上げたまま登録しなかった写真を先に片付ける。残っていると確定が必ず断られる
-     （放置リスト `#75`）。今回の写真（番号を引き継いだものを含む）は残す。
-     新しく作ったカルテ（下書きが無い）は番号が今できたばかりで、置き場に何も無いので見ない。 */
+     （放置リスト `#75`）。今回の写真（同じ番号のものを含む）は残す。
+     新しく作ったカルテは番号が今できたばかりで、置き場に何も無いので見ない。 */
   if (draftId) {
     await removeUnregisteredAssets({ client, report, petId, keepIds: assets.map((asset) => asset.id) });
   }
 
   if (assets.length > 0) {
-    await uploadReportAssets({ client, api, report, petId, assets });
+    const current = await api(reportPath);
+    const registered = (current && current.report && current.report.assets) || [];
+    await uploadReportAssets({ client, api, report: { ...report, assets: registered }, petId, assets });
+    /* 写真が全部そろってから、下書きの中身を `asset://…` に差し替える（確定は `data:` が残っていると断る）。 */
+    await putDraft(petId, report.id, data, reportDate);
   }
 
   const finalized = await api(
-    `/api/pets/${encodeURIComponent(petId)}/reports/${encodeURIComponent(report.id)}/finalize`,
+    `${reportPath}/finalize`,
     { method: 'POST' },
   );
   /* **器だけでなく番号まで見る。** 作る段（上の `!report.id`）と揃えた。
@@ -588,7 +596,7 @@ async function saveReport(petId, reportData, reportDate, draftId) {
      埋めて**文字列 `"null"`** を作り、例外も出ないまま `/edit/p/{id}/null` へ
      進む（`F-20260828-59`）。`D-2` を塞いだのは「空が返る」場合だけだった。 */
   if (!finalized || !finalized.report || !finalized.report.id) throw new Error('カルテを確定できませんでした');
-  if (cacheKey) ASSET_CACHES.delete(cacheKey);
+  ASSET_CACHES.delete(cacheKey);
   return finalized.report;
 }
 
