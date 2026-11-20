@@ -1,0 +1,20 @@
+# 静的ファイルを Worker を通さずに配るときのセキュリティヘッダ（放置リスト #78）。
+#
+# `worker/wrangler.supabase.toml` の `run_worker_first` は `/` だけなので、
+# `/my`（my.html）・`/admin`（admin.html）・js・画像などは Cloudflare が直接配り、
+# `worker/src/index.js` の `withSecurityHeaders()` を通らない。ここで同じものを付ける。
+# Worker が作る応答（`/`・`/edit`・`/api/*`）にはこのファイルは効かない
+# （Cloudflare 公式: Workers Static Assets の `_headers`）。値は Worker 側と揃えること。
+#
+# connect-src / img-src に **ローカルの Supabase（127.0.0.1:54321）も並べている理由**:
+# `dist/` は本番とローカル（`worker/wrangler.local.toml`）で同じものを使う。本番の URL だけに
+# すると、ローカルの `/my`・`/admin` が Supabase に繋がらず `verify:*` が全部止まる。
+# 本番の利用者の端末で 127.0.0.1:54321 が開いていることは無く、足しても漏れ先にはならない。
+# 本番の SUPABASE_URL は `worker/wrangler.supabase.toml` の [vars] にある公開値。
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://bcodloqwnrhcuvevfguy.supabase.co http://127.0.0.1:54321; connect-src 'self' https://bcodloqwnrhcuvevfguy.supabase.co http://127.0.0.1:54321; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Strict-Transport-Security: max-age=31536000
+  Permissions-Policy: camera=(), microphone=(), geolocation=()

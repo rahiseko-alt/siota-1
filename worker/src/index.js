@@ -33,11 +33,73 @@ const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8' };
 const HTML_HEADERS = { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' };
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/* JSON は**既定で `Cache-Control: no-store`**（放置リスト #78・ASVS 14.4 / CWE-524）。
+   `/api/*` の中身は飼い主の名前・連絡先・カルテといった個人情報で、ログインした本人にしか
+   返さない。指示が無いと、ブラウザや途中の共有キャッシュが残してしまい、共用端末で
+   ログアウトした後でも「戻る」で前の人のデータが見える。呼び出し側が明示的に
+   `Cache-Control` を渡したときだけ、そちらを優先する（`extraHeaders` が後勝ち）。 */
 function json(body, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...JSON_HEADERS, ...extraHeaders },
+    headers: { ...JSON_HEADERS, 'Cache-Control': 'no-store', ...extraHeaders },
   });
+}
+
+/* ██ 全レスポンスに付けるセキュリティヘッダ（放置リスト #78・review M3/M8）。██
+
+   以前はどの応答にも1つも付いていなかった。よそのサイトが `<iframe>` でこのアプリを
+   透明に重ね、お店の人に気づかれずボタンを押させる（クリックジャッキング・CWE-1021）
+   ことを止める手段が無かった。
+
+   **CSP の `script-src` に `'unsafe-inline'` が要る理由**: `src/index.html` は
+   `onclick="…"` などのインライン属性を多数持ち、Worker 自身も `<script>` を本文へ
+   差し込んで初期状態（`window.__REPORT__` 等）を渡している。これを外すと画面が
+   1つも動かなくなる。インラインを無くすのは F4 の範囲外（機能を書き換える作業）なので、
+   ここでは**外部からの読み込みを自分自身と Supabase だけに絞る**ところまでにする。
+
+   Supabase は `env.SUPABASE_URL` から作る——本番とローカル（127.0.0.1:54321）で
+   違うので、固定値にするとどちらかが通信できなくなる。写真は Storage から
+   `download()` して `blob:` で見せ、撮った写真は `data:` で持つので img-src に両方要る。
+   Google ログインは Supabase へのページ遷移（fetch ではない）なので CSP は止めない。
+   realtime（wss）は使っていない（`.channel(` が 0 件）ので connect-src に足さない。 */
+function contentSecurityPolicy(env) {
+  const supabase = env.SUPABASE_URL ? ` ${new URL(env.SUPABASE_URL).origin}` : '';
+  return [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline'",
+    `img-src 'self' data: blob:${supabase}`,
+    `connect-src 'self'${supabase}`,
+    "font-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join('; ');
+}
+
+function withSecurityHeaders(response, request, env) {
+  /* `env.ASSETS.fetch()` の応答はヘッダが書き換え不可なので、必ず作り直してから足す。 */
+  const res = new Response(response.body, response);
+  /* CSP だけは**上書き**する。`dist/_headers` は本番の Supabase しか知らないので、
+     ローカルの Worker が配るページではこちらの（env から作った）値を正にする。 */
+  res.headers.set('Content-Security-Policy', contentSecurityPolicy(env));
+  const defaults = {
+    'X-Frame-Options': 'DENY',
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'no-referrer',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  };
+  /* http で HSTS を返しても意味が無い（ブラウザが無視する）うえ、ローカル開発を
+     https に縛りかねないので、https で来たときだけ付ける。 */
+  if (new URL(request.url).protocol === 'https:') {
+    defaults['Strict-Transport-Security'] = 'max-age=31536000';
+  }
+  /* 道ごとに意図して付けたものは消さない（足りないものだけ足す）。 */
+  for (const [name, value] of Object.entries(defaults)) {
+    if (!res.headers.has(name)) res.headers.set(name, value);
+  }
+  return res;
 }
 
 // localhost 開発（wrangler dev）時のみ CORS 許可。本番は同一オリジンで preflight 不要
@@ -602,7 +664,7 @@ async function renderAppPage(env, state) {
   return new Response(injectedHtml, { status: 200, headers: HTML_HEADERS });
 }
 
-export default {
+const app = {
   async fetch(request, env) {
     const url = new URL(request.url);
     const path = url.pathname;
@@ -626,5 +688,13 @@ export default {
     }
 
     return handleSupabaseMode(request, env, url, cors);
+  },
+};
+
+/* 道の処理（`app.fetch`）が返した応答に、最後に1か所でセキュリティヘッダを足す。
+   道ごとに付けると、新しい道を足したときに付け忘れる。 */
+export default {
+  async fetch(request, env) {
+    return withSecurityHeaders(await app.fetch(request, env), request, env);
   },
 };
