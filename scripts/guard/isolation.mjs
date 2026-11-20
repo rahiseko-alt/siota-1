@@ -134,7 +134,13 @@ const reachable = new Set(entries.flatMap((e) => [...reachableFrom(root, e)]));
 const deferred = deferredNames(repoRoot);
 
 /* ── A: 到達できないファイル ── */
-const unreachable = all.filter((f) => !reachable.has(f));
+/* **ブラウザではなく Cloudflare が読むファイル**は、HTML から参照されないのが正しい形。
+   `_headers` は静的配信の応答ヘッダの設定で、それ自体は配信されない（放置リスト #78）。
+   名前で1本ずつだけ外し、外したものは毎回出力する（黙って範囲を狭めない・D-18 偽-2）。
+   根元（`src/` か `dist/` の直下）に在るときだけ外す——下の階層に同名を置いても逃がさない。 */
+const PLATFORM_FILES = new Set(['_headers']);
+const platform = all.filter((f) => PLATFORM_FILES.has(f));
+const unreachable = all.filter((f) => !reachable.has(f) && !PLATFORM_FILES.has(f));
 const unregistered = unreachable.filter((f) => !deferred.has(path.basename(f)));
 
 /* ── B: 到達できるファイルの中の、あってはならない参照 ── */
@@ -155,6 +161,9 @@ process.stdout.write(
   `[isolation] ${uiDir}/ を走査: 全 ${all.length} ファイル / 起点 ${entries.join(' + ')} から到達 ${reachable.size} / `
   + `中身を読んだ ${checkB ? scanned.length : 0}\n`,
 );
+if (platform.length > 0) {
+  process.stdout.write(`[isolation] Cloudflare の設定として条件A から外した: ${platform.map((f) => `${uiDir}/${f}`).join(', ')}\n`);
+}
 
 /* 外した回は、外したと声に出す。黙って消さない（A-4 / D-18 偽-2）。 */
 if (!checkB) {
