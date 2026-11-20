@@ -209,7 +209,7 @@ try {
   /* この時点では犬がまだ0頭のこともある（作るのは ④）。**行ではなく見出しを待つ**
      ——0件でも picker は必ず見出しを出す。 */
   const pickerShown = await page.waitForFunction(
-    () => (document.body.textContent || '').includes('レポートを作成する犬を選ぶ'),
+    () => (document.body.textContent || '').includes('カルテを作成する犬を選ぶ'),
     { timeout: 20_000 },
   ).then(() => true).catch(() => false);
   check('3c. サブ画面（犬を選ぶ）でも住所が変わる',

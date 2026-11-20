@@ -695,7 +695,7 @@ function petItems(pets) {
 function pickPetForCreate() {
   return withList(listPets, (pets) => picker({
     items: petItems(pets),
-    label: 'レポートを作成する犬を選ぶ',
+    label: 'カルテを作成する犬を選ぶ',
     empty: 'まだ1頭も登録されていません。「② 新規」から登録してください。',
     testid: 'pick-pet',
     search: '犬の名前・飼い主様の名前・犬種で探す',
