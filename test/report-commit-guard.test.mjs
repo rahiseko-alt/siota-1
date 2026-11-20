@@ -42,7 +42,14 @@ async function loadStaff({ finalizeReport, reviseReport }) {
   await import('../backend/js/supabase-staff.js');
 
   const calls = [];
-  globalThis.TrimmerAuth = { client: {} };
+  /* 置き忘れの写真の片付け（放置リスト `#75`）が置き場を一覧し、登録を読む。ここでは何も残っていない。 */
+  const empty = { data: [], error: null };
+  globalThis.TrimmerAuth = {
+    client: {
+      storage: { from: () => ({ list: async () => empty }) },
+      from: () => ({ select: () => ({ eq: async () => empty }) }),
+    },
+  };
   globalThis.TrimmerStaffApi = {
     request: async (url, options) => {
       calls.push(url);
@@ -52,7 +59,7 @@ async function loadStaff({ finalizeReport, reviseReport }) {
          直しの検査だけが「投げない」に見えていた。 */
       if (url.endsWith('/revise')) return { report: reviseReport };
       /* 作る段は正しく番号を返す——**確定段だけ**が欠けている状況を作る。 */
-      return { report: { id: 'report-1' } };
+      return { report: { id: 'report-1', pet_id: 'pet-1', shop_id: 'shop-1' } };
     },
   };
   return { staff: globalThis.TrimmerSupabaseStaff, calls };

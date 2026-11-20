@@ -49,8 +49,11 @@ test('カルテ修正で犬体図の絵（データURL）を含めても保存�
       storage: {
         from: () => ({
           upload: async (path) => { uploadedPaths.push(path); return { error: null }; },
+          /* 置き忘れの写真の片付け（放置リスト `#75`）。ここでは何も残っていない。 */
+          list: async () => ({ data: [], error: null }),
         }),
       },
+      from: () => ({ select: () => ({ eq: async () => ({ data: [], error: null }) }) }),
     },
   };
   const reportPath = `/api/pets/${ids.pet}/reports/${ids.report}`;
