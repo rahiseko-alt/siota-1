@@ -178,6 +178,41 @@ node scripts/swap-image.mjs login-photo /path/to/新しい写真.png
    `docs/ops/plan.md` の `N-47` に「誰の」とだけ書く。流したあと、上の 1. の一覧をもう一度出して確かめる。
 3. そのあとで Worker を出す（下の 3. A-1）。`npm run verify:prod` が緑になること。
 
+## 2-F. 確定済みカルテを前の版に戻す（N-77 / #77）
+
+**何ができるようになったか**: 確定したカルテを「カルテ修正」で直すと、**直す前の中身が1版ずつ自動で残る**
+（`supabase/migrations/202611200021_report_revisions.sql`）。間違えて上書きした・空にしてしまった、でも戻せる。
+**見られるのは管理者だけ**。スタッフには見えない。履歴は画面からも API からも書き換え・削除できない。
+
+> **まだ本番に無い**: この migration を本番に当てるまでは、履歴は1件も残らない。当てる順番は 2-E と同じで、
+> **migration が先・Worker が後**（`F-20260829-61`）。
+
+1. **戻したいカルテの id を探す**（読むだけ）。犬の名前と日付で引ける:
+
+   ```sql
+   select r.id, r.report_date, p.name
+   from public.reports r join public.pets p on p.id = r.pet_id
+   where p.name = '<犬の名前>' and r.status = 'final'
+   order by r.report_date desc;
+   ```
+
+2. **そのカルテの履歴を見る**（読むだけ・何も変えない）。本番の Supabase → SQL Editor に貼る:
+
+   ```sql
+   select id, revised_at, revised_by, previous_data
+   from public.report_revisions
+   where report_id = '<カルテのid>'
+   order by revised_at desc;
+   ```
+
+   上ほど新しい。`revised_at` が「直した日時」、`previous_data` が「**その直しの直前の中身**」。
+   戻したい時点の行を選び、その `previous_data` をまるごとコピーする。
+3. **戻す**——管理者がログインした状態で「カルテ修正」から、選んだ版の内容で直して確定する。
+   戻す操作も「直し」の1回なので、**戻す直前の中身がまた1版残る**。戻しても何も失われない。
+   - SQL Editor から直接 `update public.reports ...` で書き戻さない。それだと履歴にも記録（`audit_logs`）にも残らない。
+   - 写真は `asset://…` という参照だけが残っている。直しで外した写真の実体は消えていないので、参照を戻せば写真も戻る。
+4. 戻したあと、飼い主の画面（そのカルテの共有 URL）を開いて、戻した内容で出ていることを目で確かめる。
+
 ## 3. デプロイ手順（順序固定）
 
 > ⛔ **移設・統合フェーズのあいだ、本節の手順を実行するな。**
