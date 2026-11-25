@@ -37,10 +37,34 @@ exception
 end;
 $$;
 
+/* 「決まった理由で断られること」を見る（R9・2026-11-25）。
+   通ってしまったら止める。**別の理由で落ちた**ときも止める——壊れて落ちたのを
+   「断られた」と数えると、検査が緑のまま守りが消えうる（`D-18` 偽-5）。 */
+create or replace function pg_temp.refused(statement text, expected_state text, label text)
+returns void language plpgsql as $$
+declare
+  got text;
+begin
+  begin
+    execute statement;
+  exception when others then
+    got := sqlstate;
+  end;
+  if got is null then
+    raise exception 'RLS 検査: % — 断られるはずの操作が通ってしまった', label;
+  end if;
+  if got <> expected_state then
+    raise exception 'RLS 検査: % — 断り方が違う（期待 % / 実際 %）', label, expected_state, got;
+  end if;
+end;
+$$;
+
 /* ── 土台。2店舗・スタッフ2人・飼い主2人・犬2頭・カルテ2枚 ── */
 insert into auth.users (id, email) values
   ('aa000000-0000-0000-0000-000000000001', 'staff-a@rls.test'),
   ('aa000000-0000-0000-0000-000000000002', 'staff-b@rls.test'),
+  ('aa000000-0000-0000-0000-000000000003', 'admin-b@rls.test'),
+  ('aa000000-0000-0000-0000-000000000004', 'staff-b2@rls.test'),
   ('aa000000-0000-0000-0000-00000000000a', 'owner-a@rls.test'),
   ('aa000000-0000-0000-0000-00000000000b', 'owner-b@rls.test')
 on conflict (id) do nothing;
@@ -53,7 +77,10 @@ insert into public.shops (id, name, slug) values
    （ログアウト後に管理者の判定も閉じることを ⑥ で見るため）。 */
 insert into public.shop_memberships (shop_id, user_id, role) values
   ('bb000000-0000-0000-0000-000000000001', 'aa000000-0000-0000-0000-000000000001', 'admin'),
-  ('bb000000-0000-0000-0000-000000000002', 'aa000000-0000-0000-0000-000000000002', 'staff');
+  ('bb000000-0000-0000-0000-000000000002', 'aa000000-0000-0000-0000-000000000002', 'staff'),
+  /* ⑦⑧ 用: 店舗Bの管理者と、止められる側のスタッフ（R9・2026-11-25）。 */
+  ('bb000000-0000-0000-0000-000000000002', 'aa000000-0000-0000-0000-000000000003', 'admin'),
+  ('bb000000-0000-0000-0000-000000000002', 'aa000000-0000-0000-0000-000000000004', 'staff');
 
 insert into public.owners (id, shop_id, name) values
   ('cc000000-0000-0000-0000-00000000000a', 'bb000000-0000-0000-0000-000000000001', 'RLS Owner A'),
@@ -168,6 +195,127 @@ select pg_temp.eq((select count(*)::integer from public.reports where id = 'ee00
 select pg_temp.logout('aa000000-0000-0000-0000-00000000000a');
 select pg_temp.eq((select count(*)::integer from public.reports where id = 'ee000000-0000-0000-0000-00000000000a'), 0, 'ログアウト後は、同じ通行証でも確定したカルテは見えない');
 select pg_temp.eq((select count(*)::integer from public.pets where id = 'dd000000-0000-0000-0000-00000000000a'), 0, 'ログアウト後は、同じ通行証でも自分の犬は見えない');
+
+/* ── ⑦ スタッフは、管理者だけの操作ができない（R9・`D-26`・`202611190017`）──
+   画面で隠しているだけでなく、**データベースが断る**こと。店舗Bのスタッフで試す。
+   それぞれ、同じ操作が管理者には通ることも裏取りする（全部断るだけの壊れ方を見逃さない）。 */
+select pg_temp.login('aa000000-0000-0000-0000-000000000002');
+with attempted as (
+  delete from public.owners where id = 'cc000000-0000-0000-0000-00000000000b' returning 1
+)
+select pg_temp.eq((select count(*)::integer from attempted), 0, 'スタッフは、自分の店舗の飼い主でも消せない');
+with attempted as (
+  delete from public.pets where id = 'dd000000-0000-0000-0000-00000000000b' returning 1
+)
+select pg_temp.eq((select count(*)::integer from attempted), 0, 'スタッフは、自分の店舗の犬でも消せない');
+select pg_temp.refused(
+  $$select public.mark_report_deleting('ee000000-0000-0000-0000-00000000000b')$$,
+  'P0002', 'スタッフは、自分の店舗のカルテでも消せない（削除の入口）');
+select pg_temp.refused(
+  $$select public.archive_report('ee000000-0000-0000-0000-00000000000b')$$,
+  'P0002', 'スタッフは、自分の店舗のカルテでも片付け（アーカイブ）できない');
+with attempted as (
+  update public.shops set default_revisit_days = 7 where id = 'bb000000-0000-0000-0000-000000000002' returning 1
+)
+select pg_temp.eq((select count(*)::integer from attempted), 0, 'スタッフは、店舗設定を書き換えられない');
+select pg_temp.refused(
+  $$select * from public.create_invitation('bb000000-0000-0000-0000-000000000002', 'staff', null)$$,
+  '42501', 'スタッフは、スタッフ招待を作れない');
+select pg_temp.refused(
+  $$select public.set_member_active('bb000000-0000-0000-0000-000000000002', 'aa000000-0000-0000-0000-000000000004', false)$$,
+  '42501', 'スタッフは、他のスタッフを止められない');
+select pg_temp.refused(
+  $$update public.owners set active = false where id = 'cc000000-0000-0000-0000-00000000000b'$$,
+  '42501', 'スタッフは、飼い主を無効にできない');
+select pg_temp.refused(
+  $$update public.pets set active = false where id = 'dd000000-0000-0000-0000-00000000000b'$$,
+  '42501', 'スタッフは、犬を無効にできない');
+
+/* 裏取り: 同じ店舗の管理者には通る。 */
+select pg_temp.login('aa000000-0000-0000-0000-000000000003');
+with attempted as (
+  update public.shops set default_revisit_days = 30 where id = 'bb000000-0000-0000-0000-000000000002' returning 1
+)
+select pg_temp.eq((select count(*)::integer from attempted), 1, '管理者は、店舗設定を書き換えられる');
+
+/* ── ⑧ 止められた人は入れない（R9・`202611200020`）──
+   止める前は見えていた人が、管理者に止められたあとは同じ通行証で何も見えず、何も書けない。 */
+select pg_temp.login('aa000000-0000-0000-0000-000000000004');
+select pg_temp.eq((select count(*)::integer from public.pets where id = 'dd000000-0000-0000-0000-00000000000b'), 1, '止める前のスタッフに、自分の店舗の犬は見える');
+
+select pg_temp.login('aa000000-0000-0000-0000-000000000003');
+select pg_temp.eq(
+  (select (not (public.set_member_active('bb000000-0000-0000-0000-000000000002', 'aa000000-0000-0000-0000-000000000004', false)).active)::integer),
+  1, '管理者は、スタッフを止められる');
+
+select pg_temp.login('aa000000-0000-0000-0000-000000000004');
+select pg_temp.eq((select count(*)::integer from public.pets where id = 'dd000000-0000-0000-0000-00000000000b'), 0, '止められたスタッフに、犬は見えない');
+select pg_temp.eq((select count(*)::integer from public.reports where id = 'ee000000-0000-0000-0000-00000000000b'), 0, '止められたスタッフに、カルテは見えない');
+select pg_temp.eq(private.is_shop_staff('bb000000-0000-0000-0000-000000000002')::integer, 0, '止められたスタッフは、スタッフとして通らない');
+select pg_temp.refused(
+  $$select public.revise_report('ee000000-0000-0000-0000-00000000000b', '{"memo":"stolen"}'::jsonb)$$,
+  'P0002', '止められたスタッフは、確定済みカルテを直せない');
+
+/* ── ⑨ カルテの「修正」は、データベースが回数で止め、記録は1枚20版まで（R1・`202611250023`）──
+   Worker を通らない直接の呼び出し（`rest/v1/rpc/revise_report`）でも止まること。
+   先に古い記録を25版置いておき、上限で古い方から消えることも見る。 */
+reset role;
+insert into public.report_revisions (shop_id, report_id, previous_data, revised_at)
+select 'bb000000-0000-0000-0000-000000000002', 'ee000000-0000-0000-0000-00000000000b',
+       '{"memo":"old"}'::jsonb, now() - make_interval(days => 1, secs => n)
+from generate_series(1, 25) as n;
+set local role authenticated;
+
+select pg_temp.login('aa000000-0000-0000-0000-000000000002');
+select pg_temp.eq(
+  (select (public.revise_report('ee000000-0000-0000-0000-00000000000b', '{"memo":"B1"}'::jsonb)).id is not null)::integer,
+  1, 'スタッフは、確定済みカルテを直せる（1回目）');
+
+reset role;
+select pg_temp.eq((select count(*)::integer from public.report_revisions where report_id = 'ee000000-0000-0000-0000-00000000000b'), 20, '記録は1枚につき20版まで（古い版から消える）');
+select pg_temp.eq((select count(*)::integer from public.report_revisions where report_id = 'ee000000-0000-0000-0000-00000000000b' and previous_data = '{"memo":"B"}'::jsonb), 1, 'いま直す直前の中身は、上限で消されずに残る');
+set local role authenticated;
+
+do $$
+begin
+  for n in 2..30 loop
+    perform public.revise_report('ee000000-0000-0000-0000-00000000000b', jsonb_build_object('memo', 'B' || n));
+  end loop;
+end;
+$$;
+select pg_temp.refused(
+  $$select public.revise_report('ee000000-0000-0000-0000-00000000000b', '{"memo":"B31"}'::jsonb)$$,
+  'PT429', '1時間に31回目の修正は、データベースが断る（PostgREST が 429 を返す番号）');
+
+reset role;
+select pg_temp.eq((select count(*)::integer from public.report_revisions where report_id = 'ee000000-0000-0000-0000-00000000000b'), 20, '30回直しても、記録は20版のまま');
+select pg_temp.eq((select count(*)::integer from public.report_revisions where report_id = 'ee000000-0000-0000-0000-00000000000b' and previous_data = '{"memo":"old"}'::jsonb), 0, '先に置いた古い記録は、上限で消えている');
+select pg_temp.eq((select count(*)::integer from public.reports where id = 'ee000000-0000-0000-0000-00000000000b' and data = '{"memo":"B30"}'::jsonb), 1, '断られた31回目は、中身を書き換えていない');
+
+/* ── ⑩ 置き忘れの写真の片づけは、上げてから3分たったものだけ（R7・`202611250024`）──
+   登録の無い写真2枚（上げた直後・10分前）。スタッフが消せるのは10分前の方だけ。
+   ここで置く写真は ⑨ の修正を止める（登録の無い写真がある）ので、⑨ より後に置く。 */
+insert into storage.buckets (id, name) values ('report-assets', 'report-assets') on conflict (id) do nothing;
+insert into storage.objects (bucket_id, name, created_at) values
+  ('report-assets', 'bb000000-0000-0000-0000-000000000002/dd000000-0000-0000-0000-00000000000b/ee000000-0000-0000-0000-00000000000b/fresh.webp', now()),
+  ('report-assets', 'bb000000-0000-0000-0000-000000000002/dd000000-0000-0000-0000-00000000000b/ee000000-0000-0000-0000-00000000000b/stale.webp', now() - interval '10 minutes');
+set local role authenticated;
+
+select pg_temp.login('aa000000-0000-0000-0000-000000000002');
+with attempted as (
+  delete from storage.objects
+  where bucket_id = 'report-assets'
+    and name = 'bb000000-0000-0000-0000-000000000002/dd000000-0000-0000-0000-00000000000b/ee000000-0000-0000-0000-00000000000b/fresh.webp'
+  returning 1
+)
+select pg_temp.eq((select count(*)::integer from attempted), 0, 'スタッフは、上げてから3分たっていない登録の無い写真を消せない');
+with attempted as (
+  delete from storage.objects
+  where bucket_id = 'report-assets'
+    and name = 'bb000000-0000-0000-0000-000000000002/dd000000-0000-0000-0000-00000000000b/ee000000-0000-0000-0000-00000000000b/stale.webp'
+  returning 1
+)
+select pg_temp.eq((select count(*)::integer from attempted), 1, 'スタッフは、3分より前の置き忘れの写真は消せる');
 
 reset role;
 rollback;
