@@ -68,8 +68,20 @@ function json(body, status = 200, extraHeaders = {}) {
    `download()` して `blob:` で見せ、撮った写真は `data:` で持つので img-src に両方要る。
    Google ログインは Supabase へのページ遷移（fetch ではない）なので CSP は止めない。
    realtime（wss）は使っていない（`.channel(` が 0 件）ので connect-src に足さない。 */
+function supabaseOrigin(env) {
+  /* `SUPABASE_URL` の書き間違いで**全ページ（入口のログイン画面も）が落ちない**ようにする
+     （review R14）。ここで投げると `withSecurityHeaders` が全応答で失敗する。
+     読めないときは Supabase を CSP に載せないだけにする——API 側は
+     `auth-context.js` の `authConfig()` が同じ値を読めずに 503 を返す。 */
+  try {
+    return env.SUPABASE_URL ? ` ${new URL(env.SUPABASE_URL).origin}` : '';
+  } catch {
+    return '';
+  }
+}
+
 function contentSecurityPolicy(env) {
-  const supabase = env.SUPABASE_URL ? ` ${new URL(env.SUPABASE_URL).origin}` : '';
+  const supabase = supabaseOrigin(env);
   return [
     "default-src 'self'",
     "script-src 'self' 'unsafe-inline'",
@@ -108,8 +120,13 @@ function withSecurityHeaders(response, request, env) {
   return res;
 }
 
-// localhost 開発（wrangler dev）時のみ CORS 許可。本番は同一オリジンで preflight 不要
-function corsHeaders(request) {
+// localhost 開発（wrangler dev）時のみ CORS 許可。本番は同一オリジンで preflight 不要。
+/* 「開発時」は**設定で決める**（review R14）。以前は Origin だけを見ていたので、本番の Worker も
+   `Origin: http://localhost` に許可を返していた。`ALLOW_LOCALHOST_CORS` を置くのは
+   `wrangler dev` 専用の `wrangler.local.toml` / `wrangler.poison.toml` だけで、
+   本番の `wrangler.supabase.toml` には置かない。 */
+function corsHeaders(request, env) {
+  if (env.ALLOW_LOCALHOST_CORS !== 'true') return {};
   const origin = request.headers.get('Origin') || '';
   if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
     return {
@@ -126,7 +143,13 @@ function safeJsonStr(data) {
 }
 
 function supabaseError(error, cors = {}) {
-  if (error instanceof AuthError) return json({ error: error.message }, error.status, cors);
+  if (error instanceof AuthError) {
+    return json(
+      { error: error.message },
+      error.status,
+      error.retryAfterSeconds ? { ...cors, 'Retry-After': String(error.retryAfterSeconds) } : cors,
+    );
+  }
   if (error instanceof StoreError) {
     const status = error.status === 401 ? 401
       : error.status === 403 || error.status === 404 ? 404
@@ -696,7 +719,7 @@ const app = {
   async fetch(request, env) {
     const url = new URL(request.url);
     const path = url.pathname;
-    const cors = corsHeaders(request);
+    const cors = corsHeaders(request, env);
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: cors });

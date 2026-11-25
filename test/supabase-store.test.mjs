@@ -5,6 +5,9 @@ import { createPetSchema, updatePetSchema, parseJson } from '../worker/src/api-s
 import { StoreError, SupabaseDataStore } from '../worker/src/data-stores/supabase-data-store.js';
 import worker from '../worker/src/index.js';
 
+/* 偽のアクセストークンは JWT の形（`ヘッダ.中身.署名`・中身は {"exp":4102444800}＝2100年）にしてある。
+   Worker は Supabase に問い合わせる前に形と期限を見て、崩れたものを弾く（review R6）。 */
+
 function supabaseEnv(fetchImpl) {
   return {
     DATA_BACKEND: 'supabase',
@@ -61,14 +64,14 @@ test('Supabase store forwards the user JWT and never a privileged key', async ()
   const store = new SupabaseDataStore({
     supabaseUrl: 'https://project.supabase.co',
     publishableKey: 'publishable-key',
-    accessToken: 'user-jwt',
+    accessToken: 'e30.eyJleHAiOjQxMDI0NDQ4MDB9.user-jwt',
     fetchImpl: async (url, init) => {
       calls.push({ url, init });
       return Response.json([]);
     },
   });
   await store.listPets();
-  assert.equal(calls[0].init.headers.Authorization, 'Bearer user-jwt');
+  assert.equal(calls[0].init.headers.Authorization, 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.user-jwt');
   assert.equal(calls[0].init.headers.apikey, 'publishable-key');
   assert.equal(JSON.stringify(calls).includes('service_role'), false);
 });
@@ -97,7 +100,7 @@ test('Supabase mode rejects a missing bearer before data access', async () => {
 test('Supabase session route validates Auth before querying RLS-scoped rows', async () => {
   const calls = [];
   const response = await worker.fetch(
-    new Request('https://test.local/api/session', { headers: { Authorization: 'Bearer user-jwt' } }),
+    new Request('https://test.local/api/session', { headers: { Authorization: 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.user-jwt' } }),
     supabaseEnv(async (url, init) => {
       calls.push({ url, init });
       if (url.endsWith('/auth/v1/user')) {
@@ -112,7 +115,7 @@ test('Supabase session route validates Auth before querying RLS-scoped rows', as
   assert.deepEqual(body.memberships, []);
   assert.deepEqual(body.ownerLinks, []);
   assert.equal(calls.length, 3);
-  assert.ok(calls.slice(1).every((call) => call.init.headers.Authorization === 'Bearer user-jwt'));
+  assert.ok(calls.slice(1).every((call) => call.init.headers.Authorization === 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.user-jwt'));
 });
 
 test('public config exposes only browser-safe values', async () => {
@@ -190,7 +193,7 @@ test('report creation rejects a route/body pet mismatch before any database writ
     {
       method: 'POST',
       headers: {
-        Authorization: 'Bearer staff-jwt',
+        Authorization: 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.staff-jwt',
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -218,7 +221,7 @@ test('report creation derives shop and pet from the exact route pet context', as
   const calls = [];
   const response = await worker.fetch(new Request(`https://test.local/api/pets/${petId}/reports`, {
     method: 'POST',
-    headers: { Authorization: 'Bearer staff-jwt', 'Content-Type': 'application/json' },
+    headers: { Authorization: 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.staff-jwt', 'Content-Type': 'application/json' },
     body: JSON.stringify({ petId, reportDate: '2026-07-16', data: { pet: 'X', memo: 'X only' } }),
   }), supabaseEnv(async (url, init) => {
     calls.push({ url, init });
@@ -261,7 +264,7 @@ test('report creation derives shop and pet from the exact route pet context', as
 test('customer report denial is the same generic 404 for hidden and missing rows', async () => {
   const response = await worker.fetch(new Request(
     'https://test.local/api/my/pets/40000000-0000-0000-0000-0000000000a1/reports/50000000-0000-0000-0000-0000000000a1',
-    { headers: { Authorization: 'Bearer owner-b-jwt' } },
+    { headers: { Authorization: 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.owner-b-jwt' } },
   ), supabaseEnv(async (url) => {
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: '20000000-0000-0000-0000-0000000000b1', email: 'owner-b@local.test' });
@@ -277,7 +280,7 @@ test('invitation claim rejects malformed tokens before rate-limit or database ac
   const calls = [];
   const response = await worker.fetch(new Request('https://test.local/api/invitations/claim', {
     method: 'POST',
-    headers: { Authorization: 'Bearer user-jwt', 'Content-Type': 'application/json' },
+    headers: { Authorization: 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.user-jwt', 'Content-Type': 'application/json' },
     body: JSON.stringify({ token: 'short-or-not-hex' }),
   }), supabaseEnv(async (url, init) => {
     calls.push({ url, init });
@@ -297,7 +300,7 @@ test('invitation claim rate limit returns 429 with Retry-After and never claims'
   const calls = [];
   const response = await worker.fetch(new Request('https://test.local/api/invitations/claim', {
     method: 'POST',
-    headers: { Authorization: 'Bearer user-jwt', 'Content-Type': 'application/json' },
+    headers: { Authorization: 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.user-jwt', 'Content-Type': 'application/json' },
     body: JSON.stringify({ token }),
   }), supabaseEnv(async (url, init) => {
     calls.push({ url, init });
@@ -319,7 +322,7 @@ test('owner invitation returns the raw token once without exposing a stored hash
   const calls = [];
   const response = await worker.fetch(new Request('https://test.local/api/invitations', {
     method: 'POST',
-    headers: { Authorization: 'Bearer staff-jwt', 'Content-Type': 'application/json' },
+    headers: { Authorization: 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.staff-jwt', 'Content-Type': 'application/json' },
     body: JSON.stringify({
       invitationType: 'owner',
       ownerId: '30000000-0000-0000-0000-0000000000a1',
@@ -358,7 +361,7 @@ test('owner invitation returns the raw token once without exposing a stored hash
 test('expired revoked claimed and missing invitation claims share one generic response', async () => {
   const response = await worker.fetch(new Request('https://test.local/api/invitations/claim', {
     method: 'POST',
-    headers: { Authorization: 'Bearer user-jwt', 'Content-Type': 'application/json' },
+    headers: { Authorization: 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.user-jwt', 'Content-Type': 'application/json' },
     body: JSON.stringify({ token: 'c'.repeat(64) }),
   }), supabaseEnv(async (url) => {
     if (url.endsWith('/auth/v1/user')) {
@@ -387,7 +390,7 @@ test('valid invitation claim hashes the client IP with a server-only pepper', as
   const response = await worker.fetch(new Request('https://test.local/api/invitations/claim', {
     method: 'POST',
     headers: {
-      Authorization: 'Bearer user-jwt',
+      Authorization: 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.user-jwt',
       'Content-Type': 'application/json',
       'CF-Connecting-IP': '203.0.113.7',
     },
@@ -405,7 +408,7 @@ test('valid invitation claim hashes the client IP with a server-only pepper', as
 test('invitation listing requests only safe columns and never token material', async () => {
   const calls = [];
   const response = await worker.fetch(new Request('https://test.local/api/invitations', {
-    headers: { Authorization: 'Bearer staff-jwt' },
+    headers: { Authorization: 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.staff-jwt' },
   }), supabaseEnv(async (url, init) => {
     calls.push({ url, init });
     if (url.endsWith('/auth/v1/user')) {
@@ -448,13 +451,13 @@ test('the staff-management endpoints are gone (no way in)', async () => {
   });
 
   const list = await worker.fetch(new Request('https://test.local/api/staff', {
-    headers: { Authorization: 'Bearer staff-jwt' },
+    headers: { Authorization: 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.staff-jwt' },
   }), env());
   const patch = await worker.fetch(new Request(
     'https://test.local/api/staff/20000000-0000-0000-0000-000000000001',
     {
       method: 'PATCH',
-      headers: { Authorization: 'Bearer staff-jwt', 'Content-Type': 'application/json' },
+      headers: { Authorization: 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.staff-jwt', 'Content-Type': 'application/json' },
       body: JSON.stringify({ active: false }),
     },
   ), env());
@@ -485,7 +488,7 @@ test('asset metadata rejects client storage paths and derives them inside the da
     `https://test.local/api/pets/${petId}/reports/${reportId}/assets`,
     {
       method: 'POST',
-      headers: { Authorization: 'Bearer staff-jwt', 'Content-Type': 'application/json' },
+      headers: { Authorization: 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.staff-jwt', 'Content-Type': 'application/json' },
       body: JSON.stringify({
         id: assetId,
         kind: 'heroPhotos.0',
@@ -529,7 +532,7 @@ test('finalize keeps a report draft when storage metadata or objects are incompl
   const reportId = '50000000-0000-0000-0000-0000000000a1';
   const response = await worker.fetch(new Request(
     `https://test.local/api/pets/${petId}/reports/${reportId}/finalize`,
-    { method: 'POST', headers: { Authorization: 'Bearer staff-jwt' } },
+    { method: 'POST', headers: { Authorization: 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.staff-jwt' } },
   ), supabaseEnv(async (url) => {
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: '20000000-0000-0000-0000-000000000002', email: 'staff@local.test' });
@@ -559,7 +562,7 @@ test('finalize は配列で返ってきても、カルテ1件として返す（�
   const reportId = '50000000-0000-0000-0000-0000000000a1';
   const response = await worker.fetch(new Request(
     `https://test.local/api/pets/${petId}/reports/${reportId}/finalize`,
-    { method: 'POST', headers: { Authorization: 'Bearer staff-jwt' } },
+    { method: 'POST', headers: { Authorization: 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.staff-jwt' } },
   ), supabaseEnv(async (url) => {
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: '20000000-0000-0000-0000-000000000002', email: 'staff@local.test' });
@@ -587,7 +590,7 @@ test('finalize は空の配列を「確定できた」と言わない', async ()
   const reportId = '50000000-0000-0000-0000-0000000000a1';
   const response = await worker.fetch(new Request(
     `https://test.local/api/pets/${petId}/reports/${reportId}/finalize`,
-    { method: 'POST', headers: { Authorization: 'Bearer staff-jwt' } },
+    { method: 'POST', headers: { Authorization: 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.staff-jwt' } },
   ), supabaseEnv(async (url) => {
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: '20000000-0000-0000-0000-000000000002', email: 'staff@local.test' });
@@ -615,7 +618,7 @@ test('the Supabase store never calls fetch with itself as the receiver', async (
   const store = new SupabaseDataStore({
     supabaseUrl: 'https://project.supabase.co',
     publishableKey: 'publishable-key',
-    accessToken: 'user-jwt',
+    accessToken: 'e30.eyJleHAiOjQxMDI0NDQ4MDB9.user-jwt',
     // アロー関数だと `this` が束縛済みで検査にならないので、通常の関数で受ける。
     fetchImpl: function fake() {
       receivers.push(this);
@@ -641,7 +644,7 @@ test('getSessionContext returns the caller own membership role (N-49)', async ()
   const store = new SupabaseDataStore({
     supabaseUrl: 'https://project.supabase.co',
     publishableKey: 'publishable-key',
-    accessToken: 'user-jwt',
+    accessToken: 'e30.eyJleHAiOjQxMDI0NDQ4MDB9.user-jwt',
     fetchImpl: (url) => {
       urls.push(String(url));
       if (String(url).includes('/shop_memberships?')) {
@@ -673,7 +676,7 @@ test('getStaffShopId asks only for the caller own membership', async () => {
   const store = new SupabaseDataStore({
     supabaseUrl: 'https://project.supabase.co',
     publishableKey: 'publishable-key',
-    accessToken: 'user-jwt',
+    accessToken: 'e30.eyJleHAiOjQxMDI0NDQ4MDB9.user-jwt',
     userId: '20000000-0000-0000-0000-000000000001',
     fetchImpl: (url) => {
       urls.push(String(url));
@@ -703,7 +706,7 @@ test('getStaffShopId still reports 409 when the caller really belongs to two sho
   const store = new SupabaseDataStore({
     supabaseUrl: 'https://project.supabase.co',
     publishableKey: 'publishable-key',
-    accessToken: 'user-jwt',
+    accessToken: 'e30.eyJleHAiOjQxMDI0NDQ4MDB9.user-jwt',
     userId: '20000000-0000-0000-0000-000000000001',
     fetchImpl: () => Response.json([
       { shop_id: '10000000-0000-0000-0000-000000000001' },
@@ -724,7 +727,7 @@ test('体重の履歴は、確定したカルテだけを、古い順に、体�
   const calls = [];
   const response = await worker.fetch(new Request(
     'https://test.local/api/pets/30000000-0000-0000-0000-000000000001/reports/40000000-0000-0000-0000-000000000001',
-    { headers: { Authorization: 'Bearer staff-jwt' } },
+    { headers: { Authorization: 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.staff-jwt' } },
   ), supabaseEnv(async (url) => {
     calls.push(url);
     if (url.endsWith('/auth/v1/user')) {

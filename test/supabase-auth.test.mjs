@@ -3,7 +3,10 @@ import fs from 'node:fs';
 import test from 'node:test';
 
 import {
+  AUTH_FAILURE_LIMIT,
+  AUTH_FAILURE_WINDOW_MS,
   AuthError,
+  looksLikeLiveJwt,
   readBearer,
   resolveAuthContext,
   safeReturnPath,
@@ -16,11 +19,14 @@ import {
 } from '../backend/js/supabase-auth.js';
 import { buildInvitationUrl, mapOwner, parseStaffRoute } from '../backend/js/supabase-staff.js';
 
+/* 偽のアクセストークンは JWT の形（`ヘッダ.中身.署名`・中身は {"exp":4102444800}＝2100年）にしてある。
+   Worker は Supabase に問い合わせる前に形と期限を見て、崩れたものを弾く（review R6）。 */
+
 test('readBearer accepts only a non-empty Bearer token', () => {
   assert.equal(readBearer(new Request('https://test.local')), null);
   assert.equal(readBearer(new Request('https://test.local', { headers: { Authorization: 'Basic abc' } })), null);
   assert.equal(readBearer(new Request('https://test.local', { headers: { Authorization: 'Bearer   ' } })), null);
-  assert.equal(readBearer(new Request('https://test.local', { headers: { Authorization: 'Bearer user-jwt' } })), 'user-jwt');
+  assert.equal(readBearer(new Request('https://test.local', { headers: { Authorization: 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.user-jwt' } })), 'e30.eyJleHAiOjQxMDI0NDQ4MDB9.user-jwt');
 });
 
 test('safeReturnPath permits only protected internal routes', () => {
@@ -47,7 +53,7 @@ test('safeReturnPath keeps the staff route so trimmers land back on /edit', () =
 test('resolveAuthContext validates the bearer with Supabase Auth', async () => {
   const calls = [];
   const context = await resolveAuthContext(
-    new Request('https://test.local/api/session', { headers: { Authorization: 'Bearer user-jwt' } }),
+    new Request('https://test.local/api/session', { headers: { Authorization: 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.user-jwt' } }),
     { SUPABASE_URL: 'https://project.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'publishable-key' },
     async (url, init) => {
       calls.push({ url, init });
@@ -55,9 +61,9 @@ test('resolveAuthContext validates the bearer with Supabase Auth', async () => {
     },
   );
   assert.equal(context.userId, '20000000-0000-0000-0000-0000000000a1');
-  assert.equal(context.accessToken, 'user-jwt');
+  assert.equal(context.accessToken, 'e30.eyJleHAiOjQxMDI0NDQ4MDB9.user-jwt');
   assert.equal(calls[0].url, 'https://project.supabase.co/auth/v1/user');
-  assert.equal(calls[0].init.headers.Authorization, 'Bearer user-jwt');
+  assert.equal(calls[0].init.headers.Authorization, 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.user-jwt');
   assert.equal(calls[0].init.headers.apikey, 'publishable-key');
 });
 
@@ -66,14 +72,93 @@ test('resolveAuthContext rejects missing and invalid sessions generically', asyn
     () => resolveAuthContext(new Request('https://test.local/api/session'), { SUPABASE_URL: 'https://project.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'pk' }),
     (error) => error instanceof AuthError && error.status === 401 && error.message === 'authentication required',
   );
+  /* 形の合った鍵を Supabase が断ったとき。中身（internal details）を外へ出さない。 */
+  let asked = 0;
   await assert.rejects(
     () => resolveAuthContext(
-      new Request('https://test.local/api/session', { headers: { Authorization: 'Bearer invalid' } }),
+      new Request('https://test.local/api/session', { headers: { Authorization: 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.invalid' } }),
       { SUPABASE_URL: 'https://project.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'pk' },
-      async () => new Response('internal details', { status: 401 }),
+      async () => { asked += 1; return new Response('internal details', { status: 401 }); },
     ),
     (error) => error instanceof AuthError && error.status === 401 && !error.message.includes('internal details'),
   );
+  assert.equal(asked, 1);
+});
+
+/* ██ review R6: Supabase に問い合わせる前の足切り ██
+   以前は Bearer を1本残らず `/auth/v1/user` へ回していた。でたらめな鍵を送り続けるだけで、
+   1回ごとに Supabase への往復を払わせられた。 */
+const b64 = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
+const AUTH_ENV = { SUPABASE_URL: 'https://project.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'pk' };
+
+test('R6: 形の崩れた鍵・期限の切れた鍵は Supabase に問い合わせずに 401', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const bad = [
+    'random-garbage',
+    'a.b',
+    'a.b.c.d',
+    `${b64({ alg: 'HS256' })}.not-json.sig`,
+    `${b64({ alg: 'HS256' })}.${b64({ sub: 'x' })}.sig`,
+    `${b64({ alg: 'HS256' })}.${b64({ exp: now - 3600 })}.sig`,
+    `${b64({ alg: 'HS256' })}.${b64({ exp: now + 3600, pad: 'x'.repeat(9000) })}.sig`,
+  ];
+  for (const token of bad) {
+    assert.equal(looksLikeLiveJwt(token), false, token.slice(0, 40));
+    let asked = 0;
+    await assert.rejects(
+      () => resolveAuthContext(
+        new Request('https://test.local/api/session', { headers: { Authorization: `Bearer ${token}` } }),
+        AUTH_ENV,
+        async () => { asked += 1; return Response.json({ id: '20000000-0000-0000-0000-0000000000a1' }); },
+      ),
+      (error) => error instanceof AuthError && error.status === 401,
+    );
+    assert.equal(asked, 0, `Supabase に回してはいけない: ${token.slice(0, 40)}`);
+  }
+  /* 形が合い期限内なら、今までどおり Supabase が決める（中身はここで信用しない）。 */
+  assert.equal(looksLikeLiveJwt(`${b64({ alg: 'HS256' })}.${b64({ exp: now + 3600 })}.sig`), true);
+});
+
+test('R6: 同じ IP から認証に失敗し続けたら、Supabase に回さず 429 と Retry-After', async () => {
+  const ip = '198.51.100.77';
+  const forged = `${b64({ alg: 'HS256' })}.${b64({ exp: Math.floor(Date.now() / 1000) + 3600 })}.forged`;
+  let asked = 0;
+  const reject = async () => { asked += 1; return new Response('{}', { status: 401 }); };
+  const request = (token, from = ip) => new Request('https://test.local/api/session', {
+    headers: { Authorization: `Bearer ${token}`, 'CF-Connecting-IP': from },
+  });
+  for (let i = 0; i < AUTH_FAILURE_LIMIT; i += 1) {
+    await assert.rejects(() => resolveAuthContext(request(forged), AUTH_ENV, reject), (error) => error.status === 401);
+  }
+  assert.equal(asked, AUTH_FAILURE_LIMIT);
+  await assert.rejects(
+    () => resolveAuthContext(request(forged), AUTH_ENV, reject),
+    (error) => error instanceof AuthError && error.status === 429
+      && error.retryAfterSeconds > 0 && error.retryAfterSeconds <= AUTH_FAILURE_WINDOW_MS / 1000,
+  );
+  assert.equal(asked, AUTH_FAILURE_LIMIT, '締め出したあとは Supabase に回さない');
+  /* 別の IP は巻き込まない。 */
+  const context = await resolveAuthContext(
+    request(forged, '198.51.100.78'),
+    AUTH_ENV,
+    async () => Response.json({ id: '20000000-0000-0000-0000-0000000000a1' }),
+  );
+  assert.equal(context.userId, '20000000-0000-0000-0000-0000000000a1');
+});
+
+test('R6: Supabase 側の不調（5xx）は送り手の失敗として数えない', async () => {
+  const ip = '198.51.100.79';
+  const token = `${b64({ alg: 'HS256' })}.${b64({ exp: Math.floor(Date.now() / 1000) + 3600 })}.sig`;
+  for (let i = 0; i < AUTH_FAILURE_LIMIT + 5; i += 1) {
+    await assert.rejects(
+      () => resolveAuthContext(
+        new Request('https://test.local/api/session', { headers: { Authorization: `Bearer ${token}`, 'CF-Connecting-IP': ip } }),
+        AUTH_ENV,
+        async () => new Response('down', { status: 502 }),
+      ),
+      (error) => error.status === 401,
+    );
+  }
 });
 
 test('browser return path and protected route parser reject external or malformed routes', () => {

@@ -14,6 +14,9 @@ import test from 'node:test';
 import { setMemberActiveSchema } from '../worker/src/api-schemas.js';
 import worker from '../worker/src/index.js';
 
+/* 偽のアクセストークンは JWT の形（`ヘッダ.中身.署名`・中身は {"exp":4102444800}＝2100年）にしてある。
+   Worker は Supabase に問い合わせる前に形と期限を見て、崩れたものを弾く（review R6）。 */
+
 const migrationUrl = new URL('../supabase/migrations/202611200020_admin_set_member_active.sql', import.meta.url);
 
 const SHOP = '10000000-0000-0000-0000-000000000001';
@@ -102,7 +105,7 @@ function fakeEnv(rpc, calls) {
 function postActive(userId, body) {
   return new Request(`https://test.local/api/staff/${userId}/active`, {
     method: 'POST',
-    headers: { Authorization: 'Bearer admin-jwt', 'Content-Type': 'application/json' },
+    headers: { Authorization: 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.admin-jwt', 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
 }
@@ -114,7 +117,7 @@ test('GET /api/staff は呼んだ人の店で list_shop_members を呼び、一�
     role: 'staff', active: true, created_at: '2026-11-19T00:00:00Z',
   };
   const response = await worker.fetch(new Request('https://test.local/api/staff', {
-    headers: { Authorization: 'Bearer admin-jwt' },
+    headers: { Authorization: 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.admin-jwt' },
   }), fakeEnv({ list_shop_members: () => Response.json([row]) }, calls));
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('Cache-Control'), 'no-store');
@@ -122,7 +125,7 @@ test('GET /api/staff は呼んだ人の店で list_shop_members を呼び、一�
   const rpcCall = calls.find((call) => call.url.endsWith('/rest/v1/rpc/list_shop_members'));
   assert.ok(rpcCall, 'list_shop_members を呼んでいない');
   assert.deepEqual(JSON.parse(rpcCall.init.body), { target_shop: SHOP });
-  assert.equal(rpcCall.init.headers.Authorization, 'Bearer admin-jwt');
+  assert.equal(rpcCall.init.headers.Authorization, 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.admin-jwt');
 });
 
 test('POST /api/staff/{id}/active は本文を確かめてから set_member_active を呼ぶ', async () => {
@@ -175,7 +178,7 @@ test('DB の断りは 4xx に直り、理由の文面は外に出さない', asy
 
   /* 一覧も、管理者でなければ 404。 */
   const list = await worker.fetch(new Request('https://test.local/api/staff', {
-    headers: { Authorization: 'Bearer staff-jwt' },
+    headers: { Authorization: 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.staff-jwt' },
   }), fakeEnv({ list_shop_members: refuse('42501', 403) }, []));
   assert.equal(list.status, 404);
 });
@@ -184,7 +187,7 @@ test('消した PATCH /api/staff/{id} と update_staff_membership は戻して�
   const calls = [];
   const response = await worker.fetch(new Request(`https://test.local/api/staff/${TARGET}`, {
     method: 'PATCH',
-    headers: { Authorization: 'Bearer admin-jwt', 'Content-Type': 'application/json' },
+    headers: { Authorization: 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.admin-jwt', 'Content-Type': 'application/json' },
     body: JSON.stringify({ active: false }),
   }), fakeEnv({}, calls));
   assert.equal(response.status, 404);
