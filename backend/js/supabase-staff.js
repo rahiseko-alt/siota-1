@@ -476,6 +476,11 @@ async function bootStaffPortal(PonchiApp) {
 async function saveDraft(petId, reportId, reportData, reportDate) {
   const api = globalThis.TrimmerStaffApi && globalThis.TrimmerStaffApi.request;
   if (typeof api !== 'function') throw new Error('下書きを保存できません');
+  /* **作る前に、この犬の下書きが既に在るかを見る**（レビュー 2026-11-25 R3）。
+     作った応答だけが途中で切れると、画面は番号を知らないまま次の保存でもう1枚作り、
+     次に開いたとき古いほうが「前回の続き」として出る。下書きは犬1頭に1枚
+     （`findDraft()` も1枚目を続きとして開く）なので、在ればそれに書く。 */
+  if (!reportId) reportId = await findDraftId(api, petId);
   if (reportId) {
     const updated = await api(
       `/api/pets/${encodeURIComponent(petId)}/reports/${encodeURIComponent(reportId)}`,
@@ -492,6 +497,25 @@ async function saveDraft(petId, reportId, reportData, reportDate) {
   if (!created || !created.report) throw new Error('下書きを作れませんでした');
   return created.report.id;
 }
+
+/** その犬の下書きの番号を1つ返す（無ければ null）。`findDraft()` と同じく1枚目を採る。 */
+async function findDraftId(api, petId) {
+  const body = await api(`/api/pets/${encodeURIComponent(petId)}/reports`);
+  const draft = (body.reports || []).find((report) => report.status === 'draft');
+  return draft ? draft.id : null;
+}
+
+/** そのカルテが**もう確定している**なら、そのカルテを返す（下書きのまま・読めないなら null）。 */
+async function finalReportOrNull(api, petId, reportId) {
+  const body = await api(
+    `/api/pets/${encodeURIComponent(petId)}/reports/${encodeURIComponent(reportId)}`,
+  );
+  return body && body.report && body.report.id && body.report.status === 'final' ? body.report : null;
+}
+
+/* この画面で `saveReport` が作ったカルテの番号（犬ごと）。作った応答は届いたが確定の応答が
+   切れたとき、押し直しで**2枚目を作らない**ために覚えておく。確定できたら捨てる。 */
+const CREATED_REPORTS = new Map();
 
 /** その犬の、確定していない下書きを1件返す（無ければ null）。 */
 async function findDraft(petId) {
@@ -551,27 +575,53 @@ async function saveReport(petId, reportData, reportDate, draftId) {
   const api = globalThis.TrimmerStaffApi && globalThis.TrimmerStaffApi.request;
   if (!client || typeof api !== 'function') throw new Error('保存できません（ログインし直してください）');
 
-  const cacheKey = draftId ? `${petId}:${draftId}` : null;
-  const { data, assets } = await replaceDataUrlAssets(reportData, { cache: assetCacheFor(cacheKey) });
+  /* 番号が分からないときも、まず既に在るものを探す（レビュー 2026-11-25 R2・R3）。
+     この画面で作ったカルテ → この犬の下書き の順。どちらも無いときだけ新しく作る。 */
+  const targetId = draftId || CREATED_REPORTS.get(petId) || await findDraftId(api, petId);
+  let cacheKey = targetId ? `${petId}:${targetId}` : null;
+  /* 新しく作るときも番号を控えておく。作った後で確定の応答が切れたら、押し直しは
+     そのカルテに同じ写真の番号で上げ直す（番号が変わると置き場に二重に残る）。 */
+  const cache = assetCacheFor(cacheKey) || new Map();
+  const { data, assets } = await replaceDataUrlAssets(reportData, { cache });
   /* 下書きが在ればそれを確定させる。**新しく作らない**——作ると下書きが残り、
      次に開いたときに古い記入が蘇る（`#15` の 3 が見ているのはそこ）。 */
-  const saved = draftId
-    ? await api(
-      `/api/pets/${encodeURIComponent(petId)}/reports/${encodeURIComponent(draftId)}`,
-      { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data }) },
-    )
-    : await api(`/api/pets/${encodeURIComponent(petId)}/reports`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ petId, reportDate, data }),
-    });
+  let saved;
+  try {
+    saved = targetId
+      ? await api(
+        `/api/pets/${encodeURIComponent(petId)}/reports/${encodeURIComponent(targetId)}`,
+        { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data }) },
+      )
+      : await api(`/api/pets/${encodeURIComponent(petId)}/reports`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ petId, reportDate, data }),
+      });
+  } catch (error) {
+    /* **前の1回で確定まで済んでいたら、それを成功として返す**（レビュー 2026-11-25 R2）。
+       確定の応答だけが切れると、押し直しの書き込みは「下書きでない」ので 404 で断られ、
+       実際は飼い主に届いているのに「保存できませんでした」と出ていた。
+       確定済みかどうかは**サーバに読み直して**決める（推測で成功にしない・`D-2`）。 */
+    const already = targetId && error.status === 404
+      ? await finalReportOrNull(api, petId, targetId)
+      : null;
+    if (!already) throw error;
+    if (cacheKey) ASSET_CACHES.delete(cacheKey);
+    CREATED_REPORTS.delete(petId);
+    return already;
+  }
   const report = saved.report;
   if (!report || !report.id) throw new Error('カルテを作れませんでした');
+  if (!targetId) {
+    CREATED_REPORTS.set(petId, report.id);
+    cacheKey = `${petId}:${report.id}`;
+    ASSET_CACHES.set(cacheKey, cache);
+  }
 
   /* 前に閉じたタブが上げたまま登録しなかった写真を先に片付ける。残っていると確定が必ず断られる
      （放置リスト `#75`）。今回の写真（番号を引き継いだものを含む）は残す。
      新しく作ったカルテ（下書きが無い）は番号が今できたばかりで、置き場に何も無いので見ない。 */
-  if (draftId) {
+  if (targetId) {
     await removeUnregisteredAssets({ client, report, petId, keepIds: assets.map((asset) => asset.id) });
   }
 
@@ -589,6 +639,7 @@ async function saveReport(petId, reportData, reportDate, draftId) {
      進む（`F-20260828-59`）。`D-2` を塞いだのは「空が返る」場合だけだった。 */
   if (!finalized || !finalized.report || !finalized.report.id) throw new Error('カルテを確定できませんでした');
   if (cacheKey) ASSET_CACHES.delete(cacheKey);
+  CREATED_REPORTS.delete(petId);
   return finalized.report;
 }
 

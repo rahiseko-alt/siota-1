@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 
+import { hasLocalOrigin, productionHeaders } from '../scripts/lib/production-headers.mjs';
 import worker from '../worker/src/index.js';
 
 const SUPABASE_URL = 'https://project.supabase.co';
@@ -114,4 +115,56 @@ test('src/_headers の値は Worker が本番で付ける値と同じ', async ()
   /* CSP だけは、ローカル Supabase を足した分だけ違ってよい（理由は `src/_headers` の冒頭）。 */
   const local = ' http://127.0.0.1:54321';
   assert.equal(fileHeaders['Content-Security-Policy'].split(local).join(''), response.headers.get('Content-Security-Policy'));
+});
+
+/* ██ review R14 ██ */
+
+/* (a) `SUPABASE_URL` を書き間違えても、入口のログイン画面まで落ちない。API は 503。 */
+test('R14: SUPABASE_URL が読めなくても入口は配られ、API は 503 を返す', async () => {
+  const broken = {
+    ...env(async () => new Response('<html><head></head><body></body></html>', { headers: { 'Content-Type': 'text/html' } })),
+    SUPABASE_URL: 'not a url',
+  };
+  const page = await worker.fetch(new Request('https://test.local/'), broken);
+  assert.equal(page.status, 200);
+  const csp = page.headers.get('Content-Security-Policy');
+  assert.match(csp, /connect-src 'self'; /);
+  assert.match(csp, /frame-ancestors 'none'/);
+  const api = await worker.fetch(new Request('https://test.local/api/session', {
+    headers: { Authorization: 'Bearer e30.eyJleHAiOjQxMDI0NDQ4MDB9.user-jwt' },
+  }), broken);
+  assert.equal(api.status, 503);
+  assert.equal(api.headers.get('X-Frame-Options'), 'DENY');
+});
+
+/* (b) localhost への CORS は、`wrangler dev` 専用の設定に印があるときだけ。本番では返さない。 */
+test('R14: 本番の設定では localhost からの CORS を許さない（開発用の設定でだけ許す）', async () => {
+  const fromLocal = (method = 'GET') => new Request('https://test.local/api/ping', {
+    method,
+    headers: { Origin: 'http://localhost:8787' },
+  });
+  for (const method of ['GET', 'OPTIONS']) {
+    const prod = await worker.fetch(fromLocal(method), env());
+    assert.equal(prod.headers.get('Access-Control-Allow-Origin'), null, method);
+    const dev = await worker.fetch(fromLocal(method), { ...env(), ALLOW_LOCALHOST_CORS: 'true' });
+    assert.equal(dev.headers.get('Access-Control-Allow-Origin'), 'http://localhost:8787', method);
+  }
+  const read = (name) => fs.readFileSync(new URL(`../worker/${name}`, import.meta.url), 'utf8');
+  assert.doesNotMatch(read('wrangler.supabase.toml'), /^ALLOW_LOCALHOST_CORS/m);
+  assert.match(read('wrangler.local.toml'), /^ALLOW_LOCALHOST_CORS = "true"$/m);
+});
+
+/* (c) 放置リスト #80: 本番に出す `_headers` にローカルの住所（127.0.0.1:54321）を載せない。 */
+test('R14 #80: 本番向けの _headers にはローカルの Supabase が無く、CSP は Worker の本番値と同じ', async () => {
+  const toml = fs.readFileSync(new URL('../worker/wrangler.supabase.toml', import.meta.url), 'utf8');
+  /* 本番の deploy は必ず `--production` で作り直してから配る。 */
+  assert.match(toml, /^\[build\]\ncommand = "node \.\.\/scripts\/build-dist\.mjs --production"$/m);
+  const prodUrl = toml.match(/^SUPABASE_URL\s*=\s*"([^"]+)"/m)[1];
+  const src = fs.readFileSync(new URL('../src/_headers', import.meta.url), 'utf8');
+  assert.ok(hasLocalOrigin(src), 'ローカル用（src）にはまだ在る前提');
+  const prod = productionHeaders(src);
+  assert.equal(hasLocalOrigin(prod), false);
+  const csp = prod.split('\n').find((line) => line.trim().startsWith('Content-Security-Policy:'));
+  const response = await worker.fetch(new Request('https://test.local/api/ping'), { ...env(), SUPABASE_URL: prodUrl });
+  assert.equal(csp.slice(csp.indexOf(':') + 1).trim(), response.headers.get('Content-Security-Policy'));
 });
