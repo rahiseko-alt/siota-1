@@ -250,3 +250,70 @@ test('確定に失敗したら、下書きをまた書ける状態に戻す（�
   await new Promise((r) => setTimeout(r, 10));
   assert.ok(order.includes('下書き:出た'), `失敗の後に下書きを書けていない: ${order.join(' → ')}`);
 });
+
+/* ── 3. 写真の途中で切れても、下書きから全部やり直せる（`N-52`）──────────────
+   以前は写真を上げる前に下書きを `asset://…`（まだ無い写真の番号）で上書きしていたので、
+   2枚目で電波が切れてタブを閉じると、次に開いた下書きから写真が消えていた。 */
+test('写真2枚目で切れても、下書きに写真3枚と所見が残り、別のタブから確定できる（送り直しは残りだけ）', async () => {
+  const { staff } = await loadStaff({});
+  const petId = crypto.randomUUID();
+  const report = { id: crypto.randomUUID(), shop_id: crypto.randomUUID(), pet_id: petId, status: 'draft', data: null };
+  const registered = [];
+  const files = new Map();
+  let offline = true;
+  let created = 0;
+  const empty = { data: [], error: null };
+  globalThis.TrimmerAuth.client = {
+    storage: { from: () => ({
+      list: async () => empty,
+      upload: async (storagePath, blob) => {
+        if (files.size === 1 && offline) throw new Error('offline');
+        assert.equal(files.has(storagePath), false, '上げ終わった写真を送り直した');
+        files.set(storagePath, blob);
+        return { error: null };
+      },
+    }) },
+    from: () => ({ select: () => ({ eq: async () => ({ data: registered.map((row) => ({ storage_path: row.storage_path })), error: null }) }) }),
+  };
+  globalThis.TrimmerStaffApi.request = async (url, options = {}) => {
+    const body = options.body ? JSON.parse(options.body) : {};
+    if (url.endsWith('/assets')) {
+      const storagePath = [...files.keys()].find((key) => key.includes(body.id));
+      assert.ok(storagePath, '上がっていない写真を登録しようとした');
+      registered.push({ id: body.id, storage_path: storagePath, kind: body.kind, sort_order: body.sortOrder });
+      return { asset: { id: body.id } };
+    }
+    if (url.endsWith('/finalize')) {
+      assert.ok(!JSON.stringify(report.data).includes('data:image/'), '写真がそろう前に確定した');
+      report.status = 'final';
+      return { report: { ...report, assets: registered } };
+    }
+    if (url.endsWith('/reports') && options.method === 'POST') { created += 1; report.data = body.data; return { report }; }
+    /* 下書きは作られるまで一覧に出ない（作る前に、既にある下書きを探すため・R3）。 */
+    if (url.endsWith('/reports')) return { reports: created ? [report] : [] };
+    if (options.method === 'PATCH') { report.data = body.data; return { report }; }
+    return { report: { ...report, assets: registered } };
+  };
+  const photos = [1, 2, 3].map((n) => `data:image/jpeg;base64,${Buffer.from([255, 216, 255, n]).toString('base64')}`);
+  const input = { photos, staffNote: '右耳に赤み' };
+  let heldId = null;
+
+  await assert.rejects(staff.saveReport(petId, input, '2026-11-21', null, (id) => { heldId = id; }), /画像を保存できませんでした|offline/);
+  assert.equal(heldId, report.id, '下書きの番号を呼ぶ側へ渡していない（やり直すと下書きがもう1枚できる）');
+  assert.equal(report.status, 'draft');
+  const draft = await staff.findDraft(petId);
+  assert.deepEqual(draft.data, input, '切れたあとの下書きから、写真か所見が消えた');
+
+  offline = false;
+  const result = await staff.saveReport(petId, draft.data, '2026-11-21', draft.id);
+  assert.equal(created, 1, 'やり直しで下書きがもう1枚できた');
+  assert.equal(result.status, 'final');
+  assert.equal(result.data.staffNote, input.staffNote);
+  assert.equal(files.size, 3);
+  for (const [index, marker] of result.data.photos.entries()) {
+    const row = registered.find((asset) => marker === `asset://${asset.id}`);
+    assert.ok(row, `${index + 1}枚目の写真がカルテから辿れない`);
+    const bytes = Buffer.from(await files.get(row.storage_path).arrayBuffer());
+    assert.equal(`data:image/jpeg;base64,${bytes.toString('base64')}`, photos[index]);
+  }
+});

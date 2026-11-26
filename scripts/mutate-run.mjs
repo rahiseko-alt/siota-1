@@ -1153,8 +1153,11 @@ export const MUTATIONS = [
     id: 'draft-becomes-new-report',
     why: '**「確定」が下書きを確定させず、2枚目を作る**——次に開くと古い記入が蘇る（`#15` の3）',
     file: 'backend/js/supabase-staff.js',
-    find: '    saved = targetId',
-    replace: '    saved = false && targetId',
+    /* 下書きの番号を「渡された番号」と「この犬の下書きを探す」の両方から得ているので、両方を同時に外す。 */
+    edits: [
+      { find: 'const targetId = draftId || CREATED_REPORTS.get(petId) || null;', replace: 'const targetId = null;' },
+      { find: 'if (!reportId) reportId = await findDraftId(api, petId);', replace: 'if (false) reportId = null;' },
+    ],
     extra: null,
     scripts: ['verify-draft.mjs'],
   },

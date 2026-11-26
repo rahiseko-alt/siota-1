@@ -65,14 +65,25 @@ function assetKind(path) {
    （ローカルで実測: 確定を2回押して2回とも 409）。
    `cache`（呼ぶ側が同じカルテについて持ち続ける Map）を渡すと、前回の写真の番号と
    「上げた／登録した」の印を引き継ぎ、残りの手順だけをやり直す。 */
+/* 写真の番号を「カルテ × 写真の中身」から決める（`N-52`）。同じカルテで同じ写真なら、
+   別のタブでやり直しても同じ番号になる。番号は UUID の形（v4 の印を立てる）にそろえる。 */
+async function photoId(reportId, value) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${reportId}/${value}`));
+  const bytes = new Uint8Array(digest, 0, 16);
+  bytes[6] = (bytes[6] & 15) | 64;
+  bytes[8] = (bytes[8] & 63) | 128;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join('-');
+}
+
 export async function replaceDataUrlAssets(
   reportData,
-  { randomUUID = () => crypto.randomUUID(), cache = null } = {},
+  { randomUUID = () => crypto.randomUUID(), cache = null, reportId = null } = {},
 ) {
   const assets = [];
   const seen = new Map();
 
-  function visit(value, path = []) {
+  async function visit(value, path = []) {
     if (typeof value === 'string' && value.startsWith('data:image/')) {
       if (seen.has(value)) return seen.get(value);
       const cached = cache && cache.get(value);
@@ -83,7 +94,7 @@ export async function replaceDataUrlAssets(
         seen.set(value, marker);
         return marker;
       }
-      const id = randomUUID();
+      const id = reportId ? await photoId(reportId, value) : randomUUID();
       if (!UUID_PATTERN.test(id)) throw new TypeError('invalid generated asset id');
       const blob = dataUrlBlob(value);
       const marker = `asset://${id}`;
@@ -93,14 +104,21 @@ export async function replaceDataUrlAssets(
       seen.set(value, marker);
       return marker;
     }
-    if (Array.isArray(value)) return value.map((entry, index) => visit(entry, [...path, String(index)]));
+    /* 写真の順番（`sortOrder`）が出てきた順で決まるので、1つずつ順に見る。 */
+    if (Array.isArray(value)) {
+      const result = [];
+      for (const [index, entry] of value.entries()) result.push(await visit(entry, [...path, String(index)]));
+      return result;
+    }
     if (value && typeof value === 'object') {
-      return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, visit(entry, [...path, key])]));
+      const entries = [];
+      for (const [key, entry] of Object.entries(value)) entries.push([key, await visit(entry, [...path, key])]);
+      return Object.fromEntries(entries);
     }
     return value;
   }
 
-  return { data: visit(reportData), assets };
+  return { data: await visit(reportData), assets };
 }
 
 export async function uploadReportAssets({
@@ -123,6 +141,13 @@ export async function uploadReportAssets({
         assetId: asset.id,
         mimeType: asset.mimeType,
       });
+      /* 前回（別のタブでも）もう上げて登録まで済んだ写真は、送り直さない。 */
+      const registered = (report.assets || []).find((row) => row.id === asset.id && row.storage_path === storagePath);
+      if (registered) {
+        asset.uploaded = true;
+        asset.registered = true;
+        asset.metadata = registered;
+      }
       if (!asset.uploaded) {
         const { error } = await client.storage.from(bucket).upload(storagePath, asset.blob, {
           contentType: asset.mimeType,
