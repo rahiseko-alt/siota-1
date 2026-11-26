@@ -2142,6 +2142,13 @@ const App = {
          載っているのに捨てていたのはこちら側。 */
       const detail = [error.message, error.reason, error.status && `(${error.status})`]
         .filter(Boolean).join(' / ');
+      /* **待てば通るときは、待てと言う**（レビュー 2026-11-25 R5）。写真を上げた直後にタブを
+         閉じて開き直すと、上げたばかりの写真は3分間は片付けない（別の端末が登録中かもしれない）
+         ので、その間の確定は 409 で断られる。「もう一度」だけだと、すぐ押し直して同じ所で止まる。 */
+      if (error.status === 409 && error.reason === 'report assets are incomplete') {
+        globalThis.alert(`カルテを保存できませんでした。\n\n写真の登録が終わっていません。3分ほど待ってから、もう一度「確定」を押してください（書いた内容は消えていません）。\n\n${detail}`);
+        return;
+      }
       globalThis.alert(`カルテを保存できませんでした。\n\n${detail}\n\nもう一度お試しください。`);
     }
   },

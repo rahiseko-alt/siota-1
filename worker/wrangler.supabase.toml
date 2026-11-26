@@ -29,6 +29,14 @@ compatibility_date = "2025-01-01"
 pattern = "trimmer-system.kouheikosehira.com/*"
 zone_name = "kouheikosehira.com"
 
+# **本番に出す前に、本番向けに作り直す**（放置リスト #80・review R14）。
+#   `src/_headers` の CSP にはローカルの Supabase（127.0.0.1:54321）が入っている
+#   （ローカルの `wrangler dev` が同じ dist を使うため）。`--production` はそれを外す。
+#   ここに書くと `wrangler deploy --config wrangler.supabase.toml` が**毎回**先に走らせるので、
+#   deploy.yml 以外から出しても、ローカル用の dist がそのまま本番へ出ることが無い。
+[build]
+command = "node ../scripts/build-dist.mjs --production"
+
 [assets]
 directory = "../dist"
 binding = "ASSETS"

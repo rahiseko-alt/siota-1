@@ -100,3 +100,10 @@ end
 $$;
 
 alter table storage.objects enable row level security;
+
+-- 本物の Supabase は、ログインした人に storage の表への権限を渡したうえで RLS で絞る。
+-- それを再現しないと、`supabase/tests/rls.sql` の Storage の検査（⑩）が
+-- 「権限が無い」で落ち、ポリシーそのものを見られない。
+grant usage on schema storage to anon, authenticated, service_role;
+grant all on storage.objects to anon, authenticated, service_role;
+grant all on storage.buckets to anon, authenticated, service_role;

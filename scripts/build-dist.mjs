@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildSync } from 'esbuild';
+import { hasLocalOrigin, productionHeaders } from './lib/production-headers.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(ROOT, 'src');
@@ -46,6 +47,28 @@ for (const entry of ENTRIES) {
   const n = copy(from, path.join(DIST, entry));
   total += n;
   console.log(`[build] ${entry}  ${n}件`);
+}
+
+/* ──────────────────────────────────────────────
+   本番向けの `_headers` からローカルの Supabase を外す（放置リスト #80・review R14）
+
+   `src/_headers` の CSP にはローカルの Supabase（127.0.0.1:54321）が並んでいる。
+   `dist/` は本番とローカル（`wrangler dev`）で同じものを使うので、外すとローカルの
+   `/my`・`/admin` が Supabase に繋がらなくなる（理由は `src/_headers` の冒頭）。
+   そこで**本番に出すときだけ** `--production` で作り、その1語を消す。
+   `--production` は `worker/wrangler.supabase.toml` の `[build]` が付けるので、
+   `wrangler deploy --config wrangler.supabase.toml` は**どこから叩いても**この形で出る。
+   ────────────────────────────────────────────── */
+if (process.argv.includes('--production')) {
+  const headersFile = path.join(DIST, '_headers');
+  const text = productionHeaders(fs.readFileSync(headersFile, 'utf8'));
+  fs.writeFileSync(headersFile, text);
+  /* 自己点検: 消し残したまま「本番向け」と言わない。 */
+  if (hasLocalOrigin(text)) {
+    console.error('[build] self-check NG: 本番向けの dist/_headers にローカルの Supabase が残っている');
+    process.exit(1);
+  }
+  console.log('[build] _headers  本番向け（ローカルの Supabase を外した）');
 }
 
 /* 自己点検: 画面が1枚も無い dist を「成功」と言わない。 */

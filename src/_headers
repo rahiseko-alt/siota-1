@@ -10,6 +10,9 @@
 # `dist/` は本番とローカル（`worker/wrangler.local.toml`）で同じものを使う。本番の URL だけに
 # すると、ローカルの `/my`・`/admin` が Supabase に繋がらず `verify:*` が全部止まる。
 # 本番の利用者の端末で 127.0.0.1:54321 が開いていることは無く、足しても漏れ先にはならない。
+# それでも本番にローカルの住所は出さない（放置リスト #80）: 本番へ出すときは
+# `worker/wrangler.supabase.toml` の [build] が `build-dist.mjs --production` で作り直し、
+# この1語を消してから配る。
 # 本番の SUPABASE_URL は `worker/wrangler.supabase.toml` の [vars] にある公開値。
 /*
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://bcodloqwnrhcuvevfguy.supabase.co http://127.0.0.1:54321; connect-src 'self' https://bcodloqwnrhcuvevfguy.supabase.co http://127.0.0.1:54321; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'

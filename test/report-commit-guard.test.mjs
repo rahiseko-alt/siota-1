@@ -289,7 +289,8 @@ test('写真2枚目で切れても、下書きに写真3枚と所見が残り、
       return { report: { ...report, assets: registered } };
     }
     if (url.endsWith('/reports') && options.method === 'POST') { created += 1; report.data = body.data; return { report }; }
-    if (url.endsWith('/reports')) return { reports: [report] };
+    /* 下書きは作られるまで一覧に出ない（作る前に、既にある下書きを探すため・R3）。 */
+    if (url.endsWith('/reports')) return { reports: created ? [report] : [] };
     if (options.method === 'PATCH') { report.data = body.data; return { report }; }
     return { report: { ...report, assets: registered } };
   };
